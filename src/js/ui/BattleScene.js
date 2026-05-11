@@ -4,6 +4,7 @@ import CharacterPane from './CharacterPane.js';
 import BoardPlaceholder from './BoardPlaceholder.js';
 import UIText from './UIText.js';
 import FloatingImageEffect from './FloatingImageEffect.js';
+import ScreenShake from './ScreenShake.js';
 
 /**
  * BattleScene — full battle layout with three columns.
@@ -59,6 +60,10 @@ export default class BattleScene extends UIPanel {
     // ── Floating image effects ──
     /** @type {FloatingImageEffect[]} */
     this._floatingEffects = [];
+
+    // ── Screen shake ──
+    /** @type {ScreenShake} */
+    this._screenShake = new ScreenShake();
 
     if (playerData || enemyData) {
       this.buildHierarchy();
@@ -185,6 +190,11 @@ export default class BattleScene extends UIPanel {
       this._spawnExtraTurnEffect(state.extraTurnTriggerPos);
     }
 
+    // ── Trigger screen shake for damage ──
+    if (state.shakeIntensity && state.shakeIntensity > 0) {
+      this._screenShake.trigger(state.shakeIntensity);
+    }
+
     // Update turn label
     if (this._turnLabel) {
       this._turnLabel.text = this._battleController.getTurnLabel();
@@ -272,6 +282,9 @@ export default class BattleScene extends UIPanel {
     // Update children (standard UI tree update)
     super.update(dt);
 
+    // Update screen shake
+    this._screenShake.update(dt);
+
     // Update floating effects, remove completed ones
     for (let i = this._floatingEffects.length - 1; i >= 0; i--) {
       this._floatingEffects[i].update(dt);
@@ -284,12 +297,24 @@ export default class BattleScene extends UIPanel {
   // ── Render (override) ───────────────────────────────
 
   render(ctx) {
+    // Apply screen shake offset
+    const shake = this._screenShake.getOffset();
+    if (shake.x !== 0 || shake.y !== 0) {
+      ctx.save();
+      ctx.translate(shake.x, shake.y);
+    }
+
     // Render standard UI (background, children)
     super.render(ctx);
 
     // Render floating effects on top of everything
     for (const effect of this._floatingEffects) {
       effect.render(ctx);
+    }
+
+    // Restore context after shake offset
+    if (shake.x !== 0 || shake.y !== 0) {
+      ctx.restore();
     }
   }
 

@@ -95,6 +95,13 @@ export default class BattleController {
     /** @type {{from:{col:number,row:number},to:{col:number,row:number},progress:number,duration:number,valid:boolean}|null} */
     this.swapAnim = null;
 
+    /**
+     * Pending screen-shake intensity (0-1). Set when damage is dealt,
+     * read & cleared by BattleScene each frame via getState().
+     * @type {number}
+     */
+    this._pendingShakeIntensity = 0;
+
     // ── Enemy turn ──
     this._enemyTimer = 0;
     this._enemyFired = false;
@@ -130,12 +137,18 @@ export default class BattleController {
     // spawns one effect per trigger.
     const triggerPos = this.extraTurnTriggerPos;
     this.extraTurnTriggerPos = null;
+    // Capture shakeIntensity and clear it so scene only
+    // triggers one shake per damage event.
+    const shakeIntensity = this._pendingShakeIntensity;
+    this._pendingShakeIntensity = 0;
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
       board: this.board, log: this.log,
       pendingExtraTurn: this.pendingExtraTurn,
       extraTurnTriggerPos: triggerPos,
+      shakeIntensity,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -308,6 +321,8 @@ export default class BattleController {
     if (a.skullDamage > 0) {
       const r = this.resolver.applyDamage(targetState, a.skullDamage);
       this.log.add(`Skull damage: ${r.actualDamage} dealt.`);
+      // Trigger screen shake scaled by damage % of target's max HP
+      this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
     }
 
     for (const [color, count] of Object.entries(a.mana)) {
@@ -545,6 +560,8 @@ export default class BattleController {
     } else if (desc.includes('damage') || name.includes('bash') || name.includes('slash')) {
       const r = this.resolver.applyDamage(tgt, baseAmount);
       this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
+      // Trigger screen shake scaled by damage % of target's max HP
+      this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
     }
   }
 
@@ -564,6 +581,26 @@ export default class BattleController {
       return true;
     }
     return false;
+  }
+
+  // ── Screen Shake ──────────────────────────────────────
+
+  /**
+   * Compute screen-shake intensity from damage dealt and set the
+   * pending shake value. Scales linearly from 0 at 0% to 1.0 at
+   * 20%+ of the target's max HP.
+   * @param {number} actualDamage
+   * @param {number} targetMaxHp
+   */
+  _setShakeFromDamage(actualDamage, targetMaxHp) {
+    if (!targetMaxHp || actualDamage <= 0) return;
+    const percent = actualDamage / targetMaxHp;
+    const intensity = Math.min(1.0, percent / 0.20);
+    // Keep the highest intensity if multiple damage events occur
+    // before the scene reads it.
+    if (intensity > this._pendingShakeIntensity) {
+      this._pendingShakeIntensity = intensity;
+    }
   }
 
   // ── Board Position ────────────────────────────────────
