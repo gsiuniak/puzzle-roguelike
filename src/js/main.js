@@ -13,7 +13,7 @@ import mockCharacter from './data/mockCharacter.js';
 import mockEnemy from './data/mockEnemy.js';
 
 // ── Debug flag ──────────────────────────────────────────
-const DEBUG_UI_LAYOUT = true;
+const DEBUG_UI_LAYOUT = false;
 
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
