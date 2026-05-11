@@ -278,8 +278,8 @@ export default class CharacterPane extends UIPanel {
     skillsTitleRow.justifyContent = 'center';
     skillsTitleRow.alignItems = 'center';
     skillsTitleRow.gap = 10;
-    skillsTitleRow.padding = { top: 8, bottom: 4 };
-    skillsTitleRow.height = 36;
+    skillsTitleRow.padding = { top: 0, bottom: 0 };
+    skillsTitleRow.height = 25;
 
     const flairLeft = new UIImage('skill_flair_left', this._assetManager);
     flairLeft.setStyle({ width: 120, height: 28, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
@@ -288,7 +288,7 @@ export default class CharacterPane extends UIPanel {
     this._skillsTitle = new UIText('Skills');
     this._skillsTitle.setStyle({
       fontSize: 18,
-      color: '#e0d070',
+      color: '#e4e4d9',
       bold: true,
       alignH: 'center',
       alignV: 'center',
