@@ -104,8 +104,13 @@ async function init() {
   // ── Wire board drag/swap input ───────────────────────
   const board = scene.getBoard();
 
+  /** Only allow board input during PLAYER_TURN */
+  function canAct() {
+    return battleController.state === BattleState.PLAYER_TURN;
+  }
+
   input.on('mousedown', (x, y) => {
-    if (!board) return;
+    if (!board || !canAct()) return;
     const cell = board.screenToCell(x, y);
     if (cell) {
       selectedCell = cell;
@@ -125,22 +130,21 @@ async function init() {
 
   input.on('mousemove', (x, y) => {
     if (!board) return;
-    const cell = board.screenToCell(x, y);
+    const cell = canAct() ? board.screenToCell(x, y) : null;
     hoveredCell = cell;
     board.hoveredCell = cell;
 
     // Skill row hover feedback
     const hit = scene.hitTest(x, y);
-    // Reset all skill row hover states
     if (playerPane) {
       for (const row of playerPane._skillRows) {
-        row._hovered = (hit === row && row.onClick);
+        row._hovered = (hit === row && row.onClick && canAct());
       }
     }
   });
 
   input.on('mouseup', (x, y) => {
-    if (!board || !selectedCell) {
+    if (!board || !selectedCell || !canAct()) {
       selectedCell = null;
       dragStartCell = null;
       if (board) board.selectedCell = null;
@@ -153,14 +157,11 @@ async function init() {
       const dc = Math.abs(releaseCell.col - dragStartCell.col);
       const dr = Math.abs(releaseCell.row - dragStartCell.row);
 
-      // Must be adjacent (1 cell away, not same cell)
       if ((dc === 1 && dr === 0) || (dc === 0 && dr === 1)) {
         battleController.tryPlayerSwap(
           dragStartCell.col, dragStartCell.row,
           releaseCell.col, releaseCell.row
         );
-      } else if (dc === 0 && dr === 0) {
-        // Clicked same cell — could be a tap-to-select, just deselect
       }
     }
 

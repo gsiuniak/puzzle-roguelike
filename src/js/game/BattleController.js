@@ -4,8 +4,7 @@
  * State machine:
  *   PLAYER_TURN → RESOLVING → ENEMY_TURN → RESOLVING → PLAYER_TURN ...
  *
- * Cascade sub-phases (RESOLVING state):
- *   SHOW_MATCH (400ms) → REMOVE (200ms) → FALL (350ms) → next step or finish
+ * Configurable timing via speedMultiplier (1.0 = normal, 2.0 = fast).
  */
 
 import BoardModel from './BoardModel.js';
@@ -18,6 +17,7 @@ export const BattleState = {
   PLAYER_TURN: 'PLAYER_TURN',
   ENEMY_TURN: 'ENEMY_TURN',
   RESOLVING: 'RESOLVING',
+  SWAPPING: 'SWAPPING',
   GAME_OVER: 'GAME_OVER',
 };
 
@@ -27,8 +27,10 @@ const CascadePhase = {
   FALL: 'FALL',
 };
 
-const PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
-const ENEMY_DELAY_MS = 400;
+/** Base durations in ms (scaled by speedMultiplier) */
+const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
+const ENEMY_BASE_DELAY = 400;
+const SWAP_BASE_DURATION = 120;
 
 export default class BattleController {
   constructor(playerData, enemyData) {
@@ -46,8 +48,14 @@ export default class BattleController {
     this.pendingExtraTurn = false;
     this.activeSide = 'player';
 
-    // Cascade step-by-step
-    /** @type {string|null} */
+    /**
+     * Speed multiplier for all animation timing.
+     * 1.0 = normal, 2.0 = fast, 0.5 = slow.
+     * Scales phase durations, enemy delay, and swap duration.
+     */
+    this.speedMultiplier = 1.0;
+
+    // ── Cascade step-by-step ──
     this._cascadePhase = null;
     this._phaseTimer = 0;
     /** @type {import('./MatchResolver.js').MatchAnalysis|null} */
@@ -55,22 +63,23 @@ export default class BattleController {
     this._allSteps = [];
     this._extraTurnEarned = false;
 
-    // Visual state for BoardPlaceholder
-    /** @type {Array<{col:number, row:number}>} */
+    // ── Visual state (exposed for BoardPlaceholder) ──
     this.highlightCells = [];
-    /** @type {Array<{col:number, row:number}>} */
     this.emptyCells = [];
-    /** @type {Array<{col:number, row:number, startRow:number, startCol:number}>} */
     this.fallCells = [];
 
-    // Enemy turn
+    // ── Swap animation ──
+    /** @type {{from:{col:number,row:number},to:{col:number,row:number},progress:number,duration:number,valid:boolean}|null} */
+    this.swapAnim = null;
+
+    // ── Enemy turn ──
     this._enemyTimer = 0;
     this._enemyFired = false;
 
-    // Callbacks
+    // ── Callbacks ──
     this.onStateChange = null;
 
-    // Init
+    // ── Init ──
     this.board.initialize();
     this.log.add('Battle begins! Your turn.');
   }
@@ -84,6 +93,12 @@ export default class BattleController {
       skills: (d.skills || []).map(s => ({ ...s })),
     };
   }
+
+  // ── Timing Helpers ────────────────────────────────────
+
+  _phaseMs(phase) { return BASE_PHASE_MS[phase] / this.speedMultiplier; }
+  _enemyDelay()    { return ENEMY_BASE_DELAY / this.speedMultiplier; }
+  _swapDuration()  { return SWAP_BASE_DURATION / this.speedMultiplier; }
 
   // ── Public API ────────────────────────────────────────
 
@@ -99,6 +114,7 @@ export default class BattleController {
       emptyCells: this.emptyCells,
       fallCells: this.fallCells,
       cascadePhase: this._cascadePhase,
+      swapAnim: this.swapAnim,
     };
   }
 
@@ -108,6 +124,8 @@ export default class BattleController {
         return this.pendingExtraTurn ? 'Extra Turn' : 'Player Turn';
       case BattleState.ENEMY_TURN:
         return this.pendingExtraTurn ? 'Extra Turn' : 'Enemy Turn';
+      case BattleState.SWAPPING:
+        return 'Swapping...';
       case BattleState.RESOLVING:
         return this._cascadePhase === CascadePhase.SHOW_MATCH ? 'Match!'
           : this._cascadePhase === CascadePhase.REMOVE ? 'Clearing...'
@@ -127,22 +145,34 @@ export default class BattleController {
 
   // ── Player Actions ────────────────────────────────────
 
+  /**
+   * Initiate a swap with animation.
+   * The actual logical swap and match check happen after the animation completes.
+   */
   tryPlayerSwap(col1, row1, col2, row2) {
     if (this.state !== BattleState.PLAYER_TURN) return false;
     if (!this.board.isAdjacent(col1, row1, col2, row2)) return false;
     if (!this.board.get(col1, row1) || !this.board.get(col2, row2)) return false;
 
+    // Do pre-check: would this swap create a match?
     this.board.swap(col1, row1, col2, row2);
-
     const analysis = this.resolver.analyzeMatches(this.board);
-    if (!analysis) {
-      this.board.swap(col1, row1, col2, row2);
-      this.log.add('No match. Swap cancelled.');
-      return false;
-    }
+    const valid = analysis !== null;
+    this.board.swap(col1, row1, col2, row2); // revert
 
-    this.log.add('Match found!');
-    this._beginResolving('player', analysis);
+    // Start swap animation
+    this.state = BattleState.SWAPPING;
+    this.swapAnim = {
+      from: { col: col1, row: row1 },
+      to: { col: col2, row: row2 },
+      progress: 0,
+      duration: this._swapDuration(),
+      valid,
+    };
+
+    if (!valid) {
+      this.log.add('No match. Swap cancelled.');
+    }
     return true;
   }
 
@@ -161,7 +191,6 @@ export default class BattleController {
 
   // ── Resolution ────────────────────────────────────────
 
-  /** @private */
   _beginResolving(side, firstAnalysis) {
     this.state = BattleState.RESOLVING;
     this.activeSide = side;
@@ -171,23 +200,27 @@ export default class BattleController {
     this.emptyCells = [];
     this.fallCells = [];
 
-    this._enterShowMatch(firstAnalysis);
+    if (firstAnalysis) {
+      // Log initial match
+      this.log.add('Match found!');
+      this._enterShowMatch(firstAnalysis);
+    } else {
+      // Try to find first match
+      this._finishStep();
+    }
   }
 
-  /** @private Enter SHOW_MATCH phase with analysis result */
   _enterShowMatch(analysis) {
     this._analysis = analysis;
     this._allSteps.push(analysis);
-
     if (analysis.extraTurnTrigger) this._extraTurnEarned = true;
 
-    // Log matches
     const activeName = this._activeState().name;
     for (const m of analysis.matches) {
       const tn = m.typeId.charAt(0).toUpperCase() + m.typeId.slice(1);
       const sh = m.isShape ? ' (L/T shape)' : '';
       if (m.typeId === 'skull') {
-        this.log.add(`Skull match: ${m.count} tiles${sh} — ${analysis.skullDamage} damage incoming!`);
+        this.log.add(`Skull match: ${m.count} tiles${sh} — damage incoming!`);
       } else {
         this.log.add(`${tn} match: ${m.count} tiles${sh} — +${m.count} mana.`);
       }
@@ -200,19 +233,16 @@ export default class BattleController {
     this._phaseTimer = 0;
   }
 
-  /** @private Apply rewards (mana + skull damage) and remove tiles */
   _doRemove() {
     const a = this._analysis;
     const activeState = this._activeState();
     const targetState = this._opponentState();
 
-    // Apply skull damage
     if (a.skullDamage > 0) {
       const r = this.resolver.applyDamage(targetState, a.skullDamage);
       this.log.add(`Skull damage: ${r.actualDamage} dealt.`);
     }
 
-    // Apply mana
     for (const [color, count] of Object.entries(a.mana)) {
       if (count > 0) {
         activeState.mana[color] = (activeState.mana[color] || 0) + count;
@@ -220,9 +250,7 @@ export default class BattleController {
       }
     }
 
-    // Remove tiles from board
     this.board.removeTiles(a.positions);
-
     this.highlightCells = [];
     this.emptyCells = [...a.positions];
     this.fallCells = [];
@@ -230,14 +258,10 @@ export default class BattleController {
     this._phaseTimer = 0;
   }
 
-  /** @private Apply gravity, refill, capture fall data */
   _doFall() {
-    // Snapshot before gravity
     const preGravityGrid = this.board.grid.map(col => [...col]);
-
     this.board.applyGravity();
     this.board.refill();
-
     const animations = this.board.generateFallAnimations(preGravityGrid);
 
     this.emptyCells = [];
@@ -246,12 +270,10 @@ export default class BattleController {
     this._phaseTimer = 0;
   }
 
-  /** @private Check for next cascade or finish */
   _finishStep() {
     this.fallCells = [];
     this._cascadePhase = null;
 
-    // Try next cascade
     const next = this.resolver.analyzeMatches(this.board);
     if (next) {
       this._enterShowMatch(next);
@@ -260,7 +282,6 @@ export default class BattleController {
     }
   }
 
-  /** @private */
   _finishResolving() {
     const totalDestroyed = this._allSteps.reduce((s, a) => s + a.tilesDestroyed, 0);
     if (this._allSteps.length > 0) {
@@ -297,7 +318,6 @@ export default class BattleController {
     if (this.onStateChange) this.onStateChange();
   }
 
-  /** @private */
   _endTurn(side) {
     this.pendingExtraTurn = false;
     this.log.nextTurn();
@@ -320,7 +340,6 @@ export default class BattleController {
   _activeState() {
     return this.activeSide === 'player' ? this.playerState : this.enemyState;
   }
-
   _opponentState() {
     return this.activeSide === 'player' ? this.enemyState : this.playerState;
   }
@@ -328,23 +347,46 @@ export default class BattleController {
   // ── Update ────────────────────────────────────────────
 
   update(dt) {
-    // Cascade sub-phases
+    // ── Swap animation ──
+    if (this.state === BattleState.SWAPPING && this.swapAnim) {
+      this.swapAnim.progress += dt / this.swapAnim.duration;
+      if (this.swapAnim.progress >= 1) {
+        this.swapAnim.progress = 1;
+        // Perform the logical swap
+        const { from, to, valid } = this.swapAnim;
+        this.board.swap(from.col, from.row, to.col, to.row);
+        this.swapAnim = null;
+
+        if (valid) {
+          const analysis = this.resolver.analyzeMatches(this.board);
+          this._beginResolving('player', analysis);
+        } else {
+          // Revert after animation
+          this.board.swap(from.col, from.row, to.col, to.row);
+          this.state = BattleState.PLAYER_TURN;
+        }
+      }
+      return; // Don't process other states during swap animation
+    }
+
+    // ── Cascade sub-phases ──
     if (this.state === BattleState.RESOLVING && this._cascadePhase) {
       this._phaseTimer += dt;
+      const phaseMs = this._phaseMs(this._cascadePhase);
 
-      if (this._cascadePhase === CascadePhase.SHOW_MATCH && this._phaseTimer >= PHASE_MS.SHOW_MATCH) {
+      if (this._cascadePhase === CascadePhase.SHOW_MATCH && this._phaseTimer >= phaseMs) {
         this._doRemove();
-      } else if (this._cascadePhase === CascadePhase.REMOVE && this._phaseTimer >= PHASE_MS.REMOVE) {
+      } else if (this._cascadePhase === CascadePhase.REMOVE && this._phaseTimer >= phaseMs) {
         this._doFall();
-      } else if (this._cascadePhase === CascadePhase.FALL && this._phaseTimer >= PHASE_MS.FALL) {
+      } else if (this._cascadePhase === CascadePhase.FALL && this._phaseTimer >= phaseMs) {
         this._finishStep();
       }
     }
 
-    // Enemy turn delay
+    // ── Enemy turn delay ──
     if (this.state === BattleState.ENEMY_TURN && !this._enemyFired) {
       this._enemyTimer += dt;
-      if (this._enemyTimer >= ENEMY_DELAY_MS) {
+      if (this._enemyTimer >= this._enemyDelay()) {
         this._enemyFired = true;
         this._doEnemyTurn();
       }
@@ -373,7 +415,6 @@ export default class BattleController {
       if (analysis) {
         this._beginResolving('enemy', analysis);
       } else {
-        // Shouldn't happen if AI picked a valid swap, but handle gracefully
         this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
         this.log.add('No valid match. Board reshuffled.');
         this.board.reshuffle();
@@ -396,14 +437,12 @@ export default class BattleController {
     }
     return true;
   }
-
   _spendCost(state, skill) {
     if (!skill.cost) return;
     for (const [c, a] of Object.entries(skill.cost)) {
       state.mana[c] = Math.max(0, (state.mana[c] || 0) - a);
     }
   }
-
   _applyEffect(skill, side) {
     const src = side === 'player' ? this.playerState : this.enemyState;
     const tgt = side === 'player' ? this.enemyState : this.playerState;

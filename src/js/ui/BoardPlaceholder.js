@@ -24,7 +24,11 @@ export default class BoardPlaceholder extends UIElement {
     this.emptyCells = [];
     this.fallCells = [];
     this._fallProgress = 0;
-    this._fallDuration = 350; // should match BattleController.PHASE_MS.FALL
+    this._fallDuration = 350;
+
+    // Swap animation state
+    /** @type {{from:{col:number,row:number},to:{col:number,row:number},progress:number}|null} */
+    this.swapAnim = null;
 
     if (!boardModel) this._generatePlaceholder();
   }
@@ -123,9 +127,35 @@ export default class BoardPlaceholder extends UIElement {
       fallMap[`${f.col},${f.row}`] = f;
     }
 
+    // Swap animation: skip rendering swapped tiles in their original positions
+    const swapSkip = new Set();
+    if (this.swapAnim) {
+      swapSkip.add(`${this.swapAnim.from.col},${this.swapAnim.from.row}`);
+      swapSkip.add(`${this.swapAnim.to.col},${this.swapAnim.to.row}`);
+    }
+
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const key = `${col},${row}`;
+
+        // Skip tiles being swap-animated (rendered separately)
+        if (swapSkip.has(key)) {
+          // Still render chessboard background
+          const x = offsetX + col * cellSize;
+          const y = offsetY + row * cellSize;
+          const isDark = (row + col) % 2 === 0;
+          const bgImg = isDark ? gridDark : gridLight;
+          if (bgImg) {
+            ctx.drawImage(bgImg, x, y, cellSize, cellSize);
+          } else {
+            ctx.fillStyle = isDark ? bgDark : bgLight;
+            ctx.fillRect(x, y, cellSize, cellSize);
+          }
+          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(x, y, cellSize, cellSize);
+          continue;
+        }
 
         // Skip empty cells during REMOVE phase
         if (emptySet.has(key)) {
@@ -227,6 +257,54 @@ export default class BoardPlaceholder extends UIElement {
       ctx.shadowColor = '#ffff00';
       ctx.shadowBlur = 8;
       ctx.strokeRect(sx + 1, sy + 1, cellSize - 2, cellSize - 2);
+      ctx.restore();
+    }
+
+    // ── Swap animation ──
+    if (this.swapAnim) {
+      const { from, to, progress } = this.swapAnim;
+      const t = progress;
+      const ease = 1 - (1 - t) * (1 - t); // ease-out quad
+
+      const fromType = this.getTileAt(from.row, from.col);
+      const toType = this.getTileAt(to.row, to.col);
+
+      const fromStartX = offsetX + from.col * cellSize;
+      const fromStartY = offsetY + from.row * cellSize;
+      const toStartX = offsetX + to.col * cellSize;
+      const toStartY = offsetY + to.row * cellSize;
+
+      // Tile A (from) moves toward to position
+      const ax = fromStartX + (toStartX - fromStartX) * ease;
+      const ay = fromStartY + (toStartY - fromStartY) * ease;
+
+      // Tile B (to) moves toward from position
+      const bx = toStartX + (fromStartX - toStartX) * ease;
+      const by = toStartY + (fromStartY - toStartY) * ease;
+
+      const drawTile = (x, y, typeKey) => {
+        if (!typeKey) return;
+        const assetKey = `tile_${typeKey}`;
+        const tileImg = this._assetManager ? this._assetManager.get(assetKey) : null;
+        if (tileImg) {
+          ctx.drawImage(tileImg, x, y, cellSize, cellSize);
+        } else {
+          ctx.fillStyle = fallbackColors[typeKey] || '#444';
+          ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.fillRect(x + 1, y + 1, cellSize - 2, (cellSize - 2) * 0.3);
+        }
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x, y, cellSize, cellSize);
+      };
+
+      // Render on top of everything with slight drop-shadow for depth
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 6;
+      drawTile(ax, ay, fromType);
+      drawTile(bx, by, toType);
       ctx.restore();
     }
   }

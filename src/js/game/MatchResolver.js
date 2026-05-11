@@ -43,13 +43,13 @@ export default class MatchResolver {
         const damage = Math.min(count, SKULL_DAMAGE_CONFIG.maxDamage)
           * SKULL_DAMAGE_CONFIG.baseMultiplier;
         cascadeSkullDamage += damage;
-        if (count >= 5) cascadeExtraTurn = true;
+        if (count >= 4) cascadeExtraTurn = true;
       } else {
         mergedMana[match.typeId] = (mergedMana[match.typeId] || 0) + count;
-        if (count >= 5) cascadeExtraTurn = true;
+        if (count >= 4) cascadeExtraTurn = true;
       }
 
-      if (match.isShape && count >= 5) {
+      if (match.isShape && count >= 4) {
         cascadeExtraTurn = true;
       }
     }
