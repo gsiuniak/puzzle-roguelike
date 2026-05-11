@@ -60,14 +60,14 @@ export default class BattleScene extends UIPanel {
     mainRow.alignItems = 'stretch';
     mainRow.justifyContent = 'center';
     mainRow.flexGrow = 1;
-    mainRow.maxWidth = 1400;
+    mainRow.maxWidth = 1600;
     mainRow.padding = { top: 12, right: 12, bottom: 12, left: 12 };
 
     // ── LEFT: Player CharacterPane ───────────────────
     this._playerPane = new CharacterPane(this._playerData, this._assetManager);
     this._playerPane.setStyle({
       widthPercent: 0.24,
-      minWidth: 300,
+      minWidth: 400,
       maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',
       borderColor: '#554422',
@@ -136,7 +136,7 @@ export default class BattleScene extends UIPanel {
     this._enemyPane = new CharacterPane(this._enemyData, this._assetManager);
     this._enemyPane.setStyle({
       widthPercent: 0.24,
-      minWidth: 300,
+      minWidth: 400,
       maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',
       borderColor: '#554422',
