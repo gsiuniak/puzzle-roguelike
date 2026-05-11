@@ -47,7 +47,7 @@ export default class UIElement {
     this.visible = true;
 
     /** Per-element image smoothing: null=use canvas default, true=smooth, false=crisp */
-    this.smoothing = null;
+    this.smoothing = true;
 
     /** Debug */
     this.debug = false;

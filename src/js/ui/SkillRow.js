@@ -82,9 +82,9 @@ export default class SkillRow extends UIPanel {
     const iconKey = sd.icon || 'placeholder';
     this._icon = new UIImage(iconKey, this._assetManager);
     this._icon.setStyle({
-      width: 48,
-      height: 48,
-      fitMode: 'contain',
+      width: 70,
+      height: 70,
+      fitMode: 'contain'
     });
     this._iconContainer.addChild(this._icon);
     this.addChild(this._iconContainer);
@@ -104,6 +104,7 @@ export default class SkillRow extends UIPanel {
       alignH: 'left',
       alignV: 'center',
       height: 20,
+      margin: { left: 15 }
     });
     infoCol.addChild(this._nameText);
 
@@ -116,6 +117,7 @@ export default class SkillRow extends UIPanel {
       alignV: 'center',
       height: 18,
       maxWidth: 200,
+       margin: { left: 15 }
     });
     infoCol.addChild(this._descText);
 
