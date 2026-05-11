@@ -18,6 +18,7 @@ export const BattleState = {
   ENEMY_TURN: 'ENEMY_TURN',
   RESOLVING: 'RESOLVING',
   SWAPPING: 'SWAPPING',
+  TURN_INTRO: 'TURN_INTRO',
   GAME_OVER: 'GAME_OVER',
 };
 
@@ -31,6 +32,8 @@ const CascadePhase = {
 const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
 const ENEMY_BASE_DELAY = 400;
 const SWAP_BASE_DURATION = 120;
+/** Turn intro animation delay in ms (NOT scaled — presentation timing) */
+const TURN_INTRO_DURATION = 600;
 
 export default class BattleController {
   constructor(playerData, enemyData) {
@@ -44,9 +47,19 @@ export default class BattleController {
     this.enemyAI = null;
 
     /** @type {BattleState} */
-    this.state = BattleState.PLAYER_TURN;
+    this.state = BattleState.TURN_INTRO;
     this.pendingExtraTurn = false;
     this.activeSide = 'player';
+
+    /** Set when entering TURN_INTRO so the scene spawns an announcement effect.
+     *  'player' | 'enemy' | null — read & cleared by getState(). */
+    this._turnAnnouncement = 'player';
+    /** Persists the target side through the intro so _completeTurnIntro
+     *  can transition correctly even after the scene clears _turnAnnouncement.
+     *  'player' | 'enemy' | null — NOT cleared by getState(). */
+    this._nextTurnSide = 'player';
+    /** Timer for TURN_INTRO delay before transitioning to the actual turn. */
+    this._turnIntroTimer = 0;
 
     /**
      * Board position (col, row) of the swap that triggered the current
@@ -157,6 +170,10 @@ export default class BattleController {
     const shakeIntensity = this._pendingShakeIntensity;
     this._pendingShakeIntensity = 0;
 
+    // Capture turn announcement and clear so scene spawns once per intro.
+    const turnAnnouncement = this._turnAnnouncement;
+    this._turnAnnouncement = null;
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -165,6 +182,7 @@ export default class BattleController {
       extraTurnTriggerPos: triggerPos,
       matchTextTriggers,
       shakeIntensity,
+      turnAnnouncement,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -181,6 +199,8 @@ export default class BattleController {
         return this.pendingExtraTurn ? 'Extra Turn' : 'Player Turn';
       case BattleState.ENEMY_TURN:
         return this.pendingExtraTurn ? 'Extra Turn' : 'Enemy Turn';
+      case BattleState.TURN_INTRO:
+        return this._turnAnnouncement === 'player' ? 'Player Turn' : 'Enemy Turn';
       case BattleState.SWAPPING:
         return 'Swapping...';
       case BattleState.RESOLVING:
@@ -488,8 +508,28 @@ export default class BattleController {
   _endTurn(side) {
     this.pendingExtraTurn = false;
     this._swapTriggerPos = null;
+    // Enter turn-intro animation before the actual turn begins.
+    // The scene reads _turnAnnouncement to spawn the appropriate
+    // floating image effect (Player Turn / Enemy Turn).
+    const nextSide = side === 'player' ? 'enemy' : 'player';
+    this.state = BattleState.TURN_INTRO;
+    this._turnAnnouncement = nextSide;
+    this._nextTurnSide = nextSide;
+    this._turnIntroTimer = 0;
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  /**
+   * Called when the TURN_INTRO delay expires. Transitions to the
+   * actual turn state (PLAYER_TURN or ENEMY_TURN).
+   */
+  _completeTurnIntro() {
+    // Use _nextTurnSide which persists through getState() clearing
+    const side = (this._nextTurnSide === 'player' || this._nextTurnSide === 'enemy')
+      ? this._nextTurnSide : 'player';
+
     this.log.nextTurn();
-    if (side === 'player') {
+    if (side === 'enemy') {
       this.state = BattleState.ENEMY_TURN;
       this.activeSide = 'enemy';
       this._enemyTimer = 0;
@@ -551,6 +591,14 @@ export default class BattleController {
         this._doFall();
       } else if (this._cascadePhase === CascadePhase.FALL && this._phaseTimer >= phaseMs) {
         this._finishStep();
+      }
+    }
+
+    // ── Turn intro delay ──
+    if (this.state === BattleState.TURN_INTRO) {
+      this._turnIntroTimer += dt;
+      if (this._turnIntroTimer >= TURN_INTRO_DURATION) {
+        this._completeTurnIntro();
       }
     }
 

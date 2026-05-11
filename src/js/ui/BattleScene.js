@@ -187,6 +187,11 @@ export default class BattleScene extends UIPanel {
     if (!this._battleController) return;
     const state = this._battleController.getState();
 
+    // ── Spawn turn announcement effect ──
+    if (state.turnAnnouncement && this._board && this._assetManager) {
+      this._spawnTurnAnnouncementEffect(state.turnAnnouncement);
+    }
+
     // ── Spawn extra turn effect ──
     if (state.extraTurnTriggerPos && this._board && this._assetManager) {
       this._spawnExtraTurnEffect(state.extraTurnTriggerPos);
@@ -235,6 +240,54 @@ export default class BattleScene extends UIPanel {
   }
 
   // ── Floating Image Effects ──────────────────────────
+
+  /**
+   * Get the center of the board area in screen coordinates.
+   * Used for centered turn announcement effects.
+   * @returns {{x:number, y:number}|null}
+   */
+  _getBoardCenter() {
+    if (!this._board) return null;
+    const r = this._board.rect;
+    return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  }
+
+  /**
+   * Spawn a centered turn announcement floating image effect.
+   * @param {string} side - 'player' or 'enemy'
+   */
+  _spawnTurnAnnouncementEffect(side) {
+    const assetKey = side === 'player'
+      ? 'animated_text_player_turn'
+      : 'animated_text_enemy_turn';
+    const img = this._assetManager.get(assetKey);
+    if (!img) return;
+
+    const center = this._getBoardCenter();
+    if (!center) return;
+
+    const metrics = this._board.getCellMetrics();
+    const targetWidth = metrics.cellSize * 5.0;
+    const aspectRatio = img.width / img.height;
+    const targetHeight = targetWidth / aspectRatio;
+
+    const effect = new FloatingImageEffect(
+      img,
+      center.x,
+      center.y,
+      targetWidth,
+      targetHeight,
+      {
+        growDuration: 150,
+        settleDuration: 100,
+        holdDuration: 250,
+        fadeDuration: 100,
+        overshoot: 1.15,
+      }
+    );
+
+    this._floatingEffects.push(effect);
+  }
 
   /**
    * Convert a board cell (col, row) to screen coordinates (center of cell).

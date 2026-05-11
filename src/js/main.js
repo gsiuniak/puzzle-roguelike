@@ -46,6 +46,8 @@ const ASSET_MAP = {
   grid_dark:                 'assets/sprites/grid/grid_dark.png',
   grid_light:                'assets/sprites/grid/grid_light.png',
   animated_text_extra_turn:  'assets/sprites/animated_text/animated_text_extra_turn.png',
+  animated_text_player_turn: 'assets/sprites/animated_text/animated_text_player_turn.png',
+  animated_text_enemy_turn:  'assets/sprites/animated_text/animated_text_enemy_turn.png',
   tile_red:                  'assets/sprites/tiles/red_tile.png',
   tile_blue:                 'assets/sprites/tiles/blue_tile.png',
   tile_green:                'assets/sprites/tiles/green_tile.png',
