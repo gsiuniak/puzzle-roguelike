@@ -1,4 +1,5 @@
 import UIContainer from './UIContainer.js';
+import UIPanel from './UIPanel.js';
 import CharacterPane from './CharacterPane.js';
 import BoardPlaceholder from './BoardPlaceholder.js';
 import UIText from './UIText.js';
@@ -7,7 +8,7 @@ import UIText from './UIText.js';
  * BattleScene — full battle layout with three columns.
  *
  * Structure:
- *   BattleScene (column)
+ *   BattleScene (column, UIPanel with battle_background_default)
  *     MainRow (row, flexGrow=1)
  *       PlayerPane   (CharacterPane, ~25% width)
  *       CenterColumn (column, flexGrow=1)
@@ -19,7 +20,7 @@ import UIText from './UIText.js';
  * Both character panes use the SAME CharacterPane component.
  * The only difference is the data object passed in.
  */
-export default class BattleScene extends UIContainer {
+export default class BattleScene extends UIPanel {
   /**
    * @param {object} playerData  - mock player data
    * @param {object} enemyData   - mock enemy data
@@ -34,6 +35,10 @@ export default class BattleScene extends UIContainer {
     this._playerData = playerData;
     this._enemyData = enemyData;
     this._assetManager = assetManager;
+
+    // UIPanel background image support — fills empty area with ambiance
+    this.assetManager = assetManager;
+    this.backgroundAssetKey = 'battle_background_default';
 
     // Child references
     this._playerPane = null;

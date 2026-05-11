@@ -17,6 +17,9 @@ const DEBUG_UI_LAYOUT = false;
 
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
+  // Battle scene
+  battle_background_default:  'assets/sprites/character_pane/background/battle_background_default.png',
+
   // Character pane
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
