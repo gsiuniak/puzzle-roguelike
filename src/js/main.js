@@ -41,6 +41,7 @@ const ASSET_MAP = {
   skill_slash:               'assets/sprites/character_pane/skills/skill_slash.png',
   skill_bash:                'assets/sprites/character_pane/skills/skill_bash.png',
   skill_defend:              'assets/sprites/character_pane/skills/skill_defend.png',
+  skill_explode:             'assets/sprites/character_pane/skills/skill_explode.png',
   skill_flair_left:          'assets/sprites/character_pane/flair/skill_flair_left.png',
   skill_flair_right:         'assets/sprites/character_pane/flair/skill_flair_right.png',
   grid_dark:                 'assets/sprites/grid/grid_dark.png',
@@ -109,13 +110,30 @@ async function init() {
   // ── Wire board drag/swap input ───────────────────────
   const board = scene.getBoard();
 
-  /** Only allow board input during PLAYER_TURN */
+  /** Allow board input during PLAYER_TURN (swap) or TARGETING (target tile) */
   function canAct() {
-    return battleController.state === BattleState.PLAYER_TURN;
+    return battleController.state === BattleState.PLAYER_TURN
+        || battleController.state === BattleState.TARGETING;
+  }
+
+  /** True when the game expects the player to act on the board */
+  function isTargeting() {
+    return battleController.state === BattleState.TARGETING;
   }
 
   input.on('mousedown', (x, y) => {
-    if (!board || !canAct()) return;
+    if (!board) return;
+
+    if (isTargeting()) {
+      // During targeting: click on board tile executes the skill
+      const cell = board.screenToCell(x, y);
+      if (cell) {
+        battleController.tryTargetTile(cell.col, cell.row);
+      }
+      return;
+    }
+
+    if (!canAct()) return;
     const cell = board.screenToCell(x, y);
     if (cell) {
       selectedCell = cell;
@@ -135,6 +153,19 @@ async function init() {
 
   input.on('mousemove', (x, y) => {
     if (!board) return;
+
+    if (isTargeting()) {
+      // During targeting: update hover for overlay
+      const cell = board.screenToCell(x, y);
+      if (cell) {
+        battleController.setTargetHover(cell.col, cell.row);
+      } else {
+        battleController.setTargetHover(null, null);
+      }
+      board.hoveredCell = cell;
+      return;
+    }
+
     const cell = canAct() ? board.screenToCell(x, y) : null;
     hoveredCell = cell;
     board.hoveredCell = cell;
@@ -149,7 +180,7 @@ async function init() {
   });
 
   input.on('mouseup', (x, y) => {
-    if (!board || !selectedCell || !canAct()) {
+    if (!board || !selectedCell || !canAct() || isTargeting()) {
       selectedCell = null;
       dragStartCell = null;
       if (board) board.selectedCell = null;
@@ -174,6 +205,23 @@ async function init() {
     dragStartCell = null;
     if (board) board.selectedCell = null;
   });
+
+  // ── Right-click / Escape to cancel targeting ────────
+  input.canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (isTargeting()) {
+      battleController.cancelTargeting();
+    }
+  });
+
+  input.canvas.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isTargeting()) {
+      battleController.cancelTargeting();
+    }
+  });
+  // Canvas needs tabindex for keydown to work
+  input.canvas.setAttribute('tabindex', '0');
+  input.canvas.style.outline = 'none';
 
   // ── Layout ───────────────────────────────────────────
   function layoutScene(canvasW, canvasH) {

@@ -3,12 +3,13 @@
  *
  * State machine:
  *   PLAYER_TURN → RESOLVING → ENEMY_TURN → RESOLVING → PLAYER_TURN ...
+ *   PLAYER_TURN → TARGETING → RESOLVING → ...
  *
  * Configurable timing via speedMultiplier (1.0 = normal, 2.0 = fast).
  */
 
 import BoardModel from './BoardModel.js';
-import MatchResolver from './MatchResolver.js';
+import MatchResolver, { SKILL_EFFECT_TYPES } from './MatchResolver.js';
 import CombatLog from './CombatLog.js';
 import EnemyAI from './EnemyAI.js';
 
@@ -19,6 +20,7 @@ export const BattleState = {
   RESOLVING: 'RESOLVING',
   SWAPPING: 'SWAPPING',
   TURN_INTRO: 'TURN_INTRO',
+  TARGETING: 'TARGETING',
   GAME_OVER: 'GAME_OVER',
 };
 
@@ -118,6 +120,17 @@ export default class BattleController {
     /** @type {{from:{col:number,row:number},to:{col:number,row:number},progress:number,duration:number,valid:boolean}|null} */
     this.swapAnim = null;
 
+    // ── Targeting state (for skills like Explode!) ──
+    /** @type {object|null} skill being targeted (copy of skill def) */
+    this._targetingSkill = null;
+    /** @type {{col:number, row:number}|null} hovered cell during targeting */
+    this._targetHoverCell = null;
+    /** @type {Array<{col:number, row:number}>} cells in targeting overlay */
+    this._targetingOverlayCells = [];
+
+    /** @type {Array<{col:number, row:number}>} tiles destroyed by skill (for REMOVE phase visual) */
+    this._skillDestroyedPositions = [];
+
     /**
      * Pending screen-shake intensity (0-1). Set when damage is dealt,
      * read & cleared by BattleScene each frame via getState().
@@ -190,6 +203,9 @@ export default class BattleController {
       fallCells: this.fallCells,
       cascadePhase: this._cascadePhase,
       swapAnim: this.swapAnim,
+      targetingActive: this.state === BattleState.TARGETING,
+      targetingOverlayCells: this._targetingOverlayCells || [],
+      targetingSkill: this._targetingSkill,
     };
   }
 
@@ -201,6 +217,8 @@ export default class BattleController {
         return this.pendingExtraTurn ? 'Extra Turn' : 'Enemy Turn';
       case BattleState.TURN_INTRO:
         return this._turnAnnouncement === 'player' ? 'Player Turn' : 'Enemy Turn';
+      case BattleState.TARGETING:
+        return 'Select a board tile...';
       case BattleState.SWAPPING:
         return 'Swapping...';
       case BattleState.RESOLVING:
@@ -259,11 +277,205 @@ export default class BattleController {
       this.log.add(`Not enough mana for ${skill.name}.`);
       return false;
     }
+
+    const effectType = skill.effectType || this._inferEffectType(skill);
+
+    // Skills that require board targeting enter TARGETING state first
+    if (skill.targeting === 'board_tile') {
+      this.state = BattleState.TARGETING;
+      this._targetingSkill = { ...skill, effectType };
+      this._targetHoverCell = null;
+      this._targetingOverlayCells = [];
+      this.log.add(`Select a board tile for ${skill.name}...`);
+      if (this.onStateChange) this.onStateChange();
+      return true;
+    }
+
+    // Instant-effect skills: spend cost and apply immediately
     this._spendCost(this.playerState, skill);
-    this._applyEffect(skill, 'player');
+    this._applyEffect(skill, 'player', effectType);
     this.log.add(`${this.playerState.name} uses ${skill.name}.`);
     this._endTurn('player');
     return true;
+  }
+
+  /**
+   * Infer the effect type from skill description/name for legacy skills
+   * that don't have an explicit effectType field.
+   * @param {object} skill
+   * @returns {string} SKILL_EFFECT_TYPES value
+   */
+  _inferEffectType(skill) {
+    const desc = (skill.description || '').toLowerCase();
+    const name = (skill.name || '').toLowerCase();
+    if (desc.includes('gain') || desc.includes('armor') || desc.includes('block')
+        || name.includes('defend') || name.includes('shield')) {
+      return SKILL_EFFECT_TYPES.ARMOR;
+    }
+    // Default: damage
+    return SKILL_EFFECT_TYPES.DAMAGE;
+  }
+
+  /**
+   * Enter targeting mode for board-targeted skills.
+   * Called when player clicks a skill with targeting: 'board_tile'.
+   * @param {object} skill
+   */
+  enterTargeting(skill) {
+    this.state = BattleState.TARGETING;
+    this._targetingSkill = { ...skill };
+    this._targetHoverCell = null;
+    this._targetingOverlayCells = [];
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  /**
+   * Update the hovered cell during TARGETING state.
+   * Called each frame from main.js mousemove handler.
+   * @param {number|null} col
+   * @param {number|null} row
+   */
+  setTargetHover(col, row) {
+    if (this.state !== BattleState.TARGETING) return;
+    this._targetHoverCell = col != null && row != null ? { col, row } : null;
+    this._targetingOverlayCells = this._computeTargetingArea(col, row);
+  }
+
+  /**
+   * Handle a board tile click during TARGETING state.
+   * @param {number} col
+   * @param {number} row
+   * @returns {boolean} true if targeting was resolved
+   */
+  tryTargetTile(col, row) {
+    if (this.state !== BattleState.TARGETING || !this._targetingSkill) return false;
+
+    const skill = this._targetingSkill;
+    const effectType = skill.effectType || SKILL_EFFECT_TYPES.DESTROY_TILES;
+
+    // Spend the cost
+    this._spendCost(this.playerState, skill);
+    this.log.add(`${this.playerState.name} uses ${skill.name}.`);
+
+    // Compute affected tiles
+    const area = this._computeTargetingArea(col, row);
+
+    // Clear targeting state
+    this._targetingSkill = null;
+    this._targetHoverCell = null;
+    this._targetingOverlayCells = [];
+
+    // Execute based on effect type
+    if (effectType === SKILL_EFFECT_TYPES.DESTROY_TILES) {
+      this._executeDestroyTiles(area, col, row);
+    }
+
+    return true;
+  }
+
+  /**
+   * Cancel board targeting and return to PLAYER_TURN.
+   */
+  cancelTargeting() {
+    if (this.state !== BattleState.TARGETING) return false;
+    this._targetingSkill = null;
+    this._targetHoverCell = null;
+    this._targetingOverlayCells = [];
+    this.state = BattleState.PLAYER_TURN;
+    this.log.add('Targeting cancelled.');
+    if (this.onStateChange) this.onStateChange();
+    return true;
+  }
+
+  /**
+   * Compute the affected area for a board-targeted skill.
+   * Radius 1 = 3x3 area centered on (col, row), clamped to board bounds.
+   * @param {number|null} col center column
+   * @param {number|null} row center row
+   * @returns {Array<{col:number, row:number}>}
+   */
+  _computeTargetingArea(col, row) {
+    if (col == null || row == null) return [];
+    const skill = this._targetingSkill;
+    if (!skill || !skill.area) return [];
+    const radius = skill.area.radius || 0;
+    const cells = [];
+    for (let dc = -radius; dc <= radius; dc++) {
+      for (let dr = -radius; dr <= radius; dr++) {
+        const c = col + dc;
+        const r = row + dr;
+        if (c >= 0 && c < this.board.cols && r >= 0 && r < this.board.rows) {
+          // Only include cells that have a tile
+          if (this.board.get(c, r)) {
+            cells.push({ col: c, row: r });
+          }
+        }
+      }
+    }
+    return cells;
+  }
+
+  /**
+   * Execute a DESTROY_TILES effect on the given positions.
+   * Awards tile rewards (mana/skull damage), removes tiles, then enters
+   * the standard board collapse → refill → cascade resolution flow.
+   * @param {Array<{col:number, row:number}>} positions
+   * @param {number} centerCol - center of explosion (for log message)
+   * @param {number} centerRow - center of explosion (for log message)
+   */
+  _executeDestroyTiles(positions, centerCol, centerRow) {
+    const activeState = this._activeState();
+    const targetState = this._opponentState();
+
+    // 1. Compute tile rewards using shared path
+    const rewards = this.resolver.resolveDestroyedTileRewards(this.board, positions);
+
+    // 2. Award mana from colored gems
+    for (const [color, count] of Object.entries(rewards.mana)) {
+      if (count > 0) {
+        activeState.mana[color] = (activeState.mana[color] || 0) + count;
+        this.log.add(`${activeState.name} gains ${count} ${color} mana from destroyed gems.`);
+      }
+    }
+
+    // 3. Deal skull damage
+    if (rewards.skullDamage > 0) {
+      const r = this.resolver.applyDamage(targetState, rewards.skullDamage);
+      this.log.add(`Destroyed skulls deal ${r.actualDamage} damage to ${targetState.name}.`);
+      this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
+    }
+
+    // 4. Remove tiles from board
+    const removedCount = this.board.removeTiles(positions);
+    this.log.add(`${removedCount} tiles destroyed by Explode!`);
+
+    // 5. Enter RESOLVING directly at REMOVE phase (skip SHOW_MATCH — no match to highlight)
+    this.state = BattleState.RESOLVING;
+    this.activeSide = 'player';
+    this._allSteps = [];
+    this._extraTurnEarned = false;
+    this.pendingExtraTurn = false;
+    this._matchTextTriggers = [];
+    this._previousEmptyCells = null;
+    this._swapTriggerPos = null;
+
+    // Create a synthetic analysis entry for _allSteps tracking
+    this._analysis = null;
+    this._allSteps.push({
+      matches: [],
+      positions: [...positions],
+      mana: rewards.mana,
+      skullDamage: rewards.skullDamage,
+      extraTurnTrigger: false,
+      tilesDestroyed: removedCount,
+    });
+
+    // Show empty cells as the REMOVE phase visual
+    this.highlightCells = [];
+    this.emptyCells = [...positions];
+    this.fallCells = [];
+    this._cascadePhase = CascadePhase.REMOVE;
+    this._phaseTimer = 0;
   }
 
   // ── Resolution ────────────────────────────────────────
@@ -667,11 +879,12 @@ export default class BattleController {
       state.mana[c] = Math.max(0, (state.mana[c] || 0) - a);
     }
   }
-  _applyEffect(skill, side) {
+  _applyEffect(skill, side, effectType) {
     const src = side === 'player' ? this.playerState : this.enemyState;
     const tgt = side === 'player' ? this.enemyState : this.playerState;
-    const name = (skill.name || '').toLowerCase();
-    const desc = (skill.description || '').toLowerCase();
+
+    // Determine effect type: explicit param → skill field → inference
+    const type = effectType || skill.effectType || this._inferEffectType(skill);
 
     // Extract numeric value from description (e.g. "Deal 5 damage" → 5)
     // Falls back to the source's attack stat if no number found.
@@ -681,15 +894,20 @@ export default class BattleController {
       baseAmount = parseInt(numMatch[1], 10);
     }
 
-    if (desc.includes('gain') || desc.includes('armor') || desc.includes('block')
-        || name.includes('defend') || name.includes('shield')) {
-      src.armor += baseAmount;
-      this.log.add(`${src.name} gains ${baseAmount} armor.`);
-    } else if (desc.includes('damage') || name.includes('bash') || name.includes('slash')) {
-      const r = this.resolver.applyDamage(tgt, baseAmount);
-      this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
-      // Trigger screen shake scaled by damage % of target's max HP
-      this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
+    switch (type) {
+      case SKILL_EFFECT_TYPES.ARMOR:
+        src.armor += baseAmount;
+        this.log.add(`${src.name} gains ${baseAmount} armor.`);
+        break;
+
+      case SKILL_EFFECT_TYPES.DAMAGE:
+      default: {
+        const r = this.resolver.applyDamage(tgt, baseAmount);
+        this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
+        // Trigger screen shake scaled by damage % of target's max HP
+        this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
+        break;
+      }
     }
   }
 

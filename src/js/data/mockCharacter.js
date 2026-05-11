@@ -34,6 +34,15 @@ const mockCharacter = {
       icon: 'skill_defend',
       cost: { blue: 5 },
     },
+    {
+      name: 'Explode!',
+      description: 'Destroy tiles in a 3x3 area.',
+      icon: 'skill_explode',
+      effectType: 'destroy_tiles',
+      targeting: 'board_tile',
+      area: { radius: 1 },
+      cost: { purple: 8 },
+    },
     // {
     //   name: 'Battle Roar',
     //   description: 'Increase Attack and Armor for 3 turns.',

@@ -23,6 +23,10 @@ export default class BoardPlaceholder extends UIElement {
     this.highlightCells = [];
     this.emptyCells = [];
     this.fallCells = [];
+
+    // Targeting overlay (for skills like Explode!)
+    /** @type {Array<{col:number, row:number}>} */
+    this.targetingOverlayCells = [];
     this._fallProgress = 0;
     this._fallDuration = 350;
 
@@ -242,9 +246,26 @@ export default class BoardPlaceholder extends UIElement {
       ctx.restore();
     }
 
+    // ── Targeting overlay (skill targeting like Explode! 3x3) ──
+    if (this.targetingOverlayCells && this.targetingOverlayCells.length > 0) {
+      for (const pos of this.targetingOverlayCells) {
+        const hx = ox + pos.col * cs;
+        const hy = oy + pos.row * cs;
+        ctx.save();
+        // Pulsing orange/red glow
+        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 120);
+        ctx.fillStyle = `rgba(255,140,40,${0.12 + pulse * 0.10})`;
+        ctx.fillRect(hx, hy, cs, cs);
+        ctx.strokeStyle = `rgba(255,120,30,${0.55 + pulse * 0.25})`;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(hx + 1, hy + 1, cs - 2, cs - 2);
+        ctx.restore();
+      }
+    }
+
     // ── Hover ── (hidden during cascade animations)
     const inCascade = this.highlightCells.length > 0 || this.emptyCells.length > 0 || this.fallCells.length > 0;
-    if (this.hoveredCell && !inCascade) {
+    if (this.hoveredCell && !inCascade && !(this.targetingOverlayCells && this.targetingOverlayCells.length > 0)) {
       const hx = ox + this.hoveredCell.col * cs;
       const hy = oy + this.hoveredCell.row * cs;
       ctx.save();

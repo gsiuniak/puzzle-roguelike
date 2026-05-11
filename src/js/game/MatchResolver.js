@@ -4,12 +4,24 @@
  * Provides:
  *   - analyzeMatches() — find matches and calculate rewards (does NOT modify board)
  *   - applyDamage() — static helper for armor→block→HP damage
+ *   - resolveDestroyedTileRewards() — shared reward computation for any tile destruction
  *
  * BattleController drives the visual phases and applies board modifications
  * (removeTiles, gravity, refill) at the appropriate times.
  */
 
 import { isSkull, SKULL_DAMAGE_CONFIG } from './TileTypes.js';
+
+/**
+ * Skill effect type constants.
+ * Used by skill definitions and BattleController routing.
+ * @enum {string}
+ */
+export const SKILL_EFFECT_TYPES = {
+  DAMAGE: 'damage',
+  ARMOR: 'armor',
+  DESTROY_TILES: 'destroy_tiles',
+};
 
 export default class MatchResolver {
   constructor() {
@@ -99,6 +111,34 @@ export default class MatchResolver {
     target.hp = Math.max(0, target.hp - remaining);
 
     return { actualDamage, blocked, armorDamage };
+  }
+
+  /**
+   * Compute rewards for destroying a set of tiles, regardless of source
+   * (match, skill, cascade, explode, etc.). Does NOT mutate board or states.
+   *
+   * Each destroyed colored gem grants 1 mana of its color to the active combatant.
+   * Each destroyed skull deals 1 damage (baseMultiplier) to the opposing combatant.
+   *
+   * @param {import('./BoardModel.js').default} board
+   * @param {Array<{col:number, row:number}>} positions
+   * @returns {{ mana: Object<string,number>, skullDamage: number, tilesDestroyed: number }}
+   */
+  resolveDestroyedTileRewards(board, positions) {
+    const mana = {};
+    let skullDamage = 0;
+
+    for (const pos of positions) {
+      const tileId = board.get(pos.col, pos.row);
+      if (!tileId) continue;
+      if (isSkull(tileId)) {
+        skullDamage += SKULL_DAMAGE_CONFIG.baseMultiplier;
+      } else {
+        mana[tileId] = (mana[tileId] || 0) + 1;
+      }
+    }
+
+    return { mana, skullDamage: Math.min(skullDamage, SKULL_DAMAGE_CONFIG.maxDamage), tilesDestroyed: positions.length };
   }
 }
 

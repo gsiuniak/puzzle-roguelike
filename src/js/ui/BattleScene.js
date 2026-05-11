@@ -236,6 +236,7 @@ export default class BattleScene extends UIPanel {
       this._board.emptyCells = state.emptyCells || [];
       this._board.fallCells = state.fallCells || [];
       this._board.swapAnim = state.swapAnim || null;
+      this._board.targetingOverlayCells = state.targetingOverlayCells || [];
     }
   }
 
