@@ -39,29 +39,39 @@ export default class UIImage extends UIElement {
     const dw = this.drawWidth || r.w;
     const dh = this.drawHeight || r.h;
 
+    // Apply per-element smoothing if set
+    this._applySmoothing(ctx);
+
     ctx.save();
 
     if (this.fitMode === 'stretch') {
-      ctx.drawImage(img, r.x, r.y, dw, dh);
+      ctx.drawImage(
+        img,
+        Math.floor(r.x), Math.floor(r.y),
+        Math.ceil(dw), Math.ceil(dh)
+      );
     } else if (this.fitMode === 'cover') {
       // Scale to cover, center-crop
       const scale = Math.max(dw / img.width, dh / img.height);
       const sw = img.width * scale;
       const sh = img.height * scale;
-      const sx = r.x + (dw - sw) / 2;
-      const sy = r.y + (dh - sh) / 2;
-      ctx.drawImage(img, sx, sy, sw, sh);
+      const sx = Math.floor(r.x + (dw - sw) / 2);
+      const sy = Math.floor(r.y + (dh - sh) / 2);
+      ctx.drawImage(img, sx, sy, Math.ceil(sw), Math.ceil(sh));
     } else {
       // 'contain' (default)
       const scale = Math.min(dw / img.width, dh / img.height, 1);
       const sw = img.width * scale;
       const sh = img.height * scale;
-      const sx = r.x + (dw - sw) / 2;
-      const sy = r.y + (dh - sh) / 2;
-      ctx.drawImage(img, sx, sy, sw, sh);
+      const sx = Math.floor(r.x + (dw - sw) / 2);
+      const sy = Math.floor(r.y + (dh - sh) / 2);
+      ctx.drawImage(img, sx, sy, Math.ceil(sw), Math.ceil(sh));
     }
 
     ctx.restore();
+
+    // Restore canvas default after draw
+    this._restoreSmoothing(ctx);
   }
 
   setStyle(props) {

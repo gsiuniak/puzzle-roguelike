@@ -1,13 +1,19 @@
 /**
- * EnemyAI — simple enemy decision-making.
+ * EnemyAI — enemy decision-making with prioritised board evaluation.
  *
  * Evaluates possible swaps on a cloned board and picks the best move.
- * Priority: skull matches > mana for own skills > larger matches > any valid.
  *
- * Also checks if enemy can use a skill before making a board move.
+ * Priority order (strict):
+ *   1. Matching 4+ tiles → extra turn (massive bonus, dominates all)
+ *   2. Dealing damage — skull matches first, then mana that enables damage skills
+ *   3. Matching colors to gain mana for the enemy's own skills
+ *   4. Matching colors to deny mana the player needs (lowest priority)
+ *
+ * Also checks if enemy can use a skill before making a board move,
+ * preferring damage-dealing skills over defensive ones.
  */
 
-import { isSkull } from './TileTypes.js';
+import { isSkull, SKULL_DAMAGE_CONFIG } from './TileTypes.js';
 
 export default class EnemyAI {
   /**
@@ -42,16 +48,26 @@ export default class EnemyAI {
   }
 
   /**
-   * Check if the enemy can afford any skill right now.
+   * Find the best affordable skill, preferring damage-dealing skills.
    * @returns {object|null} skill definition or null
    */
   findBestSkill() {
+    let bestSkill = null;
+    let bestIsDamage = false;
+
     for (const skill of (this.enemyState.skills || [])) {
-      if (this._canAfford(skill)) {
-        return skill;
+      if (!this._canAfford(skill)) continue;
+
+      const isDamage = this._isDamageSkill(skill);
+
+      // Prefer damage skills; if same category, first found wins
+      if (!bestSkill || (isDamage && !bestIsDamage)) {
+        bestSkill = skill;
+        bestIsDamage = isDamage;
       }
     }
-    return null;
+
+    return bestSkill;
   }
 
   /**
@@ -92,8 +108,34 @@ export default class EnemyAI {
   }
 
   /**
+   * Check whether a skill deals damage (as opposed to buffing / defending).
+   * @param {object} skill
+   * @returns {boolean}
+   * @private
+   */
+  _isDamageSkill(skill) {
+    const desc = (skill.description || '').toLowerCase();
+    const name = (skill.name || '').toLowerCase();
+    return desc.includes('damage')
+        || name.includes('bash')
+        || name.includes('slash')
+        || name.includes('strike')
+        || name.includes('attack');
+  }
+
+  /**
    * Score a board state after a simulated swap.
-   * Higher score = better for the enemy.
+   *
+   * Priority weights (higher = better for the enemy):
+   *   1. Any 4+ match .......................... +10000  (extra turn dominates)
+   *   2a. Skull damage ......................... +100 per point
+   *   2b. Skill affordable (damage skill) ...... +200
+   *   2c. Skill affordable (defensive skill) ... +120
+   *   3.  Enemy skill mana colors .............. +12 per tile
+   *   4.  Player skill mana colors (contest) ... +4 per tile
+   *   Base mana value .......................... +5 per tile
+   *   Shape bonus .............................. +15
+   *
    * @param {import('./BoardModel.js').default} board
    * @returns {number}
    * @private
@@ -103,7 +145,6 @@ export default class EnemyAI {
     if (matches.length === 0) return -1;
 
     let score = 0;
-    let hasExtraTurn = false;
     const enemySkillManaGained = {};
 
     // Track mana relevant to enemy skills
@@ -111,39 +152,51 @@ export default class EnemyAI {
       enemySkillManaGained[color] = 0;
     }
 
+    // ── Priority 1: extra turn from 4+ matches ──────────
+    let has4PlusMatch = false;
+    for (const match of matches) {
+      if (match.count >= 4) {
+        has4PlusMatch = true;
+        break;
+      }
+    }
+
+    if (has4PlusMatch) {
+      // Massive bonus so ANY 4+ match beats any set of 3-matches
+      score += 10000;
+    }
+
+    // ── Per-match scoring ──────────────────────────────
     for (const match of matches) {
       const count = match.count;
 
       if (isSkull(match.typeId)) {
-        // Skull matches deal damage — very good
-        const damage = Math.min(count, 25);
-        score += damage * 35;
-        if (count >= 5) hasExtraTurn = true;
+        // Priority 2a: skull matches deal direct damage
+        const damage = Math.min(count, SKULL_DAMAGE_CONFIG.maxDamage);
+        score += damage * 100;
       } else {
-        // Mana tiles
-        score += count * 8;
+        // Base mana value
+        score += count * 5;
 
-        // Mana for enemy's own skills is extra valuable
+        // Priority 3: mana for enemy's own skills
         if (enemySkillManaGained[match.typeId] !== undefined) {
           enemySkillManaGained[match.typeId] += count;
-          score += count * 20;
+          score += count * 12;
         }
 
-        // Contesting player's skill colors
+        // Priority 4: contesting player's skill colors (lowest)
         if (this.playerSkillColors[match.typeId]) {
-          score += count * 10;
+          score += count * 4;
         }
-
-        if (count >= 5) hasExtraTurn = true;
       }
 
-      // Shape bonus (L/T/cross)
+      // Shape bonus (L/T/cross) — minor
       if (match.isShape) {
-        score += 30;
+        score += 15;
       }
     }
 
-    // Bonus for being able to use a skill after this match
+    // ── Priority 2b: skill affordability after match ──
     for (const skill of (this.enemyState.skills || [])) {
       if (!skill.cost) continue;
       let canAfford = true;
@@ -155,15 +208,16 @@ export default class EnemyAI {
           break;
         }
       }
-      if (canAfford) score += 250;
+      if (canAfford) {
+        // Damage skills are worth more than defensive skills
+        score += this._isDamageSkill(skill) ? 200 : 120;
+      }
     }
 
-    if (hasExtraTurn) score += 500;
-
-    // Total tile count bonus
+    // ── Cascade size bonus ─────────────────────────────
     const totalTiles = matches.reduce((s, m) => s + m.count, 0);
-    if (totalTiles >= 5) score += 50;
-    if (totalTiles >= 8) score += 100;
+    if (totalTiles >= 5) score += 25;
+    if (totalTiles >= 8) score += 40;
 
     return score;
   }

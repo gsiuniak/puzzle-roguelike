@@ -35,6 +35,9 @@ export default class CharacterPane extends UIPanel {
     this._assetManager = assetManager;
     this.assetManager = assetManager; // for UIPanel background rendering
 
+    // Decorative background panel benefits from smoothing
+    this.smoothing = true;
+
     // Skill click callback
     /** @type {Function|null} (skillData) => {} */
     this.onSkillClick = null;
@@ -228,6 +231,7 @@ export default class CharacterPane extends UIPanel {
     manaRow.height = 100;
     manaRow.backgroundAssetKey = 'character_pane_skill_row';
     manaRow.assetManager = this._assetManager;
+    manaRow.smoothing = true;
 
     const manaColors = {
       red:    '#cc3333',

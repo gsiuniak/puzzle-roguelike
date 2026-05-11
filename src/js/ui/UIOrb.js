@@ -68,6 +68,7 @@ export default class UIOrb extends UIElement {
     if (this.assetKey && this.assetManager) {
       const img = this.assetManager.get(this.assetKey);
       if (img) {
+        this._applySmoothing(ctx);
         ctx.save();
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -77,21 +78,15 @@ export default class UIOrb extends UIElement {
           (radius * 2) / img.width,
           (radius * 2) / img.height
         );
-        const sw = img.width * scale;
-        const sh = img.height * scale;
-        ctx.drawImage(img, cx - sw / 2, cy - sh / 2, sw, sh);
+        const sw = Math.ceil(img.width * scale);
+        const sh = Math.ceil(img.height * scale);
+        const dx = Math.floor(cx - sw / 2);
+        const dy = Math.floor(cy - sh / 2);
+        ctx.drawImage(img, dx, dy, sw, sh);
         ctx.restore();
+        this._restoreSmoothing(ctx);
       }
     }
-
-    // Border
-    // if (this.borderWidth > 0) {
-    //   ctx.beginPath();
-    //   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    //   ctx.strokeStyle = this.borderColor;
-    //   ctx.lineWidth = this.borderWidth;
-    //   ctx.stroke();
-    // }
 
     // Count text centered inside orb
     if (this.showCount) {
@@ -129,10 +124,10 @@ export default class UIOrb extends UIElement {
     const orbRadius = orbSize / 2 - this.borderWidth;
 
     // Plate: positioned to overlap orb bottom, extending below
-    const plateW = orbSize * 0.82;
-    const plateH = orbSize * 0.38;
-    const plateX = r.x + (r.w - plateW) / 2;
-    const plateY = orbCy + orbRadius * 0.55; // plate starts at ~55% of orb radius below center
+    const plateW = Math.ceil(orbSize * 0.82);
+    const plateH = Math.ceil(orbSize * 0.38);
+    const plateX = Math.floor(r.x + (r.w - plateW) / 2);
+    const plateY = Math.floor(orbCy + orbRadius * 0.55);
 
     ctx.save();
 
@@ -146,6 +141,7 @@ export default class UIOrb extends UIElement {
     if (this.assetKey && this.assetManager) {
       const img = this.assetManager.get(this.assetKey);
       if (img) {
+        this._applySmoothing(ctx);
         ctx.save();
         ctx.beginPath();
         ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
@@ -155,21 +151,15 @@ export default class UIOrb extends UIElement {
           (orbRadius * 2) / img.width,
           (orbRadius * 2) / img.height
         );
-        const sw = img.width * scale;
-        const sh = img.height * scale;
-        ctx.drawImage(img, orbCx - sw / 2, orbCy - sh / 2, sw, sh);
+        const sw = Math.ceil(img.width * scale);
+        const sh = Math.ceil(img.height * scale);
+        const dx = Math.floor(orbCx - sw / 2);
+        const dy = Math.floor(orbCy - sh / 2);
+        ctx.drawImage(img, dx, dy, sw, sh);
         ctx.restore();
+        this._restoreSmoothing(ctx);
       }
     }
-
-    // Orb border
-    // if (this.borderWidth > 0) {
-    //   ctx.beginPath();
-    //   ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
-    //   ctx.strokeStyle = this.borderColor;
-    //   ctx.lineWidth = this.borderWidth;
-    //   ctx.stroke();
-    // }
 
     // ── Amount plate (drawn AFTER orb, so it is visible) ─
     const amountImg = this.assetManager
@@ -177,7 +167,9 @@ export default class UIOrb extends UIElement {
       : null;
 
     if (amountImg) {
+      this._applySmoothing(ctx);
       ctx.drawImage(amountImg, plateX, plateY, plateW, plateH);
+      this._restoreSmoothing(ctx);
     }
 
     // Count text centered over lower orb / upper plate overlap

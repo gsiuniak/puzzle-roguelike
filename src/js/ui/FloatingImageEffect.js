@@ -136,12 +136,16 @@ export default class FloatingImageEffect {
 
     const w = this.targetWidth * s;
     const h = this.targetHeight * s;
-    const x = this.originX - w / 2;
-    const y = this.originY - h / 2;
+    const x = Math.floor(this.originX - w / 2);
+    const y = Math.floor(this.originY - h / 2);
+    const rw = Math.ceil(w);
+    const rh = Math.ceil(h);
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.drawImage(this.image, x, y, w, h);
+    // Floating effect text sprites should be crisp
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.image, x, y, rw, rh);
     ctx.restore();
   }
 }

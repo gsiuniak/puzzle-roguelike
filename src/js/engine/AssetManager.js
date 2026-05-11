@@ -1,5 +1,6 @@
 /**
- * AssetManager — loads and caches images by key.
+ * AssetManager — loads and caches images by key. Also supports pre-scaled
+ * offscreen canvases to avoid repeated drawImage scaling every frame.
  *
  * Usage:
  *   const am = new AssetManager();
@@ -7,11 +8,14 @@
  *   am.add('placeholder', 'assets/sprites/placeholder.png');
  *   await am.loadAll();
  *   const img = am.get('warrior');
+ *   // Pre-scaled offscreen canvas:
+ *   const scaled = am.getScaled('warrior', 48, 48);
  *
  * Uses:
  *  - add(key, path) to register
  *  - loadAll() returns Promise that resolves when all load (or fail gracefully)
  *  - get(key) returns HTMLImageElement or null
+ *  - getScaled(key, w, h) returns HTMLCanvasElement (offscreen, pre-scaled) or null
  *  - isLoaded(key) returns boolean
  */
 export default class AssetManager {
@@ -23,6 +27,13 @@ export default class AssetManager {
     this._count = 0;
     /** Successfully loaded count */
     this._loaded = 0;
+
+    /**
+     * Cache of pre-scaled offscreen canvases.
+     * Key format: "assetKey:w:h"
+     * @type {Map<string, HTMLCanvasElement>}
+     */
+    this._scaledCache = new Map();
   }
 
   /**
@@ -92,6 +103,43 @@ export default class AssetManager {
       return null;
     }
     return entry.image; // may be null if still loading or failed
+  }
+
+  /**
+   * Get a pre-scaled offscreen canvas for an asset.
+   * Avoids repeatedly scaling the same image every frame in drawImage.
+   *
+   * @param {string} key - asset key
+   * @param {number} w   - target width (integer)
+   * @param {number} h   - target height (integer)
+   * @returns {HTMLCanvasElement|null}
+   */
+  getScaled(key, w, h) {
+    const cacheKey = `${key}:${w}:${h}`;
+    if (this._scaledCache.has(cacheKey)) {
+      return this._scaledCache.get(cacheKey);
+    }
+
+    const img = this.get(key);
+    if (!img) return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, w, h);
+
+    this._scaledCache.set(cacheKey, canvas);
+    return canvas;
+  }
+
+  /**
+   * Clear the scaled image cache (e.g. when the DPR changes and
+   * all pre-scaled sizes need recalculation).
+   */
+  clearScaledCache() {
+    this._scaledCache.clear();
   }
 
   /**

@@ -25,6 +25,7 @@ export default class SkillRow extends UIPanel {
     this.alignItems = 'stretch';
     this.padding = { top: 10, right: 14, bottom: 10, left: 14 };
     this.backgroundAssetKey = 'character_pane_skill_row';
+    this.smoothing = true; // decorative background
 
     this._skillData = skillData;
     this._assetManager = assetManager;

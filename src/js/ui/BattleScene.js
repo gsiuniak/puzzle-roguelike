@@ -40,9 +40,10 @@ export default class BattleScene extends UIPanel {
     this._enemyData = enemyData;
     this._assetManager = assetManager;
 
-    // UIPanel background image
+    // UIPanel background image — large background benefits from smoothing
     this.assetManager = assetManager;
     this.backgroundAssetKey = 'battle_background_default';
+    this.smoothing = true;
 
     /** @type {import('../game/BattleController.js').default|null} */
     this._battleController = battleController;

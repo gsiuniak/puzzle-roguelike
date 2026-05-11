@@ -20,15 +20,21 @@ export default class UIPanel extends UIContainer {
     if (this.backgroundAssetKey && this.assetManager) {
       const img = this.assetManager.get(this.backgroundAssetKey);
       if (img) {
+        this._applySmoothing(ctx);
         ctx.save();
         const r = this.rect;
+        const rx = Math.floor(r.x);
+        const ry = Math.floor(r.y);
+        const rw = Math.ceil(r.w);
+        const rh = Math.ceil(r.h);
         if (this.cornerRadius > 0) {
-          this._roundRect(ctx, r.x, r.y, r.w, r.h, this.cornerRadius);
+          this._roundRect(ctx, rx, ry, rw, rh, this.cornerRadius);
           ctx.clip();
         }
         // Stretch: draw image to exactly fill the panel rect
-        ctx.drawImage(img, r.x, r.y, r.w, r.h);
+        ctx.drawImage(img, rx, ry, rw, rh);
         ctx.restore();
+        this._restoreSmoothing(ctx);
       }
     }
 

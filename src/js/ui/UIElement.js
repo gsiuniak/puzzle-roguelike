@@ -46,6 +46,9 @@ export default class UIElement {
     /** Visibility */
     this.visible = true;
 
+    /** Per-element image smoothing: null=use canvas default, true=smooth, false=crisp */
+    this.smoothing = null;
+
     /** Debug */
     this.debug = false;
 
@@ -54,6 +57,29 @@ export default class UIElement {
   }
 
   // ── helpers ──────────────────────────────────────────
+
+  /**
+   * Apply this element's smoothing preference to the canvas context.
+   * Call before drawImage operations.
+   * @param {CanvasRenderingContext2D} ctx
+   */
+  _applySmoothing(ctx) {
+    if (this.smoothing !== null) {
+      this._prevSmoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = this.smoothing;
+    }
+  }
+
+  /**
+   * Restore canvas smoothing to its previous value.
+   * Call after drawImage operations (must match _applySmoothing).
+   * @param {CanvasRenderingContext2D} ctx
+   */
+  _restoreSmoothing(ctx) {
+    if (this.smoothing !== null) {
+      ctx.imageSmoothingEnabled = this._prevSmoothing;
+    }
+  }
 
   /** Resolve padding to {top,right,bottom,left} */
   _resolvePadding() {
