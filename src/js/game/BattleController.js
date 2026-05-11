@@ -469,7 +469,6 @@ export default class BattleController {
     if (this._checkGameOver()) return;
 
     if (this.pendingExtraTurn) {
-      this.pendingExtraTurn = false;
       this._phaseTimer = 0;
       this._enemyFired = false;
       if (this.activeSide === 'player') {
