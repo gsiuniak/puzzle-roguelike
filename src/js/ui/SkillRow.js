@@ -2,13 +2,16 @@ import UIPanel from './UIPanel.js';
 import UIContainer from './UIContainer.js';
 import UIImage from './UIImage.js';
 import UIText from './UIText.js';
-import UIOrb from './UIOrb.js';
+import ManaCostRow from './ManaCostRow.js';
 
 /**
  * SkillRow — renders a single skill from a skill data object.
  *
  * Structure:
- *   [icon] [name + description] [mana costs...]
+ *   [icon] [name + description] | [mana cost row...]
+ *
+ * The vertical separator line (|) aligns across all rows for a clean,
+ * consistent layout thanks to the fixed widthPercent on the info column.
  *
  * Properties:
  *   skillData   - { name, description, icon, cost: { red, blue, ... } }
@@ -19,18 +22,20 @@ export default class SkillRow extends UIPanel {
     super();
     this.direction = 'row';
     this.gap = 8;
-    this.alignItems = 'center';
-    this.padding = { top: 4, right: 6, bottom: 4, left: 6 };
+    this.alignItems = 'stretch';
+    this.padding = { top: 10, right: 14, bottom: 10, left: 14 };
     this.backgroundAssetKey = 'character_pane_skill_row';
 
     this._skillData = skillData;
     this._assetManager = assetManager;
     this.assetManager = assetManager; // for UIPanel background rendering
 
+    this._iconContainer = null;
     this._icon = null;
     this._nameText = null;
     this._descText = null;
-    this._costContainer = null;
+    this._costRow = null;
+    this._separator = null;
 
     if (skillData) {
       this.buildHierarchy();
@@ -50,105 +55,80 @@ export default class SkillRow extends UIPanel {
     this.assetManager = am; // for UIPanel background rendering
     // Propagate to children
     if (this._icon) this._icon.assetManager = am;
+    if (this._costRow) this._costRow.setAssetManager(am);
   }
 
   buildHierarchy() {
     const sd = this._skillData;
     if (!sd) return;
 
-    // --- Icon ---
+    // --- Icon container (56x56 frame with centered 48x48 icon) ---
+    this._iconContainer = new UIContainer();
+    this._iconContainer.setStyle({
+      width: 56,
+      height: 56,
+      alignSelfV: 'center',
+    });
+    this._iconContainer.alignItems = 'center';
+    this._iconContainer.justifyContent = 'center';
+    this._iconContainer.direction = 'row';
+
     const iconKey = sd.icon || 'placeholder';
     this._icon = new UIImage(iconKey, this._assetManager);
     this._icon.setStyle({
       width: 48,
       height: 48,
       fitMode: 'contain',
-      margin: { right: 4 },
     });
-    this.addChild(this._icon);
+    this._iconContainer.addChild(this._icon);
+    this.addChild(this._iconContainer);
 
     // --- Info column (name + description) ---
+    // Consistent width across all rows so separator line aligns vertically
     const infoCol = new UIContainer();
     infoCol.direction = 'column';
     infoCol.gap = 2;
-    infoCol.flexGrow = 1;
+    infoCol.widthPercent = 0.48;
+    infoCol.justifyContent = 'center';
 
     this._nameText = new UIText(sd.name || '');
     this._nameText.setStyle({
-      fontSize: 15,
-      color: '#f0e68c',
+      fontSize: 16,
+      color: '#cdcdcd',
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 18,
+      height: 20,
     });
     infoCol.addChild(this._nameText);
 
     this._descText = new UIText(sd.description || '');
     this._descText.setStyle({
-      fontSize: 11,
-      color: '#bbbbbb',
+      fontSize: 12,
+      color: '#f7f1c0',
       italic: true,
       alignH: 'left',
       alignV: 'center',
-      height: 16,
-      maxWidth: 180,
+      height: 18,
+      maxWidth: 200,
     });
     infoCol.addChild(this._descText);
 
     this.addChild(infoCol);
 
-    // --- Mana cost row ---
-    this._costContainer = new UIContainer();
-    this._costContainer.direction = 'row';
-    this._costContainer.gap = 6;
-    this._costContainer.alignItems = 'center';
-    this._costContainer.justifyContent = 'end';
-    this._costContainer.setStyle({
-      height: 36,
+    // --- Vertical separator line ---
+    this._separator = new UIContainer();
+    this._separator.setStyle({
+      width: 2,
+      background: '#665533',
+      cornerRadius: 1,
     });
+    this.addChild(this._separator);
 
-    // Mana color definitions
-    const manaColors = {
-      red:    '#cc3333',
-      blue:   '#3366cc',
-      green:  '#33aa33',
-      yellow: '#cccc33',
-      purple: '#9933cc',
-    };
-
+    // --- Mana cost row (using reusable component) ---
     if (sd.cost && typeof sd.cost === 'object') {
-      for (const [color, amount] of Object.entries(sd.cost)) {
-        if (!amount || amount <= 0) continue;
-
-        const orb = new UIOrb();
-        orb.setStyle({
-          color: manaColors[color] || '#888888',
-          count: amount,
-          countColor: '#ffffff',
-          fontSize: 14,
-          width: 32,
-          height: 32,
-          borderColor: '#665522',
-          borderWidth: 1,
-        });
-
-        // Use simple mana icon for skill row cost orbs
-        if (this._assetManager) {
-          const manaAssetKey = `mana_${color}_simple`;
-          if (this._assetManager.get(manaAssetKey)) {
-            orb.assetKey = manaAssetKey;
-            orb.assetManager = this._assetManager;
-          }
-        }
-
-        this._costContainer.addChild(orb);
-      }
-    }
-
-    // Only add cost container if it has children
-    if (this._costContainer.children.length > 0) {
-      this.addChild(this._costContainer);
+      this._costRow = new ManaCostRow(sd.cost, this._assetManager);
+      this.addChild(this._costRow);
     }
   }
 
@@ -160,17 +140,18 @@ export default class SkillRow extends UIPanel {
     if (this._nameText) this._nameText.text = sd.name || '';
     if (this._descText) this._descText.text = sd.description || '';
 
-    // Rebuild cost container if costs changed (simpler than trying to update each orb)
-    if (this._costContainer) {
-      this.removeChild(this._costContainer);
-      this._costContainer = null;
-    }
-    // Rebuild costs
-    if (this.children.length >= 2) {
-      // Icon + infoCol are first two children
-      // Rebuild costs
-      this.clearChildren();
-      this.buildHierarchy();
+    // Update cost row
+    if (this._costRow && sd.cost && typeof sd.cost === 'object') {
+      this._costRow.setCostData(sd.cost);
+    } else if (this._costRow && (!sd.cost || Object.keys(sd.cost).length === 0)) {
+      // Remove cost row if no costs
+      this.removeChild(this._costRow);
+      this._costRow = null;
+    } else if (!this._costRow && sd.cost && typeof sd.cost === 'object') {
+      // Add cost row if newly present
+      this._costRow = new ManaCostRow(sd.cost, this._assetManager);
+      this.addChild(this._costRow);
     }
   }
 }
+

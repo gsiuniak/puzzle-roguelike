@@ -14,6 +14,10 @@ import UIElement from './UIElement.js';
  *   borderColor     - CSS color for border
  *   borderWidth     - number (default 1)
  *   cornerRadius    - number (default 4)
+ *   shadowColor     - CSS color for label shadow (default 'rgba(0,0,0,0.65)'; set null to disable)
+ *   shadowBlur      - shadow blur radius (default 2)
+ *   shadowOffsetX   - shadow horizontal offset (default 1)
+ *   shadowOffsetY   - shadow vertical offset (default 1)
  */
 export default class UIProgressBar extends UIElement {
   constructor() {
@@ -28,6 +32,11 @@ export default class UIProgressBar extends UIElement {
     this.borderColor = '#555555';
     this.borderWidth = 1;
     this.cornerRadius = 4;
+    /** Subtle dark shadow on label text by default */
+    this.shadowColor = 'rgba(0,0,0,0.65)';
+    this.shadowBlur = 2;
+    this.shadowOffsetX = 1;
+    this.shadowOffsetY = 1;
   }
 
   renderSelf(ctx) {
@@ -64,6 +73,13 @@ export default class UIProgressBar extends UIElement {
 
     // Label centered
     if (this.label) {
+      // Apply text shadow
+      if (this.shadowColor) {
+        ctx.shadowColor = this.shadowColor;
+        ctx.shadowBlur = this.shadowBlur;
+        ctx.shadowOffsetX = this.shadowOffsetX;
+        ctx.shadowOffsetY = this.shadowOffsetY;
+      }
       ctx.fillStyle = this.labelColor;
       ctx.font = `${this.labelFontSize}px Georgia, "Times New Roman", serif`;
       ctx.textBaseline = 'middle';
@@ -109,5 +125,9 @@ export default class UIProgressBar extends UIElement {
     if (props.borderColor !== undefined) this.borderColor = props.borderColor;
     if (props.borderWidth !== undefined) this.borderWidth = props.borderWidth;
     if (props.cornerRadius !== undefined) this.cornerRadius = props.cornerRadius;
+    if (props.shadowColor !== undefined) this.shadowColor = props.shadowColor;
+    if (props.shadowBlur !== undefined) this.shadowBlur = props.shadowBlur;
+    if (props.shadowOffsetX !== undefined) this.shadowOffsetX = props.shadowOffsetX;
+    if (props.shadowOffsetY !== undefined) this.shadowOffsetY = props.shadowOffsetY;
   }
 }

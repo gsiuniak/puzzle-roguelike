@@ -59,14 +59,14 @@ export default class BattleScene extends UIContainer {
     this._playerPane = new CharacterPane(this._playerData, this._assetManager);
     this._playerPane.setStyle({
       widthPercent: 0.25,
-      minWidth: 270,
-      maxWidth: 420,
+      minWidth: 300,
+      maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',
       borderColor: '#554422',
       borderWidth: 2,
       cornerRadius: 8,
-      padding: { top: 12, right: 14, bottom: 14, left: 14 },
-      gap: 8,
+      padding: { top: 14, right: 16, bottom: 16, left: 16 },
+      gap: 10,
     });
     mainRow.addChild(this._playerPane);
 
@@ -129,14 +129,14 @@ export default class BattleScene extends UIContainer {
     this._enemyPane = new CharacterPane(this._enemyData, this._assetManager);
     this._enemyPane.setStyle({
       widthPercent: 0.25,
-      minWidth: 270,
-      maxWidth: 420,
+      minWidth: 300,
+      maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',
       borderColor: '#554422',
       borderWidth: 2,
       cornerRadius: 8,
-      padding: { top: 12, right: 14, bottom: 14, left: 14 },
-      gap: 8,
+      padding: { top: 14, right: 16, bottom: 16, left: 16 },
+      gap: 10,
     });
     mainRow.addChild(this._enemyPane);
 

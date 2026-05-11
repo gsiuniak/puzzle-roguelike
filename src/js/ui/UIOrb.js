@@ -4,15 +4,19 @@ import UIElement from './UIElement.js';
  * UIOrb — circular mana/stat orb with color, count text, optional image.
  *
  * Properties:
- *   color      - fallback fill color (CSS string)
- *   count      - number displayed centered inside
- *   countColor - CSS color for count text (default 'white')
- *   fontSize   - number
- *   assetKey   - optional image overlay from AssetManager
- *   assetManager - AssetManager reference
- *   borderColor- CSS border color
- *   borderWidth- number (default 1)
- *   showCount  - boolean, whether to render the count number (default true)
+ *   color         - fallback fill color (CSS string)
+ *   count         - number displayed centered inside
+ *   countColor    - CSS color for count text (default 'white')
+ *   fontSize      - number
+ *   assetKey      - optional image overlay from AssetManager
+ *   assetManager  - AssetManager reference
+ *   borderColor   - CSS border color
+ *   borderWidth   - number (default 1)
+ *   showCount     - boolean, whether to render the count number (default true)
+ *   shadowColor   - CSS color for count text shadow (default 'rgba(0,0,0,0.65)'; set null to disable)
+ *   shadowBlur    - shadow blur radius (default 2)
+ *   shadowOffsetX - shadow horizontal offset (default 1)
+ *   shadowOffsetY - shadow vertical offset (default 1)
  */
 export default class UIOrb extends UIElement {
   constructor() {
@@ -28,6 +32,11 @@ export default class UIOrb extends UIElement {
     this.showCount = true;
     /** If true, renders mana_amount plate below orb with count on plate */
     this.showAmountPlate = false;
+    /** Subtle dark shadow on count text by default */
+    this.shadowColor = 'rgba(0,0,0,0.65)';
+    this.shadowBlur = 2;
+    this.shadowOffsetX = 1;
+    this.shadowOffsetY = 1;
   }
 
   renderSelf(ctx) {
@@ -76,16 +85,23 @@ export default class UIOrb extends UIElement {
     }
 
     // Border
-    if (this.borderWidth > 0) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = this.borderColor;
-      ctx.lineWidth = this.borderWidth;
-      ctx.stroke();
-    }
+    // if (this.borderWidth > 0) {
+    //   ctx.beginPath();
+    //   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    //   ctx.strokeStyle = this.borderColor;
+    //   ctx.lineWidth = this.borderWidth;
+    //   ctx.stroke();
+    // }
 
     // Count text centered inside orb
     if (this.showCount) {
+      // Apply text shadow
+      if (this.shadowColor) {
+        ctx.shadowColor = this.shadowColor;
+        ctx.shadowBlur = this.shadowBlur;
+        ctx.shadowOffsetX = this.shadowOffsetX;
+        ctx.shadowOffsetY = this.shadowOffsetY;
+      }
       ctx.fillStyle = this.countColor;
       const fs = Math.max(10, Math.min(this.fontSize, radius));
       ctx.font = `bold ${fs}px Georgia, "Times New Roman", serif`;
@@ -97,31 +113,30 @@ export default class UIOrb extends UIElement {
     ctx.restore();
   }
 
-  /** Plate style: orb at top, amount plate below (overlapped by orb) */
+  /** Plate style: orb at top, decorative plate visible below orb, count over overlap.
+   *
+   *  Visual hierarchy:
+   *        [ORB]        <- orb centered in upper portion
+   *     ┌──────────┐    <- plate drawn ON TOP of orb bottom, visible below
+   *     │    12    │    <- count text in overlap zone
+   *     └──────────┘
+   */
   _renderWithPlate(ctx, r) {
+    // Orb takes upper ~60% of height; plate overlaps orb bottom
     const orbSize = Math.min(r.w, r.h * 0.65);
     const orbCx = r.x + r.w / 2;
-    const orbCy = r.y + orbSize / 2;
+    const orbCy = r.y + orbSize * 0.40;
     const orbRadius = orbSize / 2 - this.borderWidth;
 
-    // Plate: squarish, narrower than orb, overlapped by orb
-    const plateW = orbSize * 0.7;
-    const plateH = orbSize * 0.5;
+    // Plate: positioned to overlap orb bottom, extending below
+    const plateW = orbSize * 0.82;
+    const plateH = orbSize * 0.38;
     const plateX = r.x + (r.w - plateW) / 2;
-    const plateY = r.y + orbSize * 0.48; // orb overlaps plate top
+    const plateY = orbCy + orbRadius * 0.55; // plate starts at ~55% of orb radius below center
 
     ctx.save();
 
-    // ── Amount plate (drawn first, behind orb) ──────
-    const amountImg = this.assetManager
-      ? this.assetManager.get('mana_amount')
-      : null;
-
-    if (amountImg) {
-      ctx.drawImage(amountImg, plateX, plateY, plateW, plateH);
-    }
-
-    // ── Orb circle ──────────────────────────────────
+    // ── Orb circle (drawn first, plate overlaps it) ─
     ctx.beginPath();
     ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
     ctx.fillStyle = this.color;
@@ -148,22 +163,39 @@ export default class UIOrb extends UIElement {
     }
 
     // Orb border
-    if (this.borderWidth > 0) {
-      ctx.beginPath();
-      ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = this.borderColor;
-      ctx.lineWidth = this.borderWidth;
-      ctx.stroke();
+    // if (this.borderWidth > 0) {
+    //   ctx.beginPath();
+    //   ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
+    //   ctx.strokeStyle = this.borderColor;
+    //   ctx.lineWidth = this.borderWidth;
+    //   ctx.stroke();
+    // }
+
+    // ── Amount plate (drawn AFTER orb, so it is visible) ─
+    const amountImg = this.assetManager
+      ? this.assetManager.get('mana_amount')
+      : null;
+
+    if (amountImg) {
+      ctx.drawImage(amountImg, plateX, plateY, plateW, plateH);
     }
 
-    // Count text centered on plate
+    // Count text centered over lower orb / upper plate overlap
     if (this.showCount) {
+      // Apply text shadow
+      if (this.shadowColor) {
+        ctx.shadowColor = this.shadowColor;
+        ctx.shadowBlur = this.shadowBlur;
+        ctx.shadowOffsetX = this.shadowOffsetX;
+        ctx.shadowOffsetY = this.shadowOffsetY;
+      }
       ctx.fillStyle = this.countColor;
-      const fs = Math.max(9, Math.min(this.fontSize, plateH * 0.55));
+      const fs = Math.max(11, Math.min(this.fontSize, plateH * 0.55));
       ctx.font = `bold ${fs}px Georgia, "Times New Roman", serif`;
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'center';
-      const countY = plateY + plateH / 2;
+      // Position count at the overlap zone
+      const countY = plateY + plateH * 0.45;
       ctx.fillText(String(this.count), r.x + r.w / 2, countY);
     }
 
@@ -182,5 +214,9 @@ export default class UIOrb extends UIElement {
     if (props.borderWidth !== undefined) this.borderWidth = props.borderWidth;
     if (props.showCount !== undefined) this.showCount = props.showCount;
     if (props.showAmountPlate !== undefined) this.showAmountPlate = props.showAmountPlate;
+    if (props.shadowColor !== undefined) this.shadowColor = props.shadowColor;
+    if (props.shadowBlur !== undefined) this.shadowBlur = props.shadowBlur;
+    if (props.shadowOffsetX !== undefined) this.shadowOffsetX = props.shadowOffsetX;
+    if (props.shadowOffsetY !== undefined) this.shadowOffsetY = props.shadowOffsetY;
   }
 }

@@ -4,15 +4,19 @@ import UIElement from './UIElement.js';
  * UIText — renders a string from dynamic data.
  *
  * Properties:
- *   text      - string content
- *   fontSize  - number (default 16)
- *   fontFamily- string (default 'serif')
- *   color     - CSS color (default 'white')
- *   bold      - boolean
- *   italic    - boolean
- *   alignH    - 'left' | 'center' | 'right' (default 'left')
- *   alignV    - 'top' | 'center' | 'bottom' (default 'center')
- *   maxWidth  - optional clip width (0 = none)
+ *   text          - string content
+ *   fontSize      - number (default 16)
+ *   fontFamily    - string (default 'serif')
+ *   color         - CSS color (default 'white')
+ *   bold          - boolean
+ *   italic        - boolean
+ *   alignH        - 'left' | 'center' | 'right' (default 'left')
+ *   alignV        - 'top' | 'center' | 'bottom' (default 'center')
+ *   maxWidth      - optional clip width (0 = none)
+ *   shadowColor   - CSS color for text shadow (default 'rgba(0,0,0,0.65)'; set null to disable)
+ *   shadowBlur    - shadow blur radius (default 2)
+ *   shadowOffsetX - shadow horizontal offset (default 1)
+ *   shadowOffsetY - shadow vertical offset (default 1)
  */
 export default class UIText extends UIElement {
   constructor(text = '') {
@@ -26,6 +30,11 @@ export default class UIText extends UIElement {
     this.alignH = 'left';
     this.alignV = 'center';
     this.maxWidth = 0; // 0 = unconstrained
+    /** Subtle dark shadow on all text by default */
+    this.shadowColor = 'rgba(0,0,0,0.65)';
+    this.shadowBlur = 2;
+    this.shadowOffsetX = 1;
+    this.shadowOffsetY = 1;
   }
 
   /** Build CSS font string */
@@ -57,6 +66,14 @@ export default class UIText extends UIElement {
     ctx.font = font;
     ctx.fillStyle = this.color;
     ctx.textBaseline = 'middle';
+
+    // Apply text shadow
+    if (this.shadowColor) {
+      ctx.shadowColor = this.shadowColor;
+      ctx.shadowBlur = this.shadowBlur;
+      ctx.shadowOffsetX = this.shadowOffsetX;
+      ctx.shadowOffsetY = this.shadowOffsetY;
+    }
 
     // Measure
     const metrics = ctx.measureText(text);
@@ -107,5 +124,9 @@ export default class UIText extends UIElement {
     if (props.alignH !== undefined) this.alignH = props.alignH;
     if (props.alignV !== undefined) this.alignV = props.alignV;
     if (props.maxWidth !== undefined) this.maxWidth = props.maxWidth;
+    if (props.shadowColor !== undefined) this.shadowColor = props.shadowColor;
+    if (props.shadowBlur !== undefined) this.shadowBlur = props.shadowBlur;
+    if (props.shadowOffsetX !== undefined) this.shadowOffsetX = props.shadowOffsetX;
+    if (props.shadowOffsetY !== undefined) this.shadowOffsetY = props.shadowOffsetY;
   }
 }

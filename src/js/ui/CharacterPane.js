@@ -48,8 +48,8 @@ export default class CharacterPane extends UIPanel {
 
     // Configure self
     this.direction = 'column';
-    this.gap = 6;
-    this.padding = { top: 10, right: 12, bottom: 12, left: 12 };
+    this.gap = 10;
+    this.padding = { top: 14, right: 16, bottom: 16, left: 16 };
 
     if (characterData) {
       this.buildHierarchy();
@@ -72,17 +72,17 @@ export default class CharacterPane extends UIPanel {
     // ── 1. Header row ──────────────────────────────────
     const headerRow = new UIContainer();
     headerRow.direction = 'row';
-    headerRow.gap = 10;
+    headerRow.gap = 12;
     headerRow.alignItems = 'center';
-    headerRow.padding = { top: 4, right: 0, bottom: 6, left: 4 };
-    headerRow.height = 80;
+    headerRow.padding = { top: 4, right: 0, bottom: 8, left: 6 };
+    headerRow.height = 88;
 
     // Portrait image
     const portraitKey = cd.portrait ? `portrait_${cd.portrait}` : 'placeholder';
     this._portrait = new UIImage(portraitKey, this._assetManager);
     this._portrait.setStyle({
-      width: 68,
-      height: 68,
+      width: 76,
+      height: 76,
       fitMode: 'cover',
     });
     headerRow.addChild(this._portrait);
@@ -96,12 +96,12 @@ export default class CharacterPane extends UIPanel {
     // Name text
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
-      fontSize: 22,
+      fontSize: 24,
       color: '#f5deb3',
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 28,
+      height: 30,
     });
     nameCol.addChild(this._nameText);
 
@@ -110,12 +110,12 @@ export default class CharacterPane extends UIPanel {
     const levelStr = cd.level ? `  Lv.${cd.level}` : '';
     this._classText = new UIText(classStr + levelStr);
     this._classText.setStyle({
-      fontSize: 14,
+      fontSize: 15,
       color: '#ccaa77',
       italic: true,
       alignH: 'left',
       alignV: 'center',
-      height: 20,
+      height: 22,
     });
     nameCol.addChild(this._classText);
 
@@ -131,31 +131,29 @@ export default class CharacterPane extends UIPanel {
       backgroundColor: '#2a1a1a',
       label: `${cd.hp ?? 0} / ${cd.maxHp ?? 0}`,
       labelColor: '#ffffff',
-      labelFontSize: 16,
+      labelFontSize: 18,
       borderColor: '#554433',
       borderWidth: 1,
       cornerRadius: 6,
-      height: 48,
+      height: 52,
       widthPercent: 1,
       margin: { top: 2, bottom: 4 },
     });
     this.addChild(this._healthBar);
 
-    // ── 3. Stats row ───────────────────────────────────
+    // ── 3. Stats row (open, no dark backgrounds) ───────
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
-    statsRow.justifyContent = 'space-around';
+    statsRow.justifyContent = 'space-between';
     statsRow.alignItems = 'center';
     statsRow.gap = 16;
     statsRow.padding = { top: 4, right: 8, bottom: 4, left: 8 };
-    statsRow.height = 40;
-    statsRow.background = 'rgba(0,0,0,0.3)';
-    statsRow.cornerRadius = 4;
+    statsRow.height = 44;
 
     // Attack stat group
     const attackGroup = new UIContainer();
     attackGroup.direction = 'row';
-    attackGroup.gap = 6;
+    attackGroup.gap = 8;
     attackGroup.alignItems = 'center';
 
     this._attackIcon = new UIImage('icon_attack', this._assetManager);
@@ -164,7 +162,7 @@ export default class CharacterPane extends UIPanel {
 
     this._attackLabel = new UIText('ATK');
     this._attackLabel.setStyle({
-      fontSize: 13,
+      fontSize: 14,
       color: '#cc9966',
       bold: true,
       alignH: 'left',
@@ -174,7 +172,7 @@ export default class CharacterPane extends UIPanel {
 
     this._attackValue = new UIText(String(cd.attack ?? 0));
     this._attackValue.setStyle({
-      fontSize: 15,
+      fontSize: 18,
       color: '#ffffff',
       bold: true,
       alignH: 'left',
@@ -187,7 +185,7 @@ export default class CharacterPane extends UIPanel {
     // Armor stat group
     const armorGroup = new UIContainer();
     armorGroup.direction = 'row';
-    armorGroup.gap = 6;
+    armorGroup.gap = 8;
     armorGroup.alignItems = 'center';
 
     this._armorIcon = new UIImage('icon_block', this._assetManager);
@@ -196,7 +194,7 @@ export default class CharacterPane extends UIPanel {
 
     this._armorLabel = new UIText('DEF');
     this._armorLabel.setStyle({
-      fontSize: 13,
+      fontSize: 14,
       color: '#6699cc',
       bold: true,
       alignH: 'left',
@@ -206,7 +204,7 @@ export default class CharacterPane extends UIPanel {
 
     this._armorValue = new UIText(String(cd.armor ?? 0));
     this._armorValue.setStyle({
-      fontSize: 15,
+      fontSize: 18,
       color: '#ffffff',
       bold: true,
       alignH: 'left',
@@ -217,14 +215,14 @@ export default class CharacterPane extends UIPanel {
     statsRow.addChild(armorGroup);
     this.addChild(statsRow);
 
-    // ── 4. Mana orbs row ───────────────────────────────
+    // ── 4. Mana orbs row (framed area) ────────────────
     const manaRow = new UIPanel();
     manaRow.direction = 'row';
     manaRow.justifyContent = 'center';
     manaRow.alignItems = 'center';
-    manaRow.gap = 8;
-    manaRow.padding = { top: 4, right: 4, bottom: 4, left: 4 };
-    manaRow.height = 80;
+    manaRow.gap = 12;
+    manaRow.padding = { top: 40, right: 8, bottom: 8, left: 8 };
+    manaRow.height = 100;
     manaRow.backgroundAssetKey = 'character_pane_skill_row';
     manaRow.assetManager = this._assetManager;
 
@@ -245,9 +243,9 @@ export default class CharacterPane extends UIPanel {
         color: manaColors[color],
         count: manaData[color] ?? 0,
         countColor: '#ffffff',
-        fontSize: 15,
-        width: 44,
-        height: 66,
+        fontSize: 18,
+        width: 56,
+        height: 84,
         borderColor: '#886622',
         borderWidth: 2,
         showAmountPlate: true,
@@ -267,26 +265,24 @@ export default class CharacterPane extends UIPanel {
     this.addChild(manaRow);
 
     // ── 5. Skills section ──────────────────────────────
-    // "Skills" title
+    // "Skills" title (centered)
     this._skillsTitle = new UIText('Skills');
     this._skillsTitle.setStyle({
-      fontSize: 16,
+      fontSize: 18,
       color: '#e0d070',
       bold: true,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'center',
-      height: 24,
-      margin: { top: 4, bottom: 0, left: 4 },
+      height: 28,
+      margin: { top: 8, bottom: 4 },
     });
     this.addChild(this._skillsTitle);
 
-    // Skills list container (scrollable area in the future)
+    // Skills list container (open, no dark box)
     this._skillsContainer = new UIContainer();
     this._skillsContainer.direction = 'column';
-    this._skillsContainer.gap = 2;
+    this._skillsContainer.gap = 30;
     this._skillsContainer.flexGrow = 1;
-    this._skillsContainer.background = 'rgba(0,0,0,0.25)';
-    this._skillsContainer.cornerRadius = 4;
     this._skillsContainer.padding = 4;
 
     // Build skill rows from data
@@ -295,7 +291,7 @@ export default class CharacterPane extends UIPanel {
 
     for (const skillData of skills) {
       const row = new SkillRow(skillData, this._assetManager);
-      row.setStyle({ height: 60 });
+      row.setStyle({ height: 72 });
       this._skillRows.push(row);
       this._skillsContainer.addChild(row);
     }
@@ -339,7 +335,7 @@ export default class CharacterPane extends UIPanel {
       this._skillRows = [];
       for (const skillData of skills) {
         const row = new SkillRow(skillData, this._assetManager);
-        row.setStyle({ height: 60 });
+        row.setStyle({ height: 72 });
         this._skillRows.push(row);
         this._skillsContainer.addChild(row);
       }
