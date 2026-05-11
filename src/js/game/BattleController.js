@@ -233,7 +233,14 @@ export default class BattleController {
   _enterShowMatch(analysis) {
     this._analysis = analysis;
     this._allSteps.push(analysis);
-    if (analysis.extraTurnTrigger) this._extraTurnEarned = true;
+    if (analysis.extraTurnTrigger && !this._extraTurnEarned) {
+      this._extraTurnEarned = true;
+      // Immediately expose trigger pos so the scene spawns the
+      // floating effect right away, concurrent with the cascade.
+      this.extraTurnTriggerPos = this._swapTriggerPos
+        ? { col: this._swapTriggerPos.col, row: this._swapTriggerPos.row }
+        : null;
+    }
 
     const activeName = this._activeState().name;
     for (const m of analysis.matches) {
@@ -310,10 +317,8 @@ export default class BattleController {
 
     if (this._extraTurnEarned) {
       this.pendingExtraTurn = true;
-      // Capture swap trigger position for visual effects
-      this.extraTurnTriggerPos = this._swapTriggerPos
-        ? { col: this._swapTriggerPos.col, row: this._swapTriggerPos.row }
-        : null;
+      // extraTurnTriggerPos was already set in _enterShowMatch — the
+      // scene is already animating the effect concurrently with cascades.
       this.log.add(`${this._activeState().name} gets an extra turn!`);
     }
 
@@ -381,8 +386,8 @@ export default class BattleController {
         // Perform the logical swap
         const { from, to, valid } = this.swapAnim;
         this.board.swap(from.col, from.row, to.col, to.row);
-        // Save the swap position as trigger origin for visual effects
-        this._swapTriggerPos = { col: from.col, row: from.row };
+        // Save the swap DESTINATION as trigger origin for visual effects
+        this._swapTriggerPos = { col: to.col, row: to.row };
         this.swapAnim = null;
 
         if (valid) {
@@ -438,7 +443,7 @@ export default class BattleController {
 
     const swap = this.enemyAI.findBestSwap(this.board);
     if (swap) {
-      this._swapTriggerPos = { col: swap.col1, row: swap.row1 };
+      this._swapTriggerPos = { col: swap.col2, row: swap.row2 };
       this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
       this.log.add(`${this.enemyState.name} swaps tiles.`);
       const analysis = this.resolver.analyzeMatches(this.board);

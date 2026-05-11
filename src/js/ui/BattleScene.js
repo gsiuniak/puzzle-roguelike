@@ -254,10 +254,10 @@ export default class BattleScene extends UIPanel {
       targetWidth,
       targetHeight,
       {
-        growDuration: 350,
-        settleDuration: 200,
-        holdDuration: 500,
-        fadeDuration: 300,
+        growDuration: 200,
+        settleDuration: 100,
+        holdDuration: 300,
+        fadeDuration: 100,
         overshoot: 1.18,
       }
     );
