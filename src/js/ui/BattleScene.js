@@ -70,7 +70,7 @@ export default class BattleScene extends UIPanel {
       minWidth: 400,
       maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',
-      borderColor: '#554422',
+      borderColor: '#1c1c1d',
       borderWidth: 2,
       cornerRadius: 8,
       padding: { top: 14, right: 16, bottom: 16, left: 16 },
@@ -83,7 +83,6 @@ export default class BattleScene extends UIPanel {
     centerCol.direction = 'column';
     centerCol.gap = 6;
     centerCol.flexGrow = 1;
-    centerCol.justifyContent = 'center';
 
     // Turn label
     this._turnLabel = new UIText('Player Turn');
@@ -112,7 +111,7 @@ export default class BattleScene extends UIPanel {
     const combatLog = new UIContainer();
     combatLog.setStyle({
       background: 'rgba(0,0,0,0.35)',
-      borderColor: '#443322',
+      borderColor: '#1c1c1d',
       borderWidth: 1,
       cornerRadius: 4,
       height: 56,
@@ -139,7 +138,7 @@ export default class BattleScene extends UIPanel {
       minWidth: 400,
       maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',
-      borderColor: '#554422',
+      borderColor: '#1c1c1d',
       borderWidth: 2,
       cornerRadius: 8,
       padding: { top: 14, right: 16, bottom: 16, left: 16 },
