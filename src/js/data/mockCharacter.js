@@ -29,7 +29,7 @@ const mockCharacter = {
       cost: { red: 5 },
     },
     {
-      name: 'Shield Bash',
+      name: 'Defend',
       description: 'Gain 5 armor.',
       icon: 'skill_defend',
       cost: { blue: 5 },
