@@ -18,7 +18,7 @@ const mockCharacter = {
     blue: 0,
     green: 0,
     yellow: 0,
-    purple: 0,
+    purple: 100,
   },
   portrait: 'warrior', // maps to 'portrait_warrior' asset key
   skills: [

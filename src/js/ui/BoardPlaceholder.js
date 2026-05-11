@@ -249,16 +249,28 @@ export default class BoardPlaceholder extends UIElement {
     // ── Targeting overlay (skill targeting like Explode! 3x3) ──
     if (this.targetingOverlayCells && this.targetingOverlayCells.length > 0) {
       for (const pos of this.targetingOverlayCells) {
+        // 1. Calculate the exact pixel coordinates for the current grid cell
         const hx = ox + pos.col * cs;
         const hy = oy + pos.row * cs;
+        
         ctx.save();
-        // Pulsing orange/red glow
+        
         const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 120);
-        ctx.fillStyle = `rgba(255,140,40,${0.12 + pulse * 0.10})`;
+
+        // --- 1. DRAW THE GLOWING INNER CORE ---
+        // Clean, bright white selection
+        ctx.shadowColor = `rgba(255, 255, 255, ${0.4 + pulse * 0.4})`; 
+        ctx.shadowBlur = 12 + (pulse * 8); 
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.05 + pulse * 0.15})`; // Barely-there white wash
         ctx.fillRect(hx, hy, cs, cs);
-        ctx.strokeStyle = `rgba(255,120,30,${0.55 + pulse * 0.25})`;
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(hx + 1, hy + 1, cs - 2, cs - 2);
+
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)"; // Solid white border
+        ctx.lineWidth = 3;
+        ctx.strokeRect(hx, hy, cs, cs);
+  
         ctx.restore();
       }
     }
