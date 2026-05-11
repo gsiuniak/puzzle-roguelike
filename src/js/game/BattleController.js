@@ -420,6 +420,36 @@ export default class BattleController {
     return this.activeSide === 'player' ? this.enemyState : this.playerState;
   }
 
+  /**
+   * After a swap, determine which of the two swapped positions contains
+   * a tile that is part of a 4+ match. The effect should spawn from the
+   * matching tile's position, not the swap destination.
+   *
+   * @param {{col:number,row:number}} from - original position of first tile
+   * @param {{col:number,row:number}} to   - original position of second tile
+   * @param {import('./MatchResolver.js').MatchAnalysis|null} analysis
+   * @returns {{col:number,row:number}|null}
+   */
+  _findSwapTriggerPos(from, to, analysis) {
+    if (!analysis || !analysis.extraTurnTrigger) return null;
+
+    // Find all 4+ matches in this analysis
+    const bigMatches = analysis.matches.filter(m => m.count >= 4 || m.isShape);
+
+    for (const match of bigMatches) {
+      const posSet = new Set(match.positions.map(p => `${p.col},${p.row}`));
+      const toKey = `${to.col},${to.row}`;
+      const fromKey = `${from.col},${from.row}`;
+
+      // Prefer 'to' (destination of initiating tile) if both are in the match
+      if (posSet.has(toKey)) return { col: to.col, row: to.row };
+      if (posSet.has(fromKey)) return { col: from.col, row: from.row };
+    }
+
+    // Fallback: use the 'to' position
+    return { col: to.col, row: to.row };
+  }
+
   // ── Update ────────────────────────────────────────────
 
   update(dt) {
@@ -431,12 +461,13 @@ export default class BattleController {
         // Perform the logical swap
         const { from, to, valid } = this.swapAnim;
         this.board.swap(from.col, from.row, to.col, to.row);
-        // Save the swap DESTINATION as trigger origin for visual effects
-        this._swapTriggerPos = { col: to.col, row: to.row };
         this.swapAnim = null;
 
         if (valid) {
           const analysis = this.resolver.analyzeMatches(this.board);
+          // Determine which swapped position is part of the 4+ match,
+          // so the effect spawns from the matching tile, not the swap dest.
+          this._swapTriggerPos = this._findSwapTriggerPos(from, to, analysis);
           this._beginResolving('player', analysis);
         } else {
           // Revert after animation
@@ -488,11 +519,15 @@ export default class BattleController {
 
     const swap = this.enemyAI.findBestSwap(this.board);
     if (swap) {
-      this._swapTriggerPos = { col: swap.col2, row: swap.row2 };
       this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
       this.log.add(`${this.enemyState.name} swaps tiles.`);
       const analysis = this.resolver.analyzeMatches(this.board);
       if (analysis) {
+        this._swapTriggerPos = this._findSwapTriggerPos(
+          { col: swap.col1, row: swap.row1 },
+          { col: swap.col2, row: swap.row2 },
+          analysis
+        );
         this._beginResolving('enemy', analysis);
       } else {
         this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
