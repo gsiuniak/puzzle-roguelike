@@ -14,11 +14,11 @@ const mockCharacter = {
   attack: 1,
   armor: 0,
   mana: {
-    red: 0,
-    blue: 0,
-    green: 0,
-    yellow: 0,
-    purple: 0,
+    red: 5,
+    blue: 5,
+    green: 3,
+    yellow: 3,
+    purple: 3,
   },
   portrait: 'warrior', // maps to 'portrait_warrior' asset key
   skills: [

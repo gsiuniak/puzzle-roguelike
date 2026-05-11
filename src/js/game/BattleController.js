@@ -53,7 +53,7 @@ export default class BattleController {
      * 1.0 = normal, 2.0 = fast, 0.5 = slow.
      * Scales phase durations, enemy delay, and swap duration.
      */
-    this.speedMultiplier = 1.0;
+    this.speedMultiplier = 1.5;
 
     // ── Cascade step-by-step ──
     this._cascadePhase = null;
@@ -451,12 +451,20 @@ export default class BattleController {
     const name = (skill.name || '').toLowerCase();
     const desc = (skill.description || '').toLowerCase();
 
+    // Extract numeric value from description (e.g. "Deal 5 damage" → 5)
+    // Falls back to the source's attack stat if no number found.
+    let baseAmount = src.attack || 1;
+    const numMatch = skill.description && skill.description.match(/(\d+)/);
+    if (numMatch) {
+      baseAmount = parseInt(numMatch[1], 10);
+    }
+
     if (desc.includes('gain') || desc.includes('armor') || desc.includes('block')
         || name.includes('defend') || name.includes('shield')) {
-      src.armor += 5;
-      this.log.add(`${src.name} gains 5 armor.`);
+      src.armor += baseAmount;
+      this.log.add(`${src.name} gains ${baseAmount} armor.`);
     } else if (desc.includes('damage') || name.includes('bash') || name.includes('slash')) {
-      const r = this.resolver.applyDamage(tgt, 5);
+      const r = this.resolver.applyDamage(tgt, baseAmount);
       this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
     }
   }
