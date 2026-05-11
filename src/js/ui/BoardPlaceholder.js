@@ -165,10 +165,10 @@ export default class BoardPlaceholder extends UIElement {
           ctx.fillStyle = 'rgba(0,0,0,0.5)';
           ctx.fillRect(x, y, cs, cs);
         } else {
-          // Chessboard background
+          // Chessboard background — stretch full source image into tile cell
           const bgImg = isDark ? gridDark : gridLight;
           if (bgImg) {
-            ctx.drawImage(bgImg, x, y, cs, cs);
+            ctx.drawImage(bgImg, 0, 0, bgImg.width, bgImg.height, x, y, cs, cs);
           } else {
             ctx.fillStyle = isDark ? bgDark : bgLight;
             ctx.fillRect(x, y, cs, cs);
@@ -226,7 +226,7 @@ export default class BoardPlaceholder extends UIElement {
         const assetKey = `tile_${colorKey}`;
         const tileImg = this._assetManager ? this._assetManager.get(assetKey) : null;
         if (tileImg) {
-          ctx.drawImage(tileImg, displayX, displayY, cs, cs);
+          ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, displayX, displayY, cs, cs);
         } else {
           ctx.fillStyle = fallbackColors[colorKey] || '#444';
           ctx.fillRect(displayX + 1, displayY + 1, cs - 2, cs - 2);
@@ -329,7 +329,7 @@ export default class BoardPlaceholder extends UIElement {
         const assetKey = `tile_${typeKey}`;
         const tileImg = this._assetManager ? this._assetManager.get(assetKey) : null;
         if (tileImg) {
-          ctx.drawImage(tileImg, x, y, cs, cs);
+          ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, x, y, cs, cs);
         } else {
           ctx.fillStyle = fallbackColors[typeKey] || '#444';
           ctx.fillRect(x + 1, y + 1, cs - 2, cs - 2);
