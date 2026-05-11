@@ -17,6 +17,11 @@ import SkillRow from './SkillRow.js';
  *   - Skills section (dynamic SkillRow list)
  *
  * All values come from characterData. No hardcoded values.
+ *
+ * Supports two update paths:
+ *   - setCharacterData(data) — full rebuild from new data
+ *   - updateFromState(state)  — fast update from BattleController combatant state
+ *   - updateFromData()        — update from stored _characterData
  */
 export default class CharacterPane extends UIPanel {
   /**
@@ -29,6 +34,10 @@ export default class CharacterPane extends UIPanel {
     this._characterData = characterData;
     this._assetManager = assetManager;
     this.assetManager = assetManager; // for UIPanel background rendering
+
+    // Skill click callback
+    /** @type {Function|null} (skillData) => {} */
+    this.onSkillClick = null;
 
     // Child references for updating
     this._portrait = null;
@@ -77,7 +86,6 @@ export default class CharacterPane extends UIPanel {
     headerRow.padding = { top: 4, right: 0, bottom: 8, left: 6 };
     headerRow.height = 88;
 
-    // Portrait image
     const portraitKey = cd.portrait ? `portrait_${cd.portrait}` : 'placeholder';
     this._portrait = new UIImage(portraitKey, this._assetManager);
     this._portrait.setStyle({
@@ -87,13 +95,11 @@ export default class CharacterPane extends UIPanel {
     });
     headerRow.addChild(this._portrait);
 
-    // Name + Class column
     const nameCol = new UIContainer();
     nameCol.direction = 'column';
     nameCol.gap = 2;
     nameCol.flexGrow = 1;
 
-    // Name text
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: 24,
@@ -105,7 +111,6 @@ export default class CharacterPane extends UIPanel {
     });
     nameCol.addChild(this._nameText);
 
-    // Class + Level text
     const classStr = cd.className ? `${cd.className}` : '';
     const levelStr = cd.level ? `  Lv.${cd.level}` : '';
     this._classText = new UIText(classStr + levelStr);
@@ -141,7 +146,7 @@ export default class CharacterPane extends UIPanel {
     });
     this.addChild(this._healthBar);
 
-    // ── 3. Stats row (open, no dark backgrounds) ───────
+    // ── 3. Stats row ───────────────────────────────────
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
     statsRow.justifyContent = 'space-between';
@@ -150,7 +155,6 @@ export default class CharacterPane extends UIPanel {
     statsRow.padding = { top: 4, right: 8, bottom: 4, left: 8 };
     statsRow.height = 44;
 
-    // Attack stat group
     const attackGroup = new UIContainer();
     attackGroup.direction = 'row';
     attackGroup.gap = 8;
@@ -182,7 +186,6 @@ export default class CharacterPane extends UIPanel {
 
     statsRow.addChild(attackGroup);
 
-    // Armor stat group
     const armorGroup = new UIContainer();
     armorGroup.direction = 'row';
     armorGroup.gap = 8;
@@ -215,7 +218,7 @@ export default class CharacterPane extends UIPanel {
     statsRow.addChild(armorGroup);
     this.addChild(statsRow);
 
-    // ── 4. Mana orbs row (framed area) ────────────────
+    // ── 4. Mana orbs row ─────────────────────────────
     const manaRow = new UIPanel();
     manaRow.direction = 'row';
     manaRow.justifyContent = 'center';
@@ -251,7 +254,6 @@ export default class CharacterPane extends UIPanel {
         showAmountPlate: true,
       });
 
-      // Try to set mana orb asset image
       const manaAssetKey = `mana_${color}`;
       if (this._assetManager && this._assetManager.get(manaAssetKey)) {
         orb.assetKey = manaAssetKey;
@@ -265,7 +267,6 @@ export default class CharacterPane extends UIPanel {
     this.addChild(manaRow);
 
     // ── 5. Skills section ──────────────────────────────
-    // "Skills" title (centered)
     this._skillsTitle = new UIText('Skills');
     this._skillsTitle.setStyle({
       fontSize: 18,
@@ -278,25 +279,58 @@ export default class CharacterPane extends UIPanel {
     });
     this.addChild(this._skillsTitle);
 
-    // Skills list container (open, no dark box)
     this._skillsContainer = new UIContainer();
     this._skillsContainer.direction = 'column';
     this._skillsContainer.gap = 30;
     this._skillsContainer.flexGrow = 1;
     this._skillsContainer.padding = 4;
 
-    // Build skill rows from data
     const skills = cd.skills || [];
     this._skillRows = [];
 
     for (const skillData of skills) {
       const row = new SkillRow(skillData, this._assetManager);
       row.setStyle({ height: 72 });
+      // Wire skill click
+      row._skillData = skillData;
+      row.onClick = () => {
+        if (this.onSkillClick) this.onSkillClick(skillData);
+      };
       this._skillRows.push(row);
       this._skillsContainer.addChild(row);
     }
 
     this.addChild(this._skillsContainer);
+  }
+
+  /**
+   * Fast update from BattleController combatant state.
+   * Updates HP, armor, mana without rebuilding hierarchy.
+   * @param {object} state - { hp, maxHp, armor, block, mana: {...}, ... }
+   */
+  updateFromState(state) {
+    if (!state) return;
+
+    // Health bar
+    if (this._healthBar) {
+      this._healthBar.value = state.hp ?? 0;
+      this._healthBar.maxValue = state.maxHp ?? 100;
+      const blockLabel = (state.block && state.block > 0) ? ` [${state.block}]` : '';
+      this._healthBar.label = `${state.hp ?? 0} / ${state.maxHp ?? 0}${blockLabel}`;
+    }
+
+    // Stats
+    if (this._attackValue) this._attackValue.text = String(state.attack ?? 0);
+    if (this._armorValue) this._armorValue.text = String(state.armor ?? 0);
+
+    // Mana orbs
+    const manaData = state.mana || {};
+    for (const color of Object.keys(this._manaOrbs)) {
+      const orb = this._manaOrbs[color];
+      if (orb) {
+        orb.count = manaData[color] ?? 0;
+      }
+    }
   }
 
   /**
@@ -307,40 +341,35 @@ export default class CharacterPane extends UIPanel {
     const cd = this._characterData;
     if (!cd) return;
 
-    // Health bar
     if (this._healthBar) {
       this._healthBar.value = cd.hp ?? 0;
       this._healthBar.maxValue = cd.maxHp ?? 100;
       this._healthBar.label = `${cd.hp ?? 0} / ${cd.maxHp ?? 0}`;
     }
 
-    // Stats
     if (this._attackValue) this._attackValue.text = String(cd.attack ?? 0);
     if (this._armorValue) this._armorValue.text = String(cd.armor ?? 0);
 
-    // Mana orbs
     const manaData = cd.mana || {};
     for (const color of Object.keys(this._manaOrbs)) {
       const orb = this._manaOrbs[color];
-      if (orb) {
-        orb.count = manaData[color] ?? 0;
-      }
+      if (orb) orb.count = manaData[color] ?? 0;
     }
 
-    // Skills
     const skills = cd.skills || [];
-    // If skill count changed, rebuild
     if (skills.length !== this._skillRows.length) {
       this._skillsContainer.clearChildren();
       this._skillRows = [];
       for (const skillData of skills) {
         const row = new SkillRow(skillData, this._assetManager);
         row.setStyle({ height: 72 });
+        if (this.onSkillClick) {
+          row.onClick = () => this.onSkillClick(skillData);
+        }
         this._skillRows.push(row);
         this._skillsContainer.addChild(row);
       }
     } else {
-      // Update existing
       for (let i = 0; i < skills.length; i++) {
         this._skillRows[i]._skillData = skills[i];
         this._skillRows[i].updateFromData();

@@ -10,12 +10,12 @@ import ManaCostRow from './ManaCostRow.js';
  * Structure:
  *   [icon] [name + description] | [mana cost row...]
  *
- * The vertical separator line (|) aligns across all rows for a clean,
- * consistent layout thanks to the fixed widthPercent on the info column.
+ * Click callback support: set `onClick` to a function that receives the skill data.
  *
  * Properties:
  *   skillData   - { name, description, icon, cost: { red, blue, ... } }
  *   assetManager - AssetManager reference
+ *   onClick      - Function | null — called when skill row is clicked
  */
 export default class SkillRow extends UIPanel {
   constructor(skillData = null, assetManager = null) {
@@ -30,12 +30,18 @@ export default class SkillRow extends UIPanel {
     this._assetManager = assetManager;
     this.assetManager = assetManager; // for UIPanel background rendering
 
+    /** @type {Function|null} */
+    this.onClick = null;
+
     this._iconContainer = null;
     this._icon = null;
     this._nameText = null;
     this._descText = null;
     this._costRow = null;
     this._separator = null;
+
+    // Interactive state
+    this._hovered = false;
 
     if (skillData) {
       this.buildHierarchy();
@@ -53,7 +59,6 @@ export default class SkillRow extends UIPanel {
   setAssetManager(am) {
     this._assetManager = am;
     this.assetManager = am; // for UIPanel background rendering
-    // Propagate to children
     if (this._icon) this._icon.assetManager = am;
     if (this._costRow) this._costRow.setAssetManager(am);
   }
@@ -62,7 +67,7 @@ export default class SkillRow extends UIPanel {
     const sd = this._skillData;
     if (!sd) return;
 
-    // --- Icon container (56x56 frame with centered 48x48 icon) ---
+    // --- Icon container ---
     this._iconContainer = new UIContainer();
     this._iconContainer.setStyle({
       width: 56,
@@ -83,8 +88,7 @@ export default class SkillRow extends UIPanel {
     this._iconContainer.addChild(this._icon);
     this.addChild(this._iconContainer);
 
-    // --- Info column (name + description) ---
-    // Consistent width across all rows so separator line aligns vertically
+    // --- Info column ---
     const infoCol = new UIContainer();
     infoCol.direction = 'column';
     infoCol.gap = 2;
@@ -116,7 +120,7 @@ export default class SkillRow extends UIPanel {
 
     this.addChild(infoCol);
 
-    // --- Vertical separator line ---
+    // --- Vertical separator ---
     this._separator = new UIContainer();
     this._separator.setStyle({
       width: 2,
@@ -125,14 +129,14 @@ export default class SkillRow extends UIPanel {
     });
     this.addChild(this._separator);
 
-    // --- Mana cost row (using reusable component) ---
+    // --- Mana cost row ---
     if (sd.cost && typeof sd.cost === 'object') {
       this._costRow = new ManaCostRow(sd.cost, this._assetManager);
       this.addChild(this._costRow);
     }
   }
 
-  /** Update text values from current skillData (call when data changes) */
+  /** Update text values from current skillData */
   updateFromData() {
     const sd = this._skillData;
     if (!sd) return;
@@ -140,18 +144,53 @@ export default class SkillRow extends UIPanel {
     if (this._nameText) this._nameText.text = sd.name || '';
     if (this._descText) this._descText.text = sd.description || '';
 
-    // Update cost row
     if (this._costRow && sd.cost && typeof sd.cost === 'object') {
       this._costRow.setCostData(sd.cost);
     } else if (this._costRow && (!sd.cost || Object.keys(sd.cost).length === 0)) {
-      // Remove cost row if no costs
       this.removeChild(this._costRow);
       this._costRow = null;
     } else if (!this._costRow && sd.cost && typeof sd.cost === 'object') {
-      // Add cost row if newly present
       this._costRow = new ManaCostRow(sd.cost, this._assetManager);
       this.addChild(this._costRow);
     }
   }
-}
 
+  // ── Hover support for interactivity ──────────────────
+
+  /**
+   * Override hit test to support click detection.
+   * Returns this if the point is within the row's rect.
+   */
+  hitTest(x, y) {
+    if (!this.visible) return null;
+    if (!this.rect.containsPoint(x, y)) return null;
+
+    // If onClick is set, this row is clickable and returns itself
+    if (this.onClick) {
+      return this;
+    }
+
+    // Otherwise, delegate to child hit testing (default behavior)
+    for (let i = this.children.length - 1; i >= 0; i--) {
+      const hit = this.children[i].hitTest(x, y);
+      if (hit) return hit;
+    }
+    return this;
+  }
+
+  renderSelf(ctx) {
+    super.renderSelf(ctx);
+
+    // Hover highlight
+    if (this._hovered && this.onClick) {
+      const r = this.rect;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,200,0.08)';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = 'rgba(255,255,200,0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      ctx.restore();
+    }
+  }
+}

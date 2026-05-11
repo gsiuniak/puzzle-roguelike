@@ -1,14 +1,16 @@
 /**
- * main.js — entry point for the battle scene UI demo.
+ * main.js — entry point for the match-3 battle game.
  *
- * Creates the Canvas, AssetManager, loads assets, builds the BattleScene
- * (player + board + enemy), and runs the game loop.
+ * Creates Canvas, AssetManager, BattleController, BattleScene,
+ * wires input (board drag/swap + skill clicks), and runs the game loop.
  */
+
 import CanvasApp from './engine/CanvasApp.js';
 import GameLoop from './engine/GameLoop.js';
 import AssetManager from './engine/AssetManager.js';
 import InputManager from './engine/InputManager.js';
 import BattleScene from './ui/BattleScene.js';
+import BattleController, { BattleState } from './game/BattleController.js';
 import mockCharacter from './data/mockCharacter.js';
 import mockEnemy from './data/mockEnemy.js';
 
@@ -17,10 +19,7 @@ const DEBUG_UI_LAYOUT = false;
 
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
-  // Battle scene
   battle_background_default:  'assets/sprites/character_pane/background/battle_background_default.png',
-
-  // Character pane
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
   character_pane_skill_row:  'assets/sprites/character_pane/background/character_pane_skill_row.png',
@@ -42,12 +41,8 @@ const ASSET_MAP = {
   skill_slash:               'assets/sprites/character_pane/skills/skill_slash.png',
   skill_bash:                'assets/sprites/character_pane/skills/skill_bash.png',
   skill_defend:              'assets/sprites/character_pane/skills/skill_defend.png',
-
-  // Board grid background
   grid_dark:                 'assets/sprites/grid/grid_dark.png',
   grid_light:                'assets/sprites/grid/grid_light.png',
-
-  // Board tiles
   tile_red:                  'assets/sprites/tiles/red_tile.png',
   tile_blue:                 'assets/sprites/tiles/blue_tile.png',
   tile_green:                'assets/sprites/tiles/green_tile.png',
@@ -60,69 +55,161 @@ const ASSET_MAP = {
 const MIN_WIDTH = 1024;
 const MIN_HEIGHT = 640;
 
+// ── Board drag/swap input state ────────────────────────
+let selectedCell = null;   // { col, row } | null
+let hoveredCell = null;    // { col, row } | null
+let dragStartCell = null;  // { col, row } | null
+
 // ── Initialize ─────────────────────────────────────────
 async function init() {
-  // 1. Create AssetManager and register all assets
+  // 1. AssetManager
   const assetManager = new AssetManager();
   for (const [key, path] of Object.entries(ASSET_MAP)) {
     assetManager.add(key, path);
   }
 
-  // 2. Load all assets
   console.log('Loading assets...');
   const loadedCount = await assetManager.loadAll();
   console.log(`Assets loaded: ${loadedCount} / ${assetManager.count}`);
 
-  // 3. Create CanvasApp
+  // 2. CanvasApp
   const app = new CanvasApp(null, {
     autoResize: true,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
   });
 
-  // 4. Create BattleScene — player + board + enemy
-  const scene = new BattleScene(mockCharacter, mockEnemy, assetManager);
+  // 3. BattleController — the game logic engine
+  const battleController = new BattleController(mockCharacter, mockEnemy);
 
-  // 5. Enable debug outlines if flag is set
+  // 4. BattleScene — the UI
+  const scene = new BattleScene(mockCharacter, mockEnemy, assetManager, battleController);
+
   if (DEBUG_UI_LAYOUT) {
     setDebugRecursive(scene, true);
   }
 
-  // 6. Create InputManager (future interaction)
+  // 5. InputManager
   const input = new InputManager(app.canvas);
   input.setRootUI(scene);
 
-  // 7. Layout function — fills browser window
+  // ── Wire skill clicks ────────────────────────────────
+  const playerPane = scene.getPlayerPane();
+  if (playerPane) {
+    playerPane.onSkillClick = (skill) => {
+      battleController.tryPlayerSkill(skill);
+    };
+  }
+
+  // ── Wire board drag/swap input ───────────────────────
+  const board = scene.getBoard();
+
+  input.on('mousedown', (x, y) => {
+    if (!board) return;
+    const cell = board.screenToCell(x, y);
+    if (cell) {
+      selectedCell = cell;
+      dragStartCell = cell;
+      board.selectedCell = cell;
+    } else {
+      // Click outside board — try skill hit test
+      const hit = scene.hitTest(x, y);
+      if (hit && hit.onClick) {
+        hit.onClick();
+      }
+      selectedCell = null;
+      dragStartCell = null;
+      if (board) board.selectedCell = null;
+    }
+  });
+
+  input.on('mousemove', (x, y) => {
+    if (!board) return;
+    const cell = board.screenToCell(x, y);
+    hoveredCell = cell;
+    board.hoveredCell = cell;
+
+    // Skill row hover feedback
+    const hit = scene.hitTest(x, y);
+    // Reset all skill row hover states
+    if (playerPane) {
+      for (const row of playerPane._skillRows) {
+        row._hovered = (hit === row && row.onClick);
+      }
+    }
+  });
+
+  input.on('mouseup', (x, y) => {
+    if (!board || !selectedCell) {
+      selectedCell = null;
+      dragStartCell = null;
+      if (board) board.selectedCell = null;
+      return;
+    }
+
+    const releaseCell = board.screenToCell(x, y);
+
+    if (releaseCell && dragStartCell) {
+      const dc = Math.abs(releaseCell.col - dragStartCell.col);
+      const dr = Math.abs(releaseCell.row - dragStartCell.row);
+
+      // Must be adjacent (1 cell away, not same cell)
+      if ((dc === 1 && dr === 0) || (dc === 0 && dr === 1)) {
+        battleController.tryPlayerSwap(
+          dragStartCell.col, dragStartCell.row,
+          releaseCell.col, releaseCell.row
+        );
+      } else if (dc === 0 && dr === 0) {
+        // Clicked same cell — could be a tap-to-select, just deselect
+      }
+    }
+
+    selectedCell = null;
+    dragStartCell = null;
+    if (board) board.selectedCell = null;
+  });
+
+  // ── Layout ───────────────────────────────────────────
   function layoutScene(canvasW, canvasH) {
-    // BattleScene fills the entire canvas (background stretches full width)
     scene.rect.x = 0;
     scene.rect.y = 0;
     scene.rect.w = canvasW;
     scene.rect.h = canvasH;
-
-    // Layout all descendants
     scene.layoutChildren();
   }
 
-  // 8. Handle resize
   app.onResize = (w, h) => {
     layoutScene(w, h);
   };
   layoutScene(app.width, app.height);
 
-  // 9. Game loop
+  // ── Game loop ────────────────────────────────────────
   const loop = new GameLoop();
 
   loop.start((dt) => {
+    // dt is in milliseconds from GameLoop
+    // Update game logic
+    battleController.update(dt);
+
+    // Update UI from game state
+    scene.updateFromController();
+
+    // Update scene (animations, etc.)
     scene.update(dt);
+
+    // Layout (recalculate on every frame for responsiveness)
+    layoutScene(app.width, app.height);
+
+    // Render
     app.clear('#1a0a0a');
     scene.render(app.ctx);
   });
 
-  console.log('BattleScene demo running!');
-  console.log('  - Left:  player CharacterPane (Thorgrim)');
-  console.log('  - Center: 8×8 placeholder board');
-  console.log('  - Right: enemy CharacterPane (Goblin)');
+  console.log('Match-3 Battle running!');
+  console.log('  - Drag adjacent tiles to swap');
+  console.log('  - Match 3+ tiles to gain mana / deal skull damage');
+  console.log('  - Match 5+ connected tiles for extra turn');
+  console.log('  - Click skills on player pane to use them');
   console.log(`  - DEBUG_UI_LAYOUT = ${DEBUG_UI_LAYOUT}`);
 }
 
