@@ -320,6 +320,7 @@ export default class CharacterPane extends UIPanel {
       row.onClick = () => {
         if (this.onSkillClick) this.onSkillClick(skillData);
       };
+      row.setManaState(manaData);
       this._skillRows.push(row);
       this._skillsContainer.addChild(row);
     }
@@ -354,6 +355,11 @@ export default class CharacterPane extends UIPanel {
       if (orb) {
         orb.count = manaData[color] ?? 0;
       }
+    }
+
+    // Propagate mana state to skill rows for affordability overlays
+    for (const row of this._skillRows) {
+      row.setManaState(manaData);
     }
   }
 
@@ -390,6 +396,7 @@ export default class CharacterPane extends UIPanel {
         if (this.onSkillClick) {
           row.onClick = () => this.onSkillClick(skillData);
         }
+        row.setManaState(manaData);
         this._skillRows.push(row);
         this._skillsContainer.addChild(row);
       }
@@ -397,6 +404,9 @@ export default class CharacterPane extends UIPanel {
       for (let i = 0; i < skills.length; i++) {
         this._skillRows[i]._skillData = skills[i];
         this._skillRows[i].updateFromData();
+      }
+      for (const row of this._skillRows) {
+        row.setManaState(manaData);
       }
     }
   }

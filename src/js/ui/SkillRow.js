@@ -44,6 +44,12 @@ export default class SkillRow extends UIPanel {
     // Interactive state
     this._hovered = false;
 
+    // Mana affordability state
+    /** @type {Object<string,number>|null} — current mana pool, e.g. {red:3, blue:0} */
+    this._manaState = null;
+    /** @type {boolean} — cached affordability; recomputed when mana or skill changes */
+    this._affordable = false;
+
     if (skillData) {
       this.buildHierarchy();
     }
@@ -54,6 +60,7 @@ export default class SkillRow extends UIPanel {
     this._skillData = skillData;
     this.clearChildren();
     this.buildHierarchy();
+    this._computeAffordable();
   }
 
   /** Set asset manager reference */
@@ -156,6 +163,43 @@ export default class SkillRow extends UIPanel {
       this._costRow = new ManaCostRow(sd.cost, this._assetManager);
       this.addChild(this._costRow);
     }
+
+    this._computeAffordable();
+  }
+
+  // ── Mana affordability ──────────────────────────────
+
+  /**
+   * Update the player's current mana pool and recompute whether
+   * this skill is affordable.
+   * @param {Object<string,number>|null} manaState — e.g. {red:3, blue:0, green:1, yellow:0, purple:0}
+   */
+  setManaState(manaState) {
+    this._manaState = manaState;
+    this._computeAffordable();
+  }
+
+  /** Recompute _affordable from _skillData.cost vs _manaState */
+  _computeAffordable() {
+    const sd = this._skillData;
+    const mana = this._manaState;
+    if (!sd || !sd.cost || typeof sd.cost !== 'object' || Object.keys(sd.cost).length === 0) {
+      // No cost means always affordable
+      this._affordable = true;
+      return;
+    }
+    if (!mana) {
+      // No mana state available yet — default to not affordable
+      this._affordable = false;
+      return;
+    }
+    for (const [color, amount] of Object.entries(sd.cost)) {
+      if ((mana[color] || 0) < amount) {
+        this._affordable = false;
+        return;
+      }
+    }
+    this._affordable = true;
   }
 
   // ── Hover support for interactivity ──────────────────
@@ -184,13 +228,31 @@ export default class SkillRow extends UIPanel {
   renderSelf(ctx) {
     super.renderSelf(ctx);
 
-    // Hover highlight
-    if (this._hovered && this.onClick) {
-      const r = this.rect;
+    const r = this.rect;
+    const canCast = this._affordable && this.onClick;
+
+    // ── Subtle "castable" overlay — always visible when skill is affordable ──
+    if (canCast) {
       ctx.save();
-      ctx.fillStyle = 'rgba(255,255,200,0.08)';
+      // Warm golden fill across the row
+      ctx.fillStyle = 'rgba(255,240,180,0.12)';
       ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = 'rgba(255,255,200,0.3)';
+      // Left-edge accent bar signalling "available to cast"
+      ctx.fillStyle = 'rgba(255,240,160,0.35)';
+      ctx.fillRect(r.x, r.y, 4, r.h);
+      // Subtle border around the row
+      ctx.strokeStyle = 'rgba(255,240,180,0.20)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      ctx.restore();
+    }
+
+    // ── Hover highlight — only when affordable ──
+    if (this._hovered && canCast) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,200,0.12)';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = 'rgba(255,255,200,0.40)';
       ctx.lineWidth = 1;
       ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
       ctx.restore();
