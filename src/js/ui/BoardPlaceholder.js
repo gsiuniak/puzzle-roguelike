@@ -24,6 +24,10 @@ export default class BoardPlaceholder extends UIElement {
     this.emptyCells = [];
     this.fallCells = [];
 
+    // Particle effects (set by BattleScene each frame)
+    /** @type {Array<import('./TileParticleEffect.js').default>} */
+    this.particleEffects = [];
+
     // Targeting overlay (for skills like Explode!)
     /** @type {Array<{col:number, row:number}>} */
     this.targetingOverlayCells = [];
@@ -146,16 +150,22 @@ export default class BoardPlaceholder extends UIElement {
       swapSkip.add(`${this.swapAnim.to.col},${this.swapAnim.to.row}`);
     }
 
+    // ═══════════════════════════════════════════════════════
+    // PASS 1: Draw all cell BACKGROUNDS (chessboard + dark empties)
+    // ═══════════════════════════════════════════════════════
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const key = `${col},${row}`;
+        const x = ox + col * cs;
+        const y = oy + row * cs;
+        const isDark = (row + col) % 2 === 0;
 
-        // Skip tiles being swap-animated (rendered separately)
-        if (swapSkip.has(key)) {
-          // Still render chessboard background
-          const x = ox + col * cs;
-          const y = oy + row * cs;
-          const isDark = (row + col) % 2 === 0;
+        if (emptySet.has(key)) {
+          // Dark overlay for removed tiles
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(x, y, cs, cs);
+        } else {
+          // Chessboard background
           const bgImg = isDark ? gridDark : gridLight;
           if (bgImg) {
             ctx.drawImage(bgImg, x, y, cs, cs);
@@ -163,24 +173,35 @@ export default class BoardPlaceholder extends UIElement {
             ctx.fillStyle = isDark ? bgDark : bgLight;
             ctx.fillRect(x, y, cs, cs);
           }
-          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(x, y, cs, cs);
-          continue;
         }
+      }
+    }
 
-        // Skip empty cells during REMOVE phase
-        if (emptySet.has(key)) {
-          // Render dark empty cell
-          const x = ox + col * cs;
-          const y = oy + row * cs;
-          ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(x, y, cs, cs);
-          ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(x, y, cs, cs);
-          continue;
-        }
+    // ═══════════════════════════════════════════════════════
+    // PASS 2: PARTICLE EFFECTS (render below tiles, above bg)
+    // ═══════════════════════════════════════════════════════
+    if (this.particleEffects && this.particleEffects.length > 0) {
+      ctx.save();
+      // Additive blending for magical glow
+      ctx.globalCompositeOperation = 'lighter';
+      for (const effect of this.particleEffects) {
+        effect.render(ctx);
+      }
+      ctx.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // PASS 3: TILES + BORDERS + OVERLAYS
+    // ═══════════════════════════════════════════════════════
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        const key = `${col},${row}`;
+
+        // Skip tiles being swap-animated (rendered separately at end)
+        if (swapSkip.has(key)) continue;
+
+        // Skip empty cells
+        if (emptySet.has(key)) continue;
 
         const colorKey = this.getTileAt(row, col);
         if (!colorKey) continue;
@@ -193,23 +214,12 @@ export default class BoardPlaceholder extends UIElement {
         if (fallData && this._fallProgress < 1) {
           const startY = fallData.startRow >= 0
             ? oy + fallData.startRow * cs
-            : oy - cs; // from above
+            : oy - cs;
           const startX = ox + fallData.startCol * cs;
           const t = this._fallProgress;
-          // Ease-out quad for natural feel
           const ease = 1 - (1 - t) * (1 - t);
           displayX = Math.floor(startX + (displayX - startX) * ease);
           displayY = Math.floor(startY + (displayY - startY) * ease);
-        }
-
-        // Chessboard background
-        const isDark = (row + col) % 2 === 0;
-        const bgImg = isDark ? gridDark : gridLight;
-        if (bgImg) {
-          ctx.drawImage(bgImg, displayX, displayY, cs, cs);
-        } else {
-          ctx.fillStyle = isDark ? bgDark : bgLight;
-          ctx.fillRect(displayX, displayY, cs, cs);
         }
 
         // Tile sprite
@@ -231,12 +241,15 @@ export default class BoardPlaceholder extends UIElement {
       }
     }
 
+    // ═══════════════════════════════════════════════════════
+    // OVERLAYS (rendered above tiles)
+    // ═══════════════════════════════════════════════════════
+
     // ── Highlight overlay (SHOW_MATCH phase) ──
     for (const pos of this.highlightCells) {
       const hx = ox + pos.col * cs;
       const hy = oy + pos.row * cs;
       ctx.save();
-      // Pulsing glow
       const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 150);
       ctx.fillStyle = `rgba(255,255,100,${0.15 + pulse * 0.2})`;
       ctx.fillRect(hx, hy, cs, cs);
@@ -249,28 +262,19 @@ export default class BoardPlaceholder extends UIElement {
     // ── Targeting overlay (skill targeting like Explode! 3x3) ──
     if (this.targetingOverlayCells && this.targetingOverlayCells.length > 0) {
       for (const pos of this.targetingOverlayCells) {
-        // 1. Calculate the exact pixel coordinates for the current grid cell
         const hx = ox + pos.col * cs;
         const hy = oy + pos.row * cs;
-        
         ctx.save();
-        
         const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 120);
-
-        // --- 1. DRAW THE GLOWING INNER CORE ---
-        // Clean, bright white selection
-        ctx.shadowColor = `rgba(255, 255, 255, ${0.4 + pulse * 0.4})`; 
-        ctx.shadowBlur = 12 + (pulse * 8); 
-
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.05 + pulse * 0.15})`; // Barely-there white wash
+        ctx.shadowColor = `rgba(255, 255, 255, ${0.4 + pulse * 0.4})`;
+        ctx.shadowBlur = 12 + (pulse * 8);
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.05 + pulse * 0.15})`;
         ctx.fillRect(hx, hy, cs, cs);
-
         ctx.shadowColor = "transparent";
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)"; // Solid white border
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
         ctx.lineWidth = 3;
         ctx.strokeRect(hx, hy, cs, cs);
-  
         ctx.restore();
       }
     }
@@ -305,7 +309,7 @@ export default class BoardPlaceholder extends UIElement {
     if (this.swapAnim) {
       const { from, to, progress } = this.swapAnim;
       const t = progress;
-      const ease = 1 - (1 - t) * (1 - t); // ease-out quad
+      const ease = 1 - (1 - t) * (1 - t);
 
       const fromType = this.getTileAt(from.row, from.col);
       const toType = this.getTileAt(to.row, to.col);
@@ -315,11 +319,8 @@ export default class BoardPlaceholder extends UIElement {
       const toStartX = ox + to.col * cs;
       const toStartY = oy + to.row * cs;
 
-      // Tile A (from) moves toward to position
       const ax = Math.floor(fromStartX + (toStartX - fromStartX) * ease);
       const ay = Math.floor(fromStartY + (toStartY - fromStartY) * ease);
-
-      // Tile B (to) moves toward from position
       const bx = Math.floor(toStartX + (fromStartX - toStartX) * ease);
       const by = Math.floor(toStartY + (fromStartY - toStartY) * ease);
 
@@ -340,7 +341,6 @@ export default class BoardPlaceholder extends UIElement {
         ctx.strokeRect(x, y, cs, cs);
       };
 
-      // Render on top of everything with slight drop-shadow for depth
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.4)';
       ctx.shadowBlur = 6;

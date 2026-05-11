@@ -249,6 +249,8 @@ export default class BattleScene extends UIPanel {
       this._board.fallCells = state.fallCells || [];
       this._board.swapAnim = state.swapAnim || null;
       this._board.targetingOverlayCells = state.targetingOverlayCells || [];
+      // Pass particle effects to board for correct layering (below tiles)
+      this._board.particleEffects = this._particleEffects;
     }
   }
 
@@ -397,12 +399,13 @@ export default class BattleScene extends UIPanel {
       tileType.particleColor,
       baseSize,
       {
-        particleCount: 8,
-        minLife: 200,
-        maxLife: 400,
-        minSpeed: metrics.cellSize * 0.08,
-        maxSpeed: metrics.cellSize * 0.35,
-        gravity: metrics.cellSize * 0.02,
+        particleCount: 12,
+        sparkCount: 6,
+        minLife: 250,
+        maxLife: 500,
+        minSpeed: metrics.cellSize * 0.12,
+        maxSpeed: metrics.cellSize * 0.55,
+        gravity: metrics.cellSize * 0.03,
       }
     );
 
@@ -445,13 +448,8 @@ export default class BattleScene extends UIPanel {
       ctx.translate(shake.x, shake.y);
     }
 
-    // Render standard UI (background, children)
+    // Render standard UI (background, children, board with particles)
     super.render(ctx);
-
-    // Render tile destruction particles above board, below floating text
-    for (const effect of this._particleEffects) {
-      effect.render(ctx);
-    }
 
     // Render floating effects on top of everything
     for (const effect of this._floatingEffects) {
