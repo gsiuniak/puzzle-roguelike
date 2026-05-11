@@ -132,6 +132,15 @@ export default class BattleController {
     this._skillDestroyedPositions = [];
 
     /**
+     * Tiles destroyed in the current cascade step. Captured BEFORE
+     * removeTiles() so the scene can spawn matching-color particle bursts.
+     * Each entry: { col, row, typeId }.
+     * Read & cleared by BattleScene via getState().
+     * @type {Array<{col:number, row:number, typeId:string}>|null}
+     */
+    this._destroyedTilesThisStep = null;
+
+    /**
      * Pending screen-shake intensity (0-1). Set when damage is dealt,
      * read & cleared by BattleScene each frame via getState().
      * @type {number}
@@ -187,6 +196,11 @@ export default class BattleController {
     const turnAnnouncement = this._turnAnnouncement;
     this._turnAnnouncement = null;
 
+    // Capture destroyed tile info and clear so scene spawns
+    // particle bursts once per destruction step.
+    const destroyedTiles = this._destroyedTilesThisStep;
+    this._destroyedTilesThisStep = null;
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -196,6 +210,7 @@ export default class BattleController {
       matchTextTriggers,
       shakeIntensity,
       turnAnnouncement,
+      destroyedTiles,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -445,7 +460,16 @@ export default class BattleController {
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
     }
 
-    // 4. Remove tiles from board
+    // 4. Capture tile types BEFORE removal for particle burst effects
+    this._destroyedTilesThisStep = [];
+    for (const pos of positions) {
+      const typeId = this.board.get(pos.col, pos.row);
+      if (typeId) {
+        this._destroyedTilesThisStep.push({ col: pos.col, row: pos.row, typeId });
+      }
+    }
+
+    // 5. Remove tiles from board
     const removedCount = this.board.removeTiles(positions);
     this.log.add(`${removedCount} tiles destroyed by Explode!`);
 
@@ -639,6 +663,16 @@ export default class BattleController {
       if (count > 0) {
         activeState.mana[color] = (activeState.mana[color] || 0) + count;
         this.log.add(`${activeState.name} gains ${count} ${color} mana.`);
+      }
+    }
+
+    // Capture tile types BEFORE removal so the scene can spawn
+    // matching-color particle bursts for every destroyed tile.
+    this._destroyedTilesThisStep = [];
+    for (const pos of a.positions) {
+      const typeId = this.board.get(pos.col, pos.row);
+      if (typeId) {
+        this._destroyedTilesThisStep.push({ col: pos.col, row: pos.row, typeId });
       }
     }
 

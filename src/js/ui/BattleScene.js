@@ -5,6 +5,7 @@ import BoardPlaceholder from './BoardPlaceholder.js';
 import UIText from './UIText.js';
 import FloatingImageEffect from './FloatingImageEffect.js';
 import FloatingTextEffect from './FloatingTextEffect.js';
+import TileParticleEffect from './TileParticleEffect.js';
 import ScreenShake from './ScreenShake.js';
 import { getTileType } from '../game/TileTypes.js';
 
@@ -62,6 +63,10 @@ export default class BattleScene extends UIPanel {
     // ── Floating image effects ──
     /** @type {FloatingImageEffect[]} */
     this._floatingEffects = [];
+
+    // ── Tile destruction particle effects ──
+    /** @type {TileParticleEffect[]} */
+    this._particleEffects = [];
 
     // ── Screen shake ──
     /** @type {ScreenShake} */
@@ -207,6 +212,13 @@ export default class BattleScene extends UIPanel {
     // ── Trigger screen shake for damage ──
     if (state.shakeIntensity && state.shakeIntensity > 0) {
       this._screenShake.trigger(state.shakeIntensity);
+    }
+
+    // ── Spawn tile destruction particle bursts ──
+    if (state.destroyedTiles && state.destroyedTiles.length > 0 && this._board) {
+      for (const dt of state.destroyedTiles) {
+        this._spawnTileDestroyParticles(dt);
+      }
     }
 
     // Update turn label
@@ -366,6 +378,37 @@ export default class BattleScene extends UIPanel {
     this._floatingEffects.push(effect);
   }
 
+  /**
+   * Spawn a particle burst effect for a single destroyed tile.
+   * Particle size scales with the board cell size for consistency.
+   * @param {{col:number, row:number, typeId:string}} destroyedTile
+   */
+  _spawnTileDestroyParticles(destroyedTile) {
+    const screen = this._cellToScreen(destroyedTile);
+    if (!screen) return;
+
+    const tileType = getTileType(destroyedTile.typeId);
+    const metrics = this._board.getCellMetrics();
+    // Base particle radius ~5% of cell size, clamped to 2-5px
+    const baseSize = Math.max(2, Math.min(5, metrics.cellSize * 0.05));
+
+    const effect = new TileParticleEffect(
+      screen.x, screen.y,
+      tileType.particleColor,
+      baseSize,
+      {
+        particleCount: 8,
+        minLife: 200,
+        maxLife: 400,
+        minSpeed: metrics.cellSize * 0.08,
+        maxSpeed: metrics.cellSize * 0.35,
+        gravity: metrics.cellSize * 0.02,
+      }
+    );
+
+    this._particleEffects.push(effect);
+  }
+
   // ── Update (override) ───────────────────────────────
 
   update(dt) {
@@ -382,6 +425,14 @@ export default class BattleScene extends UIPanel {
         this._floatingEffects.splice(i, 1);
       }
     }
+
+    // Update particle effects, remove completed ones
+    for (let i = this._particleEffects.length - 1; i >= 0; i--) {
+      this._particleEffects[i].update(dt);
+      if (this._particleEffects[i].done) {
+        this._particleEffects.splice(i, 1);
+      }
+    }
   }
 
   // ── Render (override) ───────────────────────────────
@@ -396,6 +447,11 @@ export default class BattleScene extends UIPanel {
 
     // Render standard UI (background, children)
     super.render(ctx);
+
+    // Render tile destruction particles above board, below floating text
+    for (const effect of this._particleEffects) {
+      effect.render(ctx);
+    }
 
     // Render floating effects on top of everything
     for (const effect of this._floatingEffects) {
