@@ -29,6 +29,7 @@ export default class BattleScene extends UIPanel {
   constructor(playerData = null, enemyData = null, assetManager = null) {
     super();
     this.direction = 'column';
+    this.alignItems = 'center';  // center mainRow horizontally within full-width background
     this.gap = 0;
     this.padding = 0;
 
@@ -52,18 +53,20 @@ export default class BattleScene extends UIPanel {
   }
 
   buildHierarchy() {
-    // ── Main row: three columns ──────────────────────
+    // ── Main row: three columns, centered in scene ──
     const mainRow = new UIContainer();
     mainRow.direction = 'row';
     mainRow.gap = 10;
     mainRow.alignItems = 'stretch';
+    mainRow.justifyContent = 'center';
     mainRow.flexGrow = 1;
+    mainRow.maxWidth = 1400;
     mainRow.padding = { top: 12, right: 12, bottom: 12, left: 12 };
 
     // ── LEFT: Player CharacterPane ───────────────────
     this._playerPane = new CharacterPane(this._playerData, this._assetManager);
     this._playerPane.setStyle({
-      widthPercent: 0.25,
+      widthPercent: 0.24,
       minWidth: 300,
       maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',
@@ -80,7 +83,6 @@ export default class BattleScene extends UIPanel {
     centerCol.direction = 'column';
     centerCol.gap = 6;
     centerCol.flexGrow = 1;
-    centerCol.alignItems = 'center';
     centerCol.justifyContent = 'center';
 
     // Turn label
@@ -133,7 +135,7 @@ export default class BattleScene extends UIPanel {
     // ── RIGHT: Enemy CharacterPane ───────────────────
     this._enemyPane = new CharacterPane(this._enemyData, this._assetManager);
     this._enemyPane.setStyle({
-      widthPercent: 0.25,
+      widthPercent: 0.24,
       minWidth: 300,
       maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',

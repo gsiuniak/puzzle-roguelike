@@ -94,12 +94,11 @@ async function init() {
 
   // 7. Layout function — fills browser window
   function layoutScene(canvasW, canvasH) {
-    // BattleScene fills the entire canvas
-    const margin = scene._resolveMargin();
-    scene.rect.x = margin.left;
-    scene.rect.y = margin.top;
-    scene.rect.w = canvasW - margin.left - margin.right;
-    scene.rect.h = canvasH - margin.top - margin.bottom;
+    // BattleScene fills the entire canvas (background stretches full width)
+    scene.rect.x = 0;
+    scene.rect.y = 0;
+    scene.rect.w = canvasW;
+    scene.rect.h = canvasH;
 
     // Layout all descendants
     scene.layoutChildren();
