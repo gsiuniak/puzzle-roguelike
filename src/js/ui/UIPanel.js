@@ -16,7 +16,7 @@ export default class UIPanel extends UIContainer {
   }
 
   renderSelf(ctx) {
-    // Draw background image first
+    // Draw background image first (cover mode — scale to fill, center-crop)
     if (this.backgroundAssetKey && this.assetManager) {
       const img = this.assetManager.get(this.backgroundAssetKey);
       if (img) {
@@ -26,7 +26,13 @@ export default class UIPanel extends UIContainer {
           this._roundRect(ctx, r.x, r.y, r.w, r.h, this.cornerRadius);
           ctx.clip();
         }
-        ctx.drawImage(img, r.x, r.y, r.w, r.h);
+        // Cover: scale proportionally to fill, center-crop
+        const scale = Math.max(r.w / img.width, r.h / img.height);
+        const sw = img.width * scale;
+        const sh = img.height * scale;
+        const sx = r.x + (r.w - sw) / 2;
+        const sy = r.y + (r.h - sh) / 2;
+        ctx.drawImage(img, sx, sy, sw, sh);
         ctx.restore();
       }
     }

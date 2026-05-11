@@ -20,6 +20,7 @@ const ASSET_MAP = {
   // Character pane
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
+  character_pane_skill_row:  'assets/sprites/character_pane/background/character_pane_skill_row.png',
   portrait_warrior:          'assets/sprites/character_pane/portraits/portrait_warrior.png',
   portrait_goblin:           'assets/sprites/character_pane/portraits/portrait_goblin.png',
   icon_attack:               'assets/sprites/character_pane/icons/icon_attack.png',
@@ -29,9 +30,19 @@ const ASSET_MAP = {
   mana_green:                'assets/sprites/character_pane/mana/mana_green.png',
   mana_yellow:               'assets/sprites/character_pane/mana/mana_yellow.png',
   mana_purple:               'assets/sprites/character_pane/mana/mana_purple.png',
+  mana_red_simple:           'assets/sprites/character_pane/mana/mana_red_simple.png',
+  mana_blue_simple:          'assets/sprites/character_pane/mana/mana_blue_simple.png',
+  mana_green_simple:         'assets/sprites/character_pane/mana/mana_green_simple.png',
+  mana_yellow_simple:        'assets/sprites/character_pane/mana/mana_yellow_simple.png',
+  mana_purple_simple:        'assets/sprites/character_pane/mana/mana_purple_simple.png',
+  mana_amount:               'assets/sprites/character_pane/mana/mana_amount.png',
   skill_slash:               'assets/sprites/character_pane/skills/skill_slash.png',
   skill_bash:                'assets/sprites/character_pane/skills/skill_bash.png',
   skill_defend:              'assets/sprites/character_pane/skills/skill_defend.png',
+
+  // Board grid background
+  grid_dark:                 'assets/sprites/grid/grid_dark.png',
+  grid_light:                'assets/sprites/grid/grid_light.png',
 
   // Board tiles
   tile_red:                  'assets/sprites/tiles/red_tile.png',

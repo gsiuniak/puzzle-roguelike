@@ -66,6 +66,10 @@ export default class BoardPlaceholder extends UIElement {
     const offsetX = r.x + (r.w - gridW) / 2;
     const offsetY = r.y + (r.h - gridH) / 2;
 
+    // Chessboard background images
+    const gridDark = this._assetManager ? this._assetManager.get('grid_dark') : null;
+    const gridLight = this._assetManager ? this._assetManager.get('grid_light') : null;
+
     // Fallback color map for when tile images aren't loaded
     const fallbackColors = {
       red:    '#cc3333',
@@ -76,18 +80,32 @@ export default class BoardPlaceholder extends UIElement {
       skull:  '#555555',
     };
 
+    // Chessboard background colors
+    const bgDark  = '#2a2a1a';
+    const bgLight = '#3a3a2a';
+
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const x = offsetX + col * cellSize;
         const y = offsetY + row * cellSize;
+        const isDark = (row + col) % 2 === 0;
         const colorKey = this._grid[row][col];
 
-        // Try tile sprite first
-        const assetKey = `tile_${colorKey}`;
-        const img = this._assetManager ? this._assetManager.get(assetKey) : null;
+        // ── Chessboard background cell ──
+        const bgImg = isDark ? gridDark : gridLight;
+        if (bgImg) {
+          ctx.drawImage(bgImg, x, y, cellSize, cellSize);
+        } else {
+          ctx.fillStyle = isDark ? bgDark : bgLight;
+          ctx.fillRect(x, y, cellSize, cellSize);
+        }
 
-        if (img) {
-          ctx.drawImage(img, x, y, cellSize, cellSize);
+        // ── Tile sprite on top ──
+        const assetKey = `tile_${colorKey}`;
+        const tileImg = this._assetManager ? this._assetManager.get(assetKey) : null;
+
+        if (tileImg) {
+          ctx.drawImage(tileImg, x, y, cellSize, cellSize);
         } else {
           // Fallback: filled rectangle with a subtle inner border
           ctx.fillStyle = fallbackColors[colorKey] || '#444444';

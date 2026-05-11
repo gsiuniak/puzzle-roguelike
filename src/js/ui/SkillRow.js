@@ -1,3 +1,4 @@
+import UIPanel from './UIPanel.js';
 import UIContainer from './UIContainer.js';
 import UIImage from './UIImage.js';
 import UIText from './UIText.js';
@@ -13,16 +14,18 @@ import UIOrb from './UIOrb.js';
  *   skillData   - { name, description, icon, cost: { red, blue, ... } }
  *   assetManager - AssetManager reference
  */
-export default class SkillRow extends UIContainer {
+export default class SkillRow extends UIPanel {
   constructor(skillData = null, assetManager = null) {
     super();
     this.direction = 'row';
     this.gap = 8;
     this.alignItems = 'center';
     this.padding = { top: 4, right: 6, bottom: 4, left: 6 };
+    this.backgroundAssetKey = 'character_pane_skill_row';
 
     this._skillData = skillData;
     this._assetManager = assetManager;
+    this.assetManager = assetManager; // for UIPanel background rendering
 
     this._icon = null;
     this._nameText = null;
@@ -44,6 +47,7 @@ export default class SkillRow extends UIContainer {
   /** Set asset manager reference */
   setAssetManager(am) {
     this._assetManager = am;
+    this.assetManager = am; // for UIPanel background rendering
     // Propagate to children
     if (this._icon) this._icon.assetManager = am;
   }
@@ -56,8 +60,8 @@ export default class SkillRow extends UIContainer {
     const iconKey = sd.icon || 'placeholder';
     this._icon = new UIImage(iconKey, this._assetManager);
     this._icon.setStyle({
-      width: 40,
-      height: 40,
+      width: 48,
+      height: 48,
       fitMode: 'contain',
       margin: { right: 4 },
     });
@@ -129,9 +133,9 @@ export default class SkillRow extends UIContainer {
           borderWidth: 1,
         });
 
-        // Try asset key for mana orb image overlay
+        // Use simple mana icon for skill row cost orbs
         if (this._assetManager) {
-          const manaAssetKey = `mana_${color}`;
+          const manaAssetKey = `mana_${color}_simple`;
           if (this._assetManager.get(manaAssetKey)) {
             orb.assetKey = manaAssetKey;
             orb.assetManager = this._assetManager;

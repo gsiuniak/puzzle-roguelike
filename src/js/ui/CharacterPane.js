@@ -28,6 +28,7 @@ export default class CharacterPane extends UIPanel {
 
     this._characterData = characterData;
     this._assetManager = assetManager;
+    this.assetManager = assetManager; // for UIPanel background rendering
 
     // Child references for updating
     this._portrait = null;
@@ -74,14 +75,14 @@ export default class CharacterPane extends UIPanel {
     headerRow.gap = 10;
     headerRow.alignItems = 'center';
     headerRow.padding = { top: 4, right: 0, bottom: 6, left: 4 };
-    headerRow.height = 72;
+    headerRow.height = 80;
 
     // Portrait image
     const portraitKey = cd.portrait ? `portrait_${cd.portrait}` : 'placeholder';
     this._portrait = new UIImage(portraitKey, this._assetManager);
     this._portrait.setStyle({
-      width: 60,
-      height: 60,
+      width: 68,
+      height: 68,
       fitMode: 'cover',
     });
     headerRow.addChild(this._portrait);
@@ -158,7 +159,7 @@ export default class CharacterPane extends UIPanel {
     attackGroup.alignItems = 'center';
 
     this._attackIcon = new UIImage('icon_attack', this._assetManager);
-    this._attackIcon.setStyle({ width: 24, height: 24, fitMode: 'contain' });
+    this._attackIcon.setStyle({ width: 28, height: 28, fitMode: 'contain' });
     attackGroup.addChild(this._attackIcon);
 
     this._attackLabel = new UIText('ATK');
@@ -190,7 +191,7 @@ export default class CharacterPane extends UIPanel {
     armorGroup.alignItems = 'center';
 
     this._armorIcon = new UIImage('icon_block', this._assetManager);
-    this._armorIcon.setStyle({ width: 24, height: 24, fitMode: 'contain' });
+    this._armorIcon.setStyle({ width: 28, height: 28, fitMode: 'contain' });
     armorGroup.addChild(this._armorIcon);
 
     this._armorLabel = new UIText('DEF');
@@ -217,13 +218,15 @@ export default class CharacterPane extends UIPanel {
     this.addChild(statsRow);
 
     // ── 4. Mana orbs row ───────────────────────────────
-    const manaRow = new UIContainer();
+    const manaRow = new UIPanel();
     manaRow.direction = 'row';
     manaRow.justifyContent = 'center';
     manaRow.alignItems = 'center';
-    manaRow.gap = 10;
+    manaRow.gap = 8;
     manaRow.padding = { top: 4, right: 4, bottom: 4, left: 4 };
-    manaRow.height = 48;
+    manaRow.height = 80;
+    manaRow.backgroundAssetKey = 'character_pane_skill_row';
+    manaRow.assetManager = this._assetManager;
 
     const manaColors = {
       red:    '#cc3333',
@@ -242,11 +245,12 @@ export default class CharacterPane extends UIPanel {
         color: manaColors[color],
         count: manaData[color] ?? 0,
         countColor: '#ffffff',
-        fontSize: 16,
-        width: 42,
-        height: 42,
+        fontSize: 15,
+        width: 44,
+        height: 66,
         borderColor: '#886622',
         borderWidth: 2,
+        showAmountPlate: true,
       });
 
       // Try to set mana orb asset image
@@ -291,7 +295,7 @@ export default class CharacterPane extends UIPanel {
 
     for (const skillData of skills) {
       const row = new SkillRow(skillData, this._assetManager);
-      row.setStyle({ height: 52 });
+      row.setStyle({ height: 60 });
       this._skillRows.push(row);
       this._skillsContainer.addChild(row);
     }
@@ -335,7 +339,7 @@ export default class CharacterPane extends UIPanel {
       this._skillRows = [];
       for (const skillData of skills) {
         const row = new SkillRow(skillData, this._assetManager);
-        row.setStyle({ height: 52 });
+        row.setStyle({ height: 60 });
         this._skillRows.push(row);
         this._skillsContainer.addChild(row);
       }
