@@ -259,7 +259,9 @@ export default class BattleController {
     if (analysis.extraTurnTrigger) {
       this._extraTurnEarned = true;
       // Compute the "cause" position for the 4+ match floating effect.
-      // For the initial swap step: use the swap destination position.
+      // For the initial swap step: _swapTriggerPos was computed by
+      // _computeSwapCausePos which finds which swapped tile landed in
+      // the 4+ group (handles both click-order scenarios correctly).
       // For cascade steps: find which match position overlaps with
       // the previously-empty cells (the tile that fell into place).
       let causePos = null;
@@ -293,6 +295,53 @@ export default class BattleController {
     this.fallCells = [];
     this._cascadePhase = CascadePhase.SHOW_MATCH;
     this._phaseTimer = 0;
+  }
+
+  /**
+   * After a swap, determine which of the two swapped positions is part of
+   * a 4+ match (the tile that "caused" the extra turn). Falls back to 'to'
+   * for non-extra-turn swaps, or the first match position.
+   * @param {{col:number, row:number}} from - swap source
+   * @param {{col:number, row:number}} to - swap destination
+   * @param {import('./MatchResolver.js').MatchAnalysis|null} analysis
+   * @returns {{col:number, row:number}|null}
+   */
+  _computeSwapCausePos(from, to, analysis) {
+    if (!analysis) return null;
+
+    // If this step triggers an extra turn (4+ match), find which of the
+    // two swapped tiles landed in a 4+ connected group.
+    if (analysis.extraTurnTrigger) {
+      for (const match of analysis.matches) {
+        if (match.count >= 4 || (match.isShape && match.count >= 4)) {
+          const matchSet = new Set(match.positions.map(p => `${p.col},${p.row}`));
+          // Check 'from' first — the tile originally at 'to' lands here
+          if (matchSet.has(`${from.col},${from.row}`)) {
+            return { col: from.col, row: from.row };
+          }
+          // Check 'to' — the tile originally at 'from' lands here
+          if (matchSet.has(`${to.col},${to.row}`)) {
+            return { col: to.col, row: to.row };
+          }
+        }
+      }
+    }
+
+    // Fallback for non-extra-turn matches: use the first position in the
+    // analysis that overlaps with either swapped cell.
+    const analysisSet = new Set(analysis.positions.map(p => `${p.col},${p.row}`));
+    if (analysisSet.has(`${from.col},${from.row}`)) {
+      return { col: from.col, row: from.row };
+    }
+    if (analysisSet.has(`${to.col},${to.row}`)) {
+      return { col: to.col, row: to.row };
+    }
+
+    // Absolute fallback: first match position
+    if (analysis.positions.length > 0) {
+      return { col: analysis.positions[0].col, row: analysis.positions[0].row };
+    }
+    return { col: to.col, row: to.row };
   }
 
   /**
@@ -446,12 +495,12 @@ export default class BattleController {
         // Perform the logical swap
         const { from, to, valid } = this.swapAnim;
         this.board.swap(from.col, from.row, to.col, to.row);
-        // Save the swap DESTINATION as trigger origin for visual effects
-        this._swapTriggerPos = { col: to.col, row: to.row };
         this.swapAnim = null;
 
         if (valid) {
           const analysis = this.resolver.analyzeMatches(this.board);
+          // Determine which swapped position caused the 4+ match
+          this._swapTriggerPos = this._computeSwapCausePos(from, to, analysis);
           this._beginResolving('player', analysis);
         } else {
           // Revert after animation
@@ -503,11 +552,14 @@ export default class BattleController {
 
     const swap = this.enemyAI.findBestSwap(this.board);
     if (swap) {
-      this._swapTriggerPos = { col: swap.col2, row: swap.row2 };
       this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
       this.log.add(`${this.enemyState.name} swaps tiles.`);
       const analysis = this.resolver.analyzeMatches(this.board);
       if (analysis) {
+        // Determine which swapped position caused the 4+ match
+        const from = { col: swap.col1, row: swap.row1 };
+        const to = { col: swap.col2, row: swap.row2 };
+        this._swapTriggerPos = this._computeSwapCausePos(from, to, analysis);
         this._beginResolving('enemy', analysis);
       } else {
         this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
