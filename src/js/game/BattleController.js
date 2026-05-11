@@ -49,6 +49,20 @@ export default class BattleController {
     this.activeSide = 'player';
 
     /**
+     * Board position (col, row) of the swap that triggered the current
+     * resolution cascade. Used as origin for extra-turn visual effects.
+     * @type {{col:number, row:number}|null}
+     */
+    this._swapTriggerPos = null;
+
+    /**
+     * Set when an extra turn is granted in _finishResolving. The scene
+     * reads and clears this each frame to spawn visual effects.
+     * @type {{col:number, row:number}|null}
+     */
+    this.extraTurnTriggerPos = null;
+
+    /**
      * Speed multiplier for all animation timing.
      * 1.0 = normal, 2.0 = fast, 0.5 = slow.
      * Scales phase durations, enemy delay, and swap duration.
@@ -103,11 +117,16 @@ export default class BattleController {
   // ── Public API ────────────────────────────────────────
 
   getState() {
+    // Capture extraTurnTriggerPos and clear it so scene only
+    // spawns one effect per trigger.
+    const triggerPos = this.extraTurnTriggerPos;
+    this.extraTurnTriggerPos = null;
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
       board: this.board, log: this.log,
       pendingExtraTurn: this.pendingExtraTurn,
+      extraTurnTriggerPos: triggerPos,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -291,6 +310,10 @@ export default class BattleController {
 
     if (this._extraTurnEarned) {
       this.pendingExtraTurn = true;
+      // Capture swap trigger position for visual effects
+      this.extraTurnTriggerPos = this._swapTriggerPos
+        ? { col: this._swapTriggerPos.col, row: this._swapTriggerPos.row }
+        : null;
       this.log.add(`${this._activeState().name} gets an extra turn!`);
     }
 
@@ -322,6 +345,7 @@ export default class BattleController {
 
   _endTurn(side) {
     this.pendingExtraTurn = false;
+    this._swapTriggerPos = null;
     this.log.nextTurn();
     if (side === 'player') {
       this.state = BattleState.ENEMY_TURN;
@@ -357,6 +381,8 @@ export default class BattleController {
         // Perform the logical swap
         const { from, to, valid } = this.swapAnim;
         this.board.swap(from.col, from.row, to.col, to.row);
+        // Save the swap position as trigger origin for visual effects
+        this._swapTriggerPos = { col: from.col, row: from.row };
         this.swapAnim = null;
 
         if (valid) {
@@ -365,6 +391,7 @@ export default class BattleController {
         } else {
           // Revert after animation
           this.board.swap(from.col, from.row, to.col, to.row);
+          this._swapTriggerPos = null;
           this.state = BattleState.PLAYER_TURN;
         }
       }
@@ -411,6 +438,7 @@ export default class BattleController {
 
     const swap = this.enemyAI.findBestSwap(this.board);
     if (swap) {
+      this._swapTriggerPos = { col: swap.col1, row: swap.row1 };
       this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
       this.log.add(`${this.enemyState.name} swaps tiles.`);
       const analysis = this.resolver.analyzeMatches(this.board);
@@ -418,6 +446,7 @@ export default class BattleController {
         this._beginResolving('enemy', analysis);
       } else {
         this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
+        this._swapTriggerPos = null;
         this.log.add('No valid match. Board reshuffled.');
         this.board.reshuffle();
         this._endTurn('enemy');

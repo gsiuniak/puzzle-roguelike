@@ -3,6 +3,7 @@ import UIPanel from './UIPanel.js';
 import CharacterPane from './CharacterPane.js';
 import BoardPlaceholder from './BoardPlaceholder.js';
 import UIText from './UIText.js';
+import FloatingImageEffect from './FloatingImageEffect.js';
 
 /**
  * BattleScene — full battle layout with three columns.
@@ -19,6 +20,7 @@ import UIText from './UIText.js';
  *
  * BattleScene now accepts a BattleController reference and updates
  * character panes, turn label, and combat log from real game state.
+ * Also manages floating image effects (e.g., "Extra Turn" feedback).
  */
 export default class BattleScene extends UIPanel {
   /**
@@ -52,6 +54,10 @@ export default class BattleScene extends UIPanel {
     this._turnLabel = null;
     this._combatLogContainer = null;
     this._combatLogText = null;
+
+    // ── Floating image effects ──
+    /** @type {FloatingImageEffect[]} */
+    this._floatingEffects = [];
 
     if (playerData || enemyData) {
       this.buildHierarchy();
@@ -173,6 +179,11 @@ export default class BattleScene extends UIPanel {
     if (!this._battleController) return;
     const state = this._battleController.getState();
 
+    // ── Spawn extra turn effect ──
+    if (state.extraTurnTriggerPos && this._board && this._assetManager) {
+      this._spawnExtraTurnEffect(state.extraTurnTriggerPos);
+    }
+
     // Update turn label
     if (this._turnLabel) {
       this._turnLabel.text = this._battleController.getTurnLabel();
@@ -200,6 +211,84 @@ export default class BattleScene extends UIPanel {
       this._board.emptyCells = state.emptyCells || [];
       this._board.fallCells = state.fallCells || [];
       this._board.swapAnim = state.swapAnim || null;
+    }
+  }
+
+  // ── Floating Image Effects ──────────────────────────
+
+  /**
+   * Convert a board cell (col, row) to screen coordinates (center of cell).
+   * @param {{col:number, row:number}} cellPos
+   * @returns {{x:number, y:number}|null}
+   */
+  _cellToScreen(cellPos) {
+    if (!this._board) return null;
+    const metrics = this._board.getCellMetrics();
+    return {
+      x: metrics.offsetX + cellPos.col * metrics.cellSize + metrics.cellSize / 2,
+      y: metrics.offsetY + cellPos.row * metrics.cellSize + metrics.cellSize / 2,
+    };
+  }
+
+  /**
+   * Spawn an "Extra Turn" floating image effect from the given board position.
+   * @param {{col:number, row:number}} cellPos
+   */
+  _spawnExtraTurnEffect(cellPos) {
+    const img = this._assetManager.get('animated_text_extra_turn');
+    if (!img) return;
+
+    const screen = this._cellToScreen(cellPos);
+    if (!screen) return;
+
+    // Target size: 4.5 tile widths, maintain aspect ratio
+    const metrics = this._board.getCellMetrics();
+    const targetWidth = metrics.cellSize * 4.5;
+    const aspectRatio = img.width / img.height;
+    const targetHeight = targetWidth / aspectRatio;
+
+    const effect = new FloatingImageEffect(
+      img,
+      screen.x,
+      screen.y,
+      targetWidth,
+      targetHeight,
+      {
+        growDuration: 350,
+        settleDuration: 200,
+        holdDuration: 500,
+        fadeDuration: 300,
+        overshoot: 1.18,
+      }
+    );
+
+    this._floatingEffects.push(effect);
+  }
+
+  // ── Update (override) ───────────────────────────────
+
+  update(dt) {
+    // Update children (standard UI tree update)
+    super.update(dt);
+
+    // Update floating effects, remove completed ones
+    for (let i = this._floatingEffects.length - 1; i >= 0; i--) {
+      this._floatingEffects[i].update(dt);
+      if (this._floatingEffects[i].done) {
+        this._floatingEffects.splice(i, 1);
+      }
+    }
+  }
+
+  // ── Render (override) ───────────────────────────────
+
+  render(ctx) {
+    // Render standard UI (background, children)
+    super.render(ctx);
+
+    // Render floating effects on top of everything
+    for (const effect of this._floatingEffects) {
+      effect.render(ctx);
     }
   }
 
