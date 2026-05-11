@@ -46,8 +46,8 @@ export default class UIImage extends UIElement {
     } else if (this.fitMode === 'cover') {
       // Scale to cover, center-crop
       const scale = Math.max(dw / img.width, dh / img.height);
-      const sw = Math.round(img.width * scale);
-      const sh = Math.round(img.height * scale);
+      const sw = img.width * scale;
+      const sh = img.height * scale;
       const sx = r.x + (dw - sw) / 2;
       const sy = r.y + (dh - sh) / 2;
       ctx.drawImage(img, sx, sy, sw, sh);

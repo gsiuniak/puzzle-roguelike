@@ -249,7 +249,7 @@ export default class CharacterPane extends UIPanel {
         fontSize: 18,
         width: 56,
         height: 84,
-        borderColor: '#3b3b3b',
+        borderColor: '#886622',
         borderWidth: 2,
         showAmountPlate: true,
       });
@@ -270,18 +270,18 @@ export default class CharacterPane extends UIPanel {
     this._skillsTitle = new UIText('Skills');
     this._skillsTitle.setStyle({
       fontSize: 18,
-      color: '#e4e3d3',
+      color: '#e0d070',
       bold: true,
       alignH: 'center',
       alignV: 'center',
       height: 28,
-      margin: { top: 8, bottom: 4, },
+      margin: { top: 8, bottom: 4 },
     });
     this.addChild(this._skillsTitle);
 
     this._skillsContainer = new UIContainer();
     this._skillsContainer.direction = 'column';
-    this._skillsContainer.gap = 0;
+    this._skillsContainer.gap = 30;
     this._skillsContainer.flexGrow = 1;
     this._skillsContainer.padding = 4;
 

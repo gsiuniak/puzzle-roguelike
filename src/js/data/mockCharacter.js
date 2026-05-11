@@ -16,9 +16,9 @@ const mockCharacter = {
   mana: {
     red: 5,
     blue: 5,
-    green: 0,
-    yellow: 0,
-    purple: 0,
+    green: 3,
+    yellow: 3,
+    purple: 3,
   },
   portrait: 'warrior', // maps to 'portrait_warrior' asset key
   skills: [
@@ -26,7 +26,7 @@ const mockCharacter = {
       name: 'Bash',
       description: 'Deal 5 damage',
       icon: 'skill_slash',
-      cost: { red: 5, blue: 1 },
+      cost: { red: 5 },
     },
     {
       name: 'Shield Bash',
