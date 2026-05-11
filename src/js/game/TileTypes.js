@@ -9,12 +9,12 @@
 
 /** @type {Object<string, { id: string, isSkull: boolean, color: string, particleColor: string, spawnWeight: number }>} */
 export const TILE_TYPES = {
-  RED:    { id: 'red',    isSkull: false, color: '#cc3333', particleColor: '#E74C3C', spawnWeight: 20 },
-  BLUE:   { id: 'blue',   isSkull: false, color: '#3366cc', particleColor: '#3498DB', spawnWeight: 20 },
-  GREEN:  { id: 'green',  isSkull: false, color: '#33aa33', particleColor: '#2ECC71', spawnWeight: 20 },
-  YELLOW: { id: 'yellow', isSkull: false, color: '#cccc33', particleColor: '#F1C40F', spawnWeight: 20 },
-  PURPLE: { id: 'purple', isSkull: false, color: '#9933cc', particleColor: '#9B59B6', spawnWeight: 20 },
-  SKULL:  { id: 'skull',  isSkull: true,  color: '#555555', particleColor: '#2C3E50', spawnWeight: 5 },
+  RED:    { id: 'red',    isSkull: false, color: '#cc3333', particleColor: '#E74C3C', spawnWeight: 16 },
+  BLUE:   { id: 'blue',   isSkull: false, color: '#3366cc', particleColor: '#3498DB', spawnWeight: 16 },
+  GREEN:  { id: 'green',  isSkull: false, color: '#33aa33', particleColor: '#2ECC71', spawnWeight: 16 },
+  YELLOW: { id: 'yellow', isSkull: false, color: '#cccc33', particleColor: '#F1C40F', spawnWeight: 16 },
+  PURPLE: { id: 'purple', isSkull: false, color: '#9933cc', particleColor: '#9B59B6', spawnWeight: 16 },
+  SKULL:  { id: 'skull',  isSkull: true,  color: '#555555', particleColor: '#2C3E50', spawnWeight: 20 },
 };
 
 /** Quick array of mana color IDs (non-skull) */
