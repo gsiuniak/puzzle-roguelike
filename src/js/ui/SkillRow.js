@@ -81,8 +81,8 @@ export default class SkillRow extends UIPanel {
     const iconKey = sd.icon || 'placeholder';
     this._icon = new UIImage(iconKey, this._assetManager);
     this._icon.setStyle({
-      width: 48,
-      height: 48,
+      width: 70,
+      height: 70,
       fitMode: 'contain',
     });
     this._iconContainer.addChild(this._icon);
@@ -98,7 +98,7 @@ export default class SkillRow extends UIPanel {
     this._nameText = new UIText(sd.name || '');
     this._nameText.setStyle({
       fontSize: 16,
-      color: '#cdcdcd',
+      color: '#e4e3d3',
       bold: true,
       alignH: 'left',
       alignV: 'center',
@@ -108,9 +108,9 @@ export default class SkillRow extends UIPanel {
 
     this._descText = new UIText(sd.description || '');
     this._descText.setStyle({
-      fontSize: 12,
-      color: '#f7f1c0',
-      italic: true,
+      fontSize: 11,
+      color: '#c1bb8e',
+      italic: false,
       alignH: 'left',
       alignV: 'center',
       height: 18,
@@ -124,7 +124,7 @@ export default class SkillRow extends UIPanel {
     this._separator = new UIContainer();
     this._separator.setStyle({
       width: 2,
-      background: '#665533',
+      background: '#454545',
       cornerRadius: 1,
     });
     this.addChild(this._separator);

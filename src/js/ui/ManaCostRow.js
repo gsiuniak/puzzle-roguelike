@@ -96,18 +96,6 @@ export default class ManaCostRow extends UIContainer {
       costGroup.gap = 10;
       costGroup.alignItems = 'center';
 
-      // Value text LEFT of orb (skill cost format: "8 [orb]")
-      const value = new UIText(String(amount));
-      value.setStyle({
-        fontSize: 16,
-        color: '#ffffff',
-        bold: true,
-        alignH: 'right',
-        alignV: 'center',
-      });
-      costGroup.addChild(value);
-      this._costValues.push(value);
-
       // Simple orb (no count inside, no decorative plate in skill row)
       const orb = new UIOrb();
       orb.setStyle({
@@ -117,8 +105,7 @@ export default class ManaCostRow extends UIContainer {
         fontSize: 10,
         width: 24,
         height: 24,
-        borderColor: '#665522',
-        borderWidth: 1,
+        borderWidth: 0,
         showCount: false,
         showAmountPlate: false,
       });
@@ -134,6 +121,18 @@ export default class ManaCostRow extends UIContainer {
 
       costGroup.addChild(orb);
       this._costOrbs.push(orb);
+
+      // Value text LEFT of orb (skill cost format: "8 [orb]")
+      const value = new UIText(String(amount));
+      value.setStyle({
+        fontSize: 16,
+        color: '#ffffff',
+        bold: true,
+        alignH: 'left',
+        alignV: 'center',
+      });
+      costGroup.addChild(value);
+      this._costValues.push(value);
 
       this.addChild(costGroup);
     }

@@ -27,14 +27,14 @@ export default class UIOrb extends UIElement {
     this.fontSize = 16;
     this.assetKey = null;
     this.assetManager = null;
-    this.borderColor = '#886622';
+    this.borderColor = '#2c2c2c';
     this.borderWidth = 2;
     this.showCount = true;
     /** If true, renders mana_amount plate below orb with count on plate */
     this.showAmountPlate = false;
     /** Subtle dark shadow on count text by default */
     this.shadowColor = 'rgba(0,0,0,0.65)';
-    this.shadowBlur = 2;
+    this.shadowBlur = 10;
     this.shadowOffsetX = 1;
     this.shadowOffsetY = 1;
   }
@@ -58,11 +58,11 @@ export default class UIOrb extends UIElement {
 
     ctx.save();
 
-    // Draw circle fill
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
-    ctx.fill();
+    // Draw circle fill - DEPRECATED
+    // ctx.beginPath();
+    // ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    // ctx.fillStyle = this.color;
+    // ctx.fill();
 
     // Draw image overlay if available
     if (this.assetKey && this.assetManager) {
@@ -136,20 +136,23 @@ export default class UIOrb extends UIElement {
 
     ctx.save();
 
-    // ── Orb circle (drawn first, plate overlaps it) ─
-    ctx.beginPath();
-    ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
-    ctx.fill();
+     // ── Amount plate (drawn AFTER orb, so it is visible) ─
+    const amountImg = this.assetManager
+      ? this.assetManager.get('mana_amount')
+      : null;
+
+    if (amountImg) {
+      ctx.drawImage(amountImg, plateX, plateY, plateW, plateH);
+    }
 
     // Draw image overlay if available
     if (this.assetKey && this.assetManager) {
       const img = this.assetManager.get(this.assetKey);
       if (img) {
         ctx.save();
-        ctx.beginPath();
-        ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
-        ctx.clip();
+        // ctx.beginPath();
+        // ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
+        // ctx.clip();
 
         const scale = Math.min(
           (orbRadius * 2) / img.width,
@@ -171,15 +174,6 @@ export default class UIOrb extends UIElement {
     //   ctx.stroke();
     // }
 
-    // ── Amount plate (drawn AFTER orb, so it is visible) ─
-    const amountImg = this.assetManager
-      ? this.assetManager.get('mana_amount')
-      : null;
-
-    if (amountImg) {
-      ctx.drawImage(amountImg, plateX, plateY, plateW, plateH);
-    }
-
     // Count text centered over lower orb / upper plate overlap
     if (this.showCount) {
       // Apply text shadow
@@ -190,8 +184,8 @@ export default class UIOrb extends UIElement {
         ctx.shadowOffsetY = this.shadowOffsetY;
       }
       ctx.fillStyle = this.countColor;
-      const fs = Math.max(11, Math.min(this.fontSize, plateH * 0.55));
-      ctx.font = `bold ${fs}px Georgia, "Times New Roman", serif`;
+      const fs = Math.max(14, Math.min(this.fontSize, plateH * 0.55));
+      ctx.font = `${fs}px Georgia, "Times New Roman", serif`;
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'center';
       // Position count at the overlap zone

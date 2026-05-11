@@ -59,6 +59,16 @@ export default class BattleScene extends UIPanel {
     /** @type {FloatingImageEffect[]} */
     this._floatingEffects = [];
 
+    // ── Screen shake state ──
+    /** Current shake intensity (0 = none) */
+    this._shakeIntensity = 0;
+    /** Elapsed time since shake began (ms) */
+    this._shakeElapsed = 0;
+    /** Total shake duration (ms) */
+    this._shakeDuration = 300;
+    /** Base amplitude as fraction of canvas width (e.g. 0.04 = 4 %) */
+    this._shakeBaseAmplitude = 0.04;
+
     if (playerData || enemyData) {
       this.buildHierarchy();
     }
@@ -87,7 +97,7 @@ export default class BattleScene extends UIPanel {
     this._playerPane = new CharacterPane(this._playerData, this._assetManager);
     this._playerPane.setStyle({
       widthPercent: 0.24,
-      minWidth: 400,
+      minWidth: 360,
       maxWidth: 440,
       backgroundAssetKey: 'character_pane_background',
       borderColor: '#1c1c1d',
@@ -184,6 +194,11 @@ export default class BattleScene extends UIPanel {
       this._spawnExtraTurnEffect(state.extraTurnTriggerPos);
     }
 
+    // ── Trigger screen shake ──
+    if (state.screenShake) {
+      this._triggerShake(state.screenShake.intensity);
+    }
+
     // Update turn label
     if (this._turnLabel) {
       this._turnLabel.text = this._battleController.getTurnLabel();
@@ -265,6 +280,18 @@ export default class BattleScene extends UIPanel {
     this._floatingEffects.push(effect);
   }
 
+  /**
+   * Begin (or intensify) the screen shake.
+   * @param {number} intensity - 0..0.20 from BattleController
+   */
+  _triggerShake(intensity) {
+    // Use the higher of current remaining intensity vs new trigger
+    const currentRemaining = this._shakeIntensity * (1 - this._shakeElapsed / this._shakeDuration);
+    const newIntensity = Math.max(currentRemaining, intensity);
+    this._shakeIntensity = newIntensity;
+    this._shakeElapsed = 0;
+  }
+
   // ── Update (override) ───────────────────────────────
 
   update(dt) {
@@ -278,11 +305,41 @@ export default class BattleScene extends UIPanel {
         this._floatingEffects.splice(i, 1);
       }
     }
+
+    // Decay screen shake
+    if (this._shakeIntensity > 0) {
+      this._shakeElapsed += dt;
+      if (this._shakeElapsed >= this._shakeDuration) {
+        this._shakeIntensity = 0;
+        this._shakeElapsed = 0;
+      }
+    }
   }
 
   // ── Render (override) ───────────────────────────────
 
   render(ctx) {
+    // Apply screen shake via canvas translation
+    let shakeX = 0;
+    let shakeY = 0;
+    if (this._shakeIntensity > 0 && this._shakeElapsed < this._shakeDuration) {
+      const progress = this._shakeElapsed / this._shakeDuration;
+      // Intensity decays linearly over the duration
+      const currentIntensity = this._shakeIntensity * (1 - progress);
+      // Base amplitude scales with canvas width
+      const canvasW = ctx.canvas.width;
+      const maxOffset = canvasW * this._shakeBaseAmplitude * currentIntensity;
+      // Deterministic pseudo-random per frame using elapsed time
+      const seed = this._shakeElapsed * 0.037;
+      shakeX = Math.sin(seed * 17.3) * maxOffset;
+      shakeY = Math.cos(seed * 23.7) * maxOffset;
+    }
+
+    ctx.save();
+    if (shakeX !== 0 || shakeY !== 0) {
+      ctx.translate(shakeX, shakeY);
+    }
+
     // Render standard UI (background, children)
     super.render(ctx);
 
@@ -290,6 +347,8 @@ export default class BattleScene extends UIPanel {
     for (const effect of this._floatingEffects) {
       effect.render(ctx);
     }
+
+    ctx.restore();
   }
 
   // ── data updates ────────────────────────────────────
