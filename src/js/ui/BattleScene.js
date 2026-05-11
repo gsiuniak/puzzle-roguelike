@@ -4,7 +4,9 @@ import CharacterPane from './CharacterPane.js';
 import BoardPlaceholder from './BoardPlaceholder.js';
 import UIText from './UIText.js';
 import FloatingImageEffect from './FloatingImageEffect.js';
+import FloatingTextEffect from './FloatingTextEffect.js';
 import ScreenShake from './ScreenShake.js';
+import { getTileType } from '../game/TileTypes.js';
 
 /**
  * BattleScene — full battle layout with three columns.
@@ -190,6 +192,13 @@ export default class BattleScene extends UIPanel {
       this._spawnExtraTurnEffect(state.extraTurnTriggerPos);
     }
 
+    // ── Spawn match text effects for every 3+ match ──
+    if (state.matchTextTriggers && state.matchTextTriggers.length > 0 && this._board) {
+      for (const trigger of state.matchTextTriggers) {
+        this._spawnMatchTextEffect(trigger);
+      }
+    }
+
     // ── Trigger screen shake for damage ──
     if (state.shakeIntensity && state.shakeIntensity > 0) {
       this._screenShake.trigger(state.shakeIntensity);
@@ -272,6 +281,33 @@ export default class BattleScene extends UIPanel {
         overshoot: 1.18,
       }
     );
+
+    this._floatingEffects.push(effect);
+  }
+
+  /**
+   * Spawn a floating text effect showing the match count (e.g. "+3")
+   * at the given board position, colored to match the tile type.
+   * @param {{typeId:string, count:number, position:{col:number, row:number}}} trigger
+   */
+  _spawnMatchTextEffect(trigger) {
+    const { typeId, count, position } = trigger;
+    const screen = this._cellToScreen(position);
+    if (!screen) return;
+
+    const tileType = getTileType(typeId);
+    const color = tileType.color;
+
+    const text = `+${count}`;
+
+    const effect = new FloatingTextEffect(text, color, screen.x, screen.y, {
+      fontSize: 22,
+      growDuration: 200,
+      settleDuration: 100,
+      holdDuration: 300,
+      fadeDuration: 100,
+      overshoot: 1.18,
+    });
 
     this._floatingEffects.push(effect);
   }

@@ -64,6 +64,16 @@ export default class BattleController {
     this.extraTurnTriggerPos = null;
 
     /**
+     * Accumulated per-match floating text triggers for the current
+     * cascade step. Each entry: { typeId, count, position: {col, row} }.
+     * The scene reads and clears this each frame to spawn "+3"/"+4"/etc
+     * floating text effects for every match found.
+     * Updated for every cascade step.
+     * @type {Array<{typeId:string, count:number, position:{col:number, row:number}}>}
+     */
+    this._matchTextTriggers = [];
+
+    /**
      * Speed multiplier for all animation timing.
      * 1.0 = normal, 2.0 = fast, 0.5 = slow.
      * Scales phase durations, enemy delay, and swap duration.
@@ -137,6 +147,11 @@ export default class BattleController {
     // spawns one effect per trigger.
     const triggerPos = this.extraTurnTriggerPos;
     this.extraTurnTriggerPos = null;
+
+    // Capture match text triggers and clear so scene spawns once per step.
+    const matchTextTriggers = this._matchTextTriggers;
+    this._matchTextTriggers = [];
+
     // Capture shakeIntensity and clear it so scene only
     // triggers one shake per damage event.
     const shakeIntensity = this._pendingShakeIntensity;
@@ -148,6 +163,7 @@ export default class BattleController {
       board: this.board, log: this.log,
       pendingExtraTurn: this.pendingExtraTurn,
       extraTurnTriggerPos: triggerPos,
+      matchTextTriggers,
       shakeIntensity,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
@@ -241,6 +257,7 @@ export default class BattleController {
     this.highlightCells = [];
     this.emptyCells = [];
     this.fallCells = [];
+    this._matchTextTriggers = [];
     this._previousEmptyCells = null;
 
     if (firstAnalysis) {
@@ -277,6 +294,18 @@ export default class BattleController {
         causePos = { col: analysis.positions[0].col, row: analysis.positions[0].row };
       }
       this.extraTurnTriggerPos = causePos;
+    }
+
+    // Generate floating text triggers for every match (3+ tiles).
+    // Each match gets a "+N" text effect at its first position.
+    for (const match of analysis.matches) {
+      if (match.positions.length > 0) {
+        this._matchTextTriggers.push({
+          typeId: match.typeId,
+          count: match.count,
+          position: { col: match.positions[0].col, row: match.positions[0].row },
+        });
+      }
     }
 
     const activeName = this._activeState().name;
