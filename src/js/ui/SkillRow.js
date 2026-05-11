@@ -99,7 +99,7 @@ export default class SkillRow extends UIPanel {
     this._nameText = new UIText(sd.name || '');
     this._nameText.setStyle({
       fontSize: 16,
-      color: '#cdcdcd',
+      color: '#e4e4d9',
       bold: true,
       alignH: 'left',
       alignV: 'center',
@@ -109,9 +109,9 @@ export default class SkillRow extends UIPanel {
 
     this._descText = new UIText(sd.description || '');
     this._descText.setStyle({
-      fontSize: 12,
+      fontSize: 11,
       color: '#f7f1c0',
-      italic: true,
+      italic: false,
       alignH: 'left',
       alignV: 'center',
       height: 18,
@@ -125,7 +125,7 @@ export default class SkillRow extends UIPanel {
     this._separator = new UIContainer();
     this._separator.setStyle({
       width: 2,
-      background: '#665533',
+      background: '#505050',
       cornerRadius: 1,
     });
     this.addChild(this._separator);

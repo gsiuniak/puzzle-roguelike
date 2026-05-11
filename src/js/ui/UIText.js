@@ -23,7 +23,7 @@ export default class UIText extends UIElement {
     super();
     this.text = text;
     this.fontSize = 16;
-    this.fontFamily = 'Georgia, "Times New Roman", serif';
+    this.fontFamily = '"Marcellus SC", Georgia, "Times New Roman", serif';
     this.color = '#ffffff';
     this.bold = false;
     this.italic = false;

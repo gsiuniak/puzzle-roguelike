@@ -27,7 +27,7 @@ export default class UIOrb extends UIElement {
     this.fontSize = 16;
     this.assetKey = null;
     this.assetManager = null;
-    this.borderColor = '#886622';
+    this.borderColor = '#ffffff';
     this.borderWidth = 2;
     this.showCount = true;
     /** If true, renders mana_amount plate below orb with count on plate */
@@ -59,10 +59,10 @@ export default class UIOrb extends UIElement {
     ctx.save();
 
     // Draw circle fill
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
-    ctx.fill();
+    // ctx.beginPath();
+    // ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    // ctx.fillStyle = this.color;
+    // ctx.fill();
 
     // Draw image overlay if available
     if (this.assetKey && this.assetManager) {
@@ -99,7 +99,7 @@ export default class UIOrb extends UIElement {
       }
       ctx.fillStyle = this.countColor;
       const fs = Math.max(10, Math.min(this.fontSize, radius));
-      ctx.font = `bold ${fs}px Georgia, "Times New Roman", serif`;
+      ctx.font = `bold ${fs}px "Marcellus SC", Georgia, "Times New Roman", serif`;
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'center';
       ctx.fillText(String(this.count), cx, cy);
@@ -132,10 +132,10 @@ export default class UIOrb extends UIElement {
     ctx.save();
 
     // ── Orb circle (drawn first, plate overlaps it) ─
-    ctx.beginPath();
-    ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
-    ctx.fill();
+    // ctx.beginPath();
+    // ctx.arc(orbCx, orbCy, orbRadius, 0, Math.PI * 2);
+    // ctx.fillStyle = this.color;
+    // ctx.fill();
 
     // Draw image overlay if available
     if (this.assetKey && this.assetManager) {
@@ -183,7 +183,7 @@ export default class UIOrb extends UIElement {
       }
       ctx.fillStyle = this.countColor;
       const fs = Math.max(11, Math.min(this.fontSize, plateH * 0.55));
-      ctx.font = `bold ${fs}px Georgia, "Times New Roman", serif`;
+      ctx.font = `bold ${fs}px "Marcellus SC", Georgia, "Times New Roman", serif`;
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'center';
       // Position count at the overlap zone

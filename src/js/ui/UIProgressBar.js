@@ -81,7 +81,7 @@ export default class UIProgressBar extends UIElement {
         ctx.shadowOffsetY = this.shadowOffsetY;
       }
       ctx.fillStyle = this.labelColor;
-      ctx.font = `${this.labelFontSize}px Georgia, "Times New Roman", serif`;
+      ctx.font = `${this.labelFontSize}px "Marcellus SC", Georgia, "Times New Roman", serif`;
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'center';
       ctx.fillText(this.label, r.x + r.w / 2, r.y + r.h / 2);

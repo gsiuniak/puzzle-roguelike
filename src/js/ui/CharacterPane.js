@@ -92,25 +92,26 @@ export default class CharacterPane extends UIPanel {
     const portraitKey = cd.portrait ? `portrait_${cd.portrait}` : 'placeholder';
     this._portrait = new UIImage(portraitKey, this._assetManager);
     this._portrait.setStyle({
-      width: 76,
-      height: 76,
+      width: 120,
+      height: 120,
       fitMode: 'cover',
     });
     headerRow.addChild(this._portrait);
 
     const nameCol = new UIContainer();
     nameCol.direction = 'column';
-    nameCol.gap = 2;
+    nameCol.gap = 1;
     nameCol.flexGrow = 1;
 
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: 24,
-      color: '#f5deb3',
+      color: '#e4e4d9',
       bold: true,
       alignH: 'left',
       alignV: 'center',
       height: 30,
+      margin: { top: 15 }
     });
     nameCol.addChild(this._nameText);
 
@@ -120,7 +121,7 @@ export default class CharacterPane extends UIPanel {
     this._classText.setStyle({
       fontSize: 15,
       color: '#ccaa77',
-      italic: true,
+      italic: false,
       alignH: 'left',
       alignV: 'center',
       height: 22,
@@ -253,7 +254,7 @@ export default class CharacterPane extends UIPanel {
         fontSize: 18,
         width: 56,
         height: 84,
-        borderColor: '#886622',
+        borderColor: '#151515',
         borderWidth: 2,
         showAmountPlate: true,
       });
@@ -285,7 +286,7 @@ export default class CharacterPane extends UIPanel {
 
     this._skillsContainer = new UIContainer();
     this._skillsContainer.direction = 'column';
-    this._skillsContainer.gap = 30;
+    this._skillsContainer.gap = 0;
     this._skillsContainer.flexGrow = 1;
     this._skillsContainer.padding = 4;
 
