@@ -381,8 +381,8 @@ export default class BattleController {
     this._targetingOverlayCells = [];
 
     // Execute based on effect type
-    if (effectType === SKILL_EFFECT_TYPES.DESTROY_TILES) {
-      this._executeDestroyTiles(area, col, row);
+    if (effectType === SKILL_EFFECT_TYPES.DESTROY_TILES || effectType === SKILL_EFFECT_TYPES.DESTROY_TILES_ROW) {
+      this._executeDestroyTiles(area, col, row, skill.name);
     }
 
     return true;
@@ -413,6 +413,14 @@ export default class BattleController {
     if (col == null || row == null) return [];
     const skill = this._targetingSkill;
     if (!skill || !skill.area) return [];
+
+    // Row-based targeting (DESTROY_TILES_ROW): area is a number (1, 3, 5, ...)
+    // representing the total number of rows affected centered on the hovered row.
+    if (typeof skill.area === 'number') {
+      return this._computeRowArea(col, row, skill.area);
+    }
+
+    // Radius-based targeting (DESTROY_TILES): area.radius defines a square
     const radius = skill.area.radius || 0;
     const cells = [];
     for (let dc = -radius; dc <= radius; dc++) {
@@ -431,6 +439,28 @@ export default class BattleController {
   }
 
   /**
+   * Compute the affected tiles for a row-based destruction skill.
+   * areaCount rows are affected, centered on centerRow, spanning all columns.
+   * @param {number} centerCol - center column (for hover position context, unused for row area)
+   * @param {number} centerRow - center row
+   * @param {number} areaCount - number of rows to affect (1, 3, 5, ...)
+   * @returns {Array<{col:number, row:number}>}
+   */
+  _computeRowArea(centerCol, centerRow, areaCount) {
+    const halfSpan = Math.floor(areaCount / 2);
+    const cells = [];
+    for (let r = centerRow - halfSpan; r <= centerRow + halfSpan; r++) {
+      if (r < 0 || r >= this.board.rows) continue;
+      for (let c = 0; c < this.board.cols; c++) {
+        if (this.board.get(c, r)) {
+          cells.push({ col: c, row: r });
+        }
+      }
+    }
+    return cells;
+  }
+
+  /**
    * Execute a DESTROY_TILES effect on the given positions.
    * Awards tile rewards (mana/skull damage), removes tiles, then enters
    * the standard board collapse → refill → cascade resolution flow.
@@ -438,7 +468,7 @@ export default class BattleController {
    * @param {number} centerCol - center of explosion (for log message)
    * @param {number} centerRow - center of explosion (for log message)
    */
-  _executeDestroyTiles(positions, centerCol, centerRow) {
+  _executeDestroyTiles(positions, centerCol, centerRow, skillName = 'Skill') {
     const activeState = this._activeState();
     const targetState = this._opponentState();
 
@@ -471,9 +501,9 @@ export default class BattleController {
 
     // 5. Remove tiles from board
     const removedCount = this.board.removeTiles(positions);
-    this.log.add(`${removedCount} tiles destroyed by Explode!`);
+    this.log.add(`${removedCount} tiles destroyed by ${skillName}!`);
 
-    // 5. Enter RESOLVING directly at REMOVE phase (skip SHOW_MATCH — no match to highlight)
+    // 6. Enter RESOLVING directly at REMOVE phase (skip SHOW_MATCH — no match to highlight)
     this.state = BattleState.RESOLVING;
     this.activeSide = 'player';
     this._allSteps = [];
