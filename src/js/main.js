@@ -1,21 +1,23 @@
 /**
- * main.js — entry point for the character pane UI demo.
+ * main.js — entry point for the battle scene UI demo.
  *
- * Creates the Canvas, AssetManager, loads assets, builds the CharacterPane,
- * and runs the game loop.
+ * Creates the Canvas, AssetManager, loads assets, builds the BattleScene
+ * (player + board + enemy), and runs the game loop.
  */
 import CanvasApp from './engine/CanvasApp.js';
 import GameLoop from './engine/GameLoop.js';
 import AssetManager from './engine/AssetManager.js';
 import InputManager from './engine/InputManager.js';
-import CharacterPane from './ui/CharacterPane.js';
+import BattleScene from './ui/BattleScene.js';
 import mockCharacter from './data/mockCharacter.js';
+import mockEnemy from './data/mockEnemy.js';
 
 // ── Debug flag ──────────────────────────────────────────
 const DEBUG_UI_LAYOUT = true;
 
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
+  // Character pane
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
   portrait_warrior:          'assets/sprites/character_pane/portraits/portrait_warrior.png',
@@ -30,12 +32,19 @@ const ASSET_MAP = {
   skill_slash:               'assets/sprites/character_pane/skills/skill_slash.png',
   skill_bash:                'assets/sprites/character_pane/skills/skill_bash.png',
   skill_defend:              'assets/sprites/character_pane/skills/skill_defend.png',
+
+  // Board tiles
+  tile_red:                  'assets/sprites/tiles/red_tile.png',
+  tile_blue:                 'assets/sprites/tiles/blue_tile.png',
+  tile_green:                'assets/sprites/tiles/green_tile.png',
+  tile_yellow:               'assets/sprites/tiles/yellow_tile.png',
+  tile_purple:               'assets/sprites/tiles/purple_tile.png',
+  tile_skull:                'assets/sprites/tiles/skull_tile.png',
 };
 
-// ── Pane sizing ────────────────────────────────────────
-const PANE_WIDTH = 400;
-const PANE_MAX_HEIGHT_RATIO = 0.95;
-const PANE_MAX_HEIGHT = 800;
+// ── Scene sizing ────────────────────────────────────────
+const MIN_WIDTH = 1024;
+const MIN_HEIGHT = 640;
 
 // ── Initialize ─────────────────────────────────────────
 async function init() {
@@ -53,70 +62,54 @@ async function init() {
   // 3. Create CanvasApp
   const app = new CanvasApp(null, {
     autoResize: true,
-    minWidth: 400,
-    minHeight: 600,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
   });
 
-  // 4. Create CharacterPane
-  const pane = new CharacterPane(mockCharacter, assetManager);
-  pane.setStyle({
-    width: PANE_WIDTH,
-    height: null,
-    minHeight: 200,
-    maxHeight: PANE_MAX_HEIGHT,
-    backgroundAssetKey: 'character_pane_background',
-    borderColor: '#554422',
-    borderWidth: 2,
-    cornerRadius: 8,
-    padding: { top: 12, right: 14, bottom: 14, left: 14 },
-    gap: 8,
-  });
+  // 4. Create BattleScene — player + board + enemy
+  const scene = new BattleScene(mockCharacter, mockEnemy, assetManager);
 
-  // Enable debug outlines if flag is set
+  // 5. Enable debug outlines if flag is set
   if (DEBUG_UI_LAYOUT) {
-    setDebugRecursive(pane, true);
+    setDebugRecursive(scene, true);
   }
 
-  // 5. Create InputManager
+  // 6. Create InputManager (future interaction)
   const input = new InputManager(app.canvas);
-  input.setRootUI(pane);
+  input.setRootUI(scene);
 
-  // 6. Layout function — positions the root pane and lays out children
-  function layoutPane(canvasW, canvasH) {
-    const maxH = Math.min(canvasH * PANE_MAX_HEIGHT_RATIO, PANE_MAX_HEIGHT);
-    pane.maxHeight = maxH;
-
-    const px = (canvasW - PANE_WIDTH) / 2;
-    const py = Math.max(10, (canvasH - maxH) / 2);
-
-    // Set root rect directly (no parent to position it)
-    const margin = pane._resolveMargin();
-    pane.rect.x = px + margin.left;
-    pane.rect.y = py + margin.top;
-    pane.rect.w = PANE_WIDTH - margin.left - margin.right;
-    pane.rect.h = maxH - margin.top - margin.bottom;
+  // 7. Layout function — fills browser window
+  function layoutScene(canvasW, canvasH) {
+    // BattleScene fills the entire canvas
+    const margin = scene._resolveMargin();
+    scene.rect.x = margin.left;
+    scene.rect.y = margin.top;
+    scene.rect.w = canvasW - margin.left - margin.right;
+    scene.rect.h = canvasH - margin.top - margin.bottom;
 
     // Layout all descendants
-    pane.layoutChildren();
+    scene.layoutChildren();
   }
 
-  // 7. Handle resize
+  // 8. Handle resize
   app.onResize = (w, h) => {
-    layoutPane(w, h);
+    layoutScene(w, h);
   };
-  layoutPane(app.width, app.height);
+  layoutScene(app.width, app.height);
 
-  // 8. Game loop
+  // 9. Game loop
   const loop = new GameLoop();
 
   loop.start((dt) => {
-    pane.update(dt);
+    scene.update(dt);
     app.clear('#1a0a0a');
-    pane.render(app.ctx);
+    scene.render(app.ctx);
   });
 
-  console.log('CharacterPane demo running!');
-  console.log('  - Change mockCharacter.js values and reload to see updates');
+  console.log('BattleScene demo running!');
+  console.log('  - Left:  player CharacterPane (Thorgrim)');
+  console.log('  - Center: 8×8 placeholder board');
+  console.log('  - Right: enemy CharacterPane (Goblin)');
   console.log(`  - DEBUG_UI_LAYOUT = ${DEBUG_UI_LAYOUT}`);
 }
 
