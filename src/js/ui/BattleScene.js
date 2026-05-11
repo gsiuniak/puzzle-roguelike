@@ -298,8 +298,7 @@ export default class BattleScene extends UIPanel {
     const tileType = getTileType(typeId);
     const color = tileType.color;
 
-    // Skull matches show "<N> DMG"; mana matches show "+N"
-    const text = typeId === 'skull' ? `${count} DMG` : `+${count}`;
+    const text = `+${count}`;
 
     const effect = new FloatingTextEffect(text, color, screen.x, screen.y, {
       fontSize: 22,
