@@ -41,6 +41,8 @@ const ASSET_MAP = {
   skill_slash:               'assets/sprites/character_pane/skills/skill_slash.png',
   skill_bash:                'assets/sprites/character_pane/skills/skill_bash.png',
   skill_defend:              'assets/sprites/character_pane/skills/skill_defend.png',
+  skill_flair_left:          'assets/sprites/character_pane/flair/skill_flair_left.png',
+  skill_flair_right:         'assets/sprites/character_pane/flair/skill_flair_right.png',
   grid_dark:                 'assets/sprites/grid/grid_dark.png',
   grid_light:                'assets/sprites/grid/grid_light.png',
   animated_text_extra_turn:  'assets/sprites/animated_text/animated_text_extra_turn.png',

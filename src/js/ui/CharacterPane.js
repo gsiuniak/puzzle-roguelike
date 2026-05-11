@@ -272,6 +272,19 @@ export default class CharacterPane extends UIPanel {
     this.addChild(manaRow);
 
     // ── 5. Skills section ──────────────────────────────
+    // Centered row: [flair_left] "Skills" [flair_right]
+    const skillsTitleRow = new UIContainer();
+    skillsTitleRow.direction = 'row';
+    skillsTitleRow.justifyContent = 'center';
+    skillsTitleRow.alignItems = 'center';
+    skillsTitleRow.gap = 10;
+    skillsTitleRow.padding = { top: 8, bottom: 4 };
+    skillsTitleRow.height = 36;
+
+    const flairLeft = new UIImage('skill_flair_left', this._assetManager);
+    flairLeft.setStyle({ width: 120, height: 28, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    skillsTitleRow.addChild(flairLeft);
+
     this._skillsTitle = new UIText('Skills');
     this._skillsTitle.setStyle({
       fontSize: 18,
@@ -279,10 +292,16 @@ export default class CharacterPane extends UIPanel {
       bold: true,
       alignH: 'center',
       alignV: 'center',
+      width: 300,
       height: 28,
-      margin: { top: 8, bottom: 4 },
     });
-    this.addChild(this._skillsTitle);
+    skillsTitleRow.addChild(this._skillsTitle);
+
+    const flairRight = new UIImage('skill_flair_right', this._assetManager);
+    flairRight.setStyle({ width: 120, height: 28, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center', margin: { left: 42 } });
+    skillsTitleRow.addChild(flairRight);
+
+    this.addChild(skillsTitleRow);
 
     this._skillsContainer = new UIContainer();
     this._skillsContainer.direction = 'column';

@@ -7,6 +7,8 @@ import UIElement from './UIElement.js';
  *   assetKey   - key string resolved by AssetManager
  *   assetManager - reference to AssetManager instance
  *   fitMode    - 'contain' | 'cover' | 'stretch' (default 'contain')
+ *   imageAlignH - 'left' | 'center' | 'right' horizontal alignment within box (default 'center')
+ *   imageAlignV - 'top' | 'center' | 'bottom' vertical alignment within box (default 'center')
  *   drawWidth  - override draw width (null = use rect)
  *   drawHeight - override draw height (null = use rect)
  */
@@ -16,6 +18,8 @@ export default class UIImage extends UIElement {
     this.assetKey = assetKey;
     this.assetManager = assetManager;
     this.fitMode = 'contain';
+    this.imageAlignH = 'center';
+    this.imageAlignV = 'center';
     this.drawWidth = null;
     this.drawHeight = null;
   }
@@ -29,6 +33,24 @@ export default class UIImage extends UIElement {
       return this.assetManager.get('placeholder');
     }
     return img;
+  }
+
+  /** Compute horizontal draw offset based on imageAlignH */
+  _alignX(rectX, dw, sw) {
+    switch (this.imageAlignH) {
+      case 'left':  return Math.floor(rectX);
+      case 'right': return Math.floor(rectX + dw - sw);
+      default:      return Math.floor(rectX + (dw - sw) / 2);
+    }
+  }
+
+  /** Compute vertical draw offset based on imageAlignV */
+  _alignY(rectY, dh, sh) {
+    switch (this.imageAlignV) {
+      case 'top':    return Math.floor(rectY);
+      case 'bottom': return Math.floor(rectY + dh - sh);
+      default:       return Math.floor(rectY + (dh - sh) / 2);
+    }
   }
 
   renderSelf(ctx) {
@@ -51,20 +73,20 @@ export default class UIImage extends UIElement {
         Math.ceil(dw), Math.ceil(dh)
       );
     } else if (this.fitMode === 'cover') {
-      // Scale to cover, center-crop
+      // Scale to cover, center-crop (alignment applies after scale)
       const scale = Math.max(dw / img.width, dh / img.height);
       const sw = img.width * scale;
       const sh = img.height * scale;
-      const sx = Math.floor(r.x + (dw - sw) / 2);
-      const sy = Math.floor(r.y + (dh - sh) / 2);
+      const sx = this._alignX(r.x, dw, sw);
+      const sy = this._alignY(r.y, dh, sh);
       ctx.drawImage(img, sx, sy, Math.ceil(sw), Math.ceil(sh));
     } else {
       // 'contain' (default)
       const scale = Math.min(dw / img.width, dh / img.height, 1);
       const sw = img.width * scale;
       const sh = img.height * scale;
-      const sx = Math.floor(r.x + (dw - sw) / 2);
-      const sy = Math.floor(r.y + (dh - sh) / 2);
+      const sx = this._alignX(r.x, dw, sw);
+      const sy = this._alignY(r.y, dh, sh);
       ctx.drawImage(img, sx, sy, Math.ceil(sw), Math.ceil(sh));
     }
 
@@ -79,6 +101,8 @@ export default class UIImage extends UIElement {
     if (props.assetKey !== undefined) this.assetKey = props.assetKey;
     if (props.assetManager !== undefined) this.assetManager = props.assetManager;
     if (props.fitMode !== undefined) this.fitMode = props.fitMode;
+    if (props.imageAlignH !== undefined) this.imageAlignH = props.imageAlignH;
+    if (props.imageAlignV !== undefined) this.imageAlignV = props.imageAlignV;
     if (props.drawWidth !== undefined) this.drawWidth = props.drawWidth;
     if (props.drawHeight !== undefined) this.drawHeight = props.drawHeight;
   }
