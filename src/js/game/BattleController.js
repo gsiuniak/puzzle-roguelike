@@ -56,8 +56,9 @@ export default class BattleController {
     this._swapTriggerPos = null;
 
     /**
-     * Set when an extra turn is granted in _finishResolving. The scene
+     * Set when a 4+ match is found during resolution. The scene
      * reads and clears this each frame to spawn visual effects.
+     * Updated for every cascade step that contains a 4+ match.
      * @type {{col:number, row:number}|null}
      */
     this.extraTurnTriggerPos = null;
@@ -76,6 +77,14 @@ export default class BattleController {
     this._analysis = null;
     this._allSteps = [];
     this._extraTurnEarned = false;
+
+    /**
+     * Positions that were empty (removed) in the previous cascade step.
+     * Saved before gravity so we can compute the "cause" position for
+     * cascade 4+ match effects by intersecting with new match positions.
+     * @type {Array<{col:number, row:number}>|null}
+     */
+    this._previousEmptyCells = null;
 
     // ── Visual state (exposed for BoardPlaceholder) ──
     this.highlightCells = [];
@@ -219,6 +228,7 @@ export default class BattleController {
     this.highlightCells = [];
     this.emptyCells = [];
     this.fallCells = [];
+    this._previousEmptyCells = null;
 
     if (firstAnalysis) {
       // Log initial match
@@ -233,13 +243,25 @@ export default class BattleController {
   _enterShowMatch(analysis) {
     this._analysis = analysis;
     this._allSteps.push(analysis);
-    if (analysis.extraTurnTrigger && !this._extraTurnEarned) {
+    if (analysis.extraTurnTrigger) {
       this._extraTurnEarned = true;
-      // Immediately expose trigger pos so the scene spawns the
-      // floating effect right away, concurrent with the cascade.
-      this.extraTurnTriggerPos = this._swapTriggerPos
-        ? { col: this._swapTriggerPos.col, row: this._swapTriggerPos.row }
-        : null;
+      // Compute the "cause" position for the 4+ match floating effect.
+      // For the initial swap step: use the swap destination position.
+      // For cascade steps: find which match position overlaps with
+      // the previously-empty cells (the tile that fell into place).
+      let causePos = null;
+      if (this._previousEmptyCells && this._previousEmptyCells.length > 0) {
+        // Cascade step — find overlap between new match and old empty cells
+        causePos = this._findCascadeCausePos(analysis, this._previousEmptyCells);
+      }
+      if (!causePos && this._swapTriggerPos) {
+        causePos = { col: this._swapTriggerPos.col, row: this._swapTriggerPos.row };
+      }
+      // Fallback: use first match position
+      if (!causePos && analysis.positions.length > 0) {
+        causePos = { col: analysis.positions[0].col, row: analysis.positions[0].row };
+      }
+      this.extraTurnTriggerPos = causePos;
     }
 
     const activeName = this._activeState().name;
@@ -258,6 +280,24 @@ export default class BattleController {
     this.fallCells = [];
     this._cascadePhase = CascadePhase.SHOW_MATCH;
     this._phaseTimer = 0;
+  }
+
+  /**
+   * Find a position in the new match that overlaps with the previously
+   * empty (removed) cells — this is where a falling tile "caused" the
+   * cascade match. Returns null if no overlap found.
+   * @param {import('./MatchResolver.js').MatchAnalysis} analysis
+   * @param {Array<{col:number, row:number}>} previousEmpty
+   * @returns {{col:number, row:number}|null}
+   */
+  _findCascadeCausePos(analysis, previousEmpty) {
+    const prevSet = new Set(previousEmpty.map(p => `${p.col},${p.row}`));
+    for (const pos of analysis.positions) {
+      if (prevSet.has(`${pos.col},${pos.row}`)) {
+        return { col: pos.col, row: pos.row };
+      }
+    }
+    return null;
   }
 
   _doRemove() {
@@ -286,6 +326,10 @@ export default class BattleController {
   }
 
   _doFall() {
+    // Save the empty cells before clearing — needed by _enterShowMatch
+    // to compute the "cause" position for cascade 4+ match effects.
+    this._previousEmptyCells = [...this.emptyCells];
+
     const preGravityGrid = this.board.grid.map(col => [...col]);
     this.board.applyGravity();
     this.board.refill();
@@ -327,6 +371,7 @@ export default class BattleController {
     this.highlightCells = [];
     this.emptyCells = [];
     this.fallCells = [];
+    this._previousEmptyCells = null;
 
     if (this._checkGameOver()) return;
 
