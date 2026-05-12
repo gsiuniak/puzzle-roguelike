@@ -100,11 +100,13 @@ export default class CharacterSelectScene extends UIPanel {
 
   _buildScene() {
     // ── Info panel (positioned manually in layoutChildren) ──
+    // Narrower, card-like proportions with generous balanced padding
+    // and clear section separation to match the mock's visual rhythm.
     this._infoPanel = new UIContainer();
     this._infoPanel.direction = 'column';
     this._infoPanel.alignItems = 'center';
-    this._infoPanel.gap = 6;
-    this._infoPanel.padding = { top: 20, right: 40, bottom: 24, left: 40 };
+    this._infoPanel.gap = 10;
+    this._infoPanel.padding = { top: 32, right: 44, bottom: 32, left: 44 };
     this._infoPanel.smoothing = true;
     this.addChild(this._infoPanel);
 
@@ -154,8 +156,14 @@ export default class CharacterSelectScene extends UIPanel {
 
   /**
    * Rebuild the info panel contents for the currently selected character.
-   * All children have explicit heights so the flexbox layout produces
-   * a deterministic total panel height.
+   *
+   * Structure mirrors the mock's intentional top-to-bottom scan:
+   *   Name → Class (with flairs) → Description →
+   *   Divider → Health & Mana (single row) → Divider →
+   *   "Starting Skills" (with flairs) → Skill blocks
+   *
+   * Every child has an explicit height so flexbox produces a deterministic
+   * total panel height for vertical centering in layoutChildren().
    */
   _updateInfoPanel() {
     const panel = this._infoPanel;
@@ -169,159 +177,174 @@ export default class CharacterSelectScene extends UIPanel {
     const cd = def.characterData;
     const am = this._assetManager;
 
-    // ── Character Name ──────────────────────────────────
+    // ── Character Name — large, dominant, the visual anchor ─
     const nameText = new UIText(cd.name || '');
     nameText.setStyle({
-      fontSize: 30,
+      fontSize: 42,
       color: '#e8d8b0',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      height: 38,
+      height: 48,
+      shadowColor: 'rgba(0,0,0,0.7)',
+      shadowBlur: 4,
+      shadowOffsetX: 2,
+      shadowOffsetY: 2,
     });
     panel.addChild(nameText);
 
-    // ── Class row: [flair_left] ClassName [flair_right] ─
+    // ── Class row: [flair] ClassName [flair] ────────────
     const classRow = new UIContainer();
     classRow.direction = 'row';
     classRow.justifyContent = 'center';
     classRow.alignItems = 'center';
-    classRow.gap = 12;
-    classRow.height = 26;
+    classRow.gap = 14;
+    classRow.height = 28;
 
     const flairL = new UIImage('character_select_flair_left', am);
-    flairL.setStyle({ width: 80, height: 20, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    flairL.setStyle({ width: 100, height: 24, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
     classRow.addChild(flairL);
 
     const classText = new UIText(cd.className || '');
     classText.setStyle({
-      fontSize: 19,
+      fontSize: 22,
       color: '#ccaa77',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      width: 110,
-      height: 22,
+      width: 120,
+      height: 26,
     });
     classRow.addChild(classText);
 
     const flairR = new UIImage('character_select_flair_right', am);
-    flairR.setStyle({ width: 80, height: 20, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    flairR.setStyle({ width: 100, height: 24, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
     classRow.addChild(flairR);
     panel.addChild(classRow);
 
-    // ── Character description ───────────────────────────
+    // ── Character description — centered, readable ──────
     const descText = new UIText(cd.description || '');
     descText.setStyle({
-      fontSize: 13,
+      fontSize: 15,
       color: '#b0a880',
       alignH: 'center',
       alignV: 'center',
-      height: 42,
-      maxWidth: 500,
+      height: 60,
+      maxWidth: 400,
     });
     panel.addChild(descText);
 
     // ── Divider ─────────────────────────────────────────
     const divider1 = new UIImage('character_select_divider', am);
-    divider1.setStyle({ widthPercent: 0.65, height: 6, fitMode: 'stretch' });
+    divider1.setStyle({ widthPercent: 0.78, height: 8, fitMode: 'stretch' });
     panel.addChild(divider1);
 
-    // ── Stats row: [heart] Health ──────────────────────
-    const statsRow = new UIContainer();
-    statsRow.direction = 'row';
-    statsRow.justifyContent = 'center';
-    statsRow.alignItems = 'center';
-    statsRow.gap = 10;
-    statsRow.height = 32;
+    // ── Health + mana single centered row ───────────────
+    // Mock: "Health and mana sit in a single elegant centered row.
+    //        Icons are evenly spaced. Values align visually with icons.
+    //        Everything sits on the same baseline."
+    const statManaRow = new UIContainer();
+    statManaRow.direction = 'row';
+    statManaRow.justifyContent = 'center';
+    statManaRow.alignItems = 'center';
+    statManaRow.gap = 12;
+    statManaRow.height = 36;
 
+    // Heart icon + health value group
     const heartIcon = new UIImage('character_select_heart', am);
-    heartIcon.setStyle({ width: 24, height: 24, fitMode: 'contain' });
-    statsRow.addChild(heartIcon);
+    heartIcon.setStyle({ width: 22, height: 22, fitMode: 'contain' });
+    statManaRow.addChild(heartIcon);
 
     const healthText = new UIText(`${cd.hp ?? 0} / ${cd.maxHp ?? 0}`);
     healthText.setStyle({
-      fontSize: 21,
+      fontSize: 22,
       color: '#ff6666',
       bold: true,
       alignH: 'left',
       alignV: 'center',
+      width: 80,
       height: 26,
     });
-    statsRow.addChild(healthText);
-    panel.addChild(statsRow);
+    statManaRow.addChild(healthText);
 
-    // ── Mana symbols + count row (simple, no plates) ──
-    const manaRow = new UIContainer();
-    manaRow.direction = 'row';
-    manaRow.justifyContent = 'center';
-    manaRow.alignItems = 'center';
-    manaRow.gap = 18;
-    manaRow.height = 34;
+    // Spacer between health and mana groups
+    const spacer = new UIContainer();
+    spacer.width = 14;
+    spacer.height = 1;
+    statManaRow.addChild(spacer);
 
+    // Mana groups: icon + count, evenly spaced, same baseline
     const manaData = cd.mana || {};
-    for (const color of MANA_ORDER) {
+    const MANA_COLORS = [
+      { key: 'red',    color: '#ff5555' },
+      { key: 'blue',   color: '#5599ff' },
+      { key: 'green',  color: '#55cc55' },
+      { key: 'yellow', color: '#dddd44' },
+      { key: 'purple', color: '#cc55cc' },
+    ];
+
+    for (const mc of MANA_COLORS) {
       const manaGroup = new UIContainer();
       manaGroup.direction = 'row';
       manaGroup.alignItems = 'center';
-      manaGroup.gap = 5;
-      manaGroup.width = 62;
+      manaGroup.gap = 4;
+      manaGroup.width = 55;
 
-      const symbol = new UIImage(`mana_${color}_simple`, am);
-      symbol.setStyle({ width: 26, height: 26, fitMode: 'contain' });
+      const symbol = new UIImage(`mana_${mc.key}_simple`, am);
+      symbol.setStyle({ width: 22, height: 22, fitMode: 'contain' });
       manaGroup.addChild(symbol);
 
-      const countText = new UIText(String(manaData[color] ?? 0));
+      const countText = new UIText(String(manaData[mc.key] ?? 0));
       countText.setStyle({
-        fontSize: 17,
-        color: '#ffffff',
+        fontSize: 18,
+        color: mc.color,
         bold: true,
         alignH: 'left',
         alignV: 'center',
         width: 30,
-        height: 26,
+        height: 22,
         shadowColor: 'rgba(0,0,0,0.7)',
-        shadowBlur: 3,
+        shadowBlur: 2,
         shadowOffsetX: 1,
         shadowOffsetY: 1,
       });
       manaGroup.addChild(countText);
 
-      manaRow.addChild(manaGroup);
+      statManaRow.addChild(manaGroup);
     }
-    panel.addChild(manaRow);
+    panel.addChild(statManaRow);
 
     // ── Divider ─────────────────────────────────────────
     const divider2 = new UIImage('character_select_divider', am);
-    divider2.setStyle({ widthPercent: 0.65, height: 6, fitMode: 'stretch' });
+    divider2.setStyle({ widthPercent: 0.78, height: 8, fitMode: 'stretch' });
     panel.addChild(divider2);
 
-    // ── Skills title row ───────────────────────────────
+    // ── "Starting Skills" title row with flairs ─────────
     const skillsTitleRow = new UIContainer();
     skillsTitleRow.direction = 'row';
     skillsTitleRow.justifyContent = 'center';
     skillsTitleRow.alignItems = 'center';
-    skillsTitleRow.gap = 10;
-    skillsTitleRow.height = 22;
+    skillsTitleRow.gap = 12;
+    skillsTitleRow.height = 24;
 
     const sFlairL = new UIImage('character_select_flair_left', am);
-    sFlairL.setStyle({ width: 56, height: 16, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    sFlairL.setStyle({ width: 72, height: 18, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
     skillsTitleRow.addChild(sFlairL);
 
     const skillsTitle = new UIText('Starting Skills');
     skillsTitle.setStyle({
-      fontSize: 14,
+      fontSize: 16,
       color: '#d0d0c4',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      width: 140,
-      height: 20,
+      width: 150,
+      height: 22,
     });
     skillsTitleRow.addChild(skillsTitle);
 
     const sFlairR = new UIImage('character_select_flair_right', am);
-    sFlairR.setStyle({ width: 56, height: 16, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    sFlairR.setStyle({ width: 72, height: 18, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
     skillsTitleRow.addChild(sFlairR);
     panel.addChild(skillsTitleRow);
 
@@ -331,8 +354,8 @@ export default class CharacterSelectScene extends UIPanel {
     skillsRow.direction = 'row';
     skillsRow.justifyContent = 'center';
     skillsRow.alignItems = 'start';
-    skillsRow.gap = 28;
-    skillsRow.height = 100;
+    skillsRow.gap = 36;
+    skillsRow.height = 110;
 
     for (const skillData of skills) {
       const skillBlock = this._buildSkillBlock(skillData, am);
@@ -343,6 +366,7 @@ export default class CharacterSelectScene extends UIPanel {
 
   /**
    * Build a single skill block (icon + name + description) for the info panel.
+   * Larger, breathable composition that matches the mock's visual weight.
    * @param {object} skillData - { name, description, icon }
    * @param {import('../engine/AssetManager.js').default} am
    * @returns {UIContainer}
@@ -351,37 +375,37 @@ export default class CharacterSelectScene extends UIPanel {
     const block = new UIContainer();
     block.direction = 'column';
     block.alignItems = 'center';
-    block.gap = 3;
-    block.width = 150;
-    block.height = 100;
+    block.gap = 5;
+    block.width = 180;
+    block.height = 110;
 
-    // Skill icon
+    // Skill icon — large enough to breathe
     const iconKey = skillData.icon || 'placeholder';
     const icon = new UIImage(iconKey, am);
-    icon.setStyle({ width: 52, height: 52, fitMode: 'contain' });
+    icon.setStyle({ width: 64, height: 64, fitMode: 'contain' });
     block.addChild(icon);
 
-    // Skill name
+    // Skill name — clear, readable
     const nameText = new UIText(skillData.name || '');
     nameText.setStyle({
-      fontSize: 14,
+      fontSize: 16,
       color: '#e4e4d9',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      height: 18,
+      height: 20,
     });
     block.addChild(nameText);
 
-    // Skill description
+    // Skill description — comfortable size
     const descText = new UIText(skillData.description || '');
     descText.setStyle({
-      fontSize: 10,
+      fontSize: 12,
       color: '#c0b890',
       alignH: 'center',
       alignV: 'center',
-      height: 24,
-      maxWidth: 140,
+      height: 28,
+      maxWidth: 170,
     });
     block.addChild(descText);
 
@@ -396,6 +420,10 @@ export default class CharacterSelectScene extends UIPanel {
    * Manual layout: compute the info panel height from its children, then
    * center the entire block (panel + heroes + button) vertically in the
    * canvas. This avoids the auto-height limitation of the flexbox system.
+   *
+   * The panel uses a narrow, card-like width (≈38% of canvas) to create
+   * the compact, centered "card" feel from the mock rather than a wide,
+   * flattened strip.
    */
   layoutChildren() {
     const W = this.rect.w;
@@ -406,11 +434,12 @@ export default class CharacterSelectScene extends UIPanel {
     const heroes = this._heroesRow;
 
     // ── 1. Compute info panel dimensions ─────────────────
-    let panelW = 600;
+    // Narrow card proportions: 38–54% of canvas width, clamped to 420–540px
+    let panelW = 500;
     let panelH = 200;
 
     if (panel) {
-      panelW = Math.min(780, Math.max(460, W * 0.55));
+      panelW = Math.min(540, Math.max(420, W * 0.42));
 
       // Do a trial layout with generous height so child rects are computed
       panel.rect.x = 0;
