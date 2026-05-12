@@ -20,7 +20,6 @@ import UIPanel from '../ui/UIPanel.js';
 import UIContainer from '../ui/UIContainer.js';
 import UIImage from '../ui/UIImage.js';
 import UIText from '../ui/UIText.js';
-import UIOrb from '../ui/UIOrb.js';
 import characterSelectDefinitions from '../data/characterSelectDefinitions.js';
 import mockEnemy from '../data/mockEnemy.js';
 import BattleController from '../game/BattleController.js';
@@ -28,15 +27,6 @@ import BattleScene from '../ui/BattleScene.js';
 
 /** Duration of the cross-fade transition between splash backgrounds (ms) */
 const CROSS_FADE_DURATION = 400;
-
-/** Mana colors map matching CharacterPane conventions */
-const MANA_COLORS = {
-  red:    '#cc3333',
-  blue:   '#3366cc',
-  green:  '#33aa33',
-  yellow: '#cccc33',
-  purple: '#9933cc',
-};
 
 const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
 
@@ -182,12 +172,12 @@ export default class CharacterSelectScene extends UIPanel {
     // ── Character Name ──────────────────────────────────
     const nameText = new UIText(cd.name || '');
     nameText.setStyle({
-      fontSize: 32,
+      fontSize: 30,
       color: '#e8d8b0',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      height: 44,
+      height: 38,
     });
     panel.addChild(nameText);
 
@@ -197,28 +187,40 @@ export default class CharacterSelectScene extends UIPanel {
     classRow.justifyContent = 'center';
     classRow.alignItems = 'center';
     classRow.gap = 12;
-    classRow.height = 28;
+    classRow.height = 26;
 
     const flairL = new UIImage('character_select_flair_left', am);
-    flairL.setStyle({ width: 80, height: 22, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    flairL.setStyle({ width: 80, height: 20, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
     classRow.addChild(flairL);
 
     const classText = new UIText(cd.className || '');
     classText.setStyle({
-      fontSize: 20,
+      fontSize: 19,
       color: '#ccaa77',
       bold: true,
       alignH: 'center',
       alignV: 'center',
       width: 110,
-      height: 24,
+      height: 22,
     });
     classRow.addChild(classText);
 
     const flairR = new UIImage('character_select_flair_right', am);
-    flairR.setStyle({ width: 80, height: 22, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    flairR.setStyle({ width: 80, height: 20, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
     classRow.addChild(flairR);
     panel.addChild(classRow);
+
+    // ── Character description ───────────────────────────
+    const descText = new UIText(cd.description || '');
+    descText.setStyle({
+      fontSize: 13,
+      color: '#b0a880',
+      alignH: 'center',
+      alignV: 'center',
+      height: 42,
+      maxWidth: 500,
+    });
+    panel.addChild(descText);
 
     // ── Divider ─────────────────────────────────────────
     const divider1 = new UIImage('character_select_divider', am);
@@ -231,53 +233,61 @@ export default class CharacterSelectScene extends UIPanel {
     statsRow.justifyContent = 'center';
     statsRow.alignItems = 'center';
     statsRow.gap = 10;
-    statsRow.height = 34;
+    statsRow.height = 32;
 
     const heartIcon = new UIImage('character_select_heart', am);
-    heartIcon.setStyle({ width: 26, height: 26, fitMode: 'contain' });
+    heartIcon.setStyle({ width: 24, height: 24, fitMode: 'contain' });
     statsRow.addChild(heartIcon);
 
     const healthText = new UIText(`${cd.hp ?? 0} / ${cd.maxHp ?? 0}`);
     healthText.setStyle({
-      fontSize: 22,
+      fontSize: 21,
       color: '#ff6666',
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 28,
+      height: 26,
     });
     statsRow.addChild(healthText);
     panel.addChild(statsRow);
 
-    // ── Mana orbs row ──────────────────────────────────
+    // ── Mana symbols + count row (simple, no plates) ──
     const manaRow = new UIContainer();
     manaRow.direction = 'row';
     manaRow.justifyContent = 'center';
     manaRow.alignItems = 'center';
-    manaRow.gap = 8;
-    manaRow.height = 84;
+    manaRow.gap = 18;
+    manaRow.height = 34;
 
     const manaData = cd.mana || {};
     for (const color of MANA_ORDER) {
-      const orb = new UIOrb();
-      orb.setStyle({
-        color: MANA_COLORS[color],
-        count: manaData[color] ?? 0,
-        countColor: '#ffffff',
-        fontSize: 18,
-        width: 52,
-        height: 78,
-        borderColor: '#151515',
-        borderWidth: 2,
-        showAmountPlate: true,
-      });
+      const manaGroup = new UIContainer();
+      manaGroup.direction = 'row';
+      manaGroup.alignItems = 'center';
+      manaGroup.gap = 5;
+      manaGroup.width = 62;
 
-      const manaAssetKey = `mana_${color}`;
-      if (am && am.get(manaAssetKey)) {
-        orb.assetKey = manaAssetKey;
-        orb.assetManager = am;
-      }
-      manaRow.addChild(orb);
+      const symbol = new UIImage(`mana_${color}_simple`, am);
+      symbol.setStyle({ width: 26, height: 26, fitMode: 'contain' });
+      manaGroup.addChild(symbol);
+
+      const countText = new UIText(String(manaData[color] ?? 0));
+      countText.setStyle({
+        fontSize: 17,
+        color: '#ffffff',
+        bold: true,
+        alignH: 'left',
+        alignV: 'center',
+        width: 30,
+        height: 26,
+        shadowColor: 'rgba(0,0,0,0.7)',
+        shadowBlur: 3,
+        shadowOffsetX: 1,
+        shadowOffsetY: 1,
+      });
+      manaGroup.addChild(countText);
+
+      manaRow.addChild(manaGroup);
     }
     panel.addChild(manaRow);
 
@@ -292,26 +302,26 @@ export default class CharacterSelectScene extends UIPanel {
     skillsTitleRow.justifyContent = 'center';
     skillsTitleRow.alignItems = 'center';
     skillsTitleRow.gap = 10;
-    skillsTitleRow.height = 24;
+    skillsTitleRow.height = 22;
 
     const sFlairL = new UIImage('character_select_flair_left', am);
-    sFlairL.setStyle({ width: 56, height: 18, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    sFlairL.setStyle({ width: 56, height: 16, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
     skillsTitleRow.addChild(sFlairL);
 
     const skillsTitle = new UIText('Starting Skills');
     skillsTitle.setStyle({
-      fontSize: 15,
+      fontSize: 14,
       color: '#d0d0c4',
       bold: true,
       alignH: 'center',
       alignV: 'center',
       width: 140,
-      height: 22,
+      height: 20,
     });
     skillsTitleRow.addChild(skillsTitle);
 
     const sFlairR = new UIImage('character_select_flair_right', am);
-    sFlairR.setStyle({ width: 56, height: 18, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    sFlairR.setStyle({ width: 56, height: 16, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
     skillsTitleRow.addChild(sFlairR);
     panel.addChild(skillsTitleRow);
 
@@ -509,7 +519,7 @@ export default class CharacterSelectScene extends UIPanel {
     this._crossFadeAlpha = 1.0;
     this._buttonHovered = false;
 
-    // Propagate assetManager to all UIImage/UIOrb children
+    // Propagate assetManager to all UIImage children
     this._propagateAssetManager(this);
 
     // Rebuild info panel now that assetManager is available
@@ -547,9 +557,9 @@ export default class CharacterSelectScene extends UIPanel {
     }
   }
 
-  /** Recursively set assetManager on all UIImage and UIOrb children */
+  /** Recursively set assetManager on all UIImage children */
   _propagateAssetManager(element) {
-    if (element.assetManager === null && (element instanceof UIImage || element instanceof UIOrb)) {
+    if (element.assetManager === null && element instanceof UIImage) {
       element.assetManager = this._assetManager;
     }
     for (const child of element.children) {
