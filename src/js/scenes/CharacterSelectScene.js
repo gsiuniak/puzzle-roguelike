@@ -407,6 +407,7 @@ export default class CharacterSelectScene extends UIPanel {
       alignH: 'left',
       alignV: 'center',
       height: 8,
+      margin: { bottom: 5 }
     });
     textCol.addChild(nameText);
 
@@ -415,7 +416,7 @@ export default class CharacterSelectScene extends UIPanel {
       fontSize: 12,
       color: '#c0b890',
       alignH: 'left',
-      alignV: 'center',
+      alignV: 'top',
       height: 28,
       maxWidth: 100,
     });
