@@ -191,6 +191,7 @@ export default class CharacterSelectScene extends UIPanel {
       shadowBlur: 4,
       shadowOffsetX: 2,
       shadowOffsetY: 2,
+      margin: { top: 20 }
     });
     panel.addChild(nameText);
 
@@ -215,6 +216,7 @@ export default class CharacterSelectScene extends UIPanel {
       alignV: 'center',
       width: 120,
       height: 26,
+      margin: { left: 40, right: 40 }
     });
     classRow.addChild(classText);
 
@@ -258,13 +260,14 @@ export default class CharacterSelectScene extends UIPanel {
 
     const healthText = new UIText(`${cd.hp ?? 0} / ${cd.maxHp ?? 0}`);
     healthText.setStyle({
-      fontSize: 22,
+      fontSize: 18,
       color: '#ff6666',
       bold: true,
       alignH: 'left',
       alignV: 'center',
       width: 80,
       height: 26,
+      margin: { right: 50 }
     });
     statManaRow.addChild(healthText);
 
@@ -289,16 +292,16 @@ export default class CharacterSelectScene extends UIPanel {
       manaGroup.direction = 'row';
       manaGroup.alignItems = 'center';
       manaGroup.gap = 4;
-      manaGroup.width = 55;
+      manaGroup.width = 50;
 
       const symbol = new UIImage(`mana_${mc.key}`, am);
-      symbol.setStyle({ width: 22, height: 22, fitMode: 'contain' });
+      symbol.setStyle({ width: 22, height: 22, fitMode: 'contain', margin: { right: 3 } });
       manaGroup.addChild(symbol);
 
       const countText = new UIText(String(manaData[mc.key] ?? 0));
       countText.setStyle({
-        fontSize: 18,
-        color: '#ffffff',
+        fontSize: 14,
+        color: '#b0a880',
         bold: true,
         alignH: 'left',
         alignV: 'center',
@@ -308,6 +311,7 @@ export default class CharacterSelectScene extends UIPanel {
         shadowBlur: 2,
         shadowOffsetX: 1,
         shadowOffsetY: 1,
+        margin: { right: 10 }
       });
       manaGroup.addChild(countText);
 
@@ -316,9 +320,9 @@ export default class CharacterSelectScene extends UIPanel {
     panel.addChild(statManaRow);
 
     // ── Divider ─────────────────────────────────────────
-    const divider2 = new UIImage('character_select_divider', am);
-    divider2.setStyle({ widthPercent: 0.78, height: 8, fitMode: 'stretch' });
-    panel.addChild(divider2);
+    // const divider2 = new UIImage('character_select_divider', am);
+    // divider2.setStyle({ widthPercent: 0.78, height: 8, fitMode: 'stretch' });
+    // panel.addChild(divider2);
 
     // ── "Starting Skills" title row with flairs ─────────
     const skillsTitleRow = new UIContainer();
@@ -329,7 +333,7 @@ export default class CharacterSelectScene extends UIPanel {
     skillsTitleRow.height = 24;
 
     const sFlairL = new UIImage('character_select_flair_left', am);
-    sFlairL.setStyle({ width: 72, height: 18, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    sFlairL.setStyle({ width: 200, height: 18, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
     skillsTitleRow.addChild(sFlairL);
 
     const skillsTitle = new UIText('Starting Skills');
@@ -341,11 +345,12 @@ export default class CharacterSelectScene extends UIPanel {
       alignV: 'center',
       width: 150,
       height: 22,
+      margin: { left: 60, right: 60 }
     });
     skillsTitleRow.addChild(skillsTitle);
 
     const sFlairR = new UIImage('character_select_flair_right', am);
-    sFlairR.setStyle({ width: 72, height: 18, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    sFlairR.setStyle({ width: 200, height: 18, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
     skillsTitleRow.addChild(sFlairR);
     panel.addChild(skillsTitleRow);
 
