@@ -89,6 +89,14 @@ const SOUNDS = {
     src: ['assets/audio/sfx/extra_turn.mp3'],
     category: AudioCategory.SFX,
   },
+  sfx_new_turn: {
+    src: ['assets/audio/sfx/new_turn.mp3'],
+    category: AudioCategory.SFX,
+  },
+  sfx_tile_hover: {
+    src: ['assets/audio/sfx/tile_hover.mp3'],
+    category: AudioCategory.SFX,
+  },
   sfx_damage_taken: {
     src: ['assets/audio/sfx/damage_taken.mp3'],
     category: AudioCategory.SFX,
@@ -113,14 +121,14 @@ const SOUNDS = {
   },
 
   // ── Ambient ─────────────────────────────────────────────
-  ambient_battle: {
-    src: ['assets/audio/ambient/battle_ambient2.mp3'],
-    category: AudioCategory.AMBIENT,
-    options: {
-      loop: true,
-      volume: 0.3,
-    },
-  },
+//   ambient_battle: {
+//     src: ['assets/audio/ambient/battle_ambient2.mp3'],
+//     category: AudioCategory.AMBIENT,
+//     options: {
+//       loop: true,
+//       volume: 0.3,
+//     },
+//   },
 };
 
 export default SOUNDS;

@@ -345,6 +345,13 @@ export default class BattleScene extends UIPanel {
     }
 
     const cell = this._canAct() ? board.screenToCell(x, y) : null;
+    // Play tile_hover SFX when hovering a new tile
+    if (cell && this._audioManager) {
+      const prev = this._hoveredCell;
+      if (!prev || prev.col !== cell.col || prev.row !== cell.row) {
+        this._audioManager.playSfx('sfx_tile_hover');
+      }
+    }
     this._hoveredCell = cell;
     board.hoveredCell = cell;
 
@@ -410,6 +417,11 @@ export default class BattleScene extends UIPanel {
     // ── Music state transitions (only on state change) ──
     this._updateMusicFromState(state.state);
 
+    // ── Play SFX for turn announcement ──
+    if (state.turnAnnouncement && this._audioManager) {
+      this._audioManager.playSfx('sfx_new_turn');
+    }
+
     // ── Spawn turn announcement effect ──
     if (state.turnAnnouncement && this._board && this._assetManager) {
       this._spawnTurnAnnouncementEffect(state.turnAnnouncement);
@@ -418,6 +430,10 @@ export default class BattleScene extends UIPanel {
     // ── Spawn extra turn effect ──
     if (state.extraTurnTriggerPos && this._board && this._assetManager) {
       this._spawnExtraTurnEffect(state.extraTurnTriggerPos);
+      // Play extra_turn SFX at the time the animation pops up
+      if (this._audioManager) {
+        this._audioManager.playSfx('sfx_extra_turn');
+      }
     }
 
     // ── Spawn match text effects for every 3+ match ──
@@ -427,6 +443,11 @@ export default class BattleScene extends UIPanel {
       }
     }
 
+    // ── Play skull damage SFX ──
+    if (state.skullDamageDealt && this._audioManager) {
+      this._audioManager.playSfx('sfx_skull_damage');
+    }
+
     // ── Trigger screen shake for damage ──
     if (state.shakeIntensity && state.shakeIntensity > 0) {
       this._screenShake.trigger(state.shakeIntensity);
@@ -434,6 +455,10 @@ export default class BattleScene extends UIPanel {
 
     // ── Spawn tile destruction particle bursts ──
     if (state.destroyedTiles && state.destroyedTiles.length > 0 && this._board) {
+      // Play tile_destroy SFX once (not per-tile)
+      if (this._audioManager) {
+        this._audioManager.playSfx('sfx_tile_destroy');
+      }
       for (const dt of state.destroyedTiles) {
         this._spawnTileDestroyParticles(dt);
       }
@@ -596,19 +621,6 @@ export default class BattleScene extends UIPanel {
     });
 
     this._floatingEffects.push(effect);
-
-    // Play match SFX — only for sound files that actually exist on disk
-    if (this._audioManager) {
-      if (typeId === 'skull') {
-        this._audioManager.playSfx('sfx_skull_damage');
-      } else if (count >= 5) {
-        this._audioManager.playSfx('sfx_match_5');
-      } else if (count >= 4) {
-        this._audioManager.playSfx('sfx_match_4');
-      } else {
-        this._audioManager.playSfx('sfx_match_3');
-      }
-    }
   }
 
   /**

@@ -147,6 +147,13 @@ export default class BattleController {
      */
     this._pendingShakeIntensity = 0;
 
+    /**
+     * Set when skull damage is dealt during resolution. The scene
+     * reads and clears this each frame to play skull_damage SFX.
+     * @type {boolean}
+     */
+    this._skullDamageDealt = false;
+
     // ── Enemy turn ──
     this._enemyTimer = 0;
     this._enemyFired = false;
@@ -192,6 +199,10 @@ export default class BattleController {
     const shakeIntensity = this._pendingShakeIntensity;
     this._pendingShakeIntensity = 0;
 
+    // Capture skull damage flag and clear so scene plays SFX once.
+    const skullDamageDealt = this._skullDamageDealt;
+    this._skullDamageDealt = false;
+
     // Capture turn announcement and clear so scene spawns once per intro.
     const turnAnnouncement = this._turnAnnouncement;
     this._turnAnnouncement = null;
@@ -209,6 +220,7 @@ export default class BattleController {
       extraTurnTriggerPos: triggerPos,
       matchTextTriggers,
       shakeIntensity,
+      skullDamageDealt,
       turnAnnouncement,
       destroyedTiles,
       gameOver: this.state === BattleState.GAME_OVER,
@@ -488,6 +500,7 @@ export default class BattleController {
       const r = this.resolver.applyDamage(targetState, rewards.skullDamage);
       this.log.add(`Destroyed skulls deal ${r.actualDamage} damage to ${targetState.name}.`);
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
+      this._skullDamageDealt = true;
     }
 
     // 4. Capture tile types BEFORE removal for particle burst effects
@@ -687,6 +700,7 @@ export default class BattleController {
       this.log.add(`Skull damage: ${r.actualDamage} dealt.`);
       // Trigger screen shake scaled by damage % of target's max HP
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
+      this._skullDamageDealt = true;
     }
 
     for (const [color, count] of Object.entries(a.mana)) {
