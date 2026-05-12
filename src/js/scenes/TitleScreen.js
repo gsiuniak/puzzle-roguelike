@@ -1,9 +1,8 @@
 import UIPanel from '../ui/UIPanel.js';
-import UIText from '../ui/UIText.js';
 
 /**
- * TitleScreen — dedicated title scene with cover-fit background image,
- * fade-in, and a pulsing "Press Any Key" prompt.
+ * TitleScreen — dedicated title scene with cover-fit background image
+ * and a fade-in transition.
  *
  * On any keyboard key, mouse click, or touch — transitions to BattleScene
  * via the SceneManager.
@@ -25,25 +24,6 @@ export default class TitleScreen extends UIPanel {
     this._fadeInDuration = 500; // ms
     this._elapsed = 0;
     this._fadeInDone = false;
-
-    // "Press Any Key" prompt
-    this._promptText = new UIText('Press Any Key');
-    this._promptText.setStyle({
-      fontSize: 20,
-      color: '#d4c080',
-      bold: true,
-      alignH: 'center',
-      alignV: 'center',
-      shadowColor: 'rgba(0,0,0,0.8)',
-      shadowBlur: 4,
-      shadowOffsetX: 1,
-      shadowOffsetY: 1,
-    });
-    // Position it near bottom
-    this._promptText.alignSelfV = 'end';
-    this._promptText.margin = { bottom: 48 };
-    this._promptText.height = 30;
-    this.addChild(this._promptText);
 
     // Input handler bound once
     this._handleAnyInput = this._onAnyInput.bind(this);
@@ -149,9 +129,5 @@ export default class TitleScreen extends UIPanel {
       }
     }
 
-    // ── Static prompt text ──
-    if (this._promptText && this._fadeInDone) {
-      this._promptText.color = '#d4c080';
-    }
   }
 }
