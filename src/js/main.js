@@ -2,8 +2,11 @@
  * main.js — entry point for the match-3 battle game.
  *
  * Creates shared services (Canvas, AssetManager, InputManager, GameLoop,
- * AudioManager), then instantiates the SceneManager with TitleScreen
- * and BattleScene. The game boots into the title screen first.
+ * AudioManager), then instantiates the SceneManager with TitleScreen,
+ * CharacterSelectScene, and BattleScene (created on demand).
+ * The game boots into the title screen first.
+ *
+ * Flow: TitleScreen → CharacterSelectScene → BattleScene
  */
 
 import CanvasApp from './engine/CanvasApp.js';
@@ -12,12 +15,9 @@ import AssetManager from './engine/AssetManager.js';
 import InputManager from './engine/InputManager.js';
 import SceneManager from './scenes/SceneManager.js';
 import TitleScreen from './scenes/TitleScreen.js';
-import BattleScene from './ui/BattleScene.js';
-import BattleController from './game/BattleController.js';
+import CharacterSelectScene from './scenes/CharacterSelectScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
-import mockCharacter from './data/mockCharacter.js';
-import mockEnemy from './data/mockEnemy.js';
 
 // ── Debug flag ──────────────────────────────────────────
 const DEBUG_UI_LAYOUT = false;
@@ -30,7 +30,7 @@ const ASSET_MAP = {
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
   character_pane_skill_row:  'assets/sprites/character_pane/background/character_pane_skill_row.png',
   portrait_warrior:          'assets/sprites/character_pane/portraits/portrait_warrior.png',
-  portrait_mage:          'assets/sprites/character_pane/portraits/portrait_mage.png',
+  portrait_mage:             'assets/sprites/character_pane/portraits/portrait_mage.png',
   portrait_goblin:           'assets/sprites/character_pane/portraits/portrait_goblin.png',
   icon_attack:               'assets/sprites/character_pane/icons/icon_attack.png',
   icon_block:                'assets/sprites/character_pane/icons/icon_block.png',
@@ -63,6 +63,16 @@ const ASSET_MAP = {
   tile_yellow:               'assets/sprites/tiles/yellow_tile.png',
   tile_purple:               'assets/sprites/tiles/purple_tile.png',
   tile_skull:                'assets/sprites/tiles/skull_tile.png',
+  // ── Character select scene assets ───────────────────
+  character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.png',
+  character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.png',
+  character_select_info_panel:                 'assets/sprites/character_select/character_select_info_panel.png',
+  character_select_heart:                      'assets/sprites/character_select/character_select_heart.png',
+  character_select_flair_left:                 'assets/sprites/character_select/character_select_flair_left.png',
+  character_select_flair_right:                'assets/sprites/character_select/character_select_flair_right.png',
+  character_select_choose_hero_button:         'assets/sprites/character_select/character_select_chooe_hero_button.png',
+  character_select_choose_hero_button_hover:   'assets/sprites/character_select/character_select_chooe_hero_button_hover.png',
+  character_select_divider:                    'assets/sprites/character_select/character_select_divider.png',
 };
 
 // ── Scene sizing ────────────────────────────────────────
@@ -102,33 +112,28 @@ async function init() {
   const sceneManager = new SceneManager(app, loop, input, assetManager);
   sceneManager.setAudioManager(AudioManager);
 
-  // 7. BattleController — the game logic engine (shared across scenes)
-  const battleController = new BattleController(mockCharacter, mockEnemy);
-
-  // 8. TitleScreen
+  // 7. TitleScreen
   const titleScreen = new TitleScreen();
   titleScreen.assetManager = assetManager;
 
-  // 9. BattleScene
-  const battleScene = new BattleScene(mockCharacter, mockEnemy, assetManager, battleController);
-  battleScene.setAudioManager(AudioManager);
+  // 8. CharacterSelectScene — BattleScene is created on demand when "Choose Hero" is clicked
+  const characterSelectScene = new CharacterSelectScene();
 
-  if (DEBUG_UI_LAYOUT) {
-    setDebugRecursive(battleScene, true);
-  }
-
-  // 10. Register scenes
+  // 9. Register scenes
   sceneManager.registerScene('TitleScreen', titleScreen);
-  sceneManager.registerScene('BattleScene', battleScene);
+  sceneManager.registerScene('CharacterSelectScene', characterSelectScene);
+  // BattleScene is registered lazily by CharacterSelectScene._chooseHero()
 
-  // 11. Boot into title screen
+  // 10. Boot into title screen
   sceneManager.switchTo('TitleScreen');
 
-  // 12. Start the game loop
+  // 11. Start the game loop
   sceneManager.start();
 
   console.log('Match-3 Battle ready!');
-  console.log('  - Press any key or click to start');
+  console.log('  - Press any key or click at the title screen');
+  console.log('  - Select your hero: Warrior or Mage');
+  console.log('  - Click portraits to switch, click Choose Hero to start');
   console.log('  - Drag adjacent tiles to swap');
   console.log('  - Match 3+ tiles to gain mana / deal skull damage');
   console.log('  - Match 5+ connected tiles for extra turn');

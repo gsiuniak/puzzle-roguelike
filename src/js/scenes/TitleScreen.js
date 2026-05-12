@@ -4,7 +4,7 @@ import UIPanel from '../ui/UIPanel.js';
  * TitleScreen — dedicated title scene with cover-fit background image
  * and a fade-in transition.
  *
- * On any keyboard key, mouse click, or touch — transitions to BattleScene
+ * On any keyboard key, mouse click, or touch — transitions to CharacterSelectScene
  * via the SceneManager.
  */
 export default class TitleScreen extends UIPanel {
@@ -39,7 +39,7 @@ export default class TitleScreen extends UIPanel {
     this._elapsed = 0;
     this._fadeInDone = false;
 
-    // Register input listeners — any key or click transitions to BattleScene
+    // Register input listeners — any key or click transitions to CharacterSelectScene
     const input = this._sceneManager._input;
     input.on('keydown', this._handleAnyInput);
     input.on('mousedown', this._handleAnyInput);
@@ -64,7 +64,7 @@ export default class TitleScreen extends UIPanel {
     // Prevent double-transition (keydown + click in same frame, etc.)
     if (!this._sceneManager || this._sceneManager._currentScene !== this) return;
 
-    this._sceneManager.switchTo('BattleScene');
+    this._sceneManager.switchTo('CharacterSelectScene');
   }
 
   // ── Update ────────────────────────────────────────────
