@@ -20,6 +20,7 @@ import UIPanel from '../ui/UIPanel.js';
 import UIContainer from '../ui/UIContainer.js';
 import UIImage from '../ui/UIImage.js';
 import UIText from '../ui/UIText.js';
+import AudioManager from '../audio/AudioManager.js';
 import characterSelectDefinitions from '../data/characterSelectDefinitions.js';
 import mockEnemy from '../data/mockEnemy.js';
 import BattleController from '../game/BattleController.js';
@@ -554,6 +555,9 @@ export default class CharacterSelectScene extends UIPanel {
     // Rebuild info panel now that assetManager is available
     this._updateInfoPanel();
 
+    // ── Music ──────────────────────────────────────────
+    AudioManager.playMusic('main_theme', { fadeIn: 600 });
+
     // ── Wire input ──────────────────────────────────────
     const input = sm._input;
     this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
@@ -570,6 +574,9 @@ export default class CharacterSelectScene extends UIPanel {
   onExit() {
     const sm = this._sceneManager;
     if (!sm) return;
+
+    // ── Stop music ────────────────────────────────────
+    AudioManager.stopMusic(300);
 
     const input = sm._input;
     if (this._onMouseDown) {

@@ -32,6 +32,15 @@ export const AudioCategory = {
 const SOUNDS = {
 
   // ── Music ───────────────────────────────────────────────
+  main_theme: {
+    src: ['assets/audio/music/main_theme.mp3'],
+    category: AudioCategory.MUSIC,
+    options: {
+      loop: true,
+      volume: 0.35,
+      preload: true,
+    },
+  },
   battle_theme: {
     src: ['assets/audio/music/battle_theme.mp3'],
     category: AudioCategory.MUSIC,
