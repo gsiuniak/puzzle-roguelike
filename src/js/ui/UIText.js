@@ -80,12 +80,21 @@ export default class UIText extends UIElement {
     const textWidth = metrics.width;
     const textHeight = this.fontSize;
 
-    // Horizontal position
+    // Horizontal position & textAlign
     let tx;
     switch (this.alignH) {
-      case 'center': tx = r.x + r.w / 2; break;
-      case 'right':  tx = r.x + r.w; break;
-      default:       tx = r.x; break;
+      case 'center':
+        tx = r.x + r.w / 2;
+        ctx.textAlign = 'center';
+        break;
+      case 'right':
+        tx = r.x + r.w;
+        ctx.textAlign = 'right';
+        break;
+      default:
+        tx = r.x;
+        ctx.textAlign = 'left';
+        break;
     }
 
     // Vertical position

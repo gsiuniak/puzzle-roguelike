@@ -122,7 +122,7 @@ export default class CharacterSelectScene extends UIPanel {
     this._portraitImages = [];
     for (let i = 0; i < this._definitions.length; i++) {
       const def = this._definitions[i];
-      const portrait = new UIImage(def.portraitKey, null); // assetManager set in onEnter
+      const portrait = new UIImage(`character_select_splash_${def.id}`, null); // assetManager set in onEnter
       portrait.setStyle({
         width: 100,
         height: 120,
@@ -290,14 +290,14 @@ export default class CharacterSelectScene extends UIPanel {
       manaGroup.gap = 4;
       manaGroup.width = 55;
 
-      const symbol = new UIImage(`mana_${mc.key}_simple`, am);
+      const symbol = new UIImage(`mana_${mc.key}`, am);
       symbol.setStyle({ width: 22, height: 22, fitMode: 'contain' });
       manaGroup.addChild(symbol);
 
       const countText = new UIText(String(manaData[mc.key] ?? 0));
       countText.setStyle({
         fontSize: 18,
-        color: mc.color,
+        color: '#ffffff',
         bold: true,
         alignH: 'left',
         alignV: 'center',
