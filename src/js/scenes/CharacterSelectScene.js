@@ -122,7 +122,7 @@ export default class CharacterSelectScene extends UIPanel {
     this._portraitImages = [];
     for (let i = 0; i < this._definitions.length; i++) {
       const def = this._definitions[i];
-      const portrait = new UIImage(`character_select_splash_${def.id}`, null); // assetManager set in onEnter
+      const portrait = new UIImage(`character_select_portrait_${def.id}`, null); // assetManager set in onEnter
       portrait.setStyle({
         width: 100,
         height: 120,

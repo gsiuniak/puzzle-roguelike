@@ -21,7 +21,7 @@ const characterSelectDefinitions = [
     name: warriorCharacter.name,
     className: warriorCharacter.className,
     /** Asset key for the portrait icon shown in the heroes row */
-    portraitKey: 'portrait_warrior',
+    portraitKey: 'character_select_portrait_warrior',
     /** Asset key for the full-screen splash background */
     splashKey: 'character_select_splash_warrior',
     /** Reference to the gameplay character data (hp, mana, skills, etc.) */
@@ -35,7 +35,7 @@ const characterSelectDefinitions = [
     id: 'mage',
     name: mageCharacter.name,
     className: mageCharacter.className,
-    portraitKey: 'portrait_mage',
+    portraitKey: 'character_select_portrait_mage',
     splashKey: 'character_select_splash_mage',
     characterData: mageCharacter,
     order: 1,

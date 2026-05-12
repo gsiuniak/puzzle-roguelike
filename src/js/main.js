@@ -66,6 +66,8 @@ const ASSET_MAP = {
   // ── Character select scene assets ───────────────────
   character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.png',
   character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.png',
+  character_select_portrait_warrior:           'assets/sprites/character_select/character_select_portrait_warrior.png',
+  character_select_portrait_mage:              'assets/sprites/character_select/character_select_portrait_mage.png',
   character_select_info_panel:                 'assets/sprites/character_select/character_select_info_panel.png',
   character_select_heart:                      'assets/sprites/character_select/character_select_heart.png',
   character_select_flair_left:                 'assets/sprites/character_select/character_select_flair_left.png',
