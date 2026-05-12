@@ -7,6 +7,7 @@ import FloatingImageEffect from './FloatingImageEffect.js';
 import FloatingTextEffect from './FloatingTextEffect.js';
 import TileParticleEffect from './TileParticleEffect.js';
 import ScreenShake from './ScreenShake.js';
+import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
 
 /**
@@ -51,6 +52,16 @@ export default class BattleScene extends UIPanel {
 
     /** @type {import('../game/BattleController.js').default|null} */
     this._battleController = battleController;
+
+    /** @type {import('../audio/AudioManager.js').default|null} */
+    this._audioManager = null;
+
+    /**
+     * Track previous battle state so we only trigger music on transitions,
+     * not every frame.
+     * @type {string|null}
+     */
+    this._previousBattleState = null;
 
     // Child references
     this._playerPane = null;
@@ -191,6 +202,9 @@ export default class BattleScene extends UIPanel {
   updateFromController() {
     if (!this._battleController) return;
     const state = this._battleController.getState();
+
+    // ── Music state transitions (only on state change) ──
+    this._updateMusicFromState(state.state);
 
     // ── Spawn turn announcement effect ──
     if (state.turnAnnouncement && this._board && this._assetManager) {
@@ -503,6 +517,47 @@ export default class BattleScene extends UIPanel {
     if (this._playerPane) this._playerPane.setAssetManager(am);
     if (this._enemyPane) this._enemyPane.setAssetManager(am);
     if (this._board) this._board.setAssetManager(am);
+  }
+
+  // ── Audio manager ───────────────────────────────────
+
+  /**
+   * Set the AudioManager reference so the scene can trigger music
+   * based on battle state transitions.
+   * @param {import('../audio/AudioManager.js').default} am
+   */
+  setAudioManager(am) {
+    this._audioManager = am;
+  }
+
+  /**
+   * React to battle state transitions for music playback.
+   * Only fires on state *change*, not every frame.
+   * @param {string} currentState — BattleState enum value
+   */
+  _updateMusicFromState(currentState) {
+    if (!this._audioManager) return;
+
+    // No-op if state hasn't changed
+    if (currentState === this._previousBattleState) return;
+    this._previousBattleState = currentState;
+
+    switch (currentState) {
+      case BattleState.PLAYER_TURN:
+      case BattleState.ENEMY_TURN:
+        // Ensure battle music is playing (fade in)
+        this._audioManager.playMusic('battle_theme', { fadeIn: 600 });
+        break;
+
+      case BattleState.GAME_OVER:
+        // Stop battle music with a short fade-out
+        this._audioManager.stopMusic(400);
+        break;
+
+      default:
+        // TURN_INTRO, RESOLVING, SWAPPING, TARGETING — no music change
+        break;
+    }
   }
 
   // ── style passthrough ───────────────────────────────

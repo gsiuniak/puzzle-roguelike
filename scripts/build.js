@@ -163,13 +163,13 @@ function transformModule(source) {
 }
 
 // ── Step 1: Build module dependency graph ─────────────────
-console.log('[1/5] Building module dependency graph...');
+console.log('[1/6] Building module dependency graph...');
 
 const moduleOrder = buildModuleOrder(JS_ENTRY);
 console.log(`  Found ${moduleOrder.length} modules in dependency order`);
 
 // ── Step 2: Concatenate and transform modules ─────────────
-console.log('[2/5] Concatenating modules...');
+console.log('[2/6] Concatenating modules...');
 
 const moduleSources = moduleOrder.map(filePath => {
   const source = fs.readFileSync(filePath, 'utf-8');
@@ -182,7 +182,7 @@ let bundledJs = `(function() {\n'use strict';\n${moduleSources.join('\n')}\n})()
 console.log(`  Concatenated JS: ${(bundledJs.length / 1024).toFixed(1)} KB`);
 
 // ── Step 3: Inline image assets as base64 ─────────────────
-console.log('[3/5] Inlining image assets as base64 data URLs...');
+console.log('[3/6] Inlining image assets as base64 data URLs...');
 
 const pngFiles = collectPngFiles(ASSETS_SPRITES, SRC);
 
@@ -213,16 +213,29 @@ console.log(`  Replaced ${replaceCount} asset paths with data URLs`);
 console.log(`  Final JS: ${(replacedJs.length / 1024).toFixed(1)} KB`);
 
 // ── Step 4: Inline font ────────────────────────────────────
-console.log('[4/5] Inlining font...');
+console.log('[4/6] Inlining font...');
 
 const fontPath = path.join(ASSETS_FONTS, FONT_FILE);
 const fontDataUrl = fileToDataUrl(fontPath, 'font/truetype');
 console.log(`  Font data URL: ${(fontDataUrl.length / 1024).toFixed(1)} KB`);
 
-// ── Step 5: Generate dist/index.html ───────────────────────
-console.log('[5/5] Generating dist/index.html...');
+// ── Step 5: Read Howler.js for inlining ────────────────────
+console.log('[5/6] Reading Howler.js...');
+
+const HOWLER_PATH = path.join(JS_DIR, 'lib', 'howler.js');
+const howlerJs = fs.readFileSync(HOWLER_PATH, 'utf-8');
+console.log(`  Howler.js: ${(howlerJs.length / 1024).toFixed(1)} KB`);
+
+// ── Step 6: Generate dist/index.html ───────────────────────
+console.log('[6/6] Generating dist/index.html...');
 
 let html = fs.readFileSync(HTML_SRC, 'utf-8');
+
+// Replace the Howler.js script tag with inlined content
+html = html.replace(
+  /<script\s+src="js\/lib\/howler\.js"><\/script>/,
+  `<script>\n${howlerJs}\n</script>`
+);
 
 // Replace the module script tag with the inlined IIFE bundle
 html = html.replace(

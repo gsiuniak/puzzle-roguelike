@@ -11,6 +11,8 @@ import AssetManager from './engine/AssetManager.js';
 import InputManager from './engine/InputManager.js';
 import BattleScene from './ui/BattleScene.js';
 import BattleController, { BattleState } from './game/BattleController.js';
+import AudioManager from './audio/AudioManager.js';
+import SoundConfig from './audio/SoundConfig.js';
 import mockCharacter from './data/mockCharacter.js';
 import mockEnemy from './data/mockEnemy.js';
 
@@ -80,6 +82,10 @@ async function init() {
   const loadedCount = await assetManager.loadAll();
   console.log(`Assets loaded: ${loadedCount} / ${assetManager.count}`);
 
+  // 1b. AudioManager — initialize with sound config
+  AudioManager.init(SoundConfig);
+  console.log('[AudioManager] Sound system ready.');
+
   // 2. CanvasApp
   const app = new CanvasApp(null, {
     autoResize: true,
@@ -92,6 +98,7 @@ async function init() {
 
   // 4. BattleScene — the UI
   const scene = new BattleScene(mockCharacter, mockEnemy, assetManager, battleController);
+  scene.setAudioManager(AudioManager);
 
   if (DEBUG_UI_LAYOUT) {
     setDebugRecursive(scene, true);
