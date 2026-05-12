@@ -37,7 +37,7 @@ const warriorCharacter = {
     },
     {
       name: 'Defend',
-      description: 'Gain 5 armor.',
+      description: 'Gain 5 armor',
       icon: 'skill_defend',
       sound: 'skill_defend',
       cost: { blue: 5 },
@@ -66,7 +66,7 @@ const mageCharacter = {
   skills: [
     {
       name: 'Fracture',
-      description: 'Destroy 1 row.',
+      description: 'Destroy 1 row',
       icon: 'skill_fracture',
       sound: 'skill_fracture',
       effectType: 'destroy_tiles_row',
@@ -76,7 +76,7 @@ const mageCharacter = {
     },
     {
       name: 'Explode!',
-      description: 'Destroy tiles in a 3x3 area.',
+      description: 'Destroy tiles in a 3x3 area',
       icon: 'skill_explode',
       sound: 'skill_explode',
       effectType: 'destroy_tiles',
