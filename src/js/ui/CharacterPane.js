@@ -84,7 +84,7 @@ export default class CharacterPane extends UIPanel {
     // ── 1. Unified identity card ── two columns: portrait | everything else ──
     const headerCard = new UIContainer();
     headerCard.direction = 'row';
-    headerCard.gap = 14;
+    headerCard.gap = 30;
     headerCard.alignItems = 'start';
     headerCard.padding = { top: 2, right: 4, bottom: 6, left: 4 };
     headerCard.height = 178;
@@ -104,13 +104,13 @@ export default class CharacterPane extends UIPanel {
     rightCol.direction = 'column';
     rightCol.gap = 0;
     rightCol.flexGrow = 1;
-    rightCol.padding = { top: 4 };
+    rightCol.padding = { top: 10, right: 15 };
 
     // Name
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: 26,
-      color: '#e4e4d9',
+      color: '#d0d0c4',
       bold: true,
       alignH: 'left',
       alignV: 'center',
@@ -135,7 +135,7 @@ export default class CharacterPane extends UIPanel {
     const titleDivider = new UIContainer();
     titleDivider.setStyle({
       height: 2,
-      background: '#4a3a2a',
+      background: '#989898',
       margin: { top: 6, bottom: 6 },
       cornerRadius: 1,
     });
@@ -145,7 +145,7 @@ export default class CharacterPane extends UIPanel {
     const healthLabel = new UIText('HEALTH');
     healthLabel.setStyle({
       fontSize: 11,
-      color: '#777766',
+      color: '#d4d4cd',
       bold: true,
       alignH: 'left',
       alignV: 'center',
@@ -347,7 +347,7 @@ export default class CharacterPane extends UIPanel {
     this._skillsTitle = new UIText('Skills');
     this._skillsTitle.setStyle({
       fontSize: 18,
-      color: '#e4e4d9',
+      color: '#d0d0c4',
       bold: true,
       alignH: 'center',
       alignV: 'center',
