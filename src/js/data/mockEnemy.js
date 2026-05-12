@@ -13,7 +13,7 @@ const mockEnemy = {
   attack: 1,
   armor: 0,
   mana: {
-    red: 5,
+    red: 0,
     blue: 0,
     green: 0,
     yellow: 0,
