@@ -173,6 +173,7 @@ class _AudioManager {
 
     // Stop any currently playing music with optional fade
     if (this._currentMusicHowl && this._currentMusicId !== null) {
+      this._currentMusicHowl.off('end', undefined, this._currentMusicId);
       this._currentMusicHowl.stop();
       this._currentMusicHowl = null;
       this._currentMusicId = null;
@@ -193,7 +194,21 @@ class _AudioManager {
 
     const id = howl.play();
     if (id !== null && id !== undefined) {
-      howl.loop(true, id);
+      // Use manual event-based looping instead of Howler's native loop(true)
+      // to avoid potential freeze/hang bugs with MP3 gapless looping in
+      // certain browser/Howler combinations.
+      const self = this;
+      howl.on('end', function restartLoop() {
+        // Only re-loop if this is still the current music
+        if (self._currentMusicKey === key && self._currentMusicHowl === howl) {
+          const newId = howl.play();
+          if (newId !== null && newId !== undefined) {
+            self._currentMusicId = newId;
+            howl.volume(effectiveVolume, newId);
+            howl.on('end', restartLoop, newId);
+          }
+        }
+      }, id);
 
       if (fadeIn > 0) {
         howl.volume(0, id);

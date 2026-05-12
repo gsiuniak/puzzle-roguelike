@@ -66,6 +66,14 @@ export default class BattleScene extends UIPanel {
      */
     this._previousBattleState = null;
 
+    /**
+     * Suppress the very first "player turn" SFX that fires when the battle
+     * boots (the TURN_INTRO for the first player turn is automatic, not
+     * something the player should hear as a "new turn" announcement).
+     * @type {boolean}
+     */
+    this._suppressFirstTurnSfx = true;
+
     // Child references
     this._playerPane = null;
     this._enemyPane = null;
@@ -418,8 +426,14 @@ export default class BattleScene extends UIPanel {
     this._updateMusicFromState(state.state);
 
     // ── Play SFX for turn announcement ──
+    // Suppress the very first player-turn SFX (the battle boots into
+    // PLAYER_TURN automatically; the player shouldn't hear a "new turn"
+    // sound for it).
     if (state.turnAnnouncement && this._audioManager) {
-      this._audioManager.playSfx('sfx_new_turn');
+      if (!this._suppressFirstTurnSfx) {
+        this._audioManager.playSfx('sfx_new_turn');
+      }
+      this._suppressFirstTurnSfx = false;
     }
 
     // ── Spawn turn announcement effect ──

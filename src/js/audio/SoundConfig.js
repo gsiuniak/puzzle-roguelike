@@ -94,7 +94,7 @@ const SOUNDS = {
     category: AudioCategory.SFX,
   },
   sfx_tile_hover: {
-    src: ['assets/audio/sfx/tile_hover.mp3'],
+    src: ['assets/audio/sfx/tile_hover2.mp3'],
     category: AudioCategory.SFX,
   },
   sfx_damage_taken: {

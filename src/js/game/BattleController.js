@@ -148,11 +148,13 @@ export default class BattleController {
     this._pendingShakeIntensity = 0;
 
     /**
-     * Set when skull damage is dealt during resolution. The scene
+     * Counter for skull damage events during resolution. The scene
      * reads and clears this each frame to play skull_damage SFX.
-     * @type {boolean}
+     * Using a counter instead of a boolean so rapid cascade events
+     * are not lost between getState() calls.
+     * @type {number}
      */
-    this._skullDamageDealt = false;
+    this._skullDamageCount = 0;
 
     // ── Enemy turn ──
     this._enemyTimer = 0;
@@ -199,9 +201,9 @@ export default class BattleController {
     const shakeIntensity = this._pendingShakeIntensity;
     this._pendingShakeIntensity = 0;
 
-    // Capture skull damage flag and clear so scene plays SFX once.
-    const skullDamageDealt = this._skullDamageDealt;
-    this._skullDamageDealt = false;
+    // Capture skull damage count and clear so scene plays SFX.
+    const skullDamageDealt = this._skullDamageCount > 0;
+    this._skullDamageCount = 0;
 
     // Capture turn announcement and clear so scene spawns once per intro.
     const turnAnnouncement = this._turnAnnouncement;
@@ -500,7 +502,7 @@ export default class BattleController {
       const r = this.resolver.applyDamage(targetState, rewards.skullDamage);
       this.log.add(`Destroyed skulls deal ${r.actualDamage} damage to ${targetState.name}.`);
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
-      this._skullDamageDealt = true;
+      this._skullDamageCount++;
     }
 
     // 4. Capture tile types BEFORE removal for particle burst effects
@@ -700,7 +702,7 @@ export default class BattleController {
       this.log.add(`Skull damage: ${r.actualDamage} dealt.`);
       // Trigger screen shake scaled by damage % of target's max HP
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
-      this._skullDamageDealt = true;
+      this._skullDamageCount++;
     }
 
     for (const [color, count] of Object.entries(a.mana)) {
