@@ -14,7 +14,7 @@ const mockCharacter = {
   attack: 1,
   armor: 0,
   mana: {
-    red: 5,
+    red: 0,
     blue: 5,
     green: 0,
     yellow: 0,
