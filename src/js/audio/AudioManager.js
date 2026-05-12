@@ -201,10 +201,14 @@ class _AudioManager {
       howl.on('end', function restartLoop() {
         // Only re-loop if this is still the current music
         if (self._currentMusicKey === key && self._currentMusicHowl === howl) {
+          // Recompute effective volume in case volume settings changed
+          const currentEffVolume = self._muted
+            ? 0
+            : volume * self._musicVolume * self._masterVolume;
           const newId = howl.play();
           if (newId !== null && newId !== undefined) {
             self._currentMusicId = newId;
-            howl.volume(effectiveVolume, newId);
+            howl.volume(currentEffVolume, newId);
             howl.on('end', restartLoop, newId);
           }
         }
