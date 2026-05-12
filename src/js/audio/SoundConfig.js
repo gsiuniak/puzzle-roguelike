@@ -133,6 +133,16 @@ const SOUNDS = {
     category: AudioCategory.SFX,
   },
 
+  // ── Character Select ────────────────────────────────────
+  character_select_pick: {
+    src: ['assets/audio/sfx/character_select/character_select_pick.mp3'],
+    category: AudioCategory.SFX,
+  },
+  character_select_confirm: {
+    src: ['assets/audio/sfx/character_select/character_select_confirm.mp3'],
+    category: AudioCategory.SFX,
+  },
+
   // ── UI ──────────────────────────────────────────────────
   ui_button_hover: {
     src: ['assets/audio/ui/button_hover.mp3'],

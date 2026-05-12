@@ -533,6 +533,9 @@ export default class CharacterSelectScene extends UIPanel {
     if (newIndex < 0 || newIndex >= this._definitions.length) return;
     if (newIndex === this._selectedIndex) return;
 
+    // Play character pick sound
+    AudioManager.playSfx('character_select_pick');
+
     // Start cross-fade from current to new splash
     const prevDef = this._getSelectedDef();
     this._prevSplashKey = prevDef ? prevDef.splashKey : null;
@@ -700,6 +703,9 @@ export default class CharacterSelectScene extends UIPanel {
 
     const sm = this._sceneManager;
     if (!sm) return;
+
+    // Play confirm sound
+    AudioManager.playSfx('character_select_confirm');
 
     // Deep-clone character data so runtime state does not mutate the definition
     const playerClone = JSON.parse(JSON.stringify(def.characterData));
