@@ -342,6 +342,8 @@ export default class BattleController {
     // Record resolve sound for immediate skills
     this._setSkillSound(skill);
 
+    // Check for game over before proceeding to next turn
+    if (this._checkGameOver()) return true;
     this._endTurn('player');
     return true;
   }
@@ -525,6 +527,8 @@ export default class BattleController {
       this.log.add(`Destroyed skulls deal ${r.actualDamage} damage to ${targetState.name}.`);
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
+      // Check for immediate game over — don't enter cascade if target died
+      if (this._checkGameOver()) return;
     }
 
     // 4. Capture tile types BEFORE removal for particle burst effects
@@ -725,6 +729,8 @@ export default class BattleController {
       // Trigger screen shake scaled by damage % of target's max HP
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
+      // Check for immediate game over — stop cascade if target died
+      if (this._checkGameOver()) return;
     }
 
     for (const [color, count] of Object.entries(a.mana)) {
@@ -940,6 +946,8 @@ export default class BattleController {
       // Record resolve sound for enemy skills
       this._setSkillSound(skill);
 
+      // Check for game over before proceeding to next turn
+      if (this._checkGameOver()) return;
       this._endTurn('enemy');
       return;
     }
