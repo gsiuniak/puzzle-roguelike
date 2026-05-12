@@ -107,7 +107,7 @@ export default class CharacterSelectScene extends UIPanel {
     this._infoPanel.direction = 'column';
     this._infoPanel.alignItems = 'center';
     this._infoPanel.gap = 10;
-    this._infoPanel.padding = { top: 32, right: 44, bottom: 32, left: 44 };
+    this._infoPanel.padding = { top: 32, right: 44, bottom: 48, left: 44 };
     this._infoPanel.smoothing = true;
     this.addChild(this._infoPanel);
 
@@ -362,6 +362,7 @@ export default class CharacterSelectScene extends UIPanel {
     skillsRow.alignItems = 'center';
     skillsRow.gap = 36;
     skillsRow.height = 90;
+    skillsRow.margin = { top: -5 };
 
     for (const skillData of skills) {
       const skillBlock = this._buildSkillBlock(skillData, am);
