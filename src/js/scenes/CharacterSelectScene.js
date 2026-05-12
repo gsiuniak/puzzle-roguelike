@@ -144,8 +144,8 @@ export default class CharacterSelectScene extends UIPanel {
 
     this._chooseButton = new UIImage('character_select_choose_hero_button', null);
     this._chooseButton.setStyle({
-      width: 240,
-      height: 64,
+      width: 320,
+      height: 80,
       fitMode: 'contain',
       imageAlignH: 'center',
       imageAlignV: 'center',
@@ -239,7 +239,7 @@ export default class CharacterSelectScene extends UIPanel {
 
     // ── Divider ─────────────────────────────────────────
     const divider1 = new UIImage('character_select_divider', am);
-    divider1.setStyle({ widthPercent: 0.78, height: 8, fitMode: 'stretch' });
+    divider1.setStyle({ widthPercent: 0.78, height: 15, fitMode: 'stretch' });
     panel.addChild(divider1);
 
     // ── Health + mana single centered row ───────────────
@@ -251,7 +251,7 @@ export default class CharacterSelectScene extends UIPanel {
     statManaRow.justifyContent = 'center';
     statManaRow.alignItems = 'center';
     statManaRow.gap = 12;
-    statManaRow.height = 36;
+    statManaRow.height = 25;
 
     // Heart icon + health value group
     const heartIcon = new UIImage('character_select_heart', am);
@@ -339,7 +339,7 @@ export default class CharacterSelectScene extends UIPanel {
     const skillsTitle = new UIText('Starting Skills');
     skillsTitle.setStyle({
       fontSize: 16,
-      color: '#d0d0c4',
+      color: '#ccaa77',
       bold: true,
       alignH: 'center',
       alignV: 'center',
@@ -359,9 +359,9 @@ export default class CharacterSelectScene extends UIPanel {
     const skillsRow = new UIContainer();
     skillsRow.direction = 'row';
     skillsRow.justifyContent = 'center';
-    skillsRow.alignItems = 'start';
+    skillsRow.alignItems = 'center';
     skillsRow.gap = 36;
-    skillsRow.height = 110;
+    skillsRow.height = 90;
 
     for (const skillData of skills) {
       const skillBlock = this._buildSkillBlock(skillData, am);
@@ -379,41 +379,48 @@ export default class CharacterSelectScene extends UIPanel {
    */
   _buildSkillBlock(skillData, am) {
     const block = new UIContainer();
-    block.direction = 'column';
+    block.direction = 'row';
     block.alignItems = 'center';
-    block.gap = 5;
+    block.gap = 12;
     block.width = 180;
-    block.height = 110;
+    block.height = 80;
 
-    // Skill icon — large enough to breathe
+    // Column 1: Skill icon
     const iconKey = skillData.icon || 'placeholder';
     const icon = new UIImage(iconKey, am);
-    icon.setStyle({ width: 64, height: 64, fitMode: 'contain' });
+    icon.setStyle({ width: 80, height: 80, fitMode: 'contain' });
     block.addChild(icon);
 
-    // Skill name — clear, readable
+    // Column 2: Name + Description in their own rows
+    const textCol = new UIContainer();
+    textCol.direction = 'column';
+    textCol.justifyContent = 'center';
+    textCol.alignItems = 'start';
+    textCol.gap = 4;
+
     const nameText = new UIText(skillData.name || '');
     nameText.setStyle({
       fontSize: 16,
-      color: '#e4e4d9',
+      color: '#e8d8b0',
       bold: true,
-      alignH: 'center',
+      alignH: 'left',
       alignV: 'center',
-      height: 20,
+      height: 8,
     });
-    block.addChild(nameText);
+    textCol.addChild(nameText);
 
-    // Skill description — comfortable size
     const descText = new UIText(skillData.description || '');
     descText.setStyle({
       fontSize: 12,
       color: '#c0b890',
-      alignH: 'center',
+      alignH: 'left',
       alignV: 'center',
       height: 28,
-      maxWidth: 170,
+      maxWidth: 100,
     });
-    block.addChild(descText);
+    textCol.addChild(descText);
+
+    block.addChild(textCol);
 
     return block;
   }
