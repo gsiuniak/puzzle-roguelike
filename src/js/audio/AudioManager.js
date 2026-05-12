@@ -63,7 +63,7 @@ class _AudioManager {
 
     // ── Volume state (0..1) ────────────────────────────
     this._masterVolume = 1.0;
-    this._musicVolume = 1.0;
+    this._musicVolume = 0.3;
     this._sfxVolume = 1.0;
     this._uiVolume = 1.0;
     this._ambientVolume = 1.0;

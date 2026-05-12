@@ -1,16 +1,19 @@
 /**
  * main.js — entry point for the match-3 battle game.
  *
- * Creates Canvas, AssetManager, BattleController, BattleScene,
- * wires input (board drag/swap + skill clicks), and runs the game loop.
+ * Creates shared services (Canvas, AssetManager, InputManager, GameLoop,
+ * AudioManager), then instantiates the SceneManager with TitleScreen
+ * and BattleScene. The game boots into the title screen first.
  */
 
 import CanvasApp from './engine/CanvasApp.js';
 import GameLoop from './engine/GameLoop.js';
 import AssetManager from './engine/AssetManager.js';
 import InputManager from './engine/InputManager.js';
+import SceneManager from './scenes/SceneManager.js';
+import TitleScreen from './scenes/TitleScreen.js';
 import BattleScene from './ui/BattleScene.js';
-import BattleController, { BattleState } from './game/BattleController.js';
+import BattleController from './game/BattleController.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
 import mockCharacter from './data/mockCharacter.js';
@@ -21,6 +24,7 @@ const DEBUG_UI_LAYOUT = false;
 
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
+  title_screen:               'assets/sprites/title/title_screen.png',
   battle_background_default:  'assets/sprites/character_pane/background/battle_background_default.png',
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
@@ -65,11 +69,6 @@ const ASSET_MAP = {
 const MIN_WIDTH = 1024;
 const MIN_HEIGHT = 640;
 
-// ── Board drag/swap input state ────────────────────────
-let selectedCell = null;   // { col, row } | null
-let hoveredCell = null;    // { col, row } | null
-let dragStartCell = null;  // { col, row } | null
-
 // ── Initialize ─────────────────────────────────────────
 async function init() {
   // 1. AssetManager
@@ -82,193 +81,54 @@ async function init() {
   const loadedCount = await assetManager.loadAll();
   console.log(`Assets loaded: ${loadedCount} / ${assetManager.count}`);
 
-  // 1b. AudioManager — initialize with sound config
+  // 2. AudioManager — initialize with sound config
   AudioManager.init(SoundConfig);
   console.log('[AudioManager] Sound system ready.');
 
-  // 2. CanvasApp
+  // 3. CanvasApp
   const app = new CanvasApp(null, {
     autoResize: true,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
   });
 
-  // 3. BattleController — the game logic engine
-  const battleController = new BattleController(mockCharacter, mockEnemy);
-
-  // 4. BattleScene — the UI
-  const scene = new BattleScene(mockCharacter, mockEnemy, assetManager, battleController);
-  scene.setAudioManager(AudioManager);
-
-  if (DEBUG_UI_LAYOUT) {
-    setDebugRecursive(scene, true);
-  }
-
-  // 5. InputManager
+  // 4. InputManager
   const input = new InputManager(app.canvas);
-  input.setRootUI(scene);
 
-  // ── Wire skill clicks ────────────────────────────────
-  const playerPane = scene.getPlayerPane();
-  if (playerPane) {
-    playerPane.onSkillClick = (skill) => {
-      battleController.tryPlayerSkill(skill);
-    };
-  }
-
-  // ── Wire board drag/swap input ───────────────────────
-  const board = scene.getBoard();
-
-  /** Allow board input during PLAYER_TURN (swap) or TARGETING (target tile) */
-  function canAct() {
-    return battleController.state === BattleState.PLAYER_TURN
-        || battleController.state === BattleState.TARGETING;
-  }
-
-  /** True when the game expects the player to act on the board */
-  function isTargeting() {
-    return battleController.state === BattleState.TARGETING;
-  }
-
-  input.on('mousedown', (x, y) => {
-    if (!board) return;
-
-    if (isTargeting()) {
-      // During targeting: click on board tile executes the skill
-      const cell = board.screenToCell(x, y);
-      if (cell) {
-        battleController.tryTargetTile(cell.col, cell.row);
-      }
-      return;
-    }
-
-    if (!canAct()) return;
-    const cell = board.screenToCell(x, y);
-    if (cell) {
-      selectedCell = cell;
-      dragStartCell = cell;
-      board.selectedCell = cell;
-    } else {
-      // Click outside board — try skill hit test
-      const hit = scene.hitTest(x, y);
-      if (hit && hit.onClick) {
-        hit.onClick();
-      }
-      selectedCell = null;
-      dragStartCell = null;
-      if (board) board.selectedCell = null;
-    }
-  });
-
-  input.on('mousemove', (x, y) => {
-    if (!board) return;
-
-    if (isTargeting()) {
-      // During targeting: update hover for overlay
-      const cell = board.screenToCell(x, y);
-      if (cell) {
-        battleController.setTargetHover(cell.col, cell.row);
-      } else {
-        battleController.setTargetHover(null, null);
-      }
-      board.hoveredCell = cell;
-      return;
-    }
-
-    const cell = canAct() ? board.screenToCell(x, y) : null;
-    hoveredCell = cell;
-    board.hoveredCell = cell;
-
-    // Skill row hover feedback
-    const hit = scene.hitTest(x, y);
-    if (playerPane) {
-      for (const row of playerPane._skillRows) {
-        row._hovered = (hit === row && row.onClick && canAct());
-      }
-    }
-  });
-
-  input.on('mouseup', (x, y) => {
-    if (!board || !selectedCell || !canAct() || isTargeting()) {
-      selectedCell = null;
-      dragStartCell = null;
-      if (board) board.selectedCell = null;
-      return;
-    }
-
-    const releaseCell = board.screenToCell(x, y);
-
-    if (releaseCell && dragStartCell) {
-      const dc = Math.abs(releaseCell.col - dragStartCell.col);
-      const dr = Math.abs(releaseCell.row - dragStartCell.row);
-
-      if ((dc === 1 && dr === 0) || (dc === 0 && dr === 1)) {
-        battleController.tryPlayerSwap(
-          dragStartCell.col, dragStartCell.row,
-          releaseCell.col, releaseCell.row
-        );
-      }
-    }
-
-    selectedCell = null;
-    dragStartCell = null;
-    if (board) board.selectedCell = null;
-  });
-
-  // ── Right-click / Escape to cancel targeting ────────
-  input.canvas.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    if (isTargeting()) {
-      battleController.cancelTargeting();
-    }
-  });
-
-  input.canvas.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isTargeting()) {
-      battleController.cancelTargeting();
-    }
-  });
-  // Canvas needs tabindex for keydown to work
-  input.canvas.setAttribute('tabindex', '0');
-  input.canvas.style.outline = 'none';
-
-  // ── Layout ───────────────────────────────────────────
-  function layoutScene(canvasW, canvasH) {
-    scene.rect.x = 0;
-    scene.rect.y = 0;
-    scene.rect.w = canvasW;
-    scene.rect.h = canvasH;
-    scene.layoutChildren();
-  }
-
-  app.onResize = (w, h) => {
-    layoutScene(w, h);
-  };
-  layoutScene(app.width, app.height);
-
-  // ── Game loop ────────────────────────────────────────
+  // 5. GameLoop
   const loop = new GameLoop();
 
-  loop.start((dt) => {
-    // dt is in milliseconds from GameLoop
-    // Update game logic
-    battleController.update(dt);
+  // 6. SceneManager — owns all shared services
+  const sceneManager = new SceneManager(app, loop, input, assetManager);
+  sceneManager.setAudioManager(AudioManager);
 
-    // Update UI from game state
-    scene.updateFromController();
+  // 7. BattleController — the game logic engine (shared across scenes)
+  const battleController = new BattleController(mockCharacter, mockEnemy);
 
-    // Update scene (animations, etc.)
-    scene.update(dt);
+  // 8. TitleScreen
+  const titleScreen = new TitleScreen();
+  titleScreen.assetManager = assetManager;
 
-    // Layout (recalculate on every frame for responsiveness)
-    layoutScene(app.width, app.height);
+  // 9. BattleScene
+  const battleScene = new BattleScene(mockCharacter, mockEnemy, assetManager, battleController);
+  battleScene.setAudioManager(AudioManager);
 
-    // Render
-    app.clear('#1a0a0a');
-    scene.render(app.ctx);
-  });
+  if (DEBUG_UI_LAYOUT) {
+    setDebugRecursive(battleScene, true);
+  }
 
-  console.log('Match-3 Battle running!');
+  // 10. Register scenes
+  sceneManager.registerScene('TitleScreen', titleScreen);
+  sceneManager.registerScene('BattleScene', battleScene);
+
+  // 11. Boot into title screen
+  sceneManager.switchTo('TitleScreen');
+
+  // 12. Start the game loop
+  sceneManager.start();
+
+  console.log('Match-3 Battle ready!');
+  console.log('  - Press any key or click to start');
   console.log('  - Drag adjacent tiles to swap');
   console.log('  - Match 3+ tiles to gain mana / deal skull damage');
   console.log('  - Match 5+ connected tiles for extra turn');

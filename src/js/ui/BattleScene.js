@@ -56,6 +56,9 @@ export default class BattleScene extends UIPanel {
     /** @type {import('../audio/AudioManager.js').default|null} */
     this._audioManager = null;
 
+    /** @type {import('../scenes/SceneManager.js').default|null} */
+    this._sceneManager = null;
+
     /**
      * Track previous battle state so we only trigger music on transitions,
      * not every frame.
@@ -82,6 +85,21 @@ export default class BattleScene extends UIPanel {
     // ── Screen shake ──
     /** @type {ScreenShake} */
     this._screenShake = new ScreenShake();
+
+    // ── Board drag/swap input state ──
+    /** @type {{col:number, row:number}|null} */
+    this._selectedCell = null;
+    /** @type {{col:number, row:number}|null} */
+    this._hoveredCell = null;
+    /** @type {{col:number, row:number}|null} */
+    this._dragStartCell = null;
+
+    // ── Bound input handlers (for cleanup) ──
+    this._onMouseDown = null;
+    this._onMouseMove = null;
+    this._onMouseUp = null;
+    this._onContextMenu = null;
+    this._onKeyDown = null;
 
     if (playerData || enemyData) {
       this.buildHierarchy();
@@ -192,6 +210,192 @@ export default class BattleScene extends UIPanel {
     mainRow.addChild(this._enemyPane);
 
     this.addChild(mainRow);
+  }
+
+  // ── Scene lifecycle ──────────────────────────────────
+
+  /**
+   * Called by SceneManager when this scene becomes active.
+   * Wires all battle-specific input handlers.
+   */
+  onEnter() {
+    const input = this._sceneManager._input;
+    if (!input) return;
+
+    // Reset drag/swap state
+    this._selectedCell = null;
+    this._hoveredCell = null;
+    this._dragStartCell = null;
+
+    // Create bound handlers (stored for cleanup in onExit)
+    this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
+    this._onMouseMove = (x, y) => this._handleMouseMove(x, y);
+    this._onMouseUp   = (x, y) => this._handleMouseUp(x, y);
+    this._onContextMenu = (e) => this._handleContextMenu(e);
+    this._onKeyDown     = (e) => this._handleKeyDown(e);
+
+    input.on('mousedown', this._onMouseDown);
+    input.on('mousemove', this._onMouseMove);
+    input.on('mouseup',   this._onMouseUp);
+
+    input.canvas.addEventListener('contextmenu', this._onContextMenu);
+    input.canvas.addEventListener('keydown', this._onKeyDown);
+    input.canvas.setAttribute('tabindex', '0');
+    input.canvas.style.outline = 'none';
+    input.canvas.focus();
+
+    // Wire skill click callbacks
+    const playerPane = this._playerPane;
+    if (playerPane && this._battleController) {
+      playerPane.onSkillClick = (skill) => {
+        this._battleController.tryPlayerSkill(skill);
+      };
+    }
+  }
+
+  /**
+   * Called by SceneManager when this scene is about to be left.
+   * Removes all battle input handlers.
+   */
+  onExit() {
+    const input = this._sceneManager._input;
+    if (!input) return;
+
+    if (this._onMouseDown) {
+      input.off('mousedown', this._onMouseDown);
+      this._onMouseDown = null;
+    }
+    if (this._onMouseMove) {
+      input.off('mousemove', this._onMouseMove);
+      this._onMouseMove = null;
+    }
+    if (this._onMouseUp) {
+      input.off('mouseup', this._onMouseUp);
+      this._onMouseUp = null;
+    }
+    if (this._onContextMenu) {
+      input.canvas.removeEventListener('contextmenu', this._onContextMenu);
+      this._onContextMenu = null;
+    }
+    if (this._onKeyDown) {
+      input.canvas.removeEventListener('keydown', this._onKeyDown);
+      this._onKeyDown = null;
+    }
+  }
+
+  // ── Input helpers ────────────────────────────────────
+
+  /** Allow board input during PLAYER_TURN (swap) or TARGETING (target tile) */
+  _canAct() {
+    if (!this._battleController) return false;
+    return this._battleController.state === BattleState.PLAYER_TURN
+        || this._battleController.state === BattleState.TARGETING;
+  }
+
+  /** True when the game expects the player to act on the board */
+  _isTargeting() {
+    if (!this._battleController) return false;
+    return this._battleController.state === BattleState.TARGETING;
+  }
+
+  // ── Input handlers ───────────────────────────────────
+
+  _handleMouseDown(x, y) {
+    const board = this._board;
+    if (!board) return;
+
+    if (this._isTargeting()) {
+      const cell = board.screenToCell(x, y);
+      if (cell) {
+        this._battleController.tryTargetTile(cell.col, cell.row);
+      }
+      return;
+    }
+
+    if (!this._canAct()) return;
+    const cell = board.screenToCell(x, y);
+    if (cell) {
+      this._selectedCell = cell;
+      this._dragStartCell = cell;
+      board.selectedCell = cell;
+    } else {
+      const hit = this.hitTest(x, y);
+      if (hit && hit.onClick) {
+        hit.onClick();
+      }
+      this._selectedCell = null;
+      this._dragStartCell = null;
+      if (board) board.selectedCell = null;
+    }
+  }
+
+  _handleMouseMove(x, y) {
+    const board = this._board;
+    if (!board) return;
+
+    if (this._isTargeting()) {
+      const cell = board.screenToCell(x, y);
+      if (cell) {
+        this._battleController.setTargetHover(cell.col, cell.row);
+      } else {
+        this._battleController.setTargetHover(null, null);
+      }
+      board.hoveredCell = cell;
+      return;
+    }
+
+    const cell = this._canAct() ? board.screenToCell(x, y) : null;
+    this._hoveredCell = cell;
+    board.hoveredCell = cell;
+
+    const hit = this.hitTest(x, y);
+    const playerPane = this._playerPane;
+    if (playerPane) {
+      for (const row of playerPane._skillRows) {
+        row._hovered = (hit === row && row.onClick && this._canAct());
+      }
+    }
+  }
+
+  _handleMouseUp(x, y) {
+    const board = this._board;
+    if (!board || !this._selectedCell || !this._canAct() || this._isTargeting()) {
+      this._selectedCell = null;
+      this._dragStartCell = null;
+      if (board) board.selectedCell = null;
+      return;
+    }
+
+    const releaseCell = board.screenToCell(x, y);
+
+    if (releaseCell && this._dragStartCell) {
+      const dc = Math.abs(releaseCell.col - this._dragStartCell.col);
+      const dr = Math.abs(releaseCell.row - this._dragStartCell.row);
+
+      if ((dc === 1 && dr === 0) || (dc === 0 && dr === 1)) {
+        this._battleController.tryPlayerSwap(
+          this._dragStartCell.col, this._dragStartCell.row,
+          releaseCell.col, releaseCell.row
+        );
+      }
+    }
+
+    this._selectedCell = null;
+    this._dragStartCell = null;
+    if (board) board.selectedCell = null;
+  }
+
+  _handleContextMenu(e) {
+    e.preventDefault();
+    if (this._isTargeting()) {
+      this._battleController.cancelTargeting();
+    }
+  }
+
+  _handleKeyDown(e) {
+    if (e.key === 'Escape' && this._isTargeting()) {
+      this._battleController.cancelTargeting();
+    }
   }
 
   // ── Per-Frame Update from BattleController ──────────
@@ -429,6 +633,14 @@ export default class BattleScene extends UIPanel {
   // ── Update (override) ───────────────────────────────
 
   update(dt) {
+    // Update game logic first (battle state machine, AI, etc.)
+    if (this._battleController) {
+      this._battleController.update(dt);
+    }
+
+    // Sync UI state from game state
+    this.updateFromController();
+
     // Update children (standard UI tree update)
     super.update(dt);
 

@@ -1,14 +1,15 @@
 /**
- * InputManager — simple mouse/touch event handling with hit-testing.
+ * InputManager — simple mouse/touch/keyboard event handling with hit-testing.
  *
  * Provides:
  *   - mouse position (x, y)
- *   - click/mousedown/mouseup events
+ *   - click/mousedown/mouseup/mousemove/keydown events
  *   - hit testing delegation to a root UIElement tree
  *
  * Usage:
  *   const input = new InputManager(canvas);
  *   input.on('click', (x, y) => { ... });
+ *   input.on('keydown', (event) => { ... });
  *   input.setRootUI(rootUIElement); // for hit testing
  */
 export default class InputManager {
@@ -27,6 +28,7 @@ export default class InputManager {
       mousedown: [],
       mouseup: [],
       mousemove: [],
+      keydown: [],
     };
 
     // Bound handlers
@@ -34,12 +36,18 @@ export default class InputManager {
     this._handleMouseDown = this._onMouseDown.bind(this);
     this._handleMouseUp = this._onMouseUp.bind(this);
     this._handleMouseMove = this._onMouseMove.bind(this);
+    this._handleKeyDown = this._onKeyDown.bind(this);
+
+    // Make canvas focusable for keyboard events
+    this.canvas.setAttribute('tabindex', '0');
+    this.canvas.style.outline = 'none';
 
     // Attach canvas events
     this.canvas.addEventListener('click', this._handleClick);
     this.canvas.addEventListener('mousedown', this._handleMouseDown);
     this.canvas.addEventListener('mouseup', this._handleMouseUp);
     this.canvas.addEventListener('mousemove', this._handleMouseMove);
+    this.canvas.addEventListener('keydown', this._handleKeyDown);
 
     // Touch support
     this.canvas.addEventListener('touchstart', this._handleTouchStart.bind(this), { passive: false });
@@ -67,6 +75,13 @@ export default class InputManager {
     }
   }
 
+  /** Remove all event listeners (used during scene transitions) */
+  clearAllListeners() {
+    for (const key of Object.keys(this._listeners)) {
+      this._listeners[key] = [];
+    }
+  }
+
   _getPos(e) {
     const rect = this.canvas.getBoundingClientRect();
     // Canvas CSS size matches our logical coordinate space,
@@ -77,22 +92,29 @@ export default class InputManager {
     };
   }
 
-  _onClick(e) { this._fire('click', this._getPos(e)); }
+  _onClick(e) {
+    const pos = this._getPos(e);
+    this._fire('click', pos.x, pos.y);
+  }
   _onMouseDown(e) {
     const pos = this._getPos(e);
     this.mouseDown = true;
-    this._fire('mousedown', pos);
+    this._fire('mousedown', pos.x, pos.y);
   }
   _onMouseUp(e) {
     const pos = this._getPos(e);
     this.mouseDown = false;
-    this._fire('mouseup', pos);
+    this._fire('mouseup', pos.x, pos.y);
   }
   _onMouseMove(e) {
     const pos = this._getPos(e);
     this.mouseX = pos.x;
     this.mouseY = pos.y;
-    this._fire('mousemove', pos);
+    this._fire('mousemove', pos.x, pos.y);
+  }
+
+  _onKeyDown(e) {
+    this._fire('keydown', e);
   }
 
   _handleTouchStart(e) {
@@ -102,24 +124,23 @@ export default class InputManager {
       this.mouseX = pos.x;
       this.mouseY = pos.y;
       this.mouseDown = true;
-      this._fire('mousedown', pos);
+      this._fire('mousedown', pos.x, pos.y);
     }
   }
 
   _handleTouchEnd(e) {
     e.preventDefault();
-    const pos = { x: this.mouseX, y: this.mouseY };
     this.mouseDown = false;
-    this._fire('mouseup', pos);
-    this._fire('click', pos);
+    this._fire('mouseup', this.mouseX, this.mouseY);
+    this._fire('click', this.mouseX, this.mouseY);
   }
 
-  _fire(eventName, pos) {
+  _fire(eventName, ...args) {
     const arr = this._listeners[eventName];
     if (arr) {
       for (const cb of arr) {
         try {
-          cb(pos.x, pos.y);
+          cb(...args);
         } catch (e) {
           console.error(`InputManager: error in ${eventName} handler:`, e);
         }
@@ -142,6 +163,7 @@ export default class InputManager {
     this.canvas.removeEventListener('mousedown', this._handleMouseDown);
     this.canvas.removeEventListener('mouseup', this._handleMouseUp);
     this.canvas.removeEventListener('mousemove', this._handleMouseMove);
+    this.canvas.removeEventListener('keydown', this._handleKeyDown);
     this._listeners = {};
   }
 }

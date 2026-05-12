@@ -37,7 +37,7 @@ const SOUNDS = {
     category: AudioCategory.MUSIC,
     options: {
       loop: true,
-      volume: 0.65,
+      volume: 0.15,
       preload: true,
     },
   },
