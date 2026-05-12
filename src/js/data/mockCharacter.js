@@ -33,6 +33,7 @@ const mockCharacter = {
       name: 'Defend',
       description: 'Gain 5 armor.',
       icon: 'skill_defend',
+      sound: 'skill_defend',
       cost: { blue: 5 },
     }
   ],
