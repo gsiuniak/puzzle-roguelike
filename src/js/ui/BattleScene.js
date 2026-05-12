@@ -596,6 +596,19 @@ export default class BattleScene extends UIPanel {
     });
 
     this._floatingEffects.push(effect);
+
+    // Play match SFX — only for sound files that actually exist on disk
+    if (this._audioManager) {
+      if (typeId === 'skull') {
+        this._audioManager.playSfx('sfx_skull_damage');
+      } else if (count >= 5) {
+        this._audioManager.playSfx('sfx_match_5');
+      } else if (count >= 4) {
+        this._audioManager.playSfx('sfx_match_4');
+      } else {
+        this._audioManager.playSfx('sfx_match_3');
+      }
+    }
   }
 
   /**
