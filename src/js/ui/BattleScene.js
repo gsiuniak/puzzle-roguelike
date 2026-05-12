@@ -462,6 +462,13 @@ export default class BattleScene extends UIPanel {
       this._audioManager.playSfx('sfx_skull_damage');
     }
 
+    // ── Play skill resolve sound ──
+    // This is set by BattleController only when a skill actually resolves
+    // (not on button click, not on cancel). Safe no-op if skill has no sound.
+    if (state.pendingSkillSound && this._audioManager) {
+      this._audioManager.playSfx(state.pendingSkillSound);
+    }
+
     // ── Trigger screen shake for damage ──
     if (state.shakeIntensity && state.shakeIntensity > 0) {
       this._screenShake.trigger(state.shakeIntensity);

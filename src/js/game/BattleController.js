@@ -156,6 +156,14 @@ export default class BattleController {
      */
     this._skullDamageCount = 0;
 
+    /**
+     * Pending skill resolve sound key. Set when a skill actually resolves
+     * (not on button click). The scene reads and clears this each frame.
+     * If the skill has no `sound` field, remains null (no error).
+     * @type {string|null}
+     */
+    this._pendingSkillSound = null;
+
     // ── Enemy turn ──
     this._enemyTimer = 0;
     this._enemyFired = false;
@@ -214,6 +222,11 @@ export default class BattleController {
     const destroyedTiles = this._destroyedTilesThisStep;
     this._destroyedTilesThisStep = null;
 
+    // Capture pending skill resolve sound and clear so scene
+    // plays it once per skill resolution.
+    const pendingSkillSound = this._pendingSkillSound;
+    this._pendingSkillSound = null;
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -225,6 +238,7 @@ export default class BattleController {
       skullDamageDealt,
       turnAnnouncement,
       destroyedTiles,
+      pendingSkillSound,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -324,6 +338,10 @@ export default class BattleController {
     this._spendCost(this.playerState, skill);
     this._applyEffect(skill, 'player', effectType);
     this.log.add(`${this.playerState.name} uses ${skill.name}.`);
+
+    // Record resolve sound for immediate skills
+    this._setSkillSound(skill);
+
     this._endTurn('player');
     return true;
   }
@@ -394,6 +412,9 @@ export default class BattleController {
     this._targetHoverCell = null;
     this._targetingOverlayCells = [];
 
+    // Record resolve sound for targeted skills
+    this._setSkillSound(skill);
+
     // Execute based on effect type
     if (effectType === SKILL_EFFECT_TYPES.DESTROY_TILES || effectType === SKILL_EFFECT_TYPES.DESTROY_TILES_ROW) {
       this._executeDestroyTiles(area, col, row, skill.name);
@@ -404,6 +425,7 @@ export default class BattleController {
 
   /**
    * Cancel board targeting and return to PLAYER_TURN.
+   * No skill resolve sound is played — the skill was not executed.
    */
   cancelTargeting() {
     if (this.state !== BattleState.TARGETING) return false;
@@ -914,6 +936,10 @@ export default class BattleController {
       this._spendCost(this.enemyState, skill);
       this._applyEffect(skill, 'enemy');
       this.log.add(`${this.enemyState.name} uses ${skill.name}.`);
+
+      // Record resolve sound for enemy skills
+      this._setSkillSound(skill);
+
       this._endTurn('enemy');
       return;
     }
@@ -945,6 +971,17 @@ export default class BattleController {
   }
 
   // ── Skill Helpers ────────────────────────────────────
+
+  /**
+   * Record the skill's resolve sound key so the scene can play it.
+   * Safe to call with any skill — if skill.sound is missing, this is a no-op.
+   * @param {object} skill
+   */
+  _setSkillSound(skill) {
+    if (skill && typeof skill.sound === 'string' && skill.sound.length > 0) {
+      this._pendingSkillSound = skill.sound;
+    }
+  }
 
   _affordable(state, skill) {
     if (!skill.cost) return true;

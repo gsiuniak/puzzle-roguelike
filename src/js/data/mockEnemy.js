@@ -13,7 +13,7 @@ const mockEnemy = {
   attack: 1,
   armor: 0,
   mana: {
-    red: 0,
+    red: 5,
     blue: 0,
     green: 0,
     yellow: 0,
@@ -25,6 +25,7 @@ const mockEnemy = {
       name: 'Slash',
       description: 'Deal 5 damage.',
       icon: 'skill_slash',
+      sound: 'skill_slash',
       cost: { red: 5 },
     },
   ],

@@ -102,6 +102,28 @@ const SOUNDS = {
     category: AudioCategory.SFX,
   },
 
+  // ── Skill resolve sounds (played when skill effect resolves, NOT on button click) ──
+  skill_bash: {
+    src: ['assets/audio/sfx/skills/warrior/skill_bash.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_defend: {
+    src: ['assets/audio/sfx/skills/warrior/skill_defend.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_slash: {
+    src: ['assets/audio/sfx/weapon_skill.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_explode: {
+    src: ['assets/audio/sfx/skills/mage/skill_explode.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_fracture: {
+    src: ['assets/audio/sfx/skills/mage/skill_fracture.mp3'],
+    category: AudioCategory.SFX,
+  },
+
   // ── UI ──────────────────────────────────────────────────
   ui_button_hover: {
     src: ['assets/audio/ui/button_hover.mp3'],

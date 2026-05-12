@@ -87,7 +87,7 @@ const mockCharacter = {
     blue: 0,
     green: 0,
     yellow: 5,
-    purple: 0,
+    purple: 8,
   },
   portrait: 'mage', // maps to 'portrait_warrior' asset key
   skills: [
@@ -95,6 +95,7 @@ const mockCharacter = {
       name: 'Fracture',
       description: 'Destroy 1 row.',
       icon: 'skill_fracture',
+      sound: 'skill_fracture',
       effectType: 'destroy_tiles_row',
       targeting: 'board_tile',
       area: 1,
@@ -104,6 +105,7 @@ const mockCharacter = {
       name: 'Explode!',
       description: 'Destroy tiles in a 3x3 area.',
       icon: 'skill_explode',
+      sound: 'skill_explode',
       effectType: 'destroy_tiles',
       targeting: 'board_tile',
       area: { radius: 1 },
