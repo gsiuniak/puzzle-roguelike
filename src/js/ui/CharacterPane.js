@@ -84,16 +84,17 @@ export default class CharacterPane extends UIPanel {
     // ── 1. Unified identity card ── two columns: portrait | everything else ──
     const headerCard = new UIContainer();
     headerCard.direction = 'row';
-    headerCard.gap = 24;
+    headerCard.gap = 30;
     headerCard.alignItems = 'start';
-    headerCard.padding = { top: 4, right: 8, bottom: 8, left: 4 };
+    headerCard.padding = { top: 2, right: 4, bottom: 6, left: 4 };
+    headerCard.height = 178;
 
-    // Left column — large portrait anchoring the header
+    // Left column — large portrait
     const portraitKey = cd.portrait ? `portrait_${cd.portrait}` : 'placeholder';
     this._portrait = new UIImage(portraitKey, this._assetManager);
     this._portrait.setStyle({
-      width: 144,
-      height: 184,
+      width: 130,
+      height: 168,
       fitMode: 'cover',
     });
     headerCard.addChild(this._portrait);
@@ -103,39 +104,39 @@ export default class CharacterPane extends UIPanel {
     rightCol.direction = 'column';
     rightCol.gap = 0;
     rightCol.flexGrow = 1;
-    rightCol.padding = { top: 8, right: 12 };
+    rightCol.padding = { top: 10, right: 15 };
 
-    // Name — primary focus of the identity area
+    // Name
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
-      fontSize: 30,
+      fontSize: 26,
       color: '#d0d0c4',
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 36,
+      height: 32,
     });
     rightCol.addChild(this._nameText);
 
-    // Class + level — subtitle beneath name
+    // Class + level
     const classStr = cd.className ? `${cd.className}` : '';
     const levelStr = cd.level ? `  Lv.${cd.level}` : '';
     this._classText = new UIText(classStr + levelStr);
     this._classText.setStyle({
       fontSize: 14,
-      color: '#b8966c',
+      color: '#ccaa77',
       alignH: 'left',
       alignV: 'center',
-      height: 22,
+      height: 20,
     });
     rightCol.addChild(this._classText);
 
-    // Decorative divider beneath title area
+    // Decorative divider
     const titleDivider = new UIContainer();
     titleDivider.setStyle({
       height: 2,
-      background: '#6a5a4a',
-      margin: { top: 8, bottom: 8 },
+      background: '#989898',
+      margin: { top: 6, bottom: 6 },
       cornerRadius: 1,
     });
     rightCol.addChild(titleDivider);
@@ -144,15 +145,15 @@ export default class CharacterPane extends UIPanel {
     const healthLabel = new UIText('HEALTH');
     healthLabel.setStyle({
       fontSize: 11,
-      color: '#c4c4bb',
+      color: '#d4d4cd',
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 18,
+      height: 16,
     });
     rightCol.addChild(healthLabel);
 
-    // Compact, elegant HP bar — shorter, integrated into the layout
+    // Compact HP bar
     this._healthBar = new UIProgressBar();
     this._healthBar.setStyle({
       value: cd.hp ?? 0,
@@ -161,45 +162,45 @@ export default class CharacterPane extends UIPanel {
       backgroundColor: '#1a0e0e',
       label: `${cd.hp ?? 0} / ${cd.maxHp ?? 0}`,
       labelColor: '#ffffff',
-      labelFontSize: 12,
-      borderColor: '#443322',
+      labelFontSize: 13,
+      borderColor: '#554433',
       borderWidth: 1,
-      cornerRadius: 3,
-      height: 22,
+      cornerRadius: 4,
+      height: 28,
       widthPercent: 1,
-      margin: { top: 2, bottom: 10 },
+      margin: { top: 2, bottom: 8 },
     });
     rightCol.addChild(this._healthBar);
 
-    // Stats row — two balanced blocks with a vertical divider
+    // Stats row — two balanced blocks with vertical divider
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
     statsRow.justifyContent = 'center';
     statsRow.alignItems = 'center';
-    statsRow.gap = 6;
-    statsRow.height = 56;
+    statsRow.gap = 4;
+    statsRow.height = 50;
 
     // Attack block
     const attackBlock = new UIContainer();
     attackBlock.direction = 'column';
     attackBlock.alignItems = 'center';
-    attackBlock.gap = 3;
-    attackBlock.width = 100;
+    attackBlock.gap = 2;
+    attackBlock.width = 85;
 
     const attackIconRow = new UIContainer();
     attackIconRow.direction = 'row';
-    attackIconRow.gap = 6;
+    attackIconRow.gap = 5;
     attackIconRow.alignItems = 'center';
     attackIconRow.justifyContent = 'center';
-    attackIconRow.height = 22;
+    attackIconRow.height = 20;
 
     this._attackIcon = new UIImage('icon_attack', this._assetManager);
-    this._attackIcon.setStyle({ width: 22, height: 22, fitMode: 'contain' });
+    this._attackIcon.setStyle({ width: 18, height: 18, fitMode: 'contain' });
     attackIconRow.addChild(this._attackIcon);
 
     this._attackLabel = new UIText('ATTACK');
     this._attackLabel.setStyle({
-      fontSize: 12,
+      fontSize: 11,
       color: '#cc9966',
       bold: true,
       alignH: 'left',
@@ -211,12 +212,12 @@ export default class CharacterPane extends UIPanel {
 
     this._attackValue = new UIText(String(cd.attack ?? 0));
     this._attackValue.setStyle({
-      fontSize: 26,
+      fontSize: 22,
       color: '#ffffff',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      height: 30,
+      height: 26,
     });
     attackBlock.addChild(this._attackValue);
 
@@ -226,10 +227,10 @@ export default class CharacterPane extends UIPanel {
     const vDivider = new UIContainer();
     vDivider.setStyle({
       width: 2,
-      height: 44,
+      height: 36,
       background: '#3a2a1a',
       cornerRadius: 1,
-      margin: { left: 6, right: 6 },
+      margin: { left: 4, right: 4 },
     });
     statsRow.addChild(vDivider);
 
@@ -237,23 +238,23 @@ export default class CharacterPane extends UIPanel {
     const armorBlock = new UIContainer();
     armorBlock.direction = 'column';
     armorBlock.alignItems = 'center';
-    armorBlock.gap = 3;
-    armorBlock.width = 100;
+    armorBlock.gap = 2;
+    armorBlock.width = 85;
 
     const armorIconRow = new UIContainer();
     armorIconRow.direction = 'row';
-    armorIconRow.gap = 6;
+    armorIconRow.gap = 5;
     armorIconRow.alignItems = 'center';
     armorIconRow.justifyContent = 'center';
-    armorIconRow.height = 22;
+    armorIconRow.height = 20;
 
     this._armorIcon = new UIImage('icon_block', this._assetManager);
-    this._armorIcon.setStyle({ width: 22, height: 22, fitMode: 'contain' });
+    this._armorIcon.setStyle({ width: 18, height: 18, fitMode: 'contain' });
     armorIconRow.addChild(this._armorIcon);
 
     this._armorLabel = new UIText('ARMOR');
     this._armorLabel.setStyle({
-      fontSize: 12,
+      fontSize: 11,
       color: '#6699cc',
       bold: true,
       alignH: 'left',
@@ -265,12 +266,12 @@ export default class CharacterPane extends UIPanel {
 
     this._armorValue = new UIText(String(cd.armor ?? 0));
     this._armorValue.setStyle({
-      fontSize: 26,
+      fontSize: 22,
       color: '#ffffff',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      height: 30,
+      height: 26,
     });
     armorBlock.addChild(this._armorValue);
 
