@@ -58,10 +58,10 @@ export default class CharacterPane extends UIPanel {
     this._skillsContainer = null;
     this._skillRows = [];
 
-    // Configure self
+    // Configure self — tighter gap so sections feel cohesive
     this.direction = 'column';
-    this.gap = 10;
-    this.padding = { top: 14, right: 16, bottom: 16, left: 16 };
+    this.gap = 8;
+    this.padding = { top: 10, right: 14, bottom: 14, left: 14 };
 
     if (characterData) {
       this.buildHierarchy();
@@ -81,146 +81,205 @@ export default class CharacterPane extends UIPanel {
     const cd = this._characterData;
     if (!cd) return;
 
-    // ── 1. Header row ──────────────────────────────────
-    const headerRow = new UIContainer();
-    headerRow.direction = 'row';
-    headerRow.gap = 12;
-    headerRow.alignItems = 'center';
-    headerRow.padding = { top: 4, right: 0, bottom: 8, left: 6 };
-    headerRow.height = 88;
+    // ── 1. Unified identity card ── two columns: portrait | everything else ──
+    const headerCard = new UIContainer();
+    headerCard.direction = 'row';
+    headerCard.gap = 14;
+    headerCard.alignItems = 'start';
+    headerCard.padding = { top: 2, right: 4, bottom: 6, left: 4 };
+    headerCard.height = 178;
 
+    // Left column — large portrait
     const portraitKey = cd.portrait ? `portrait_${cd.portrait}` : 'placeholder';
     this._portrait = new UIImage(portraitKey, this._assetManager);
     this._portrait.setStyle({
-      width: 120,
-      height: 120,
+      width: 130,
+      height: 168,
       fitMode: 'cover',
     });
-    headerRow.addChild(this._portrait);
+    headerCard.addChild(this._portrait);
 
-    const nameCol = new UIContainer();
-    nameCol.direction = 'column';
-    nameCol.gap = 1;
-    nameCol.flexGrow = 1;
+    // Right column — identity, health, stats stacked vertically
+    const rightCol = new UIContainer();
+    rightCol.direction = 'column';
+    rightCol.gap = 0;
+    rightCol.flexGrow = 1;
+    rightCol.padding = { top: 4 };
 
+    // Name
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
-      fontSize: 24,
+      fontSize: 26,
       color: '#e4e4d9',
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 30,
-      margin: { top: 15 }
+      height: 32,
     });
-    nameCol.addChild(this._nameText);
+    rightCol.addChild(this._nameText);
 
+    // Class + level
     const classStr = cd.className ? `${cd.className}` : '';
     const levelStr = cd.level ? `  Lv.${cd.level}` : '';
     this._classText = new UIText(classStr + levelStr);
     this._classText.setStyle({
-      fontSize: 15,
+      fontSize: 14,
       color: '#ccaa77',
-      italic: false,
       alignH: 'left',
       alignV: 'center',
-      height: 22,
+      height: 20,
     });
-    nameCol.addChild(this._classText);
+    rightCol.addChild(this._classText);
 
-    headerRow.addChild(nameCol);
-    this.addChild(headerRow);
+    // Decorative divider
+    const titleDivider = new UIContainer();
+    titleDivider.setStyle({
+      height: 2,
+      background: '#4a3a2a',
+      margin: { top: 6, bottom: 6 },
+      cornerRadius: 1,
+    });
+    rightCol.addChild(titleDivider);
 
-    // ── 2. Health bar ──────────────────────────────────
+    // HEALTH label
+    const healthLabel = new UIText('HEALTH');
+    healthLabel.setStyle({
+      fontSize: 11,
+      color: '#777766',
+      bold: true,
+      alignH: 'left',
+      alignV: 'center',
+      height: 16,
+    });
+    rightCol.addChild(healthLabel);
+
+    // Compact HP bar
     this._healthBar = new UIProgressBar();
     this._healthBar.setStyle({
       value: cd.hp ?? 0,
       maxValue: cd.maxHp ?? 100,
       fillColor: '#cc3333',
-      backgroundColor: '#2a1a1a',
+      backgroundColor: '#1a0e0e',
       label: `${cd.hp ?? 0} / ${cd.maxHp ?? 0}`,
       labelColor: '#ffffff',
-      labelFontSize: 18,
+      labelFontSize: 13,
       borderColor: '#554433',
       borderWidth: 1,
-      cornerRadius: 6,
-      height: 52,
+      cornerRadius: 4,
+      height: 28,
       widthPercent: 1,
-      margin: { top: 2, bottom: 4 },
+      margin: { top: 2, bottom: 8 },
     });
-    this.addChild(this._healthBar);
+    rightCol.addChild(this._healthBar);
 
-    // ── 3. Stats row ───────────────────────────────────
+    // Stats row — two balanced blocks with vertical divider
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
-    statsRow.justifyContent = 'space-between';
+    statsRow.justifyContent = 'center';
     statsRow.alignItems = 'center';
-    statsRow.gap = 16;
-    statsRow.padding = { top: 4, right: 8, bottom: 4, left: 8 };
-    statsRow.height = 44;
+    statsRow.gap = 4;
+    statsRow.height = 50;
 
-    const attackGroup = new UIContainer();
-    attackGroup.direction = 'row';
-    attackGroup.gap = 8;
-    attackGroup.alignItems = 'center';
+    // Attack block
+    const attackBlock = new UIContainer();
+    attackBlock.direction = 'column';
+    attackBlock.alignItems = 'center';
+    attackBlock.gap = 2;
+    attackBlock.width = 85;
+
+    const attackIconRow = new UIContainer();
+    attackIconRow.direction = 'row';
+    attackIconRow.gap = 5;
+    attackIconRow.alignItems = 'center';
+    attackIconRow.justifyContent = 'center';
+    attackIconRow.height = 20;
 
     this._attackIcon = new UIImage('icon_attack', this._assetManager);
-    this._attackIcon.setStyle({ width: 28, height: 28, fitMode: 'contain' });
-    attackGroup.addChild(this._attackIcon);
+    this._attackIcon.setStyle({ width: 18, height: 18, fitMode: 'contain' });
+    attackIconRow.addChild(this._attackIcon);
 
-    this._attackLabel = new UIText('ATK');
+    this._attackLabel = new UIText('ATTACK');
     this._attackLabel.setStyle({
-      fontSize: 14,
+      fontSize: 11,
       color: '#cc9966',
       bold: true,
       alignH: 'left',
       alignV: 'center',
     });
-    attackGroup.addChild(this._attackLabel);
+    attackIconRow.addChild(this._attackLabel);
+
+    attackBlock.addChild(attackIconRow);
 
     this._attackValue = new UIText(String(cd.attack ?? 0));
     this._attackValue.setStyle({
-      fontSize: 18,
+      fontSize: 22,
       color: '#ffffff',
       bold: true,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'center',
+      height: 26,
     });
-    attackGroup.addChild(this._attackValue);
+    attackBlock.addChild(this._attackValue);
 
-    statsRow.addChild(attackGroup);
+    statsRow.addChild(attackBlock);
 
-    const armorGroup = new UIContainer();
-    armorGroup.direction = 'row';
-    armorGroup.gap = 8;
-    armorGroup.alignItems = 'center';
+    // Vertical divider between stat blocks
+    const vDivider = new UIContainer();
+    vDivider.setStyle({
+      width: 2,
+      height: 36,
+      background: '#3a2a1a',
+      cornerRadius: 1,
+      margin: { left: 4, right: 4 },
+    });
+    statsRow.addChild(vDivider);
+
+    // Armor block
+    const armorBlock = new UIContainer();
+    armorBlock.direction = 'column';
+    armorBlock.alignItems = 'center';
+    armorBlock.gap = 2;
+    armorBlock.width = 85;
+
+    const armorIconRow = new UIContainer();
+    armorIconRow.direction = 'row';
+    armorIconRow.gap = 5;
+    armorIconRow.alignItems = 'center';
+    armorIconRow.justifyContent = 'center';
+    armorIconRow.height = 20;
 
     this._armorIcon = new UIImage('icon_block', this._assetManager);
-    this._armorIcon.setStyle({ width: 28, height: 28, fitMode: 'contain' });
-    armorGroup.addChild(this._armorIcon);
+    this._armorIcon.setStyle({ width: 18, height: 18, fitMode: 'contain' });
+    armorIconRow.addChild(this._armorIcon);
 
-    this._armorLabel = new UIText('DEF');
+    this._armorLabel = new UIText('ARMOR');
     this._armorLabel.setStyle({
-      fontSize: 14,
+      fontSize: 11,
       color: '#6699cc',
       bold: true,
       alignH: 'left',
       alignV: 'center',
     });
-    armorGroup.addChild(this._armorLabel);
+    armorIconRow.addChild(this._armorLabel);
+
+    armorBlock.addChild(armorIconRow);
 
     this._armorValue = new UIText(String(cd.armor ?? 0));
     this._armorValue.setStyle({
-      fontSize: 18,
+      fontSize: 22,
       color: '#ffffff',
       bold: true,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'center',
+      height: 26,
     });
-    armorGroup.addChild(this._armorValue);
+    armorBlock.addChild(this._armorValue);
 
-    statsRow.addChild(armorGroup);
-    this.addChild(statsRow);
+    statsRow.addChild(armorBlock);
+    rightCol.addChild(statsRow);
+
+    headerCard.addChild(rightCol);
+    this.addChild(headerCard);
 
     // ── 4. Mana orbs row ─────────────────────────────
     const manaRow = new UIPanel();
