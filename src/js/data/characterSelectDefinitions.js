@@ -24,6 +24,8 @@ const characterSelectDefinitions = [
     portraitKey: 'character_select_portrait_warrior',
     /** Asset key for the full-screen splash background */
     splashKey: 'character_select_splash_warrior',
+    /** Aura color {r,g,b} in 0-1 range — red/orange ember */
+    auraColor: { r: 1.0, g: 0.28, b: 0.08 },
     /** Reference to the gameplay character data (hp, mana, skills, etc.) */
     characterData: warriorCharacter,
     /** Display order in the heroes row (lower = leftmost) */
@@ -37,6 +39,8 @@ const characterSelectDefinitions = [
     className: mageCharacter.className,
     portraitKey: 'character_select_portrait_mage',
     splashKey: 'character_select_splash_mage',
+    /** Aura color {r,g,b} in 0-1 range — purple/violet arcane */
+    auraColor: { r: 0.55, g: 0.15, b: 0.85 },
     characterData: mageCharacter,
     order: 1,
     enabled: true,

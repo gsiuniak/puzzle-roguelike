@@ -51,8 +51,8 @@ const mageCharacter = {
   className: 'Mage',
   description: 'A master of the arcane arts, channeling raw magical energy into devastating spells that reshape the battlefield.',
   level: 1,
-  hp: 30,
-  maxHp: 30,
+  hp: 25,
+  maxHp: 25,
   attack: 1,
   armor: 0,
   mana: {
@@ -75,7 +75,7 @@ const mageCharacter = {
       cost: { yellow: 5 },
     },
     {
-      name: 'Explode!',
+      name: 'Explode',
       description: 'Destroy tiles in a 3x3 area',
       icon: 'skill_explode',
       sound: 'skill_explode',

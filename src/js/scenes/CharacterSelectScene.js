@@ -25,6 +25,7 @@ import characterSelectDefinitions from '../data/characterSelectDefinitions.js';
 import mockEnemy from '../data/mockEnemy.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
+import AuraStrandsEffect from '../ui/AuraStrandsEffect.js';
 
 /** Duration of the cross-fade transition between splash backgrounds (ms) */
 const CROSS_FADE_DURATION = 400;
@@ -71,6 +72,10 @@ export default class CharacterSelectScene extends UIPanel {
     this._btnContainer = null;
     /** @type {UIImage[]} portrait images in heroes row */
     this._portraitImages = [];
+
+    // ── Aura effect ────────────────────────────────────
+    /** @type {AuraStrandsEffect} */
+    this._auraEffect = new AuraStrandsEffect();
 
     // ── Hover state ────────────────────────────────────
     /** @type {boolean} */
@@ -544,6 +549,12 @@ export default class CharacterSelectScene extends UIPanel {
     this._currSplashKey = newDef ? newDef.splashKey : null;
     this._crossFadeAlpha = 0;
 
+    // Transition aura color to new character
+    if (newDef && newDef.auraColor) {
+      const ac = newDef.auraColor;
+      this._auraEffect.setTargetColor(ac.r, ac.g, ac.b);
+    }
+
     // Rebuild info panel for new character
     this._updateInfoPanel();
   }
@@ -565,6 +576,12 @@ export default class CharacterSelectScene extends UIPanel {
     this._prevSplashKey = null;
     this._crossFadeAlpha = 1.0;
     this._buttonHovered = false;
+
+    // Initialize aura color to selected character
+    if (def && def.auraColor) {
+      const ac = def.auraColor;
+      this._auraEffect.setColorInstant(ac.r, ac.g, ac.b);
+    }
 
     // Propagate assetManager to all UIImage children
     this._propagateAssetManager(this);
@@ -739,6 +756,9 @@ export default class CharacterSelectScene extends UIPanel {
       this._crossFadeAlpha = Math.min(1.0, this._crossFadeAlpha + dt / CROSS_FADE_DURATION);
     }
 
+    // Advance aura animation
+    this._auraEffect.update(dt);
+
     super.update(dt);
   }
 
@@ -747,8 +767,9 @@ export default class CharacterSelectScene extends UIPanel {
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Override renderSelf to draw the character splash background in cover mode
-   * with cross-fade support, then draw the info panel background image.
+   * Override renderSelf to draw only the character splash backgrounds.
+   * The info panel background is drawn separately in render() so the aura
+   * can layer correctly between splash and UI.
    */
   renderSelf(ctx) {
     const am = this._assetManager;
@@ -772,9 +793,16 @@ export default class CharacterSelectScene extends UIPanel {
         this._drawCoverImage(ctx, currImg, r, Math.min(1.0, this._crossFadeAlpha));
       }
     }
+  }
 
-    // ── Draw info panel background image manually ──────
-    // Drawn after splash so it layers on top; children render over this.
+  /**
+   * Draw the info panel background image. Called from render() after the
+   * aura so the panel sits above the aura but below panel children text/icons.
+   */
+  _drawInfoPanelBackground(ctx) {
+    const am = this._assetManager;
+    if (!am) return;
+
     if (this._infoPanel) {
       const panelImg = am.get('character_select_info_panel');
       if (panelImg) {
@@ -826,10 +854,16 @@ export default class CharacterSelectScene extends UIPanel {
   render(ctx) {
     if (!this.visible) return;
 
-    // Draw background (splash + info panel bg)
+    // 1. Draw character splash backgrounds
     this.renderSelf(ctx);
 
-    // Draw children (info panel contents, heroes row, button)
+    // 2. Draw animated aura strands (over splash, under all UI)
+    this._auraEffect.render(ctx, this.rect);
+
+    // 3. Draw info panel background (over aura, under panel text/icons)
+    this._drawInfoPanelBackground(ctx);
+
+    // 4. Draw children (info panel contents, heroes row, button)
     this.renderChildren(ctx);
 
     // ── Selected portrait highlight ────────────────────
