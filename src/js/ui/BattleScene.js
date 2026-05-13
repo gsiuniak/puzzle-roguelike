@@ -163,7 +163,7 @@ export default class BattleScene extends UIPanel {
       alignH: 'center',
       alignV: 'center',
       height: 26,
-      margin: { top: 2, bottom: 0 },
+      margin: { top: 2, bottom: 0, left: 60 },
     });
     centerCol.addChild(this._turnLabel);
 
