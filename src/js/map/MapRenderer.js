@@ -341,50 +341,48 @@ export default class MapRenderer {
   // ── Nodes ──────────────────────────────────────────
 
   /**
-   * Draw a single node (circle + icon) with state-based styling.
+   * Draw a single node (circle + icon) with state-based highlighting.
+   *
+   * All nodes render at full/normal color. State is conveyed through
+   * highlights — glow, ring thickness, scale, and pulse animation —
+   * rather than by dimming (alpha reduction).
    */
   _drawNode(ctx, node, x, y, dt) {
     const traversal = this._traversal;
     const isHovered = this._hovered && this._hovered.nodeId === node.id;
 
-    let ringAlpha = 0.55;
-    let iconAlpha = 0.5;
+    // All nodes always render at full/normal color.
+    // State (current / reachable-next) is conveyed via highlights:
+    // glow, scale, ring thickness, and pulse — not alpha dimming.
+    const style = styleForType(node.type);
+
+    let ringAlpha = 1.0;
+    let iconAlpha = 1.0;
     let ringWidth = 2.5;
     let scale = 1.0;
-
-    const style = styleForType(node.type);
+    let isHighlighted = false;   // current node
+    let isNextNode = false;      // reachable "next" node
 
     if (traversal) {
       if (node.state.current) {
-        // Current node — fully highlighted
-        ringAlpha = 1.0;
-        iconAlpha = 1.0;
+        isHighlighted = true;
         ringWidth = 4;
         scale = 1.12;
-      } else if (node.state.completed) {
-        ringAlpha = 0.8;
-        iconAlpha = 0.85;
-        ringWidth = 2.5;
-        scale = 0.95;
       } else if (node.state.reachable) {
-        // Reachable but not highlighted — visible enough to click
-        ringAlpha = 0.65;
-        iconAlpha = 0.7;
-        ringWidth = 2.5;
-        scale = 1.0;
-      } else {
-        ringAlpha = 0.35;
-        iconAlpha = 0.3;
-        ringWidth = 2;
+        isNextNode = true;
+        ringWidth = 3;
+        scale = 1.04;
+      } else if (node.state.completed) {
+        // completed — normal colors, slightly smaller
+        scale = 0.95;
       }
+      // else: undiscovered / future — still full normal color
     }
 
-    // Hover boost (only for reachable nodes)
-    if (isHovered && node.state.reachable && !node.state.current) {
-      ringAlpha = Math.min(1.0, ringAlpha + 0.2);
-      iconAlpha = Math.min(1.0, iconAlpha + 0.15);
+    // Hover boost (only for reachable "next" nodes)
+    if (isHovered && isNextNode) {
       ringWidth += 0.5;
-      scale = Math.min(1.15, scale + 0.03);
+      scale = Math.min(1.12, scale + 0.04);
     }
 
     const baseRadius = this._nodeRadius(node);
@@ -392,14 +390,16 @@ export default class MapRenderer {
 
     ctx.save();
 
-    // ── Glow (only for the current node) ─────────────
-    if (node.state.current) {
-      const glowGrad = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 1.8);
-      glowGrad.addColorStop(0, hexToRgba(style.glowColor, 0.35));
+    // ── Glow (current node: strong; next node: subtle) ──
+    if (isHighlighted || isNextNode) {
+      const glowAlpha = isHighlighted ? 0.35 : 0.2;
+      const glowRadius = isHighlighted ? r * 1.8 : r * 1.5;
+      const glowGrad = ctx.createRadialGradient(x, y, r * 0.6, x, y, glowRadius);
+      glowGrad.addColorStop(0, hexToRgba(style.glowColor, glowAlpha));
       glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
-      ctx.arc(x, y, r * 1.8, 0, Math.PI * 2);
+      ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -415,18 +415,58 @@ export default class MapRenderer {
     ctx.fillStyle = ringFillGrad;
     ctx.fill();
 
-    // Ring stroke
+    // Ring stroke — pulse the highlighted / next-node rings
     ctx.lineWidth = ringWidth;
     ctx.globalAlpha = ringAlpha;
     ctx.strokeStyle = style.ringColor;
-    ctx.stroke();
+
+    if (isHighlighted) {
+      // Pulsing glow ring behind the main ring for current node
+      const pulse = Math.sin(dt * 0.003) * 0.35 + 0.65;
+      ctx.save();
+      ctx.globalAlpha = ringAlpha * pulse;
+      ctx.lineWidth = ringWidth + 4;
+      ctx.shadowColor = style.ringColor;
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+      ctx.restore();
+      // Main ring on top
+      ctx.globalAlpha = ringAlpha;
+      ctx.lineWidth = ringWidth;
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (isNextNode) {
+      // Subtle pulse for reachable next nodes
+      const pulse = Math.sin(dt * 0.003) * 0.2 + 0.8;
+      ctx.save();
+      ctx.globalAlpha = ringAlpha * pulse;
+      ctx.lineWidth = ringWidth + 2;
+      ctx.shadowColor = style.ringColor;
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+      ctx.restore();
+      // Main ring
+      ctx.globalAlpha = ringAlpha;
+      ctx.lineWidth = ringWidth;
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      // Normal ring — no pulse, no shadow
+      ctx.stroke();
+    }
 
     // Inner decorative ring (only for the current node)
-    if (node.state.current) {
+    if (isHighlighted) {
       ctx.beginPath();
       ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
       ctx.lineWidth = 1;
-      ctx.globalAlpha = ringAlpha * 0.5;
+      ctx.globalAlpha = ringAlpha * 0.6;
       ctx.strokeStyle = style.ringColor;
       ctx.stroke();
     }
