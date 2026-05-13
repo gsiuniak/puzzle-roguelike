@@ -34,6 +34,9 @@ const warriorCharacter = {
       icon: 'skill_bash',
       sound: 'skill_bash',
       cost: { red: 5 },
+      effects: [
+        { effectType: 'damage', damage: { amount: 5 } }
+      ],
     },
     {
       name: 'Defend',
@@ -41,6 +44,9 @@ const warriorCharacter = {
       icon: 'skill_defend',
       sound: 'skill_defend',
       cost: { blue: 5 },
+      effects: [
+        { effectType: 'armor', armor: { amount: 5 } }
+      ],
     }
   ],
 };
@@ -69,20 +75,24 @@ const mageCharacter = {
       description: 'Destroy 1 row',
       icon: 'skill_fracture',
       sound: 'skill_fracture',
-      effectType: 'destroy_tiles_row',
       targeting: 'board_tile',
       area: 1,
       cost: { yellow: 5 },
+      effects: [
+        { effectType: 'destroy_tiles_row' }
+      ],
     },
     {
       name: 'Explode',
       description: 'Destroy tiles in a 3x3 area',
       icon: 'skill_explode',
       sound: 'skill_explode',
-      effectType: 'destroy_tiles',
       targeting: 'board_tile',
       area: { radius: 1 },
       cost: { purple: 8 },
+      effects: [
+        { effectType: 'destroy_tiles' }
+      ],
     },
   ],
 };
@@ -111,23 +121,26 @@ const witchDoctorCharacter = {
       description: 'Create 10 skull tiles',
       icon: 'skill_summon_dead',
       sound: 'skill_create_skull',
-      effectType: 'create_tiles',
-      createTiles: {
-        amount: 10,
-        type: 'skull',
-      },
       cost: { purple: 4 },
+      effects: [
+        {
+          effectType: 'create_tiles',
+          createTiles: { amount: 10, type: 'skull' }
+        }
+      ],
     },
     {
       name: 'Oungan',
       description: 'Heal 5 HP',
       icon: 'skill_oungan',
       sound: 'skill_oungan',
-      effectType: 'heal',
-      heal: {
-        amount: 5,
-      },
       cost: { green: 6 },
+      effects: [
+        {
+          effectType: 'heal',
+          heal: { amount: 5 }
+        }
+      ],
     },
   ],
 };

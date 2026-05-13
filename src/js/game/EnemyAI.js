@@ -110,18 +110,16 @@ export default class EnemyAI {
 
   /**
    * Check whether a skill deals damage (as opposed to buffing / defending).
+   * Inspects the skill's effects[] array for a 'damage' effectType.
    * @param {object} skill
    * @returns {boolean}
    * @private
    */
   _isDamageSkill(skill) {
-    const desc = (skill.description || '').toLowerCase();
-    const name = (skill.name || '').toLowerCase();
-    return desc.includes('damage')
-        || name.includes('bash')
-        || name.includes('slash')
-        || name.includes('strike')
-        || name.includes('attack');
+    for (const effect of (skill.effects || [])) {
+      if (effect.effectType === 'damage') return true;
+    }
+    return false;
   }
 
   /**

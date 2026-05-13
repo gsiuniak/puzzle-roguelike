@@ -337,12 +337,10 @@ export default class BattleController {
       return false;
     }
 
-    const effectType = skill.effectType || this._inferEffectType(skill);
-
     // Skills that require board targeting enter TARGETING state first
     if (skill.targeting === 'board_tile') {
       this.state = BattleState.TARGETING;
-      this._targetingSkill = { ...skill, effectType };
+      this._targetingSkill = { ...skill };
       this._targetHoverCell = null;
       this._targetingOverlayCells = [];
       this.log.add(`Select a board tile for ${skill.name}...`);
@@ -350,38 +348,25 @@ export default class BattleController {
       return true;
     }
 
-    // Instant-effect skills: spend cost and apply immediately
+    // Instant-effect skills: spend cost, play sound once, then resolve all effects
     this._spendCost(this.playerState, skill);
-    this._applyEffect(skill, 'player', effectType);
+    this._setSkillSound(skill);
     this.log.add(`${this.playerState.name} uses ${skill.name}.`);
 
-    // Record resolve sound for immediate skills
-    this._setSkillSound(skill);
+    let enteredCascade = false;
+    for (const effect of (skill.effects || [])) {
+      if (this._resolveEffect(effect, skill, 'player')) {
+        enteredCascade = true;
+      }
+    }
 
-    // If _applyEffect entered a cascade (e.g. CREATE_TILES), let it resolve
-    if (this.state === BattleState.RESOLVING) return true;
+    // If any effect entered a cascade (e.g. CREATE_TILES), let it resolve
+    if (enteredCascade) return true;
 
     // Check for game over before proceeding to next turn
     if (this._checkGameOver()) return true;
     this._endTurn('player');
     return true;
-  }
-
-  /**
-   * Infer the effect type from skill description/name for legacy skills
-   * that don't have an explicit effectType field.
-   * @param {object} skill
-   * @returns {string} SKILL_EFFECT_TYPES value
-   */
-  _inferEffectType(skill) {
-    const desc = (skill.description || '').toLowerCase();
-    const name = (skill.name || '').toLowerCase();
-    if (desc.includes('gain') || desc.includes('armor') || desc.includes('block')
-        || name.includes('defend') || name.includes('shield')) {
-      return SKILL_EFFECT_TYPES.ARMOR;
-    }
-    // Default: damage
-    return SKILL_EFFECT_TYPES.DAMAGE;
   }
 
   /**
@@ -419,10 +404,10 @@ export default class BattleController {
     if (this.state !== BattleState.TARGETING || !this._targetingSkill) return false;
 
     const skill = this._targetingSkill;
-    const effectType = skill.effectType || SKILL_EFFECT_TYPES.DESTROY_TILES;
 
     // Spend the cost
     this._spendCost(this.playerState, skill);
+    this._setSkillSound(skill);
     this.log.add(`${this.playerState.name} uses ${skill.name}.`);
 
     // Compute affected tiles
@@ -433,12 +418,15 @@ export default class BattleController {
     this._targetHoverCell = null;
     this._targetingOverlayCells = [];
 
-    // Record resolve sound for targeted skills
-    this._setSkillSound(skill);
+    // All targeting skills destroy tiles in the selected area
+    this._executeDestroyTiles(area, col, row, skill.name);
 
-    // Execute based on effect type
-    if (effectType === SKILL_EFFECT_TYPES.DESTROY_TILES || effectType === SKILL_EFFECT_TYPES.DESTROY_TILES_ROW) {
-      this._executeDestroyTiles(area, col, row, skill.name);
+    // Resolve any additional non-destroy effects from the effects array
+    for (const effect of (skill.effects || [])) {
+      if (effect.effectType !== SKILL_EFFECT_TYPES.DESTROY_TILES
+          && effect.effectType !== SKILL_EFFECT_TYPES.DESTROY_TILES_ROW) {
+        this._resolveEffect(effect, skill, 'player');
+      }
     }
 
     return true;
@@ -596,13 +584,14 @@ export default class BattleController {
    * Execute a CREATE_TILES effect: convert random non-target tiles into
    * the requested type. Does NOT award mana or deal damage.
    * After conversion, checks for matches and enters RESOLVING if any found.
-   * @param {object} skill - skill definition with createTiles: { amount, type }
+   * @param {object} effect - effect definition with createTiles: { amount, type }
    * @param {string} side - 'player' or 'enemy'
+   * @param {string} skillName - skill name for log messages
    */
-  _executeCreateTiles(skill, side) {
-    const createTiles = skill.createTiles;
+  _executeCreateTiles(effect, side, skillName) {
+    const createTiles = effect.createTiles;
     if (!createTiles || typeof createTiles.amount !== 'number' || !createTiles.type) {
-      console.warn('[CREATE_TILES] Missing or invalid createTiles config on skill:', skill.name);
+      console.warn('[CREATE_TILES] Missing or invalid createTiles config on effect:', effect);
       return;
     }
 
@@ -619,7 +608,7 @@ export default class BattleController {
     const candidates = this.board.getTilesNotOfType(targetType);
 
     if (candidates.length === 0) {
-      this.log.add(`No tiles to convert for ${skill.name} — board is all ${targetType}.`);
+      this.log.add(`No tiles to convert for ${skillName} — board is all ${targetType}.`);
       return;
     }
 
@@ -628,7 +617,7 @@ export default class BattleController {
 
     // 3. Convert the selected tiles
     const convertedCount = this.board.convertTilesToType(selected, targetType);
-    this.log.add(`${skill.name} converts ${convertedCount} tiles to ${targetType}.`);
+    this.log.add(`${skillName} converts ${convertedCount} tiles to ${targetType}.`);
 
     // 4. Capture converted positions for visual feedback (BEFORE _beginResolving clears highlightCells)
     this._convertedTilePositions = [];
@@ -1013,14 +1002,18 @@ export default class BattleController {
     const skill = this.enemyAI.findBestSkill();
     if (skill) {
       this._spendCost(this.enemyState, skill);
-      this._applyEffect(skill, 'enemy');
+      this._setSkillSound(skill);
       this.log.add(`${this.enemyState.name} uses ${skill.name}.`);
 
-      // Record resolve sound for enemy skills
-      this._setSkillSound(skill);
+      let enteredCascade = false;
+      for (const effect of (skill.effects || [])) {
+        if (this._resolveEffect(effect, skill, 'enemy')) {
+          enteredCascade = true;
+        }
+      }
 
-      // If _applyEffect entered a cascade (e.g. CREATE_TILES), let it resolve
-      if (this.state === BattleState.RESOLVING) return;
+      // If any effect entered a cascade (e.g. CREATE_TILES), let it resolve
+      if (enteredCascade) return;
 
       // Check for game over before proceeding to next turn
       if (this._checkGameOver()) return;
@@ -1080,60 +1073,63 @@ export default class BattleController {
       state.mana[c] = Math.max(0, (state.mana[c] || 0) - a);
     }
   }
-  _applyEffect(skill, side, effectType) {
+  /**
+   * Resolve a single effect from a skill's effects[] array.
+   * Spends mana and plays sound are handled ONCE at the skill level before
+   * this is called for each effect.
+   *
+   * @param {object} effect - { effectType, damage?, armor?, heal?, createTiles? }
+   * @param {object} skill - the parent skill (for log context)
+   * @param {string} side - 'player' or 'enemy'
+   * @returns {boolean} true if a cascade was entered (e.g. CREATE_TILES)
+   */
+  _resolveEffect(effect, skill, side) {
     const src = side === 'player' ? this.playerState : this.enemyState;
     const tgt = side === 'player' ? this.enemyState : this.playerState;
 
-    // Determine effect type: explicit param → skill field → inference
-    const type = effectType || skill.effectType || this._inferEffectType(skill);
+    switch (effect.effectType) {
+      case SKILL_EFFECT_TYPES.DAMAGE: {
+        const amount = (effect.damage && typeof effect.damage.amount === 'number')
+          ? effect.damage.amount
+          : (src.attack || 1);
+        const r = this.resolver.applyDamage(tgt, amount);
+        this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
+        this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
+        return false;
+      }
 
-    switch (type) {
       case SKILL_EFFECT_TYPES.ARMOR: {
-        // Extract numeric value from description (e.g. "Gain 5 armor" → 5)
-        let amount = src.attack || 1;
-        const numMatch = skill.description && skill.description.match(/(\d+)/);
-        if (numMatch) {
-          amount = parseInt(numMatch[1], 10);
-        }
+        const amount = (effect.armor && typeof effect.armor.amount === 'number')
+          ? effect.armor.amount
+          : (src.attack || 1);
         src.armor += amount;
         this.log.add(`${src.name} gains ${amount} armor.`);
-        break;
+        return false;
       }
-
-      case SKILL_EFFECT_TYPES.CREATE_TILES:
-        this._executeCreateTiles(skill, side);
-        break;
 
       case SKILL_EFFECT_TYPES.HEAL: {
-        const healAmount = (skill.heal && typeof skill.heal.amount === 'number')
-          ? skill.heal.amount
+        const amount = (effect.heal && typeof effect.heal.amount === 'number')
+          ? effect.heal.amount
           : 0;
-        if (healAmount <= 0) {
+        if (amount <= 0) {
           this.log.add(`${skill.name} has no heal amount configured.`);
-          break;
+          return false;
         }
         const beforeHp = src.hp;
-        src.hp = Math.min(src.maxHp, src.hp + healAmount);
+        src.hp = Math.min(src.maxHp, src.hp + amount);
         const actualHeal = src.hp - beforeHp;
         this.log.add(`${src.name} heals for ${actualHeal} HP.`);
-        break;
+        return false;
       }
 
-      case SKILL_EFFECT_TYPES.DAMAGE:
-      default: {
-        // Extract numeric value from description (e.g. "Deal 5 damage" → 5)
-        // Falls back to the source's attack stat if no number found.
-        let baseAmount = src.attack || 1;
-        const numMatch = skill.description && skill.description.match(/(\d+)/);
-        if (numMatch) {
-          baseAmount = parseInt(numMatch[1], 10);
-        }
-        const r = this.resolver.applyDamage(tgt, baseAmount);
-        this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
-        // Trigger screen shake scaled by damage % of target's max HP
-        this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
-        break;
+      case SKILL_EFFECT_TYPES.CREATE_TILES: {
+        this._executeCreateTiles(effect, side, skill.name);
+        return this.state === BattleState.RESOLVING;
       }
+
+      default:
+        console.warn(`[BattleController] Unknown effect type: "${effect.effectType}". Skipping.`);
+        return false;
     }
   }
 

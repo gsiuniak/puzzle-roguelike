@@ -27,6 +27,9 @@ const mockEnemy = {
       icon: 'skill_slash',
       sound: 'skill_slash',
       cost: { red: 5 },
+      effects: [
+        { effectType: 'damage', damage: { amount: 5 } }
+      ],
     },
   ],
 };
