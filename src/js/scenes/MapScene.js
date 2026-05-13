@@ -189,6 +189,14 @@ export default class MapScene extends UIPanel {
     const hit = this._renderer.hitTest(this._canvasW, this._canvasH, x, y);
     if (!hit) return;
 
+    // Allow clicking on the current node (to start/resume its encounter)
+    if (hit.state.current) {
+      console.log(`[MapScene] Entering current node: ${hit.id} (type: ${hit.type}, depth: ${hit.depth})`);
+      AudioManager.playSfx('character_select_pick');
+      this._onNodeEntered(hit);
+      return;
+    }
+
     // Only allow clicking on reachable nodes
     if (!hit.state.reachable) return;
 

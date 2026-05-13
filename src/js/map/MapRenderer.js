@@ -57,6 +57,20 @@ function styleForType(type) {
   return TYPE_STYLE[type] || TYPE_STYLE.battle;
 }
 
+/**
+ * Convert a hex color like '#3a2f1f' to an rgba string with given alpha.
+ * @param {string} hex
+ * @param {number} alpha
+ * @returns {string}
+ */
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 export default class MapRenderer {
   /**
    * @param {object} services
@@ -231,19 +245,19 @@ export default class MapRenderer {
    * Subtle parchment-style background with faint depth markers.
    */
   _drawBackground(ctx, w, h) {
-    // Base fill — dark parchment tone
+    // Base fill — parchment tone
     ctx.save();
 
-    // Gradient: dark edges, slightly lighter center
+    // Gradient: subtle parchment with slightly darker edges
     const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
-    grad.addColorStop(0, '#1e1810');
-    grad.addColorStop(0.5, '#1a1410');
-    grad.addColorStop(1, '#0d0a08');
+    grad.addColorStop(0, '#3a3020');
+    grad.addColorStop(0.5, '#2e2618');
+    grad.addColorStop(1, '#1a1410');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
     // Subtle vertical parchment grain lines
-    ctx.strokeStyle = 'rgba(100, 80, 50, 0.03)';
+    ctx.strokeStyle = 'rgba(140, 110, 70, 0.04)';
     ctx.lineWidth = 1;
     for (let x = 0; x < w; x += 4) {
       ctx.beginPath();
@@ -376,6 +390,7 @@ export default class MapRenderer {
 
     if (traversal) {
       if (node.state.current) {
+        // Current node — fully highlighted
         ringAlpha = 1.0;
         iconAlpha = 1.0;
         ringWidth = 4;
@@ -386,10 +401,11 @@ export default class MapRenderer {
         ringWidth = 2.5;
         scale = 0.95;
       } else if (node.state.reachable) {
-        ringAlpha = 0.85;
-        iconAlpha = 0.9;
-        ringWidth = 3;
-        scale = 1.05;
+        // Reachable but not highlighted — visible enough to click
+        ringAlpha = 0.65;
+        iconAlpha = 0.7;
+        ringWidth = 2.5;
+        scale = 1.0;
       } else {
         ringAlpha = 0.35;
         iconAlpha = 0.3;
@@ -397,27 +413,26 @@ export default class MapRenderer {
       }
     }
 
-    // Hover boost
-    if (isHovered && node.state.reachable) {
-      ringAlpha = Math.min(1.0, ringAlpha + 0.15);
-      iconAlpha = Math.min(1.0, iconAlpha + 0.1);
-      ringWidth += 1;
-      scale = Math.min(1.2, scale + 0.03);
+    // Hover boost (only for reachable nodes)
+    if (isHovered && node.state.reachable && !node.state.current) {
+      ringAlpha = Math.min(1.0, ringAlpha + 0.2);
+      iconAlpha = Math.min(1.0, iconAlpha + 0.15);
+      ringWidth += 0.5;
+      scale = Math.min(1.15, scale + 0.03);
     }
 
     const r = NODE_RADIUS * scale;
 
     ctx.save();
 
-    // ── Glow (under the node) ──────────────────────
-    if (node.state.current || node.state.reachable) {
-      const glowGrad = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 1.6);
-      const glowAlpha = node.state.current ? 0.35 : 0.18;
-      glowGrad.addColorStop(0, style.glowColor.replace(')', `,${glowAlpha})`).replace('rgb', 'rgba'));
+    // ── Glow (only for the current node) ─────────────
+    if (node.state.current) {
+      const glowGrad = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 1.8);
+      glowGrad.addColorStop(0, hexToRgba(style.glowColor, 0.35));
       glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
-      ctx.arc(x, y, r * 1.6, 0, Math.PI * 2);
+      ctx.arc(x, y, r * 1.8, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -438,8 +453,8 @@ export default class MapRenderer {
     ctx.strokeStyle = style.ringColor;
     ctx.stroke();
 
-    // Inner decorative ring
-    if (node.state.current || node.state.reachable) {
+    // Inner decorative ring (only for the current node)
+    if (node.state.current) {
       ctx.beginPath();
       ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
       ctx.lineWidth = 1;
