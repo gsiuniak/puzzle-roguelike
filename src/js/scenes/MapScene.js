@@ -90,49 +90,51 @@ export default class MapScene extends UIPanel {
 
     this._assetManager = sm.assetManager;
 
-    // Generate a seed if not set (can be overridden before onEnter)
-    if (!this._seed) {
-      this._seed = String(Date.now());
-    }
-
-    // Generate the map graph (deterministic from seed)
-    console.log(`[MapScene] Generating map with seed: "${this._seed}"`);
-    this._graph = MapGenerator.generate(this._seed);
-
-    // Create the traversal controller
-    this._traversal = new MapTraversalController(this._graph);
-
-    // Restore traversal state if returning from battle.
-    // _handleBattleComplete pre-processes the saved state so that the
-    // battle node is already marked completed. We still need to reveal
-    // the next depth nodes since the graph was regenerated.
+    // ── Returning from battle? ──────────────────────
+    // MapScene is a singleton — the graph, renderer, mapView, and traversal
+    // controller all survive the scene switch.  When coming back from a
+    // battle we just need to advance the traversal state and re-wire input,
+    // NOT regenerate the entire map from scratch.
     if (this._savedTraversalState) {
       const saved = this._savedTraversalState;
-      this._traversal.deserialize(saved);
+      this._savedTraversalState = null;
 
-      // If the battle-complete handler flagged that we need to reveal
-      // next nodes, do it now that the graph is available.
+      // Complete the battle node and reveal next depth
       if (saved._needsCompleteAndReveal) {
         this._traversal.completeCurrentAndRevealNext();
         console.log('[MapScene] Current node completed, next depth revealed.');
       }
 
-      this._savedTraversalState = null;
-      console.log('[MapScene] Restored traversal state from battle return.');
+      console.log('[MapScene] Reusing existing map state (return from battle).');
+    } else {
+      // ── Fresh entry (from character select) ───────
+      // Generate a seed if not set (can be overridden before onEnter)
+      if (!this._seed) {
+        this._seed = String(Date.now());
+      }
+
+      // Generate the map graph (deterministic from seed)
+      console.log(`[MapScene] Generating map with seed: "${this._seed}"`);
+      this._graph = MapGenerator.generate(this._seed);
+
+      // Create the traversal controller
+      this._traversal = new MapTraversalController(this._graph);
+
+      // Create the renderer
+      this._renderer = new MapRenderer({ assetManager: this._assetManager });
+      this._renderer.setGraph(this._graph);
+      this._renderer.setTraversal(this._traversal);
+
+      // Create the reusable MapView (shared rendering with BattleScene overlay)
+      this._mapView = new MapView({
+        graph: this._graph,
+        traversal: this._traversal,
+        renderer: this._renderer,
+        assetManager: this._assetManager,
+      });
+
+      console.log(`[MapScene] Map ready — ${this._graph.size} nodes, ${this._graph.depthCount} depths.`);
     }
-
-    // Create the renderer
-    this._renderer = new MapRenderer({ assetManager: this._assetManager });
-    this._renderer.setGraph(this._graph);
-    this._renderer.setTraversal(this._traversal);
-
-    // Create the reusable MapView (shared rendering with BattleScene overlay)
-    this._mapView = new MapView({
-      graph: this._graph,
-      traversal: this._traversal,
-      renderer: this._renderer,
-      assetManager: this._assetManager,
-    });
 
     // Cache canvas dimensions
     this._canvasW = sm._app.width;
@@ -153,8 +155,6 @@ export default class MapScene extends UIPanel {
     input.on('mousemove', this._onMouseMove);
     input.canvas.addEventListener('keydown', this._onKeyDown);
     input.canvas.focus();
-
-    console.log(`[MapScene] Map ready — ${this._graph.size} nodes, ${this._graph.depthCount} depths.`);
   }
 
   /** Called by SceneManager when leaving this scene */
