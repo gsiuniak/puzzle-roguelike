@@ -341,7 +341,7 @@ export default class CharacterPane extends UIPanel {
     skillsTitleRow.height = 25;
 
     const flairLeft = new UIImage('skill_flair_left', this._assetManager);
-    flairLeft.setStyle({ width: 120, height: 28, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    flairLeft.setStyle({ width: 120, height: 28, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center',  margin: { right: 30 } });
     skillsTitleRow.addChild(flairLeft);
 
     this._skillsTitle = new UIText('Skills');
@@ -357,7 +357,7 @@ export default class CharacterPane extends UIPanel {
     skillsTitleRow.addChild(this._skillsTitle);
 
     const flairRight = new UIImage('skill_flair_right', this._assetManager);
-    flairRight.setStyle({ width: 120, height: 28, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center', margin: { left: 42 } });
+    flairRight.setStyle({ width: 120, height: 28, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center', margin: { left: 30 } });
     skillsTitleRow.addChild(flairRight);
 
     this.addChild(skillsTitleRow);
