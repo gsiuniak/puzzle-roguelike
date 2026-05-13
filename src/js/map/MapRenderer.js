@@ -24,33 +24,33 @@ const BOSS_RADIUS_MULT = 2;
 /** Icon size fraction of node radius (fills most of the node) */
 const ICON_SCALE = 0.92;
 /** Horizontal padding on each side */
-const H_PAD = 80;
+const H_PAD = 130;
 /** Vertical padding on each side */
 const V_PAD = 70;
 /** Gap between connection dots (pixels) */
 const DOT_GAP = 7;
 /** Dot radius for connection lines */
 const DOT_RADIUS = 3.0;
-/** Alpha for neutral/default edges */
-const EDGE_DEFAULT_ALPHA = 0.55;
+/** Alpha for neutral/default edges (dimmer grey) */
+const EDGE_DEFAULT_ALPHA = 0.38;
 /** Alpha for traversed/completed edges (darker) */
-const EDGE_TRAVERSED_ALPHA = 0.28;
+const EDGE_TRAVERSED_ALPHA = 0.30;
 /** Alpha for available-next edges (brighter highlight) */
-const EDGE_AVAILABLE_ALPHA = 0.85;
+const EDGE_AVAILABLE_ALPHA = 0.90;
 /** Alpha for edge path line behind dots */
-const EDGE_PATH_ALPHA = 0.25;
+const EDGE_PATH_ALPHA = 0.18;
 /** Edge path line width */
 const EDGE_PATH_WIDTH = 1.5;
 /** Maximum control-point offset for curve (fraction of horizontal distance) */
 const CURVE_FACTOR = 0.04;
-/** Color for available-next edges (gold highlight) */
-const EDGE_AVAILABLE_COLOR = '#d4a840';
-/** Color for default edges */
-const EDGE_DEFAULT_COLOR = '#b8a070';
+/** Color for available-next edges (beige/gold highlight — was default, now promoted) */
+const EDGE_AVAILABLE_COLOR = '#b8a070';
+/** Color for default/inactive edges (dimmer grey) */
+const EDGE_DEFAULT_COLOR = '#7a7a76';
 /** Color for traversed edges */
 const EDGE_TRAVERSED_COLOR = '#5a4a3a';
-/** Path line color */
-const EDGE_PATH_COLOR = '#a09070';
+/** Path line color (subtle continuous line behind dots) */
+const EDGE_PATH_COLOR = '#80807a';
 /** Pulse magnitude for available edges */
 const EDGE_AVAILABLE_PULSE = 0.5;
 
@@ -279,8 +279,10 @@ export default class MapRenderer {
       return 'available';
     }
 
-    // Traversed: both nodes have been completed (edge was travelled)
-    if (fs.completed && ts.completed) {
+    // Traversed: edge that has already been traveled by the player.
+    // Covers the entire completed chain (both ends completed) as well as
+    // the most recent step from a completed node into the current node.
+    if ((fs.completed && ts.completed) || (fs.completed && ts.current)) {
       return 'traversed';
     }
 
@@ -367,7 +369,7 @@ export default class MapRenderer {
     } else {
       dotAlpha = EDGE_DEFAULT_ALPHA;
       dotColor = EDGE_DEFAULT_COLOR;
-      dotPulseMag = 0.3;
+      dotPulseMag = 0.15; // subtle pulse on inactive edges
     }
 
     ctx.globalAlpha = dotAlpha;
@@ -425,8 +427,8 @@ export default class MapRenderer {
         scale = 1.04;
       } else if (node.state.completed) {
         isCompleted = true;
-        scale = 0.95;
-        iconAlpha = 0.6;
+        scale = 0.92;
+        iconAlpha = 0.45;
       }
     }
 
@@ -537,6 +539,14 @@ export default class MapRenderer {
       ctx.stroke();
     }
     // Completed and neutral nodes: NO colored ring
+
+    // ── Dark overlay for completed/traveled nodes ───
+    if (isCompleted) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fill();
+    }
 
     // ── Icon ───────────────────────────────────────
     const iconKey = ICON_MAP[node.type] || 'map_icon_battle';
