@@ -9,7 +9,6 @@ import TileParticleEffect from './TileParticleEffect.js';
 import ScreenShake from './ScreenShake.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
-import MapRenderer from '../map/MapRenderer.js';
 
 /**
  * BattleScene — full battle layout with three columns.
@@ -105,8 +104,8 @@ export default class BattleScene extends UIPanel {
     // ── Map overlay (toggled with 'm' key) ──
     /** @type {boolean} */
     this._mapVisible = false;
-    /** @type {MapRenderer|null} */
-    this._mapRenderer = null;
+    /** @type {import('../map/MapView.js').default|null} shared MapView borrowed from MapScene */
+    this._mapView = null;
 
     // ── Board drag/swap input state ──
     /** @type {{col:number, row:number}|null} */
@@ -252,17 +251,12 @@ export default class BattleScene extends UIPanel {
     // Reset map overlay state
     this._mapVisible = false;
 
-    // ── Wire map renderer from MapScene (for 'm' overlay) ──
+    // ── Borrow MapView from MapScene for 'm' overlay ──
     const mapScene = this._sceneManager._scenes['MapScene'];
-    if (mapScene && this._assetManager) {
-      if (!this._mapRenderer) {
-        this._mapRenderer = new MapRenderer({ assetManager: this._assetManager });
-      }
-      // Sync the latest graph and traversal state from MapScene
-      if (mapScene._graph && mapScene._traversal) {
-        this._mapRenderer.setGraph(mapScene._graph);
-        this._mapRenderer.setTraversal(mapScene._traversal);
-      }
+    if (mapScene && mapScene._mapView) {
+      this._mapView = mapScene._mapView;
+    } else {
+      this._mapView = null;
     }
 
     // Create bound handlers (stored for cleanup in onExit)
@@ -835,39 +829,11 @@ export default class BattleScene extends UIPanel {
     }
 
     // ── Map overlay (toggled with 'm' key) ──
-    if (this._mapVisible && this._mapRenderer) {
-      this._renderMapOverlay(ctx);
+    if (this._mapVisible && this._mapView && this._sceneManager) {
+      this._mapView.renderOverlay(ctx, this._sceneManager._app.width, this._sceneManager._app.height, 16);
     }
   }
 
-  /**
-   * Render the map as a full-screen overlay on top of the battle scene.
-   * Draws a dark semi-transparent backdrop and the map graph.
-   * @param {CanvasRenderingContext2D} ctx
-   */
-  _renderMapOverlay(ctx) {
-    const sm = this._sceneManager;
-    if (!sm) return;
-    const w = sm._app.width;
-    const h = sm._app.height;
-
-    // Dark semi-transparent backdrop
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.fillRect(0, 0, w, h);
-
-    // "MAP" title hint at top
-    ctx.fillStyle = 'rgba(220, 200, 160, 0.6)';
-    ctx.font = '14px "Marcellus SC", serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('Press M or Esc to close', w / 2, 16);
-
-    ctx.restore();
-
-    // Render the map on top
-    this._mapRenderer.render(ctx, w, h, 16);
-  }
 
   // ── data updates ────────────────────────────────────
 

@@ -6,40 +6,26 @@
  * Responsibilities:
  *   - Generate (or load) a MapGraph via MapGenerator
  *   - Manage traversal state via MapTraversalController
- *   - Render the map via MapRenderer inside a centered container
  *   - Handle click input for node selection and movement
  *   - Transition to BattleScene when a combat node is selected
+ *
+ * All visual rendering is delegated to MapView (shared with BattleScene overlay).
  *
  * Extends UIPanel to fit the existing scene architecture.
  *
  * Lifecycle:
- *   onEnter()  — generate map, wire input
+ *   onEnter()  — generate map, wire input, create MapView
  *   update(dt) — advance animations, update hover
- *   render(ctx) — draw overlay + container, delegate to MapRenderer
+ *   render(ctx) — delegate to MapView.renderFullscreen()
  *   onExit()   — tear down input
  */
-
-// ── Container layout constants ──────────────────────
-/** Fraction of canvas width the container occupies */
-const CONTAINER_WIDTH_FRAC = 0.85;
-/** Fraction of canvas height the container occupies */
-const CONTAINER_HEIGHT_FRAC = 0.82;
-/** Minimum horizontal padding from edges */
-const CONTAINER_MIN_H_PAD = 40;
-/** Minimum vertical padding from edges */
-const CONTAINER_MIN_V_PAD = 24;
-/** Container corner radius */
-const CONTAINER_RADIUS = 16;
-/** Container border width */
-const CONTAINER_BORDER = 2;
-/** Overlay alpha */
-const OVERLAY_ALPHA = 0.55;
 
 import UIPanel from '../ui/UIPanel.js';
 import MapGenerator from '../map/MapGenerator.js';
 import MapGraph from '../map/MapGraph.js';
 import MapTraversalController from '../map/MapTraversalController.js';
 import MapRenderer from '../map/MapRenderer.js';
+import MapView from '../map/MapView.js';
 import AudioManager from '../audio/AudioManager.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
@@ -56,6 +42,8 @@ export default class MapScene extends UIPanel {
     this._traversal = null;
     /** @type {MapRenderer|null} */
     this._renderer = null;
+    /** @type {MapView|null} */
+    this._mapView = null;
 
     // ── Seed ───────────────────────────────────────────
     /** @type {string} current run seed */
@@ -64,10 +52,6 @@ export default class MapScene extends UIPanel {
     // ── Layout cache ────────────────────────────────────
     this._canvasW = 0;
     this._canvasH = 0;
-
-    // ── Container rect cache (recomputed each frame) ────
-    /** @type {{x:number,y:number,w:number,h:number}} */
-    this._containerRect = { x: 0, y: 0, w: 0, h: 0 };
 
     // ── Input handler references ────────────────────────
     /** @type {Function|null} */
@@ -93,45 +77,6 @@ export default class MapScene extends UIPanel {
     // ── Saved state for battle return ──────────────────
     /** @type {object|null} serialized traversal state to restore on return */
     this._savedTraversalState = null;
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // Container layout
-  // ═══════════════════════════════════════════════════════
-
-  /** Target aspect ratio (16:9) */
-  static CONTAINER_ASPECT = 16 / 9;
-
-  /**
-   * Compute the centered map container rect from the current canvas size.
-   * Enforces a 16:9 aspect ratio, fitting within the canvas bounds.
-   * @returns {{x:number,y:number,w:number,h:number}}
-   */
-  _getContainerRect() {
-    const w = this._canvasW;
-    const h = this._canvasH;
-
-    // Max available area respecting padding constraints
-    const maxW = Math.min(w * CONTAINER_WIDTH_FRAC, w - CONTAINER_MIN_H_PAD * 2);
-    const maxH = Math.min(h * CONTAINER_HEIGHT_FRAC, h - CONTAINER_MIN_V_PAD * 2);
-    const targetRatio = MapScene.CONTAINER_ASPECT;
-
-    let cw, ch;
-    if (maxW / maxH > targetRatio) {
-      // Canvas is wider than 16:9 — constrain by height
-      ch = maxH;
-      cw = ch * targetRatio;
-    } else {
-      // Canvas is taller than 16:9 — constrain by width
-      cw = maxW;
-      ch = cw / targetRatio;
-    }
-
-    const cx = Math.floor((w - cw) / 2);
-    const cy = Math.floor((h - ch) / 2);
-
-    this._containerRect = { x: cx, y: cy, w: cw, h: ch };
-    return this._containerRect;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -172,6 +117,14 @@ export default class MapScene extends UIPanel {
     this._renderer = new MapRenderer({ assetManager: this._assetManager });
     this._renderer.setGraph(this._graph);
     this._renderer.setTraversal(this._traversal);
+
+    // Create the reusable MapView (shared rendering with BattleScene overlay)
+    this._mapView = new MapView({
+      graph: this._graph,
+      traversal: this._traversal,
+      renderer: this._renderer,
+      assetManager: this._assetManager,
+    });
 
     // Cache canvas dimensions
     this._canvasW = sm._app.width;
@@ -247,17 +200,10 @@ export default class MapScene extends UIPanel {
    */
   _handleMouseDown(x, y) {
     if (this._transitioning) return;
-    if (!this._renderer || !this._traversal) return;
+    if (!this._mapView || !this._traversal) return;
 
-    // Offset into container-local coordinates
-    const cr = this._containerRect;
-    const lx = x - cr.x;
-    const ly = y - cr.y;
-
-    // Ignore clicks outside the container
-    if (lx < 0 || ly < 0 || lx > cr.w || ly > cr.h) return;
-
-    const hit = this._renderer.hitTest(cr.w, cr.h, lx, ly);
+    // MapView.hitTest handles container-offset internally
+    const hit = this._mapView.hitTest(this._canvasW, this._canvasH, x, y);
     if (!hit) return;
 
     // Allow clicking on the current node (to start/resume its encounter)
@@ -289,20 +235,8 @@ export default class MapScene extends UIPanel {
    * @param {number} y — canvas-space mouse Y
    */
   _handleMouseMove(x, y) {
-    if (!this._renderer) return;
-
-    // Offset into container-local coordinates
-    const cr = this._containerRect;
-    const lx = x - cr.x;
-    const ly = y - cr.y;
-
-    // Ignore moves outside the container (clear hover)
-    if (lx < 0 || ly < 0 || lx > cr.w || ly > cr.h) {
-      this._renderer.updateHover(cr.w, cr.h, -999, -999);
-      return;
-    }
-
-    this._renderer.updateHover(cr.w, cr.h, lx, ly);
+    if (!this._mapView) return;
+    this._mapView.updateHover(this._canvasW, this._canvasH, x, y);
   }
 
   /**
@@ -448,254 +382,29 @@ export default class MapScene extends UIPanel {
     this._canvasH = sm._app.height;
 
     super.update(dt);
-
-    // Check if we returned from battle (happens when BattleScene switches back)
-    if (this._transitioning) {
-      // Check if we're back (BattleScene switched to another scene and we became active again)
-      // This is handled by onEnter being called again
-    }
   }
 
   // ═══════════════════════════════════════════════════════
-  // Render
+  // Render — delegated to MapView
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Override render to use MapRenderer inside a centered container.
+   * Override render to use MapView for all visual output.
+   * MapView provides the identical map screen whether rendered
+   * standalone (here) or as a battle overlay (BattleScene).
    * @param {CanvasRenderingContext2D} ctx
    */
   render(ctx) {
     if (!this.visible) return;
 
-    const cr = this._getContainerRect();
     const dt = 16; // ~60fps animation base
 
-    // ── 1. Full-canvas splash background ──────────────────
-    this._drawFullCanvasBackground(ctx);
-
-    // ── 2. Dark overlay outside the container (no compositing tricks) ──
-    this._drawOverlayOutsideContainer(ctx, cr);
-
-    // ── 3. Subtle inner shadow at container edges (depth cue) ──
-    ctx.save();
-    this._drawContainerInnerShadow(ctx, cr);
-    ctx.restore();
-
-    // ── 4. Clip & translate to container interior ──────────
-    ctx.save();
-    ctx.beginPath();
-    this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
-    ctx.clip();
-    ctx.translate(cr.x, cr.y);
-
-    // ── 5. Delegate map rendering within container bounds ──
-    if (this._renderer) {
-      this._renderer.render(ctx, cr.w, cr.h, dt);
+    if (this._mapView) {
+      this._mapView.renderFullscreen(ctx, this._canvasW, this._canvasH, dt);
     }
-
-    // ── 6. Depth labels (container-relative) ───────────────
-    this._drawDepthLabels(ctx, cr.w, cr.h);
-
-    // ── 7. Node info at bottom (container-relative) ────────
-    this._drawNodeInfo(ctx, cr.w, cr.h);
-
-    ctx.restore();
-
-    // ── 8. Container border (on top, after clip restore) ───
-    ctx.save();
-    this._drawContainerBorder(ctx, cr);
-    ctx.restore();
 
     if (this.debug) {
       this._drawDebug(ctx);
     }
-  }
-
-  /**
-   * Draw the map_splash image as a full-canvas background,
-   * scaled to cover the entire canvas.
-   */
-  _drawFullCanvasBackground(ctx) {
-    const splashImg = this._assetManager ? this._assetManager.get('map_splash') : null;
-
-    if (splashImg && splashImg.complete) {
-      const imgW = splashImg.width;
-      const imgH = splashImg.height;
-      const scale = Math.max(this._canvasW / imgW, this._canvasH / imgH);
-      const sw = imgW * scale;
-      const sh = imgH * scale;
-      const sx = (this._canvasW - sw) / 2;
-      const sy = (this._canvasH - sh) / 2;
-
-      ctx.save();
-      ctx.drawImage(splashImg, sx, sy, sw, sh);
-      ctx.restore();
-    } else {
-      // Fallback: dark background
-      ctx.save();
-      ctx.fillStyle = 'rgba(14, 10, 4, 1)';
-      ctx.fillRect(0, 0, this._canvasW, this._canvasH);
-      ctx.restore();
-    }
-  }
-
-  /**
-   * Draw the dark overlay in 4 rects around the container —
-   * no compositing tricks, solid and reliable.
-   */
-  _drawOverlayOutsideContainer(ctx, cr) {
-    const W = this._canvasW;
-    const H = this._canvasH;
-    ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${OVERLAY_ALPHA})`;
-
-    // Top strip
-    ctx.fillRect(0, 0, W, cr.y);
-    // Bottom strip
-    ctx.fillRect(0, cr.y + cr.h, W, H - (cr.y + cr.h));
-    // Left strip (between top and bottom)
-    ctx.fillRect(0, cr.y, cr.x, cr.h);
-    // Right strip (between top and bottom)
-    ctx.fillRect(cr.x + cr.w, cr.y, W - (cr.x + cr.w), cr.h);
-
-    ctx.restore();
-  }
-
-  /**
-   * Draw a subtle inner shadow / vignette just inside the container edges
-   * to give depth without darkening the entire interior.
-   */
-  _drawContainerInnerShadow(ctx, cr) {
-    const shadowWidth = 24;
-    ctx.save();
-
-    // Top inner shadow
-    let grad = ctx.createLinearGradient(0, cr.y, 0, cr.y + shadowWidth);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cr.x, cr.y, cr.w, shadowWidth);
-
-    // Bottom inner shadow
-    grad = ctx.createLinearGradient(0, cr.y + cr.h, 0, cr.y + cr.h - shadowWidth);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cr.x, cr.y + cr.h - shadowWidth, cr.w, shadowWidth);
-
-    // Left inner shadow
-    grad = ctx.createLinearGradient(cr.x, 0, cr.x + shadowWidth, 0);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cr.x, cr.y, shadowWidth, cr.h);
-
-    // Right inner shadow
-    grad = ctx.createLinearGradient(cr.x + cr.w, 0, cr.x + cr.w - shadowWidth, 0);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cr.x + cr.w - shadowWidth, cr.y, shadowWidth, cr.h);
-
-    ctx.restore();
-  }
-
-  /**
-   * Draw the container border stroke.
-   */
-  _drawContainerBorder(ctx, cr) {
-    ctx.strokeStyle = 'rgba(180, 150, 100, 0.35)';
-    ctx.lineWidth = CONTAINER_BORDER;
-    ctx.beginPath();
-    this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
-    ctx.stroke();
-
-    // Subtle inner border for depth
-    const inset = 3;
-    ctx.strokeStyle = 'rgba(180, 150, 100, 0.12)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    this._roundRect(ctx, cr.x + inset, cr.y + inset, cr.w - inset * 2, cr.h - inset * 2, CONTAINER_RADIUS - 1);
-    ctx.stroke();
-  }
-
-  /**
-   * Helper: draw a rounded rectangle path.
-   */
-  _roundRect(ctx, x, y, w, h, r) {
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h);
-    ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
-    ctx.closePath();
-  }
-
-  /**
-   * Draw depth/floor indicators along the top of the container.
-   * @param {CanvasRenderingContext2D} ctx — already translated to container origin
-   * @param {number} cw — container width
-   * @param {number} ch — container height
-   */
-  _drawDepthLabels(ctx, cw, ch) {
-    if (!this._graph) return;
-
-    const positioned = this._renderer.layoutNodes(cw, ch);
-    if (positioned.length === 0) return;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(180, 160, 120, 0.45)';
-    ctx.font = '15px "Marcellus SC", serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-
-    // Group by depth and draw label above topmost node
-    const depthMap = new Map();
-    for (const { node, x, y } of positioned) {
-      if (!depthMap.has(node.depth)) {
-        depthMap.set(node.depth, { x, topY: y });
-      } else {
-        const prev = depthMap.get(node.depth);
-        if (y < prev.topY) prev.topY = y;
-      }
-    }
-
-    for (const [depth, info] of depthMap) {
-      const label = depth === 0 ? 'START'
-        : depth === this._graph.depthCount - 1 ? 'BOSS'
-        : `FLOOR ${depth}`;
-      ctx.fillText(label, info.x, Math.max(8, info.topY - 42));
-    }
-
-    ctx.restore();
-  }
-
-  /**
-   * Draw info about the current node / legend at the bottom of the container.
-   * @param {CanvasRenderingContext2D} ctx — already translated to container origin
-   * @param {number} cw — container width
-   * @param {number} ch — container height
-   */
-  _drawNodeInfo(ctx, cw, ch) {
-    const traversal = this._traversal;
-    if (!traversal) return;
-
-    const current = traversal.currentNode;
-    if (!current) return;
-
-    const typeName = current.type.charAt(0).toUpperCase() + current.type.slice(1);
-    const text = `${typeName} — Depth ${current.depth + 1}`;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(220, 200, 160, 0.7)';
-    ctx.font = '18px "Marcellus SC", serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(text, cw / 2, ch - 12);
-    ctx.restore();
   }
 }
