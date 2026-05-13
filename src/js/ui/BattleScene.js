@@ -94,6 +94,13 @@ export default class BattleScene extends UIPanel {
     /** @type {ScreenShake} */
     this._screenShake = new ScreenShake();
 
+    /** Delay after game over before returning to map (ms) */
+    this._gameOverDelay = 1800;
+    /** Timer tracking elapsed time in game over state */
+    this._gameOverTimer = 0;
+    /** Whether a return-to-map transition has been initiated */
+    this._returnToMapPending = false;
+
     // ── Board drag/swap input state ──
     /** @type {{col:number, row:number}|null} */
     this._selectedCell = null;
@@ -727,6 +734,15 @@ export default class BattleScene extends UIPanel {
     // Sync UI state from game state
     this.updateFromController();
 
+    // ── Detect game over and transition back to map ──
+    if (this._battleController && this._battleController.state === BattleState.GAME_OVER) {
+      this._gameOverTimer += dt;
+      if (this._gameOverTimer >= this._gameOverDelay && !this._returnToMapPending) {
+        this._returnToMapPending = true;
+        this._returnToMap();
+      }
+    }
+
     // Update children (standard UI tree update)
     super.update(dt);
 
@@ -856,6 +872,63 @@ export default class BattleScene extends UIPanel {
         // TURN_INTRO, RESOLVING, SWAPPING, TARGETING — no music change
         break;
     }
+  }
+
+  /**
+   * Transition back to the MapScene after battle ends.
+   * Reads stored map state from userData and restores the traversal.
+   */
+  _returnToMap() {
+    const sm = this._sceneManager;
+    if (!sm) return;
+
+    // Restore map state if available
+    const mapData = this.userData;
+    const mapScene = sm._scenes['MapScene'];
+
+    if (mapScene && mapData) {
+      // Restore seed and player data
+      if (mapData.mapSeed) {
+        mapScene.setSeed(mapData.mapSeed);
+      }
+      if (mapData.playerData) {
+        // Heal/update player after battle
+        const healed = this._getPostBattlePlayerData(mapData.playerData);
+        mapScene.setPlayerData(healed);
+      }
+
+      // Re-generate the map (deterministic from seed) and restore traversal
+      // This is done in onEnter when the scene becomes active again
+    }
+
+    // Switch back to MapScene
+    sm.switchTo('MapScene');
+
+    console.log('[BattleScene] Returning to MapScene.');
+  }
+
+  /**
+   * Get player data after battle, with some recovery.
+   * @param {object} playerData
+   * @returns {object}
+   */
+  _getPostBattlePlayerData(playerData) {
+    // Get actual player state from the battle controller if available
+    if (this._battleController && this._battleController.playerState) {
+      const ps = this._battleController.playerState;
+      // Heal a portion after non-boss fights
+      const healPct = 0.3;
+      const healAmount = Math.floor(ps.maxHp * healPct);
+      const newHp = Math.min(ps.maxHp, ps.hp + healAmount);
+
+      return {
+        ...playerData,
+        hp: newHp,
+        maxHp: ps.maxHp,
+        mana: { ...ps.mana },
+      };
+    }
+    return playerData;
   }
 
   // ── style passthrough ───────────────────────────────

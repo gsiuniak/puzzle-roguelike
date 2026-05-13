@@ -726,23 +726,31 @@ export default class CharacterSelectScene extends UIPanel {
 
     // Deep-clone character data so runtime state does not mutate the definition
     const playerClone = JSON.parse(JSON.stringify(def.characterData));
-    const enemyClone = JSON.parse(JSON.stringify(mockEnemy));
 
-    // Create fresh BattleController with selected character
-    const battleController = new BattleController(playerClone, enemyClone);
+    // Set up MapScene for this run
+    const mapScene = sm._scenes['MapScene'];
+    if (mapScene) {
+      // Generate a fresh seed for this run
+      mapScene.setSeed('run_' + Date.now());
+      mapScene.setPlayerData(playerClone);
 
-    // Create fresh BattleScene
-    const battleScene = new BattleScene(
-      playerClone,
-      enemyClone,
-      this._assetManager,
-      battleController
-    );
-    battleScene.setAudioManager(sm.audioManager);
-
-    // Register and switch
-    sm.registerScene('BattleScene', battleScene);
-    sm.switchTo('BattleScene');
+      // Switch to map scene
+      sm.switchTo('MapScene');
+    } else {
+      // Fallback: direct to battle (shouldn't happen if MapScene is registered)
+      console.warn('MapScene not found, falling back to direct BattleScene');
+      const enemyClone = JSON.parse(JSON.stringify(mockEnemy));
+      const battleController = new BattleController(playerClone, enemyClone);
+      const battleScene = new BattleScene(
+        playerClone,
+        enemyClone,
+        this._assetManager,
+        battleController
+      );
+      battleScene.setAudioManager(sm.audioManager);
+      sm.registerScene('BattleScene', battleScene);
+      sm.switchTo('BattleScene');
+    }
   }
 
   // ═══════════════════════════════════════════════════════

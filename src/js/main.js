@@ -3,10 +3,10 @@
  *
  * Creates shared services (Canvas, AssetManager, InputManager, GameLoop,
  * AudioManager), then instantiates the SceneManager with TitleScreen,
- * CharacterSelectScene, and BattleScene (created on demand).
+ * CharacterSelectScene, MapScene, and BattleScene (created on demand).
  * The game boots into the title screen first.
  *
- * Flow: TitleScreen → CharacterSelectScene → BattleScene
+ * Flow: TitleScreen → CharacterSelectScene → MapScene → BattleScene → MapScene → ...
  */
 
 import CanvasApp from './engine/CanvasApp.js';
@@ -16,6 +16,7 @@ import InputManager from './engine/InputManager.js';
 import SceneManager from './scenes/SceneManager.js';
 import TitleScreen from './scenes/TitleScreen.js';
 import CharacterSelectScene from './scenes/CharacterSelectScene.js';
+import MapScene from './scenes/MapScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
 
@@ -80,6 +81,14 @@ const ASSET_MAP = {
   character_select_choose_hero_button:         'assets/sprites/character_select/character_select_chooe_hero_button.png',
   character_select_choose_hero_button_hover:   'assets/sprites/character_select/character_select_chooe_hero_button_hover.png',
   character_select_divider:                    'assets/sprites/character_select/character_select_divider.png',
+  // ── Map scene assets ────────────────────────────────
+  map_splash:       'assets/sprites/map/map_splash.png',
+  map_icon_battle:  'assets/sprites/map/map_icon_battle.png',
+  map_icon_elite:   'assets/sprites/map/map_icon_elite.png',
+  map_icon_chest:   'assets/sprites/map/map_icon_chest.png',
+  map_icon_train:   'assets/sprites/map/map_icon_train.png',
+  map_icon_rest:    'assets/sprites/map/map_icon_rest.png',
+  map_icon_boss:    'assets/sprites/map/map_icon_boss.png',
 };
 
 // ── Scene sizing ────────────────────────────────────────
@@ -123,24 +132,29 @@ async function init() {
   const titleScreen = new TitleScreen();
   titleScreen.assetManager = assetManager;
 
-  // 8. CharacterSelectScene — BattleScene is created on demand when "Choose Hero" is clicked
+  // 8. CharacterSelectScene — MapScene is created on demand when "Choose Hero" is clicked
   const characterSelectScene = new CharacterSelectScene();
 
-  // 9. Register scenes
+  // 9. MapScene — created once, reused between battle returns
+  const mapScene = new MapScene();
+
+  // 10. Register scenes
   sceneManager.registerScene('TitleScreen', titleScreen);
   sceneManager.registerScene('CharacterSelectScene', characterSelectScene);
-  // BattleScene is registered lazily by CharacterSelectScene._chooseHero()
+  sceneManager.registerScene('MapScene', mapScene);
+  // BattleScene is registered lazily by MapScene._transitionToBattle()
 
-  // 10. Boot into title screen
+  // 11. Boot into title screen
   sceneManager.switchTo('TitleScreen');
 
-  // 11. Start the game loop
+  // 12. Start the game loop
   sceneManager.start();
 
   console.log('Match-3 Battle ready!');
   console.log('  - Press any key or click at the title screen');
   console.log('  - Select your hero: Warrior or Mage');
   console.log('  - Click portraits to switch, click Choose Hero to start');
+  console.log('  - Traverse the map, choose your path');
   console.log('  - Drag adjacent tiles to swap');
   console.log('  - Match 3+ tiles to gain mana / deal skull damage');
   console.log('  - Match 5+ connected tiles for extra turn');
