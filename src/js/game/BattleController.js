@@ -365,6 +365,16 @@ export default class BattleController {
 
     // Check for game over before proceeding to next turn
     if (this._checkGameOver()) return true;
+
+    // If an EXTRA_TURN effect was resolved, stay on the same side
+    if (this._extraTurnEarned) {
+      this._extraTurnEarned = false;
+      this.pendingExtraTurn = true;
+      this.log.add('--- Extra Turn (Player) ---');
+      if (this.onStateChange) this.onStateChange();
+      return true;
+    }
+
     this._endTurn('player');
     return true;
   }
@@ -552,10 +562,13 @@ export default class BattleController {
     this.log.add(`${removedCount} tiles destroyed by ${skillName}!`);
 
     // 6. Enter RESOLVING directly at REMOVE phase (skip SHOW_MATCH — no match to highlight)
+    // Preserve any skill-granted extra turn before resetting cascade state,
+    // so that e.g. a DESTROY_TILES+EXTRA_TURN multi-effect skill works correctly.
+    const skillExtraTurn = this._extraTurnEarned;
     this.state = BattleState.RESOLVING;
     this.activeSide = 'player';
     this._allSteps = [];
-    this._extraTurnEarned = false;
+    this._extraTurnEarned = skillExtraTurn;
     this.pendingExtraTurn = false;
     this._matchTextTriggers = [];
     this._previousEmptyCells = null;
@@ -859,6 +872,7 @@ export default class BattleController {
       // extraTurnTriggerPos was already set in _enterShowMatch — the
       // scene is already animating the effect concurrently with cascades.
       this.log.add(`${this._activeState().name} gets an extra turn!`);
+      this._extraTurnEarned = false;
     }
 
     this._analysis = null;
@@ -1017,6 +1031,16 @@ export default class BattleController {
 
       // Check for game over before proceeding to next turn
       if (this._checkGameOver()) return;
+
+      // If an EXTRA_TURN effect was resolved, stay on the same side
+      if (this._extraTurnEarned) {
+        this._extraTurnEarned = false;
+        this.pendingExtraTurn = true;
+        this.log.add('--- Extra Turn (Enemy) ---');
+        if (this.onStateChange) this.onStateChange();
+        return;
+      }
+
       this._endTurn('enemy');
       return;
     }
@@ -1125,6 +1149,12 @@ export default class BattleController {
       case SKILL_EFFECT_TYPES.CREATE_TILES: {
         this._executeCreateTiles(effect, side, skill.name);
         return this.state === BattleState.RESOLVING;
+      }
+
+      case SKILL_EFFECT_TYPES.EXTRA_TURN: {
+        this._extraTurnEarned = true;
+        this.log.add(`${src.name} gains an extra turn!`);
+        return false;
       }
 
       default:

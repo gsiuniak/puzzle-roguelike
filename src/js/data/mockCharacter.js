@@ -30,17 +30,18 @@ const warriorCharacter = {
   skills: [
     {
       name: 'Bash',
-      description: 'Deal 5 damage',
+      description: 'Deal 5 damage. Gain a turn.',
       icon: 'skill_bash',
       sound: 'skill_bash',
-      cost: { red: 5 },
+      cost: { red: 7 },
       effects: [
-        { effectType: 'damage', damage: { amount: 5 } }
+        { effectType: 'damage', damage: { amount: 5 } },
+        { effectType: 'extra_turn' }
       ],
     },
     {
       name: 'Defend',
-      description: 'Gain 5 armor',
+      description: 'Gain 5 armor. Create 3 blue tiles.',
       icon: 'skill_defend',
       sound: 'skill_defend',
       cost: { blue: 5 },
@@ -110,7 +111,7 @@ const witchDoctorCharacter = {
   mana: {
     red: 0,
     blue: 0,
-    green: 3,
+    green: 100,
     yellow: 0,
     purple: 4,
   },
