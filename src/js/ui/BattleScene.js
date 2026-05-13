@@ -9,6 +9,7 @@ import TileParticleEffect from './TileParticleEffect.js';
 import ScreenShake from './ScreenShake.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
+import MapRenderer from '../map/MapRenderer.js';
 
 /**
  * BattleScene — full battle layout with three columns.
@@ -100,6 +101,12 @@ export default class BattleScene extends UIPanel {
     this._gameOverTimer = 0;
     /** Whether a return-to-map transition has been initiated */
     this._returnToMapPending = false;
+
+    // ── Map overlay (toggled with 'm' key) ──
+    /** @type {boolean} */
+    this._mapVisible = false;
+    /** @type {MapRenderer|null} */
+    this._mapRenderer = null;
 
     // ── Board drag/swap input state ──
     /** @type {{col:number, row:number}|null} */
@@ -242,6 +249,22 @@ export default class BattleScene extends UIPanel {
     this._hoveredCell = null;
     this._dragStartCell = null;
 
+    // Reset map overlay state
+    this._mapVisible = false;
+
+    // ── Wire map renderer from MapScene (for 'm' overlay) ──
+    const mapScene = this._sceneManager._scenes['MapScene'];
+    if (mapScene && this._assetManager) {
+      if (!this._mapRenderer) {
+        this._mapRenderer = new MapRenderer({ assetManager: this._assetManager });
+      }
+      // Sync the latest graph and traversal state from MapScene
+      if (mapScene._graph && mapScene._traversal) {
+        this._mapRenderer.setGraph(mapScene._graph);
+        this._mapRenderer.setTraversal(mapScene._traversal);
+      }
+    }
+
     // Create bound handlers (stored for cleanup in onExit)
     this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
     this._onMouseMove = (x, y) => this._handleMouseMove(x, y);
@@ -273,6 +296,9 @@ export default class BattleScene extends UIPanel {
    * Removes all battle input handlers.
    */
   onExit() {
+    // Reset map overlay state
+    this._mapVisible = false;
+
     const input = this._sceneManager._input;
     if (!input) return;
 
@@ -316,6 +342,7 @@ export default class BattleScene extends UIPanel {
   // ── Input handlers ───────────────────────────────────
 
   _handleMouseDown(x, y) {
+    if (this._mapVisible) return;
     const board = this._board;
     if (!board) return;
 
@@ -345,6 +372,7 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseMove(x, y) {
+    if (this._mapVisible) return;
     const board = this._board;
     if (!board) return;
 
@@ -380,6 +408,7 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseUp(x, y) {
+    if (this._mapVisible) return;
     const board = this._board;
     if (!board || !this._selectedCell || !this._canAct() || this._isTargeting()) {
       this._selectedCell = null;
@@ -409,12 +438,28 @@ export default class BattleScene extends UIPanel {
 
   _handleContextMenu(e) {
     e.preventDefault();
+    if (this._mapVisible) return;
     if (this._isTargeting()) {
       this._battleController.cancelTargeting();
     }
   }
 
   _handleKeyDown(e) {
+    // ── Map overlay toggle ('m') ──
+    if (e.key === 'm' || e.key === 'M') {
+      this._mapVisible = !this._mapVisible;
+      return;
+    }
+
+    // ── When map is visible, Escape hides it ──
+    if (this._mapVisible) {
+      if (e.key === 'Escape') {
+        this._mapVisible = false;
+      }
+      return;
+    }
+
+    // ── Normal battle key handling ──
     if (e.key === 'Escape' && this._isTargeting()) {
       this._battleController.cancelTargeting();
     }
@@ -788,6 +833,40 @@ export default class BattleScene extends UIPanel {
     if (shake.x !== 0 || shake.y !== 0) {
       ctx.restore();
     }
+
+    // ── Map overlay (toggled with 'm' key) ──
+    if (this._mapVisible && this._mapRenderer) {
+      this._renderMapOverlay(ctx);
+    }
+  }
+
+  /**
+   * Render the map as a full-screen overlay on top of the battle scene.
+   * Draws a dark semi-transparent backdrop and the map graph.
+   * @param {CanvasRenderingContext2D} ctx
+   */
+  _renderMapOverlay(ctx) {
+    const sm = this._sceneManager;
+    if (!sm) return;
+    const w = sm._app.width;
+    const h = sm._app.height;
+
+    // Dark semi-transparent backdrop
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, w, h);
+
+    // "MAP" title hint at top
+    ctx.fillStyle = 'rgba(220, 200, 160, 0.6)';
+    ctx.font = '14px "Marcellus SC", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Press M or Esc to close', w / 2, 16);
+
+    ctx.restore();
+
+    // Render the map on top
+    this._mapRenderer.render(ctx, w, h, 16);
   }
 
   // ── data updates ────────────────────────────────────
