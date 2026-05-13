@@ -31,14 +31,28 @@ const V_PAD = 70;
 const DOT_GAP = 7;
 /** Dot radius for connection lines */
 const DOT_RADIUS = 3.0;
-/** Base alpha for all edges (always visible) */
-const EDGE_BASE_ALPHA = 0.7;
+/** Alpha for neutral/default edges */
+const EDGE_DEFAULT_ALPHA = 0.55;
+/** Alpha for traversed/completed edges (darker) */
+const EDGE_TRAVERSED_ALPHA = 0.28;
+/** Alpha for available-next edges (brighter highlight) */
+const EDGE_AVAILABLE_ALPHA = 0.85;
 /** Alpha for edge path line behind dots */
 const EDGE_PATH_ALPHA = 0.25;
 /** Edge path line width */
 const EDGE_PATH_WIDTH = 1.5;
 /** Maximum control-point offset for curve (fraction of horizontal distance) */
 const CURVE_FACTOR = 0.04;
+/** Color for available-next edges (gold highlight) */
+const EDGE_AVAILABLE_COLOR = '#d4a840';
+/** Color for default edges */
+const EDGE_DEFAULT_COLOR = '#b8a070';
+/** Color for traversed edges */
+const EDGE_TRAVERSED_COLOR = '#5a4a3a';
+/** Path line color */
+const EDGE_PATH_COLOR = '#a09070';
+/** Pulse magnitude for available edges */
+const EDGE_AVAILABLE_PULSE = 0.5;
 
 // ── Type → icon asset key mapping ────────────────────
 const ICON_MAP = {
@@ -50,20 +64,15 @@ const ICON_MAP = {
   boss:     'map_icon_boss',
 };
 
-// ── Type → container styling ─────────────────────────
-const TYPE_STYLE = {
-  battle:   { ringColor: '#8b7355', glowColor: '#3a2f1f' },
-  elite:    { ringColor: '#c9a040', glowColor: '#5c3a0a' },
-  chest:    { ringColor: '#5a8a6a', glowColor: '#1f3a28' },
-  training: { ringColor: '#7a6a8a', glowColor: '#2a1f3a' },
-  rest:     { ringColor: '#5a8aaa', glowColor: '#1f2f3a' },
-  boss:     { ringColor: '#c04040', glowColor: '#5c0a0a' },
-};
-
-/** @param {string} type @returns {{ringColor:string,glowColor:string}} */
-function styleForType(type) {
-  return TYPE_STYLE[type] || TYPE_STYLE.battle;
-}
+// ── State-based highlight colors (NOT type-based) ────
+/** Ring color for the current node (strongest highlight) */
+const CURRENT_RING_COLOR = '#e8d860';
+/** Glow color for the current node */
+const CURRENT_GLOW_COLOR = '#c89820';
+/** Ring color for available next nodes (different from current) */
+const AVAILABLE_RING_COLOR = '#c8b878';
+/** Glow color for available next nodes */
+const AVAILABLE_GLOW_COLOR = '#8a7a50';
 
 /**
  * Convert a hex color like '#3a2f1f' to an rgba string with given alpha.
@@ -256,7 +265,32 @@ export default class MapRenderer {
   // ── Edges ──────────────────────────────────────────
 
   /**
-   * Draw all connection edges as dotted curved paths.
+   * Classify an edge into one of three visual states.
+   * @param {MapNode} fromNode
+   * @param {MapNode} toNode
+   * @returns {'available'|'traversed'|'default'}
+   */
+  _edgeState(fromNode, toNode) {
+    const fs = fromNode.state;
+    const ts = toNode.state;
+
+    // Available: from is current, to is directly reachable
+    if (fs.current && ts.reachable) {
+      return 'available';
+    }
+
+    // Traversed: both nodes have been completed (edge was travelled)
+    if (fs.completed && ts.completed) {
+      return 'traversed';
+    }
+
+    // Default: future, undiscovered, or otherwise neutral
+    return 'default';
+  }
+
+  /**
+   * Draw all connection edges as dotted curved paths with
+   * state-based styling.
    */
   _drawAllEdges(ctx, positioned, dt) {
     const graph = this._graph;
@@ -281,8 +315,10 @@ export default class MapRenderer {
 
   /**
    * Draw a single edge between two nodes as a dotted curved line
-   * over a subtle continuous path line. All edges are always visible
-   * regardless of traversal state.
+   * over a subtle continuous path line. Styling varies by state:
+   *   - available: bright gold highlight with pulse
+   *   - traversed: darker, muted
+   *   - default: neutral/natural
    */
   _drawEdge(ctx, fromNode, x1, y1, toNode, x2, y2, dt) {
     const dx = x2 - x1;
@@ -290,6 +326,8 @@ export default class MapRenderer {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < 1) return;
+
+    const state = this._edgeState(fromNode, toNode);
 
     // Build the quadratic bezier curve
     const midX = (x1 + x2) / 2;
@@ -306,7 +344,7 @@ export default class MapRenderer {
     // ── 1. Subtle continuous path line behind the dots ──
     ctx.save();
     ctx.globalAlpha = EDGE_PATH_ALPHA;
-    ctx.strokeStyle = '#a09070';
+    ctx.strokeStyle = EDGE_PATH_COLOR;
     ctx.lineWidth = EDGE_PATH_WIDTH;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -314,20 +352,38 @@ export default class MapRenderer {
     ctx.stroke();
     ctx.restore();
 
-    // ── 2. Dotted overlay (always visible) ──────────────
+    // ── 2. Dotted overlay — state-based styling ─────────
     ctx.save();
-    ctx.globalAlpha = EDGE_BASE_ALPHA;
+
+    let dotAlpha, dotColor, dotPulseMag;
+    if (state === 'available') {
+      dotAlpha = EDGE_AVAILABLE_ALPHA;
+      dotColor = EDGE_AVAILABLE_COLOR;
+      dotPulseMag = EDGE_AVAILABLE_PULSE;
+    } else if (state === 'traversed') {
+      dotAlpha = EDGE_TRAVERSED_ALPHA;
+      dotColor = EDGE_TRAVERSED_COLOR;
+      dotPulseMag = 0; // no pulse on traversed edges
+    } else {
+      dotAlpha = EDGE_DEFAULT_ALPHA;
+      dotColor = EDGE_DEFAULT_COLOR;
+      dotPulseMag = 0.3;
+    }
+
+    ctx.globalAlpha = dotAlpha;
+    ctx.fillStyle = dotColor;
 
     const steps = Math.max(10, Math.floor(dist / DOT_GAP));
-    ctx.fillStyle = '#b8a070';
 
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const bx = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * cpX + t * t * x2;
       const by = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cpY + t * t * y2;
 
-      // Subtle pulse animation on all edges
-      const pulse = Math.sin(dt * 0.002 + i * 0.35) * 0.4;
+      // Pulse animation only for available and default edges
+      const pulse = dotPulseMag > 0
+        ? Math.sin(dt * 0.002 + i * 0.35) * dotPulseMag
+        : 0;
       const r = DOT_RADIUS + pulse;
 
       ctx.beginPath();
@@ -343,45 +399,39 @@ export default class MapRenderer {
   /**
    * Draw a single node (circle + icon) with state-based highlighting.
    *
-   * All nodes render at full/normal color. State is conveyed through
-   * highlights — glow, ring thickness, scale, and pulse animation —
-   * rather than by dimming (alpha reduction).
+   * Highlighting rules (gameplay state only — NOT type-based):
+   *   - Current node: strongest/clearest highlight (bright ring + glow + pulse)
+   *   - Available next nodes: distinct highlight (different color ring + subtle glow)
+   *   - Completed nodes: slightly darkened, no colored ring/glow, subtle checkmark
+   *   - Future/undiscovered: natural asset color, no glow, no colored ring
+   *   - Boss node: no special red treatment unless current or available
    */
   _drawNode(ctx, node, x, y, dt) {
     const traversal = this._traversal;
     const isHovered = this._hovered && this._hovered.nodeId === node.id;
 
-    // All nodes always render at full/normal color.
-    // State (current / reachable-next) is conveyed via highlights:
-    // glow, scale, ring thickness, and pulse — not alpha dimming.
-    const style = styleForType(node.type);
-
-    let ringAlpha = 1.0;
     let iconAlpha = 1.0;
-    let ringWidth = 2.5;
     let scale = 1.0;
-    let isHighlighted = false;   // current node
-    let isNextNode = false;      // reachable "next" node
+    let isCurrent = false;       // player is on this node
+    let isNextNode = false;      // reachable from current
+    let isCompleted = false;     // already traversed
 
     if (traversal) {
       if (node.state.current) {
-        isHighlighted = true;
-        ringWidth = 4;
+        isCurrent = true;
         scale = 1.12;
       } else if (node.state.reachable) {
         isNextNode = true;
-        ringWidth = 3;
         scale = 1.04;
       } else if (node.state.completed) {
-        // completed — normal colors, slightly smaller
+        isCompleted = true;
         scale = 0.95;
+        iconAlpha = 0.6;
       }
-      // else: undiscovered / future — still full normal color
     }
 
     // Hover boost (only for reachable "next" nodes)
     if (isHovered && isNextNode) {
-      ringWidth += 0.5;
       scale = Math.min(1.12, scale + 0.04);
     }
 
@@ -390,24 +440,31 @@ export default class MapRenderer {
 
     ctx.save();
 
-    // ── Glow (current node: strong; next node: subtle) ──
-    if (isHighlighted || isNextNode) {
-      const glowAlpha = isHighlighted ? 0.35 : 0.2;
-      const glowRadius = isHighlighted ? r * 1.8 : r * 1.5;
+    // ── Glow (only for current and available nodes) ──
+    if (isCurrent) {
+      const glowRadius = r * 1.8;
       const glowGrad = ctx.createRadialGradient(x, y, r * 0.6, x, y, glowRadius);
-      glowGrad.addColorStop(0, hexToRgba(style.glowColor, glowAlpha));
+      glowGrad.addColorStop(0, hexToRgba(CURRENT_GLOW_COLOR, 0.4));
+      glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (isNextNode) {
+      const glowRadius = r * 1.5;
+      const glowGrad = ctx.createRadialGradient(x, y, r * 0.6, x, y, glowRadius);
+      glowGrad.addColorStop(0, hexToRgba(AVAILABLE_GLOW_COLOR, 0.22));
       glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
       ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Completed and neutral nodes: no glow
 
-    // ── Outer ring ─────────────────────────────────
+    // ── Dark backing circle (all nodes) ────────────
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
-
-    // Ring fill — opaque dark backing so paths are fully hidden behind nodes
     const ringFillGrad = ctx.createRadialGradient(x, y, r * 0.5, x, y, r);
     ringFillGrad.addColorStop(0, 'rgba(18, 12, 6, 0.92)');
     ringFillGrad.addColorStop(0.7, 'rgba(12, 8, 3, 0.96)');
@@ -415,61 +472,71 @@ export default class MapRenderer {
     ctx.fillStyle = ringFillGrad;
     ctx.fill();
 
-    // Ring stroke — pulse the highlighted / next-node rings
-    ctx.lineWidth = ringWidth;
-    ctx.globalAlpha = ringAlpha;
-    ctx.strokeStyle = style.ringColor;
+    // ── Colored ring (ONLY for current and available) ──
+    if (isCurrent) {
+      const ringColor = CURRENT_RING_COLOR;
+      const ringWidth = 4;
+      const hoverBoost = (isHovered && isNextNode) ? 0.5 : 0;
 
-    if (isHighlighted) {
-      // Pulsing glow ring behind the main ring for current node
+      // Pulsing outer glow ring
       const pulse = Math.sin(dt * 0.003) * 0.35 + 0.65;
       ctx.save();
-      ctx.globalAlpha = ringAlpha * pulse;
-      ctx.lineWidth = ringWidth + 4;
-      ctx.shadowColor = style.ringColor;
-      ctx.shadowBlur = 12;
-      ctx.stroke();
-      ctx.restore();
-      // Main ring on top
-      ctx.globalAlpha = ringAlpha;
-      ctx.lineWidth = ringWidth;
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
+      ctx.globalAlpha = pulse;
+      ctx.lineWidth = ringWidth + 4 + hoverBoost;
+      ctx.shadowColor = ringColor;
+      ctx.shadowBlur = 14;
+      ctx.strokeStyle = ringColor;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
-    } else if (isNextNode) {
-      // Subtle pulse for reachable next nodes
-      const pulse = Math.sin(dt * 0.003) * 0.2 + 0.8;
-      ctx.save();
-      ctx.globalAlpha = ringAlpha * pulse;
-      ctx.lineWidth = ringWidth + 2;
-      ctx.shadowColor = style.ringColor;
-      ctx.shadowBlur = 6;
-      ctx.stroke();
       ctx.restore();
-      // Main ring
-      ctx.globalAlpha = ringAlpha;
-      ctx.lineWidth = ringWidth;
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.stroke();
-    } else {
-      // Normal ring — no pulse, no shadow
-      ctx.stroke();
-    }
 
-    // Inner decorative ring (only for the current node)
-    if (isHighlighted) {
+      // Main ring on top
+      ctx.globalAlpha = 1.0;
+      ctx.lineWidth = ringWidth + hoverBoost;
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = ringColor;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner decorative ring (current only)
       ctx.beginPath();
       ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
       ctx.lineWidth = 1;
-      ctx.globalAlpha = ringAlpha * 0.6;
-      ctx.strokeStyle = style.ringColor;
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = ringColor;
+      ctx.stroke();
+    } else if (isNextNode) {
+      const ringColor = AVAILABLE_RING_COLOR;
+      const ringWidth = 3;
+      const hoverBoost = isHovered ? 0.5 : 0;
+
+      // Subtle pulse for reachable next nodes
+      const pulse = Math.sin(dt * 0.003) * 0.2 + 0.8;
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      ctx.lineWidth = ringWidth + 2 + hoverBoost;
+      ctx.shadowColor = ringColor;
+      ctx.shadowBlur = 6;
+      ctx.strokeStyle = ringColor;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Main ring
+      ctx.globalAlpha = 1.0;
+      ctx.lineWidth = ringWidth + hoverBoost;
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = ringColor;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
     }
+    // Completed and neutral nodes: NO colored ring
 
     // ── Icon ───────────────────────────────────────
     const iconKey = ICON_MAP[node.type] || 'map_icon_battle';
@@ -485,7 +552,7 @@ export default class MapRenderer {
     } else {
       // Fallback: type letter
       ctx.globalAlpha = iconAlpha;
-      ctx.fillStyle = '#c0b890';
+      ctx.fillStyle = isCurrent ? '#f0e8c0' : '#c0b890';
       ctx.font = `bold ${Math.floor(r * 0.8)}px "Marcellus SC", serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -493,42 +560,16 @@ export default class MapRenderer {
       ctx.fillText(letter, x, y + 1);
     }
 
-    // ── Boss special treatment ─────────────────────
-    if (node.type === 'boss') {
-      ctx.globalAlpha = ringAlpha;
-      // Hexagonal outer shape
-      this._drawHexRing(ctx, x, y, r * 1.25, ringWidth, style.ringColor);
-    }
-
     // ── Completed checkmark ────────────────────────
     if (node.state.completed && !node.state.current) {
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = '#c9a840';
-      ctx.font = `${Math.floor(r * 0.5)}px sans-serif`;
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#a09070';
+      ctx.font = `${Math.floor(r * 0.45)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('✓', x, y - r - 12);
+      ctx.fillText('✓', x, y - r - 10);
     }
 
     ctx.restore();
-  }
-
-  /**
-   * Draw a hexagonal ring around a point (for boss nodes).
-   */
-  _drawHexRing(ctx, cx, cy, radius, lineWidth, color) {
-    const sides = 6;
-    ctx.beginPath();
-    for (let i = 0; i < sides; i++) {
-      const angle = (Math.PI / sides) * (2 * i - 1);
-      const px = cx + radius * Math.cos(angle);
-      const py = cy + radius * Math.sin(angle);
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.lineWidth = lineWidth * 0.7;
-    ctx.strokeStyle = color;
-    ctx.stroke();
   }
 }
