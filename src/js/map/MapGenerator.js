@@ -193,14 +193,23 @@ export default class MapGenerator {
 
       const count = nodes.length;
 
+      // ── Depth 6: ALL nodes are chests ──────────────────
+      // This guarantees ≥2 chests AND every start→boss path
+      // must pass through at least one chest — no path can
+      // avert going to a chest.
+      if (d === 6) {
+        for (let i = 0; i < nodes.length; i++) {
+          nodes[i].type = NODE_TYPES.CHEST;
+          nodes[i].meta.forcedChest = true;
+        }
+        continue;
+      }
+
       // Determine elite eligibility (not before depth 4)
       const eliteOk = d >= 4;
 
       // Determine rest eligibility (not before depth 3)
       const restOk = d >= 3;
-
-      // Chests only spawn at depth 6
-      const chestOk = d === 6;
 
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
@@ -215,31 +224,16 @@ export default class MapGenerator {
         } else if (restOk && roll < 0.22) {
           // ~12% chance for rest (if eligible, cumulative above elite)
           node.type = NODE_TYPES.REST;
-        } else if (chestOk && roll < 0.40) {
-          // Chests at depth 6 only — higher chance to ensure they appear
-          node.type = NODE_TYPES.CHEST;
         } else if (roll < 0.44) {
-          // ~4% chance for training (non-chest depths)
-          // On chest depth, training rolls after chest so very rare
+          // ~22% chance for training (after elite/rest thresholds)
           node.type = NODE_TYPES.TRAINING;
         } else {
           node.type = NODE_TYPES.BATTLE;
         }
 
         // If depth has only 1 node, force it to be battle or rest
-        if (count === 1 && (node.type === NODE_TYPES.CHEST || node.type === NODE_TYPES.TRAINING)) {
+        if (count === 1 && (node.type === NODE_TYPES.TRAINING)) {
           node.type = NODE_TYPES.BATTLE;
-        }
-      }
-
-      // If depth 6 has multiple nodes but no chest, force at least one chest
-      if (chestOk && count > 1) {
-        const hasChest = nodes.some(n => n.type === NODE_TYPES.CHEST);
-        if (!hasChest) {
-          // Pick a random node and make it a chest
-          const idx = rng.intRange(0, count - 1);
-          nodes[idx].type = NODE_TYPES.CHEST;
-          nodes[idx].meta.forcedChest = true;
         }
       }
     }
@@ -449,53 +443,34 @@ export default class MapGenerator {
   }
 
   /**
-   * Ensure at least one route from start to boss passes through a chest at depth 6.
-   * If no valid path includes a depth-6 chest, convert a depth-6 battle node
-   * that IS on a valid route into a chest.
+   * Verify that every valid start→boss route passes through a chest at depth 6.
+   *
+   * Since _assignTypes forces ALL depth-6 nodes to be chests, every path
+   * automatically satisfies this requirement.  This method acts as a
+   * defensive sanity check: if any depth-6 node is *not* a chest (e.g. due
+   * to a future refactor), it is forced back to chest.
    */
   static _ensureChestRoute(depthNodes, depthCount, rng) {
-    // Build node lookup
-    const nodeMap = new Map();
-    for (const nodes of depthNodes.values()) {
-      for (const n of nodes) nodeMap.set(n.id, n);
-    }
-
-    const startNode = (depthNodes.get(0) || [])[0];
-    const bossNode = (depthNodes.get(depthCount - 1) || [])[0];
-    if (!startNode || !bossNode) return;
-
     const depth6Nodes = depthNodes.get(6) || [];
     if (depth6Nodes.length === 0) return;
 
-    // Check if any chest at depth 6 is on a valid start→boss path
-    const chestsAtDepth6 = depth6Nodes.filter(n => n.type === NODE_TYPES.CHEST);
-    for (const chest of chestsAtDepth6) {
-      if (
-        MapGenerator._canReach(nodeMap, startNode.id, chest.id) &&
-        MapGenerator._canReach(nodeMap, chest.id, bossNode.id)
-      ) {
-        // This chest is already on a valid route — nothing to do
-        return;
+    let chestCount = 0;
+    for (const node of depth6Nodes) {
+      if (node.type !== NODE_TYPES.CHEST) {
+        node.type = NODE_TYPES.CHEST;
+        node.meta.forcedChest = true;
       }
+      chestCount++;
     }
 
-    // No chest on a valid route — find a battle node at depth 6 that IS on a route
-    const battlesOnRoute = depth6Nodes.filter(n => {
-      if (n.type !== NODE_TYPES.BATTLE) return false;
-      return (
-        MapGenerator._canReach(nodeMap, startNode.id, n.id) &&
-        MapGenerator._canReach(nodeMap, n.id, bossNode.id)
+    // Defensive: if somehow only 1 node exists at depth 6, force at least 2
+    // by duplicating isn't possible here, but log a warning for investigation.
+    if (chestCount < 2) {
+      console.warn(
+        `[MapGenerator] Depth 6 has only ${chestCount} chest(s). ` +
+        `Expected ≥2. Check nodes-per-depth range.`
       );
-    });
-
-    if (battlesOnRoute.length > 0) {
-      // Convert one to a chest
-      const target = rng.pick(battlesOnRoute);
-      target.type = NODE_TYPES.CHEST;
-      target.meta.forcedChest = true;
     }
-    // If no battle nodes are on valid routes either, the graph is pathological
-    // but connectivity validation should have prevented this.
   }
 
   /**

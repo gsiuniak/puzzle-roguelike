@@ -470,38 +470,38 @@ export default class MapScene extends UIPanel {
     const cr = this._getContainerRect();
     const dt = 16; // ~60fps animation base
 
-    // ── 1. Semi-transparent black overlay across entire canvas ──
+    // ── 1. Full-canvas splash background ──────────────────
+    this._drawFullCanvasBackground(ctx);
+
+    // ── 2. Dark overlay outside the container (no compositing tricks) ──
+    this._drawOverlayOutsideContainer(ctx, cr);
+
+    // ── 3. Subtle inner shadow at container edges (depth cue) ──
     ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${OVERLAY_ALPHA})`;
-    ctx.fillRect(0, 0, this._canvasW, this._canvasH);
+    this._drawContainerInnerShadow(ctx, cr);
     ctx.restore();
 
-    // ── 2. Container background panel ──────────────────────
-    ctx.save();
-    this._drawContainerPanel(ctx, cr);
-    ctx.restore();
-
-    // ── 3. Clip & translate to container interior ──────────
+    // ── 4. Clip & translate to container interior ──────────
     ctx.save();
     ctx.beginPath();
     this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
     ctx.clip();
     ctx.translate(cr.x, cr.y);
 
-    // ── 4. Delegate map rendering within container bounds ──
+    // ── 5. Delegate map rendering within container bounds ──
     if (this._renderer) {
       this._renderer.render(ctx, cr.w, cr.h, dt);
     }
 
-    // ── 5. Depth labels (container-relative) ───────────────
+    // ── 6. Depth labels (container-relative) ───────────────
     this._drawDepthLabels(ctx, cr.w, cr.h);
 
-    // ── 6. Node info at bottom (container-relative) ────────
+    // ── 7. Node info at bottom (container-relative) ────────
     this._drawNodeInfo(ctx, cr.w, cr.h);
 
     ctx.restore();
 
-    // ── 7. Container border (on top, after clip restore) ───
+    // ── 8. Container border (on top, after clip restore) ───
     ctx.save();
     this._drawContainerBorder(ctx, cr);
     ctx.restore();
@@ -512,36 +512,92 @@ export default class MapScene extends UIPanel {
   }
 
   /**
-   * Draw the container background fill using the map_splash image.
-   * The splash is scaled to cover the entire container area.
+   * Draw the map_splash image as a full-canvas background,
+   * scaled to cover the entire canvas.
    */
-  _drawContainerPanel(ctx, cr) {
-    // Try to draw the splash image as container background
+  _drawFullCanvasBackground(ctx) {
     const splashImg = this._assetManager ? this._assetManager.get('map_splash') : null;
 
     if (splashImg && splashImg.complete) {
-      // Scale to cover the container, maintaining aspect ratio with overflow
       const imgW = splashImg.width;
       const imgH = splashImg.height;
-      const scale = Math.max(cr.w / imgW, cr.h / imgH);
+      const scale = Math.max(this._canvasW / imgW, this._canvasH / imgH);
       const sw = imgW * scale;
       const sh = imgH * scale;
-      const sx = cr.x + (cr.w - sw) / 2;
-      const sy = cr.y + (cr.h - sh) / 2;
+      const sx = (this._canvasW - sw) / 2;
+      const sy = (this._canvasH - sh) / 2;
 
       ctx.save();
-      ctx.beginPath();
-      this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
-      ctx.clip();
       ctx.drawImage(splashImg, sx, sy, sw, sh);
       ctx.restore();
     } else {
-      // Fallback: dark semi-transparent fill
-      ctx.fillStyle = 'rgba(18, 14, 8, 0.92)';
-      ctx.beginPath();
-      this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
-      ctx.fill();
+      // Fallback: dark background
+      ctx.save();
+      ctx.fillStyle = 'rgba(14, 10, 4, 1)';
+      ctx.fillRect(0, 0, this._canvasW, this._canvasH);
+      ctx.restore();
     }
+  }
+
+  /**
+   * Draw the dark overlay in 4 rects around the container —
+   * no compositing tricks, solid and reliable.
+   */
+  _drawOverlayOutsideContainer(ctx, cr) {
+    const W = this._canvasW;
+    const H = this._canvasH;
+    ctx.save();
+    ctx.fillStyle = `rgba(0, 0, 0, ${OVERLAY_ALPHA})`;
+
+    // Top strip
+    ctx.fillRect(0, 0, W, cr.y);
+    // Bottom strip
+    ctx.fillRect(0, cr.y + cr.h, W, H - (cr.y + cr.h));
+    // Left strip (between top and bottom)
+    ctx.fillRect(0, cr.y, cr.x, cr.h);
+    // Right strip (between top and bottom)
+    ctx.fillRect(cr.x + cr.w, cr.y, W - (cr.x + cr.w), cr.h);
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw a subtle inner shadow / vignette just inside the container edges
+   * to give depth without darkening the entire interior.
+   */
+  _drawContainerInnerShadow(ctx, cr) {
+    const shadowWidth = 24;
+    ctx.save();
+
+    // Top inner shadow
+    let grad = ctx.createLinearGradient(0, cr.y, 0, cr.y + shadowWidth);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cr.x, cr.y, cr.w, shadowWidth);
+
+    // Bottom inner shadow
+    grad = ctx.createLinearGradient(0, cr.y + cr.h, 0, cr.y + cr.h - shadowWidth);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cr.x, cr.y + cr.h - shadowWidth, cr.w, shadowWidth);
+
+    // Left inner shadow
+    grad = ctx.createLinearGradient(cr.x, 0, cr.x + shadowWidth, 0);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cr.x, cr.y, shadowWidth, cr.h);
+
+    // Right inner shadow
+    grad = ctx.createLinearGradient(cr.x + cr.w, 0, cr.x + cr.w - shadowWidth, 0);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cr.x + cr.w - shadowWidth, cr.y, shadowWidth, cr.h);
+
+    ctx.restore();
   }
 
   /**

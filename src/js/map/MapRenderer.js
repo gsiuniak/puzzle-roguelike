@@ -28,11 +28,17 @@ const H_PAD = 80;
 /** Vertical padding on each side */
 const V_PAD = 70;
 /** Gap between connection dots (pixels) */
-const DOT_GAP = 8;
+const DOT_GAP = 7;
 /** Dot radius for connection lines */
-const DOT_RADIUS = 2.2;
+const DOT_RADIUS = 3.0;
+/** Base alpha for all edges (always visible) */
+const EDGE_BASE_ALPHA = 0.7;
+/** Alpha for edge path line behind dots */
+const EDGE_PATH_ALPHA = 0.25;
+/** Edge path line width */
+const EDGE_PATH_WIDTH = 1.5;
 /** Maximum control-point offset for curve (fraction of horizontal distance) */
-const CURVE_FACTOR = 0.25;
+const CURVE_FACTOR = 0.04;
 
 // ── Type → icon asset key mapping ────────────────────
 const ICON_MAP = {
@@ -274,73 +280,55 @@ export default class MapRenderer {
   }
 
   /**
-   * Draw a single edge between two nodes as a dotted curved line.
+   * Draw a single edge between two nodes as a dotted curved line
+   * over a subtle continuous path line. All edges are always visible
+   * regardless of traversal state.
    */
   _drawEdge(ctx, fromNode, x1, y1, toNode, x2, y2, dt) {
-    const traversal = this._traversal;
-
-    // Determine edge visibility/styling from traversal state
-    let alpha = 0.15;
-    let color = '#6b5b4a';
-
-    if (traversal) {
-      if (fromNode.state.completed && toNode.state.completed) {
-        // Both completed — solid visible path
-        alpha = 0.6;
-        color = '#8b7550';
-      } else if (fromNode.state.completed && toNode.state.reachable) {
-        // Path to reachable — highlighted
-        alpha = 0.7;
-        color = '#c9a840';
-      } else if (fromNode.state.current || fromNode.state.completed) {
-        // Active/completed parent → undiscovered child — partially visible
-        alpha = 0.30;
-        color = '#7b6a4a';
-      }
-    } else {
-      alpha = 0.5;
-      color = '#8b7550';
-    }
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
     const dx = x2 - x1;
     const dy = y2 - y1;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist < 1) {
-      ctx.restore();
-      return;
-    }
+    if (dist < 1) return;
 
-    // Build a simple quadratic bezier curve
-    // Control point offset perpendicular to edge direction
+    // Build the quadratic bezier curve
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
     const perpX = -dy / dist;
     const perpY = dx / dist;
-    const offset = dist * CURVE_FACTOR * (Math.sin(fromNode.lane * 0.7 + toNode.lane * 0.7) * 0.5 + 0.5);
+    // Gentle, consistent curve — lane only shifts direction subtly
+    const laneSign = ((fromNode.lane + toNode.lane) % 2 === 0) ? 1 : -1;
+    const offset = dist * CURVE_FACTOR * laneSign;
 
     const cpX = midX + perpX * offset;
     const cpY = midY + perpY * offset;
 
-    // Sample the bezier at regular intervals for dots
-    const steps = Math.max(10, Math.floor(dist / DOT_GAP));
+    // ── 1. Subtle continuous path line behind the dots ──
+    ctx.save();
+    ctx.globalAlpha = EDGE_PATH_ALPHA;
+    ctx.strokeStyle = '#a09070';
+    ctx.lineWidth = EDGE_PATH_WIDTH;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+    ctx.stroke();
+    ctx.restore();
 
-    ctx.fillStyle = color;
+    // ── 2. Dotted overlay (always visible) ──────────────
+    ctx.save();
+    ctx.globalAlpha = EDGE_BASE_ALPHA;
+
+    const steps = Math.max(10, Math.floor(dist / DOT_GAP));
+    ctx.fillStyle = '#b8a070';
 
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      // Quadratic bezier
       const bx = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * cpX + t * t * x2;
       const by = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cpY + t * t * y2;
 
-      // Subtle pulse animation on reachable edges
-      let r = DOT_RADIUS;
-      if (traversal && fromNode.state.completed && toNode.state.reachable) {
-        r += Math.sin(dt * 0.003 + i * 0.3) * 0.6;
-      }
+      // Subtle pulse animation on all edges
+      const pulse = Math.sin(dt * 0.002 + i * 0.35) * 0.4;
+      const r = DOT_RADIUS + pulse;
 
       ctx.beginPath();
       ctx.arc(bx, by, r, 0, Math.PI * 2);
@@ -419,11 +407,11 @@ export default class MapRenderer {
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
 
-    // Ring fill — subtle dark backing so the icon stands out
+    // Ring fill — opaque dark backing so paths are fully hidden behind nodes
     const ringFillGrad = ctx.createRadialGradient(x, y, r * 0.5, x, y, r);
-    ringFillGrad.addColorStop(0, 'rgba(20, 14, 8, 0.55)');
-    ringFillGrad.addColorStop(0.7, 'rgba(14, 10, 4, 0.7)');
-    ringFillGrad.addColorStop(1, 'rgba(10, 6, 2, 0.85)');
+    ringFillGrad.addColorStop(0, 'rgba(18, 12, 6, 0.92)');
+    ringFillGrad.addColorStop(0.7, 'rgba(12, 8, 3, 0.96)');
+    ringFillGrad.addColorStop(1, 'rgba(8, 4, 1, 1.0)');
     ctx.fillStyle = ringFillGrad;
     ctx.fill();
 
