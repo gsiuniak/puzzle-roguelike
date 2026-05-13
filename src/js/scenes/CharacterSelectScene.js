@@ -734,8 +734,8 @@ export default class CharacterSelectScene extends UIPanel {
       mapScene.setSeed('run_' + Date.now());
       mapScene.setPlayerData(playerClone);
 
-      // Switch to map scene
-      sm.switchTo('MapScene');
+      // Fade transition to map scene
+      sm.fadeToScene('MapScene', 500);
     } else {
       // Fallback: direct to battle (shouldn't happen if MapScene is registered)
       console.warn('MapScene not found, falling back to direct BattleScene');
@@ -749,7 +749,7 @@ export default class CharacterSelectScene extends UIPanel {
       );
       battleScene.setAudioManager(sm.audioManager);
       sm.registerScene('BattleScene', battleScene);
-      sm.switchTo('BattleScene');
+      sm.fadeToScene('BattleScene', 500);
     }
   }
 

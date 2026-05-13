@@ -83,14 +83,21 @@ export default class MapTraversalController {
   }
 
   /**
-   * Check if a node is currently reachable (connected edge from current).
+   * Check if a node is currently reachable.
+   * When a current node is set, checks its outgoing edges.
+   * When no current node is set (e.g. after completeCurrentAndRevealNext),
+   * falls back to checking the node's reachable state flag.
    * @param {string} nodeId
    * @returns {boolean}
    */
   isReachable(nodeId) {
     const current = this.currentNode;
-    if (!current) return false;
-    return current.outgoing.includes(nodeId);
+    if (current) {
+      return current.outgoing.includes(nodeId);
+    }
+    // No current node — check the state flag set by completeCurrentAndRevealNext()
+    const node = this._graph.getNode(nodeId);
+    return node ? node.state.reachable : false;
   }
 
   /**

@@ -48,6 +48,22 @@ export default class SceneManager {
 
     /** @type {boolean} */
     this._running = false;
+
+    // ── Transition state ──────────────────────────────
+    /** @type {boolean} */
+    this._transitioning = false;
+    /** @type {string|null} target scene name */
+    this._transitionTarget = null;
+    /** @type {'fade'} */
+    this._transitionType = 'fade';
+    /** @type {number} transition duration in ms (total: fade-out + fade-in) */
+    this._transitionDuration = 400;
+    /** @type {number} elapsed time in current transition half */
+    this._transitionTimer = 0;
+    /** @type {'out'|'in'} which half of the transition */
+    this._transitionPhase = 'out';
+    /** @type {number} current overlay alpha (0–1) */
+    this._transitionAlpha = 0;
   }
 
   // ── Service accessors ─────────────────────────────────
@@ -80,9 +96,18 @@ export default class SceneManager {
    * Transition from the current scene to the named scene.
    * Calls onExit() on the old scene, onEnter() on the new scene,
    * and clears all input listeners in between.
+   *
+   * If a transition is already in progress, the call is ignored
+   * to prevent double-triggering.
+   *
    * @param {string} name
    */
   switchTo(name) {
+    if (this._transitioning) {
+      console.warn(`SceneManager: ignoring switchTo("${name}") — transition in progress.`);
+      return;
+    }
+
     const nextScene = this._scenes[name];
     if (!nextScene) {
       console.error(`SceneManager: unknown scene "${name}"`);
@@ -110,6 +135,44 @@ export default class SceneManager {
     this._layoutCurrentScene();
 
     console.log(`SceneManager: switched to "${name}"`);
+  }
+
+  /**
+   * Fade to black, switch scene, fade in — centralized soft transition.
+   * Input is blocked during the entire transition to prevent
+   * double-triggering or gameplay logic running twice.
+   *
+   * @param {string} name         — target scene name
+   * @param {number} [duration=400] — total transition duration in ms
+   */
+  fadeToScene(name, duration = 400) {
+    if (this._transitioning) {
+      console.warn(`SceneManager: ignoring fadeToScene("${name}") — transition in progress.`);
+      return;
+    }
+
+    const nextScene = this._scenes[name];
+    if (!nextScene) {
+      console.error(`SceneManager: unknown scene "${name}"`);
+      return;
+    }
+
+    this._transitioning = true;
+    this._transitionTarget = name;
+    this._transitionType = 'fade';
+    this._transitionDuration = duration;
+    this._transitionTimer = 0;
+    this._transitionPhase = 'out';
+    this._transitionAlpha = 0;
+  }
+
+  /**
+   * Returns true if a scene transition is currently in progress.
+   * Scenes can check this to block input during transitions.
+   * @returns {boolean}
+   */
+  isTransitioning() {
+    return this._transitioning;
   }
 
   // ── Game loop ─────────────────────────────────────────
@@ -141,6 +204,62 @@ export default class SceneManager {
 
   /** @param {number} dt — delta time in ms */
   _tick(dt) {
+    // ── Handle transition animation ─────────────────
+    if (this._transitioning) {
+      this._transitionTimer += dt;
+      const halfDuration = this._transitionDuration / 2;
+      const halfProgress = Math.min(1, this._transitionTimer / halfDuration);
+
+      if (this._transitionPhase === 'out') {
+        // Fade to black: alpha 0 → 1
+        this._transitionAlpha = halfProgress;
+
+        // Still update current scene while fading out
+        if (this._currentScene) {
+          this._currentScene.update(dt);
+          this._layoutCurrentScene();
+        }
+
+        // Render current scene with darkening overlay
+        this._app.clear('#1a0a0a');
+        if (this._currentScene) {
+          this._currentScene.render(this._app.ctx);
+        }
+        this._renderTransitionOverlay();
+
+        // At full black, switch scenes
+        if (halfProgress >= 1) {
+          this._executeSceneSwitch(this._transitionTarget);
+          this._transitionPhase = 'in';
+          this._transitionTimer = 0;
+        }
+      } else {
+        // Fade in: alpha 1 → 0
+        this._transitionAlpha = 1 - halfProgress;
+
+        // Update and render new scene
+        if (this._currentScene) {
+          this._currentScene.update(dt);
+          this._layoutCurrentScene();
+        }
+
+        this._app.clear('#1a0a0a');
+        if (this._currentScene) {
+          this._currentScene.render(this._app.ctx);
+        }
+        this._renderTransitionOverlay();
+
+        // Done
+        if (halfProgress >= 1) {
+          this._transitioning = false;
+          this._transitionTarget = null;
+          this._transitionAlpha = 0;
+          console.log('SceneManager: transition complete.');
+        }
+      }
+      return;
+    }
+
     if (!this._currentScene) return;
 
     // Update
@@ -152,6 +271,50 @@ export default class SceneManager {
     // Render
     this._app.clear('#1a0a0a');
     this._currentScene.render(this._app.ctx);
+  }
+
+  /**
+   * Execute the actual scene switch (called at the midpoint of fade-to-black).
+   * @param {string} name
+   */
+  _executeSceneSwitch(name) {
+    const nextScene = this._scenes[name];
+    if (!nextScene) return;
+
+    // Exit current scene
+    if (this._currentScene && typeof this._currentScene.onExit === 'function') {
+      this._currentScene.onExit();
+    }
+
+    // Clear all input listeners from previous scene
+    this._input.clearAllListeners();
+
+    // Swap
+    this._currentScene = nextScene;
+    this._currentSceneName = name;
+
+    // Enter new scene
+    if (typeof nextScene.onEnter === 'function') {
+      nextScene.onEnter();
+    }
+
+    // Layout immediately for the new scene
+    this._layoutCurrentScene();
+
+    console.log(`SceneManager: switched to "${name}"`);
+  }
+
+  /**
+   * Draw a full-screen black overlay at the current transition alpha.
+   */
+  _renderTransitionOverlay() {
+    if (this._transitionAlpha <= 0) return;
+    const ctx = this._app.ctx;
+    ctx.save();
+    ctx.globalAlpha = this._transitionAlpha;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, this._app.width, this._app.height);
+    ctx.restore();
   }
 
   // ── Layout ────────────────────────────────────────────

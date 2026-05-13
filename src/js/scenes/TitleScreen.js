@@ -64,7 +64,7 @@ export default class TitleScreen extends UIPanel {
     // Prevent double-transition (keydown + click in same frame, etc.)
     if (!this._sceneManager || this._sceneManager._currentScene !== this) return;
 
-    this._sceneManager.switchTo('CharacterSelectScene');
+    this._sceneManager.fadeToScene('CharacterSelectScene', 500);
   }
 
   // ── Update ────────────────────────────────────────────

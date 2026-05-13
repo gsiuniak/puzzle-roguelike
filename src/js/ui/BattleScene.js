@@ -101,6 +101,14 @@ export default class BattleScene extends UIPanel {
     /** Whether a return-to-map transition has been initiated */
     this._returnToMapPending = false;
 
+    /**
+     * Callback invoked when the battle ends. Set by MapScene before
+     * entering battle so BattleScene does not need map internals.
+     * Signature: (result: { result: string, nodeId: string }) => void
+     * @type {Function|null}
+     */
+    this._onBattleComplete = null;
+
     // ── Map overlay (toggled with 'm' key) ──
     /** @type {boolean} */
     this._mapVisible = false;
@@ -439,6 +447,12 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleKeyDown(e) {
+    // ── Debug: instant win with 'K' key ──
+    if ((e.key === 'k' || e.key === 'K') && window.__DEBUG_MODE) {
+      this._debugWinBattle();
+      return;
+    }
+
     // ── Map overlay toggle ('m') ──
     if (e.key === 'm' || e.key === 'M') {
       this._mapVisible = !this._mapVisible;
@@ -921,16 +935,33 @@ export default class BattleScene extends UIPanel {
 
   /**
    * Transition back to the MapScene after battle ends.
-   * Reads stored map state from userData and restores the traversal.
+   * Calls _onBattleComplete so the map/run controller can update
+   * node completion and reachability before the scene switch.
    */
   _returnToMap() {
     const sm = this._sceneManager;
     if (!sm) return;
 
-    // Restore map state if available
-    const mapData = this.userData;
+    const mapData = this.userData || {};
     const mapScene = sm._scenes['MapScene'];
 
+    // Determine battle result
+    const winner = this._battleController
+      ? this._battleController._winner()
+      : (this._enemyData && this._enemyData.hp <= 0 ? 'player' : 'enemy');
+    const nodeId = mapData.nodeId || null;
+
+    // Report battle completion to the run/map controller
+    // This allows MapScene to mark the node as completed and update
+    // reachability before the scene transition completes.
+    if (this._onBattleComplete) {
+      this._onBattleComplete({
+        result: winner === 'player' ? 'victory' : 'defeat',
+        nodeId,
+      });
+    }
+
+    // Restore map state if available
     if (mapScene && mapData) {
       // Restore seed and player data
       if (mapData.mapSeed) {
@@ -941,15 +972,38 @@ export default class BattleScene extends UIPanel {
         const healed = this._getPostBattlePlayerData(mapData.playerData);
         mapScene.setPlayerData(healed);
       }
-
-      // Re-generate the map (deterministic from seed) and restore traversal
-      // This is done in onEnter when the scene becomes active again
     }
 
-    // Switch back to MapScene
-    sm.switchTo('MapScene');
+    // Fade transition back to MapScene
+    sm.fadeToScene('MapScene', 400);
 
-    console.log('[BattleScene] Returning to MapScene.');
+    console.log(`[BattleScene] Returning to MapScene (result: ${winner}, node: ${nodeId}).`);
+  }
+
+  /**
+   * Debug: instantly win the current battle.
+   * Only callable when DEBUG_MODE is true (checked in _handleKeyDown).
+   * Sets enemy HP to 0, triggers GAME_OVER, and lets the normal
+   * game-over → return-to-map flow handle the rest.
+   */
+  _debugWinBattle() {
+    if (!this._battleController) return;
+
+    // Only allow if battle is active (not already game over)
+    if (this._battleController.state === BattleState.GAME_OVER) return;
+
+    console.log('[BattleScene] DEBUG: Instantly winning battle via K key.');
+
+    // Force enemy HP to 0
+    this._battleController.enemyState.hp = 0;
+
+    // Trigger game over check
+    this._battleController._checkGameOver();
+
+    // Add log message so it's visible what happened
+    if (this._battleController.log) {
+      this._battleController.log.add('[DEBUG] Battle force-won via K key.');
+    }
   }
 
   /**

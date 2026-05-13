@@ -102,15 +102,23 @@ export default class MapScene extends UIPanel {
     // Create the traversal controller
     this._traversal = new MapTraversalController(this._graph);
 
-    // Restore traversal state if returning from battle
+    // Restore traversal state if returning from battle.
+    // _handleBattleComplete pre-processes the saved state so that the
+    // battle node is already marked completed. We still need to reveal
+    // the next depth nodes since the graph was regenerated.
     if (this._savedTraversalState) {
-      this._traversal.deserialize(this._savedTraversalState);
+      const saved = this._savedTraversalState;
+      this._traversal.deserialize(saved);
+
+      // If the battle-complete handler flagged that we need to reveal
+      // next nodes, do it now that the graph is available.
+      if (saved._needsCompleteAndReveal) {
+        this._traversal.completeCurrentAndRevealNext();
+        console.log('[MapScene] Current node completed, next depth revealed.');
+      }
+
       this._savedTraversalState = null;
       console.log('[MapScene] Restored traversal state from battle return.');
-
-      // Complete the node we just battled at and reveal the next depth
-      this._traversal.completeCurrentAndRevealNext();
-      console.log('[MapScene] Current node completed, next depth revealed.');
     }
 
     // Create the renderer
@@ -263,7 +271,11 @@ export default class MapScene extends UIPanel {
   _onNodeEntered(node) {
     switch (node.type) {
       case 'battle':
+        this._transitionToBattle(node);
+        break;
+
       case 'elite':
+        // For now, elite nodes route to battle (enemy scaled up)
         this._transitionToBattle(node);
         break;
 
@@ -274,17 +286,29 @@ export default class MapScene extends UIPanel {
       case 'rest':
         // Future: trigger rest scene / healing
         console.log('[MapScene] Rest node entered — healing (placeholder)');
-        // For now, mark the node as completed and stay on map
+        // For now, route to Goblin battle for testing
+        if (window.__DEBUG_MODE) {
+          console.log('[MapScene] DEBUG: routing rest node to Goblin battle for testing.');
+          this._transitionToBattle(node);
+        }
         break;
 
       case 'chest':
         // Future: trigger chest reward
         console.log('[MapScene] Chest node entered — reward (placeholder)');
+        if (window.__DEBUG_MODE) {
+          console.log('[MapScene] DEBUG: routing chest node to Goblin battle for testing.');
+          this._transitionToBattle(node);
+        }
         break;
 
       case 'training':
         // Future: trigger training scene
         console.log('[MapScene] Training node entered — upgrade (placeholder)');
+        if (window.__DEBUG_MODE) {
+          console.log('[MapScene] DEBUG: routing training node to Goblin battle for testing.');
+          this._transitionToBattle(node);
+        }
         break;
 
       default:
@@ -338,17 +362,57 @@ export default class MapScene extends UIPanel {
     );
     battleScene.setAudioManager(sm.audioManager);
 
-    // Store minimal map context for battle scene (seed for regeneration)
+    // Store map context for battle scene (seed for regeneration + node tracking)
     battleScene.userData = {
       mapSeed: this._seed,
       playerData: this._playerData,
+      nodeId: node.id,
       nodeType: node.type,
       nodeDepth: node.depth,
     };
 
-    // Register and switch
+    // Wire onBattleComplete callback so BattleScene reports back
+    // without needing to know about MapScene internals.
+    battleScene._onBattleComplete = (result) => {
+      this._handleBattleComplete(result);
+    };
+
+    // Register and fade transition to battle
     sm.registerScene('BattleScene', battleScene);
-    sm.switchTo('BattleScene');
+    sm.fadeToScene('BattleScene', 400);
+  }
+
+  /**
+   * Handle battle completion callback from BattleScene.
+   * Called BEFORE the scene transition back to MapScene (so MapScene
+   * may still be inactive).  Updates the serialized traversal state
+   * in-place so that when onEnter fires and regenerates the graph,
+   * the battle node is already marked completed and the next nodes
+   * are reachable.
+   * @param {{result:string, nodeId:string}} result
+   */
+  _handleBattleComplete(result) {
+    console.log(`[MapScene] Battle complete — result: ${result.result}, node: ${result.nodeId}`);
+
+    if (!this._savedTraversalState) {
+      console.warn('[MapScene] No saved traversal state to update on battle completion.');
+      return;
+    }
+
+    const saved = this._savedTraversalState;
+
+    // The saved state has the battle node as 'current'.
+    // When MapScene.onEnter restores and calls completeCurrentAndRevealNext(),
+    // it will mark the current node as completed and reveal outgoing nodes.
+    // We don't need to modify the saved state here — the graph will be
+    // regenerated in onEnter, and completeCurrentAndRevealNext operates on
+    // the regenerated graph's node references.
+    //
+    // We store a flag to ensure onEnter calls completeCurrentAndRevealNext.
+    saved._needsCompleteAndReveal = true;
+
+    // Save the updated state back
+    this._savedTraversalState = saved;
   }
 
   /**

@@ -20,8 +20,16 @@ import MapScene from './scenes/MapScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
 
-// ── Debug flag ──────────────────────────────────────────
+// ── Debug flags ─────────────────────────────────────────
 const DEBUG_UI_LAYOUT = false;
+
+/**
+ * Global debug mode — enables developer shortcuts across scenes.
+ * When true:
+ *   - BattleScene: press 'K' to instantly win the battle
+ *   - Future debug shortcuts can key off this flag
+ */
+const DEBUG_MODE = true;
 
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
@@ -150,6 +158,10 @@ async function init() {
   // 12. Start the game loop
   sceneManager.start();
 
+  // Attach debug flags to window for runtime access across modules
+  window.__DEBUG_MODE = DEBUG_MODE;
+  window.__DEBUG_UI_LAYOUT = DEBUG_UI_LAYOUT;
+
   console.log('Match-3 Battle ready!');
   console.log('  - Press any key or click at the title screen');
   console.log('  - Select your hero: Warrior or Mage');
@@ -159,6 +171,7 @@ async function init() {
   console.log('  - Match 3+ tiles to gain mana / deal skull damage');
   console.log('  - Match 5+ connected tiles for extra turn');
   console.log('  - Click skills on player pane to use them');
+  console.log(`  - DEBUG_MODE = ${DEBUG_MODE} (press K in battle to win instantly)`);
   console.log(`  - DEBUG_UI_LAYOUT = ${DEBUG_UI_LAYOUT}`);
 }
 
