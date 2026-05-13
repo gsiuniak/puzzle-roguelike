@@ -95,7 +95,7 @@ export default class BattleScene extends UIPanel {
     this._screenShake = new ScreenShake();
 
     /** Delay after game over before returning to map (ms) */
-    this._gameOverDelay = 800;
+    this._gameOverDelay = 400;
     /** Timer tracking elapsed time in game over state */
     this._gameOverTimer = 0;
     /** Whether a return-to-map transition has been initiated */
@@ -975,7 +975,7 @@ export default class BattleScene extends UIPanel {
     }
 
     // Fade transition back to MapScene
-    sm.fadeToScene('MapScene', 400);
+    sm.fadeToScene('MapScene', 200);
 
     console.log(`[BattleScene] Returning to MapScene (result: ${winner}, node: ${nodeId}).`);
   }
