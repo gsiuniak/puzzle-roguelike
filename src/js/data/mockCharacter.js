@@ -87,8 +87,53 @@ const mageCharacter = {
   ],
 };
 
+const witchDoctorCharacter = {
+  id: 'witch_doctor',
+  name: 'Kalfou',
+  className: 'Witch Doctor',
+  description: 'A shadowy practitioner of forbidden arts, Kalfou commands the dead and mends wounds with dark rituals.',
+  level: 1,
+  hp: 25,
+  maxHp: 25,
+  attack: 1,
+  armor: 0,
+  mana: {
+    red: 0,
+    blue: 0,
+    green: 6,
+    yellow: 0,
+    purple: 4,
+  },
+  portrait: 'witch_doctor', // maps to 'portrait_witch_doctor' asset key
+  skills: [
+    {
+      name: 'Summon Dead',
+      description: 'Create 10 skull tiles',
+      icon: 'skill_summon_dead',
+      sound: 'skill_create_skull',
+      effectType: 'create_tiles',
+      createTiles: {
+        amount: 10,
+        type: 'skull',
+      },
+      cost: { purple: 4 },
+    },
+    {
+      name: 'Oungan',
+      description: 'Heal 5 HP',
+      icon: 'skill_oungan',
+      sound: 'skill_oungan',
+      effectType: 'heal',
+      heal: {
+        amount: 5,
+      },
+      cost: { green: 6 },
+    },
+  ],
+};
+
 // Default export — Warrior for backward compatibility
 const mockCharacter = warriorCharacter;
 
-export { warriorCharacter, mageCharacter };
+export { warriorCharacter, mageCharacter, witchDoctorCharacter };
 export default mockCharacter;

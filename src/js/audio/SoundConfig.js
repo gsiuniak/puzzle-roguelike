@@ -132,6 +132,14 @@ const SOUNDS = {
     src: ['assets/audio/sfx/skills/mage/skill_fracture.mp3'],
     category: AudioCategory.SFX,
   },
+  skill_create_skull: {
+    src: ['assets/audio/sfx/skills/general/skill_create_skull.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_oungan: {
+    src: ['assets/audio/sfx/skills/witch_doctor/skill_oungan.mp3'],
+    category: AudioCategory.SFX,
+  },
 
   // ── Character Select ────────────────────────────────────
   character_select_pick: {

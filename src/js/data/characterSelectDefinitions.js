@@ -13,7 +13,7 @@
  * The scene renders from this array — no hardcoded Warrior/Mage logic.
  */
 
-import { warriorCharacter, mageCharacter } from './mockCharacter.js';
+import { warriorCharacter, mageCharacter, witchDoctorCharacter } from './mockCharacter.js';
 
 const characterSelectDefinitions = [
   {
@@ -43,6 +43,18 @@ const characterSelectDefinitions = [
     auraColor: { r: 0.55, g: 0.15, b: 0.85 },
     characterData: mageCharacter,
     order: 1,
+    enabled: true,
+  },
+  {
+    id: 'witch_doctor',
+    name: witchDoctorCharacter.name,
+    className: witchDoctorCharacter.className,
+    portraitKey: 'character_select_portrait_witch_doctor',
+    splashKey: 'character_select_splash_witch_doctor',
+    /** Aura color {r,g,b} in 0-1 range — dark green/teal voodoo */
+    auraColor: { r: 0.15, g: 0.55, b: 0.35 },
+    characterData: witchDoctorCharacter,
+    order: 2,
     enabled: true,
   },
 ];

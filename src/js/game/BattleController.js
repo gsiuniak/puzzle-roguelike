@@ -637,7 +637,8 @@ export default class BattleController {
     }
 
     // 5. Check if conversion created any matches
-    const analysis = this.resolver.analyzeMatches(this.board, src);
+    const activeState = side === 'player' ? this.playerState : this.enemyState;
+    const analysis = this.resolver.analyzeMatches(this.board, activeState);
     if (analysis) {
       // Save swap trigger pos for cascade effects; null since no swap occurred
       this._swapTriggerPos = null;
@@ -1086,26 +1087,47 @@ export default class BattleController {
     // Determine effect type: explicit param → skill field → inference
     const type = effectType || skill.effectType || this._inferEffectType(skill);
 
-    // Extract numeric value from description (e.g. "Deal 5 damage" → 5)
-    // Falls back to the source's attack stat if no number found.
-    let baseAmount = src.attack || 1;
-    const numMatch = skill.description && skill.description.match(/(\d+)/);
-    if (numMatch) {
-      baseAmount = parseInt(numMatch[1], 10);
-    }
-
     switch (type) {
-      case SKILL_EFFECT_TYPES.ARMOR:
-        src.armor += baseAmount;
-        this.log.add(`${src.name} gains ${baseAmount} armor.`);
+      case SKILL_EFFECT_TYPES.ARMOR: {
+        // Extract numeric value from description (e.g. "Gain 5 armor" → 5)
+        let amount = src.attack || 1;
+        const numMatch = skill.description && skill.description.match(/(\d+)/);
+        if (numMatch) {
+          amount = parseInt(numMatch[1], 10);
+        }
+        src.armor += amount;
+        this.log.add(`${src.name} gains ${amount} armor.`);
         break;
+      }
 
       case SKILL_EFFECT_TYPES.CREATE_TILES:
         this._executeCreateTiles(skill, side);
         break;
 
+      case SKILL_EFFECT_TYPES.HEAL: {
+        const healAmount = (skill.heal && typeof skill.heal.amount === 'number')
+          ? skill.heal.amount
+          : 0;
+        if (healAmount <= 0) {
+          this.log.add(`${skill.name} has no heal amount configured.`);
+          break;
+        }
+        const beforeHp = src.hp;
+        src.hp = Math.min(src.maxHp, src.hp + healAmount);
+        const actualHeal = src.hp - beforeHp;
+        this.log.add(`${src.name} heals for ${actualHeal} HP.`);
+        break;
+      }
+
       case SKILL_EFFECT_TYPES.DAMAGE:
       default: {
+        // Extract numeric value from description (e.g. "Deal 5 damage" → 5)
+        // Falls back to the source's attack stat if no number found.
+        let baseAmount = src.attack || 1;
+        const numMatch = skill.description && skill.description.match(/(\d+)/);
+        if (numMatch) {
+          baseAmount = parseInt(numMatch[1], 10);
+        }
         const r = this.resolver.applyDamage(tgt, baseAmount);
         this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
         // Trigger screen shake scaled by damage % of target's max HP
