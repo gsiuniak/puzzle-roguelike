@@ -2,14 +2,23 @@
  * MapRenderer — draws the map graph to a Canvas2D context.
  *
  * Responsibilities:
- *   - Layout node positions within the canvas bounds
+ *   - Layout node positions within the canvas bounds (diagonal fan-out)
  *   - Draw parchment-style background
  *   - Draw dotted/curved connection edges between nodes
  *   - Draw node circles with type-specific icons
- *   - Apply state-based styling (current, completed, reachable, unreachable)
+ *   - Apply state-based styling (current, available, past, default)
  *   - Handle hover/click hit-testing
  *
- * No game logic, no traversal state mutation, no scene management.
+ * Three visual states (replaces the old 4-state + exactRoute model):
+ *   current   — strongest gold ring + glow + pulse (primary focus)
+ *   available — distinct warm ring + glow (only directly reachable nodes)
+ *   past      — darkened, desaturated (all nodes on floors behind the player)
+ *   default   — natural asset color, no special treatment (future/unreachable)
+ *
+ * Edge hierarchy (simplified from 4 states):
+ *   available — current → reachable next nodes (bright gold, strongest)
+ *   traveled  — edges originating from past floors (dark muted)
+ *   default   — future, undiscovered, neutral (dim grey, most subdued)
  *
  * @dependency MapGraph, MapTraversalController, AssetManager
  */
@@ -31,34 +40,39 @@ const V_PAD = 70;
 const DOT_GAP = 7;
 /** Dot radius for connection lines */
 const DOT_RADIUS = 3.0;
-/** Alpha for neutral/default edges (dimmer grey) */
+/** Maximum control-point offset for curve (fraction of horizontal distance) */
+const CURVE_FACTOR = 0.04;
+
+// ── Diagonal fan-out layout ────────────────────
+/** Horizontal spread factor for diagonal fan-out (fraction of column width).
+ *  Higher values create more dramatic diagonal slant. */
+const DIAGONAL_SPREAD = 0.22;
+
+// ── Edge colors (rebalanced: default=dim grey, available=bright gold, traveled=dark muted) ──
+/** Alpha for neutral/default edges (dim grey, most subdued) */
 const EDGE_DEFAULT_ALPHA = 0.38;
-/** Alpha for generic past/traversed edges (darkened, desaturated) */
-const EDGE_TRAVERSED_ALPHA = 0.25;
-/** Alpha for exact-route edges (warmer, brighter than generic past) */
-const EDGE_EXACT_ROUTE_ALPHA = 0.50;
+/** Alpha for traveled/past edges (darkened, muted) */
+const EDGE_TRAVELED_ALPHA = 0.28;
 /** Alpha for available-next edges (brightest highlight) */
-const EDGE_AVAILABLE_ALPHA = 0.92;
+const EDGE_AVAILABLE_ALPHA = 0.90;
 /** Alpha for edge path line behind dots */
 const EDGE_PATH_ALPHA = 0.18;
 /** Edge path line width */
 const EDGE_PATH_WIDTH = 1.5;
-/** Maximum control-point offset for curve (fraction of horizontal distance) */
-const CURVE_FACTOR = 0.04;
-/** Color for available-next edges (beige/gold highlight) */
-const EDGE_AVAILABLE_COLOR = '#b8a070';
-/** Color for default/inactive edges (dimmer grey) */
-const EDGE_DEFAULT_COLOR = '#7a7a76';
-/** Color for generic past/traversed edges (darkened, desaturated) */
-const EDGE_TRAVERSED_COLOR = '#4a3a2a';
-/** Color for exact-route edges (warmer tone, slightly brighter than traversed) */
-const EDGE_EXACT_ROUTE_COLOR = '#b89858';
+
+/** Color for default/inactive edges (dim grey — the most subdued) */
+const EDGE_DEFAULT_COLOR = '#5a5a54';
+/** Color for available-next edges (bright gold highlight) */
+const EDGE_AVAILABLE_COLOR = '#c8b870';
+/** Color for traveled/past edges (darkened, desaturated) */
+const EDGE_TRAVELED_COLOR = '#4a3a2a';
 /** Path line color (subtle continuous line behind dots) */
-const EDGE_PATH_COLOR = '#80807a';
+const EDGE_PATH_COLOR = '#6a6a64';
+
 /** Pulse magnitude for available edges */
 const EDGE_AVAILABLE_PULSE = 0.5;
-/** Subtle glow radius for exact-route edge dots */
-const EDGE_EXACT_ROUTE_GLOW = 4;
+/** Subtle pulse on default edges */
+const EDGE_DEFAULT_PULSE = 0.10;
 
 // ── Type → icon asset key mapping ────────────────────
 const ICON_MAP = {
@@ -70,15 +84,16 @@ const ICON_MAP = {
   boss:     'map_icon_boss',
 };
 
-// ── State-based highlight colors (NOT type-based) ────
-/** Ring color for the current node (strongest highlight) */
-const CURRENT_RING_COLOR = '#e8d860';
+// ── State-based highlight colors ──────────────────────
+/** Ring color for the current node (bright gold, distinct from available) */
+const CURRENT_RING_COLOR = '#f0e040';
 /** Glow color for the current node */
-const CURRENT_GLOW_COLOR = '#c89820';
-/** Ring color for available next nodes (different from current) */
-const AVAILABLE_RING_COLOR = '#c8b878';
+const CURRENT_GLOW_COLOR = '#d4a020';
+/** Ring color for available next nodes (softer warm tone, clearly
+  * different from the bright-gold current-node ring) */
+const AVAILABLE_RING_COLOR = '#c8b870';
 /** Glow color for available next nodes */
-const AVAILABLE_GLOW_COLOR = '#8a7a50';
+const AVAILABLE_GLOW_COLOR = '#8a7a4a';
 
 /**
  * Convert a hex color like '#3a2f1f' to an rgba string with given alpha.
@@ -135,6 +150,12 @@ export default class MapRenderer {
 
   /**
    * Compute (x, y) positions for all nodes based on canvas dimensions.
+   *
+   * Uses a diagonal fan-out layout: nodes within the same depth are spread
+   * horizontally based on their lane position, creating a roguelike zigzag
+   * pattern where paths between depths form diagonal connections rather
+   * than a rigid vertical grid.
+   *
    * Returns a flat array of {node, x, y}.
    * Call this whenever the canvas resizes.
    *
@@ -154,17 +175,24 @@ export default class MapRenderer {
     const colW = depthCount > 1 ? mapAreaW / (depthCount - 1) : mapAreaW;
     const startX = H_PAD;
 
+    // Max horizontal offset per node (fraction of column width)
+    const maxSpread = colW * DIAGONAL_SPREAD;
+
     const positioned = [];
 
     for (let d = 0; d < depthCount; d++) {
       const nodes = graph.getNodesAtDepth(d);
       if (nodes.length === 0) continue;
 
-      const x = startX + (d > 0 ? colW * d : 0);
+      const baseX = startX + (d > 0 ? colW * d : 0);
+      const count = nodes.length;
+
+      // Alternate fan direction per depth for organic zigzag feel
+      const direction = (d % 2 === 0) ? 1 : -1;
 
       // Vertical distribution
-      const count = nodes.length;
       if (count === 1) {
+        const x = baseX;
         const y = canvasH / 2;
         nodes[0].x = x;
         nodes[0].y = y;
@@ -175,7 +203,15 @@ export default class MapRenderer {
         const startY = (canvasH - totalH) / 2;
 
         for (let i = 0; i < count; i++) {
+          // Lane position 0..1 across the nodes in this depth
+          const t = count > 1 ? i / (count - 1) : 0.5;
+          // Diagonal offset: nodes spread horizontally based on lane
+          // Top lanes shift one way, bottom lanes the opposite
+          const offset = (t - 0.5) * maxSpread * direction;
+
+          const x = baseX + offset;
           const y = startY + spacing * i;
+
           nodes[i].x = x;
           nodes[i].y = y;
           positioned.push({ node: nodes[i], x, y });
@@ -271,48 +307,36 @@ export default class MapRenderer {
   // ── Edges ──────────────────────────────────────────
 
   /**
-   * Classify an edge into one of four visual states.
+   * Classify an edge into one of three visual states.
    *
    * Priority order:
-   *   1. 'available'   — current node → reachable next node (brightest)
-   *   2. 'exactRoute'  — the exact path the player took (warmer, faint glow)
-   *   3. 'traversed'   — generic past/completed floor edges (darkened)
-   *   4. 'default'     — future, undiscovered, neutral
+   *   1. 'available' — current node → reachable next node (bright gold)
+   *   2. 'traveled'  — edge originates from a past floor (dark muted)
+   *   3. 'default'   — future, undiscovered, neutral (dim grey)
    *
    * @param {MapNode} fromNode
    * @param {MapNode} toNode
-   * @returns {'available'|'exactRoute'|'traversed'|'default'}
+   * @returns {'available'|'traveled'|'default'}
    */
   _edgeState(fromNode, toNode) {
     const fs = fromNode.state;
-    const ts = toNode.state;
 
     // 1. Available: from is current, to is directly reachable
-    if (fs.current && ts.reachable) {
+    if (fs.current && toNode.state.reachable) {
       return 'available';
     }
 
-    // 2. Exact route: this specific edge is part of the player's actual
-    //    traveled path (consecutive entries in the traversal history)
-    if (this._traversal && this._traversal.isEdgeOnExactRoute(fromNode.id, toNode.id)) {
-      return 'exactRoute';
-    }
-
-    // 3. Generic traversed/past: edge between two nodes that are both on
-    //    past or current-depth floors.  This covers:
-    //    - Both nodes completed (but edge not on exact route)
-    //    - From completed to current
-    //    - Both on past floors (bypassed alternate paths)
-    //    - Past-floor node to another past-floor node
+    // 2. Traveled: edge originates from a floor the player has left behind.
+    //    All edges starting from past floors use the subdued "traveled" style,
+    //    whether the player actually traversed them or bypassed them.
     if (this._traversal) {
-      const bothPast = this._traversal.isPastDepth(fromNode.depth)
-                    && this._traversal.isPastDepth(toNode.depth);
-      if (bothPast || (fs.completed && ts.completed) || (fs.completed && ts.current)) {
-        return 'traversed';
+      const effectiveDepth = this._traversal.getEffectiveCurrentDepth();
+      if (fromNode.depth < effectiveDepth) {
+        return 'traveled';
       }
     }
 
-    // 4. Default: future, undiscovered, or otherwise neutral
+    // 3. Default: future, undiscovered, or otherwise neutral
     return 'default';
   }
 
@@ -344,10 +368,9 @@ export default class MapRenderer {
   /**
    * Draw a single edge between two nodes as a dotted curved line
    * over a subtle continuous path line. Styling varies by state:
-   *   - available:  bright gold highlight with pulse (strongest)
-   *   - exactRoute: warmer tone, stronger opacity, faint glow (distinct traveled path)
-   *   - traversed:  darker, desaturated, muted (generic past)
-   *   - default:    neutral/natural (future/undiscovered)
+   *   - available: bright gold highlight with pulse (strongest)
+   *   - traveled:  dark, muted (past floors)
+   *   - default:   dim grey, most subdued (future/undiscovered)
    */
   _drawEdge(ctx, fromNode, x1, y1, toNode, x2, y2, dt) {
     const dx = x2 - x1;
@@ -371,52 +394,51 @@ export default class MapRenderer {
     const cpY = midY + perpY * offset;
 
     // ── 1. Subtle continuous path line behind the dots ──
-    //    (only for non-traversed states — traversed is already muted)
-    if (state !== 'traversed') {
-      ctx.save();
+    ctx.save();
+    if (state === 'traveled') {
+      ctx.globalAlpha = EDGE_PATH_ALPHA * 0.45;
+      ctx.strokeStyle = EDGE_TRAVELED_COLOR;
+      ctx.lineWidth = EDGE_PATH_WIDTH * 0.6;
+    } else if (state === 'available') {
+      ctx.globalAlpha = EDGE_PATH_ALPHA * 1.4;
+      ctx.strokeStyle = EDGE_AVAILABLE_COLOR;
+      ctx.lineWidth = EDGE_PATH_WIDTH + 0.5;
+    } else {
       ctx.globalAlpha = EDGE_PATH_ALPHA;
-      ctx.strokeStyle = state === 'exactRoute' ? EDGE_EXACT_ROUTE_COLOR : EDGE_PATH_COLOR;
-      ctx.lineWidth = state === 'exactRoute' ? EDGE_PATH_WIDTH + 0.5 : EDGE_PATH_WIDTH;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.quadraticCurveTo(cpX, cpY, x2, y2);
-      ctx.stroke();
-      ctx.restore();
+      ctx.strokeStyle = EDGE_PATH_COLOR;
+      ctx.lineWidth = EDGE_PATH_WIDTH;
     }
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+    ctx.stroke();
+    ctx.restore();
 
     // ── 2. Dotted overlay — state-based styling ─────────
     ctx.save();
 
-    let dotAlpha, dotColor, dotPulseMag, useGlow;
+    let dotAlpha, dotColor, dotPulseMag;
     if (state === 'available') {
       dotAlpha = EDGE_AVAILABLE_ALPHA;
       dotColor = EDGE_AVAILABLE_COLOR;
       dotPulseMag = EDGE_AVAILABLE_PULSE;
-      useGlow = false;
-    } else if (state === 'exactRoute') {
-      dotAlpha = EDGE_EXACT_ROUTE_ALPHA;
-      dotColor = EDGE_EXACT_ROUTE_COLOR;
-      dotPulseMag = 0;           // no pulse — static, warm
-      useGlow = true;            // faint glow differentiates from generic past
-    } else if (state === 'traversed') {
-      dotAlpha = EDGE_TRAVERSED_ALPHA;
-      dotColor = EDGE_TRAVERSED_COLOR;
-      dotPulseMag = 0;           // no pulse on traversed edges
-      useGlow = false;
+    } else if (state === 'traveled') {
+      dotAlpha = EDGE_TRAVELED_ALPHA;
+      dotColor = EDGE_TRAVELED_COLOR;
+      dotPulseMag = 0;
     } else {
       dotAlpha = EDGE_DEFAULT_ALPHA;
       dotColor = EDGE_DEFAULT_COLOR;
-      dotPulseMag = 0.15;        // subtle pulse on inactive edges
-      useGlow = false;
+      dotPulseMag = EDGE_DEFAULT_PULSE;
     }
 
     ctx.globalAlpha = dotAlpha;
     ctx.fillStyle = dotColor;
 
-    // Exact route: apply subtle shadow/glow to each dot
-    if (useGlow) {
-      ctx.shadowColor = EDGE_EXACT_ROUTE_COLOR;
-      ctx.shadowBlur = EDGE_EXACT_ROUTE_GLOW;
+    // Available edges get a subtle shadow/glow on dots
+    if (state === 'available') {
+      ctx.shadowColor = EDGE_AVAILABLE_COLOR;
+      ctx.shadowBlur = 6;
     }
 
     const steps = Math.max(10, Math.floor(dist / DOT_GAP));
@@ -426,7 +448,7 @@ export default class MapRenderer {
       const bx = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * cpX + t * t * x2;
       const by = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cpY + t * t * y2;
 
-      // Pulse animation only for available and default edges
+      // Pulse animation for available and default edges
       const pulse = dotPulseMag > 0
         ? Math.sin(dt * 0.002 + i * 0.35) * dotPulseMag
         : 0;
@@ -446,11 +468,10 @@ export default class MapRenderer {
    * Draw a single node (circle + icon) with state-based highlighting.
    *
    * State priority (strongest → weakest):
-   *   1. Current node      — strongest highlight (bright ring + glow + pulse)
-   *   2. Available next    — distinct ring + subtle glow (selectable)
-   *   3. Exact route       — visited, in history; subtle warm tint, less darkened
-   *   4. Past bypassed     — on past floor, not visited; desaturated, darkened
-   *   5. Future/inactive   — natural asset color, no special treatment
+   *   1. Current node   — strongest gold ring + glow + pulse (primary focus)
+   *   2. Available next — warm ring + subtle glow (selectable, only reachable)
+   *   3. Past           — darkened, desaturated (floors behind the player)
+   *   4. Default        — natural asset color, no special treatment (future)
    *
    * Boss nodes receive NO special type-based treatment outside of state.
    */
@@ -460,33 +481,34 @@ export default class MapRenderer {
 
     let iconAlpha = 1.0;
     let scale = 1.0;
-    let isCurrent = false;         // player is on this node (priority 1)
-    let isNextNode = false;        // reachable from current (priority 2)
-    let isExactRoute = false;      // visited, in history (priority 3)
-    let isPastBypassed = false;    // on past floor, not visited (priority 4)
+    let isCurrent = false;
+    let isAvailable = false;
+    let isPast = false;
 
     if (traversal) {
+      const effectiveDepth = traversal.getEffectiveCurrentDepth();
+
       if (node.state.current) {
+        // Priority 1: current node — strongest focus
         isCurrent = true;
         scale = 1.12;
       } else if (node.state.reachable) {
-        isNextNode = true;
+        // Priority 2: directly reachable from current
+        isAvailable = true;
         scale = 1.04;
-      } else if (node.state.completed && traversal.isOnExactRoute(node.id)) {
-        // Visited node on the exact traveled route
-        isExactRoute = true;
-        scale = 0.94;
-        iconAlpha = 0.60;
-      } else if (traversal.isPastFloorBypassedNode(node.id)) {
-        // Past-floor node the player bypassed (alternate path)
-        isPastBypassed = true;
+      } else if (node.depth < effectiveDepth) {
+        // Priority 3: on a floor the player has left behind
+        // All past-floor nodes get uniform "traveled" treatment —
+        // no distinction between visited vs bypassed.
+        isPast = true;
         scale = 0.90;
-        iconAlpha = 0.35;
+        iconAlpha = 0.45;
       }
+      // Priority 4: default — future/unreachable, no special treatment
     }
 
-    // Hover boost (only for reachable "next" nodes)
-    if (isHovered && isNextNode) {
+    // Hover boost (only for available "next" nodes)
+    if (isHovered && isAvailable) {
       scale = Math.min(1.12, scale + 0.04);
     }
 
@@ -497,58 +519,65 @@ export default class MapRenderer {
 
     // ── Glow (only for current and available nodes) ──
     if (isCurrent) {
-      const glowRadius = r * 1.8;
-      const glowGrad = ctx.createRadialGradient(x, y, r * 0.6, x, y, glowRadius);
-      glowGrad.addColorStop(0, hexToRgba(CURRENT_GLOW_COLOR, 0.4));
+      const glowRadius = r * 1.9;
+      const glowGrad = ctx.createRadialGradient(x, y, r * 0.5, x, y, glowRadius);
+      glowGrad.addColorStop(0, hexToRgba(CURRENT_GLOW_COLOR, 0.45));
       glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
       ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
-    } else if (isNextNode) {
-      const glowRadius = r * 1.5;
-      const glowGrad = ctx.createRadialGradient(x, y, r * 0.6, x, y, glowRadius);
-      glowGrad.addColorStop(0, hexToRgba(AVAILABLE_GLOW_COLOR, 0.22));
+    } else if (isAvailable) {
+      const glowRadius = r * 1.6;
+      const glowGrad = ctx.createRadialGradient(x, y, r * 0.5, x, y, glowRadius);
+      glowGrad.addColorStop(0, hexToRgba(AVAILABLE_GLOW_COLOR, 0.25));
       glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
       ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Exact-route, bypassed, and future nodes: no glow
+    // Past and default nodes: no glow
 
-    // ── Dark backing circle (all nodes) ────────────
+    // ── Base backing circle (all nodes, lighter and translucent) ──
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
-    const ringFillGrad = ctx.createRadialGradient(x, y, r * 0.5, x, y, r);
-    ringFillGrad.addColorStop(0, 'rgba(18, 12, 6, 0.92)');
-    ringFillGrad.addColorStop(0.7, 'rgba(12, 8, 3, 0.96)');
-    ringFillGrad.addColorStop(1, 'rgba(8, 4, 1, 1.0)');
+    const ringFillGrad = ctx.createRadialGradient(x, y, r * 0.4, x, y, r);
+    ringFillGrad.addColorStop(0, 'rgba(22, 14, 8, 0.78)');
+    ringFillGrad.addColorStop(0.7, 'rgba(14, 8, 4, 0.88)');
+    ringFillGrad.addColorStop(1, 'rgba(8, 4, 2, 0.94)');
     ctx.fillStyle = ringFillGrad;
     ctx.fill();
+
+    // ── Past-floor darkening overlay ───────────────
+    // Applies uniformly to all nodes on floors behind the player.
+    if (isPast) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(8, 4, 2, 0.42)';
+      ctx.fill();
+    }
 
     // ── Colored ring (ONLY for current and available) ──
     if (isCurrent) {
       const ringColor = CURRENT_RING_COLOR;
-      const ringWidth = 4;
-      const hoverBoost = (isHovered && isNextNode) ? 0.5 : 0;
 
-      // Pulsing outer glow ring
-      const pulse = Math.sin(dt * 0.003) * 0.35 + 0.65;
+      // Pulsing outer glow ring (wider, stronger)
+      const pulse = Math.sin(dt * 0.003) * 0.3 + 0.7;
       ctx.save();
       ctx.globalAlpha = pulse;
-      ctx.lineWidth = ringWidth + 4 + hoverBoost;
+      ctx.lineWidth = 5;
       ctx.shadowColor = ringColor;
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 16;
       ctx.strokeStyle = ringColor;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
-      // Main ring on top
+      // Main ring on top (clean, no glow halo)
       ctx.globalAlpha = 1.0;
-      ctx.lineWidth = ringWidth + hoverBoost;
+      ctx.lineWidth = 4;
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
       ctx.strokeStyle = ringColor;
@@ -556,25 +585,24 @@ export default class MapRenderer {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Inner decorative ring (current only)
+      // Inner decorative ring (current only — reinforces distinctness)
       ctx.beginPath();
-      ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.6;
+      ctx.arc(x, y, r * 0.82, 0, Math.PI * 2);
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 0.65;
       ctx.strokeStyle = ringColor;
       ctx.stroke();
-    } else if (isNextNode) {
+    } else if (isAvailable) {
       const ringColor = AVAILABLE_RING_COLOR;
-      const ringWidth = 3;
-      const hoverBoost = isHovered ? 0.5 : 0;
+      const hoverBoost = isHovered ? 1 : 0;
 
-      // Subtle pulse for reachable next nodes
-      const pulse = Math.sin(dt * 0.003) * 0.2 + 0.8;
+      // Subtle pulse
+      const pulse = Math.sin(dt * 0.003) * 0.18 + 0.82;
       ctx.save();
       ctx.globalAlpha = pulse;
-      ctx.lineWidth = ringWidth + 2 + hoverBoost;
+      ctx.lineWidth = 4 + hoverBoost;
       ctx.shadowColor = ringColor;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = 8;
       ctx.strokeStyle = ringColor;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -583,7 +611,7 @@ export default class MapRenderer {
 
       // Main ring
       ctx.globalAlpha = 1.0;
-      ctx.lineWidth = ringWidth + hoverBoost;
+      ctx.lineWidth = 3 + hoverBoost;
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
       ctx.strokeStyle = ringColor;
@@ -591,31 +619,7 @@ export default class MapRenderer {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
     }
-    // Exact-route, bypassed, and future nodes: NO colored ring
-
-    // ── Dark overlays for past states ──────────────
-    if (isExactRoute) {
-      // Visited exact-route node: lighter dark overlay + subtle warm tint
-      // to differentiate from generic bypassed past nodes
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-      ctx.fill();
-
-      // Subtle warm inner rim (faint glow from within)
-      ctx.beginPath();
-      ctx.arc(x, y, r * 0.88, 0, Math.PI * 2);
-      ctx.lineWidth = 1.2;
-      ctx.globalAlpha = 0.28;
-      ctx.strokeStyle = '#8a7040';
-      ctx.stroke();
-    } else if (isPastBypassed) {
-      // Bypassed past-floor node: stronger dark overlay, desaturated look
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
-      ctx.fill();
-    }
+    // Past and default nodes: NO colored ring
 
     // ── Icon ───────────────────────────────────────
     const iconKey = ICON_MAP[node.type] || 'map_icon_battle';
@@ -639,8 +643,10 @@ export default class MapRenderer {
       ctx.fillText(letter, x, y + 1);
     }
 
-    // ── Checkmark for visited exact-route nodes ────
-    if (isExactRoute) {
+    // ── Checkmark for completed (visited) nodes ──
+    // Only show on past-floor nodes that the player actually visited.
+    // This is the ONLY distinction between visited and bypassed past nodes.
+    if (isPast && traversal && traversal.isOnExactRoute(node.id)) {
       ctx.globalAlpha = 0.55;
       ctx.fillStyle = '#b89858';
       ctx.font = `${Math.floor(r * 0.45)}px sans-serif`;
