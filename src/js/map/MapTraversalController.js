@@ -11,6 +11,15 @@ import MapGraph from './MapGraph.js';
  *   - Enforce traversal rules (only connected edges from current)
  *   - Persist state independent of rendering or combat
  *
+ * Lifecycle / state flow:
+ *   1. PRE-START  — no current node; depth-0 nodes are reachable.
+ *      The player must explicitly click the start node to begin.
+ *   2. ON NODE    — a node is current (player is "on" it, about to
+ *      enter its encounter).  Outgoing edges are previewed.
+ *   3. COMPLETED  — the current node has been cleared.  Its outgoing
+ *      nodes are now reachable.  No current node exists (player is
+ *      choosing the next destination).
+ *
  * Usage:
  *   const ctrl = new MapTraversalController(graph);
  *   ctrl.moveTo('node_5');
@@ -32,10 +41,16 @@ export default class MapTraversalController {
     /** @type {string[]} ordered history of visited node ids */
     this._history = [];
 
-    // Initialize: find the starting node and set it as current
+    /** @type {string|null} node that was just completed (source for edge highlighting) */
+    this._lastCompletedNodeId = null;
+
+    // Initialize: mark depth-0 nodes as discovered + reachable so the
+    // player sees them and can click to begin.  The player is NOT placed
+    // on any node automatically — they must choose the start node first.
     const startNodes = graph.getNodesAtDepth(0);
-    if (startNodes.length > 0) {
-      this._setCurrent(startNodes[0].id);
+    for (const node of startNodes) {
+      node.state.discovered = true;
+      node.state.reachable = true;
     }
   }
 
@@ -54,6 +69,14 @@ export default class MapTraversalController {
 
   /** @returns {string[]} */
   get history() { return [...this._history]; }
+
+  /**
+   * The node that was most recently completed (via completeCurrentAndRevealNext).
+   * Used by the renderer to highlight edges FROM that node to the newly-reachable
+   * next nodes.
+   * @returns {string|null}
+   */
+  get lastCompletedNodeId() { return this._lastCompletedNodeId; }
 
   /**
    * Get all nodes directly reachable from the current node.
@@ -111,20 +134,26 @@ export default class MapTraversalController {
 
   /**
    * Get the effective current depth for rendering state decisions.
-   * Uses the current node's depth if available; otherwise falls back
-   * to the maximum depth in the history (after completeAndReveal).
+   *
+   * When the player is ON a node, the effective depth is that node's depth.
+   * When between floors (choosing the next destination), the effective depth
+   * is one beyond the deepest visited floor — so all visited floors render
+   * as "past" while the next floor renders as "current" territory.
+   *
    * @returns {number}
    */
   getEffectiveCurrentDepth() {
     const current = this.currentNode;
     if (current) return current.depth;
+    // No current node — player is between floors.  Shift the effective
+    // depth forward by one so that all visited floors are past.
     if (this._history.length > 0) {
       let maxDepth = 0;
       for (const id of this._history) {
         const node = this._graph.getNode(id);
         if (node && node.depth > maxDepth) maxDepth = node.depth;
       }
-      return maxDepth;
+      return maxDepth + 1;
     }
     return 0;
   }
@@ -196,12 +225,15 @@ export default class MapTraversalController {
       return false;
     }
 
-    // Complete current
+    // Complete current (if one exists — pre-start has none)
     const current = this.currentNode;
     if (current) {
       current.state.current = false;
       current.state.completed = true;
     }
+
+    // Clear last-completed tracking — we're moving forward
+    this._lastCompletedNodeId = null;
 
     // Push to history
     this._history.push(nodeId);
@@ -214,12 +246,12 @@ export default class MapTraversalController {
 
   /**
    * Force-set the current node without validation (for init / load).
-   * Does NOT mark outgoing nodes as reachable — use revealNextDepth()
+   * Does NOT mark outgoing nodes as reachable — use completeCurrentAndRevealNext()
    * for that, so the player must complete the current node first.
    * @param {string} nodeId
    */
   _setCurrent(nodeId) {
-    // Clear all current flags
+    // Clear all current/reachable flags
     for (const node of this._graph.allNodes) {
       node.state.current = false;
       node.state.reachable = false;
@@ -239,15 +271,23 @@ export default class MapTraversalController {
    * Complete the current node (mark it as cleared) and reveal
    * all of its outgoing nodes as reachable for the next move.
    * Call this after the player finishes the encounter at the current node.
+   *
+   * Stores the completed node's id so the renderer can highlight the
+   * correct edges (from this node → newly-reachable nodes).
    */
   completeCurrentAndRevealNext() {
     const current = this.currentNode;
     if (!current) return;
 
+    const completedNodeId = current.id;
+
     // Mark current as completed
     current.state.current = false;
     current.state.completed = true;
     this._currentNodeId = null;
+
+    // Track which node was just completed for edge highlighting
+    this._lastCompletedNodeId = completedNodeId;
 
     // Reveal all outgoing nodes as reachable
     for (const outId of current.outgoing) {
@@ -290,6 +330,7 @@ export default class MapTraversalController {
     return {
       currentNodeId: this._currentNodeId,
       history: [...this._history],
+      lastCompletedNodeId: this._lastCompletedNodeId,
       nodeStates,
     };
   }
@@ -301,6 +342,7 @@ export default class MapTraversalController {
   deserialize(data) {
     this._currentNodeId = data.currentNodeId;
     this._history = data.history ? [...data.history] : [];
+    this._lastCompletedNodeId = data.lastCompletedNodeId || null;
 
     if (data.nodeStates) {
       for (const [id, state] of Object.entries(data.nodeStates)) {

@@ -10,13 +10,15 @@
  *   - Handle hover/click hit-testing
  *
  * Three visual states (replaces the old 4-state + exactRoute model):
- *   current   — strongest gold ring + glow + pulse (primary focus)
+ *   current   — strongest gold ring + glow + pulse + overlay (primary focus)
  *   available — distinct warm ring + glow (only directly reachable nodes)
  *   past      — darkened, desaturated (all nodes on floors behind the player)
  *   default   — natural asset color, no special treatment (future/unreachable)
  *
  * Edge hierarchy (3 states):
- *   available — edges leading to reachable/outgoing nodes (bright gold, dotted)
+ *   available — edges FROM the current/last-completed node TO reachable
+ *               nodes, OR edges from the current node to its outgoing
+ *               (preview).  Bright gold, dotted, pulsing.
  *   traveled  — edges from past floors (thin washed-out solid line, no dots)
  *   default   — future, undiscovered, neutral (clearly dotted, visible)
  *
@@ -89,6 +91,12 @@ const ICON_MAP = {
 const CURRENT_RING_COLOR = '#f0e040';
 /** Glow color for the current node */
 const CURRENT_GLOW_COLOR = '#d4a020';
+/** Overlay center color (brighter than before) */
+const CURRENT_OVERLAY_CENTER = 'rgba(250, 235, 100, 0.55)';
+/** Overlay mid color */
+const CURRENT_OVERLAY_MID = 'rgba(220, 170, 40, 0.30)';
+/** Overlay edge color */
+const CURRENT_OVERLAY_EDGE = 'rgba(170, 110, 20, 0.12)';
 /** Ring color for available next nodes (softer warm tone, clearly
   * different from the bright-gold current-node ring) */
 const AVAILABLE_RING_COLOR = '#c8b870';
@@ -310,7 +318,9 @@ export default class MapRenderer {
    * Classify an edge into one of three visual states.
    *
    * Priority order:
-   *   1. 'available' — current node → reachable next node (bright gold)
+   *   1. 'available' — edge FROM the "source" node (current or last-completed)
+   *      TO a reachable node, OR edge from the current node to its outgoing
+   *      preview (before completion).
    *   2. 'traveled'  — edge originates from a past floor (dark muted)
    *   3. 'default'   — future, undiscovered, neutral (dim grey)
    *
@@ -321,28 +331,29 @@ export default class MapRenderer {
   _edgeState(fromNode, toNode) {
     const fs = fromNode.state;
     const traversal = this._traversal;
+    if (!traversal) return 'default';
 
-    // 1. Available: edge leads to a node the player can travel to.
-    //    a) toNode is flagged as reachable (set by completeCurrentAndRevealNext)
-    if (toNode.state.reachable) {
-      return 'available';
-    }
-    //    b) Preview from current node to its outgoing neighbours —
-    //       but NOT on the starting floor (history is still empty there).
-    if (fs.current && fromNode.outgoing.includes(toNode.id)
-        && traversal && traversal.history.length > 0) {
+    const lastCompletedId = traversal.lastCompletedNodeId;
+
+    // 1. Available — edge from the completed node to newly-reachable nodes.
+    //    This is the post-completion "choose next" state.
+    if (toNode.state.reachable && lastCompletedId && fromNode.id === lastCompletedId) {
       return 'available';
     }
 
-    // 2. Traveled: edge originates from a floor the player has left behind.
-    if (traversal) {
-      const effectiveDepth = traversal.getEffectiveCurrentDepth();
-      if (fromNode.depth < effectiveDepth) {
-        return 'traveled';
-      }
+    // 2. Available — preview from the current node to its outgoing neighbours.
+    //    This is the "on node, see where I can go after" state.
+    if (fs.current && fromNode.outgoing.includes(toNode.id)) {
+      return 'available';
     }
 
-    // 3. Default: future, undiscovered, or otherwise neutral
+    // 3. Traveled — edge originates from a floor the player has left behind.
+    const effectiveDepth = traversal.getEffectiveCurrentDepth();
+    if (fromNode.depth < effectiveDepth) {
+      return 'traveled';
+    }
+
+    // 4. Default — future, undiscovered, or otherwise neutral
     return 'default';
   }
 
@@ -477,7 +488,7 @@ export default class MapRenderer {
    * Draw a single node (circle + icon) with state-based highlighting.
    *
    * State priority (strongest → weakest):
-   *   1. Current node   — strongest gold ring + glow + pulse (primary focus)
+   *   1. Current node   — strongest gold ring + glow + pulse + bright overlay
    *   2. Available next — warm ring + subtle glow (selectable, only reachable)
    *   3. Past           — darkened, desaturated (floors behind the player)
    *   4. Default        — natural asset color, no special treatment (future)
@@ -502,7 +513,7 @@ export default class MapRenderer {
         isCurrent = true;
         scale = 1.12;
       } else if (node.state.reachable) {
-        // Priority 2: directly reachable from current
+        // Priority 2: directly reachable from current/last-completed
         isAvailable = true;
         scale = 1.04;
       } else if (node.depth < effectiveDepth) {
@@ -528,9 +539,10 @@ export default class MapRenderer {
 
     // ── Glow (only for current and available nodes) ──
     if (isCurrent) {
-      const glowRadius = r * 1.9;
-      const glowGrad = ctx.createRadialGradient(x, y, r * 0.5, x, y, glowRadius);
-      glowGrad.addColorStop(0, hexToRgba(CURRENT_GLOW_COLOR, 0.45));
+      const glowRadius = r * 2.2;
+      const glowGrad = ctx.createRadialGradient(x, y, r * 0.4, x, y, glowRadius);
+      glowGrad.addColorStop(0, hexToRgba(CURRENT_GLOW_COLOR, 0.55));
+      glowGrad.addColorStop(0.5, hexToRgba(CURRENT_GLOW_COLOR, 0.18));
       glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
@@ -568,14 +580,15 @@ export default class MapRenderer {
     }
 
     // ── Current-node highlighted overlay ───────────
-    // Bright golden fill on the node face itself (in addition to rings).
+    // Bright golden wash across the node face — distinctly marks
+    // "you are here" beyond just the ring.
     if (isCurrent) {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      const overlayGrad = ctx.createRadialGradient(x, y, r * 0.25, x, y, r);
-      overlayGrad.addColorStop(0, 'rgba(240, 224, 80, 0.38)');
-      overlayGrad.addColorStop(0.5, 'rgba(212, 160, 32, 0.18)');
-      overlayGrad.addColorStop(1, 'rgba(160, 100, 16, 0.06)');
+      const overlayGrad = ctx.createRadialGradient(x, y, r * 0.20, x, y, r);
+      overlayGrad.addColorStop(0, CURRENT_OVERLAY_CENTER);
+      overlayGrad.addColorStop(0.45, CURRENT_OVERLAY_MID);
+      overlayGrad.addColorStop(1, CURRENT_OVERLAY_EDGE);
       ctx.fillStyle = overlayGrad;
       ctx.fill();
     }
@@ -585,12 +598,12 @@ export default class MapRenderer {
       const ringColor = CURRENT_RING_COLOR;
 
       // Pulsing outer glow ring (wider, stronger)
-      const pulse = Math.sin(dt * 0.003) * 0.3 + 0.7;
+      const pulse = Math.sin(dt * 0.0035) * 0.3 + 0.7;
       ctx.save();
       ctx.globalAlpha = pulse;
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 5.5;
       ctx.shadowColor = ringColor;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = 20;
       ctx.strokeStyle = ringColor;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -599,7 +612,7 @@ export default class MapRenderer {
 
       // Main ring on top (clean, no glow halo)
       ctx.globalAlpha = 1.0;
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 4.5;
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
       ctx.strokeStyle = ringColor;
@@ -609,9 +622,9 @@ export default class MapRenderer {
 
       // Inner decorative ring (current only — reinforces distinctness)
       ctx.beginPath();
-      ctx.arc(x, y, r * 0.82, 0, Math.PI * 2);
-      ctx.lineWidth = 1.2;
-      ctx.globalAlpha = 0.65;
+      ctx.arc(x, y, r * 0.80, 0, Math.PI * 2);
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.75;
       ctx.strokeStyle = ringColor;
       ctx.stroke();
     } else if (isAvailable) {

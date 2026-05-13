@@ -140,7 +140,6 @@ export default class MapGenerator {
         });
         node.state.discovered = true;
         node.state.reachable = true;
-        node.state.current = true;
         nodes.push(node);
       } else if (d === depthCount - 1) {
         // Exactly one boss
