@@ -110,6 +110,75 @@ export default class MapTraversalController {
   }
 
   /**
+   * Get the effective current depth for rendering state decisions.
+   * Uses the current node's depth if available; otherwise falls back
+   * to the maximum depth in the history (after completeAndReveal).
+   * @returns {number}
+   */
+  getEffectiveCurrentDepth() {
+    const current = this.currentNode;
+    if (current) return current.depth;
+    if (this._history.length > 0) {
+      let maxDepth = 0;
+      for (const id of this._history) {
+        const node = this._graph.getNode(id);
+        if (node && node.depth > maxDepth) maxDepth = node.depth;
+      }
+      return maxDepth;
+    }
+    return 0;
+  }
+
+  /**
+   * Check if a node is on the player's exact traveled route (in history).
+   * @param {string} nodeId
+   * @returns {boolean}
+   */
+  isOnExactRoute(nodeId) {
+    return this._history.includes(nodeId);
+  }
+
+  /**
+   * Check if an edge fromId → toId is part of the exact route the player took.
+   * True when fromId and toId are consecutive entries in the history array.
+   * @param {string} fromId
+   * @param {string} toId
+   * @returns {boolean}
+   */
+  isEdgeOnExactRoute(fromId, toId) {
+    const fromIdx = this._history.indexOf(fromId);
+    if (fromIdx === -1) return false;
+    return this._history[fromIdx + 1] === toId;
+  }
+
+  /**
+   * Check if a depth is in the past (≤ effective current depth).
+   * @param {number} depth
+   * @returns {boolean}
+   */
+  isPastDepth(depth) {
+    return depth <= this.getEffectiveCurrentDepth();
+  }
+
+  /**
+   * Check if a node is on a past/current-depth floor but was NOT visited
+   * by the player (alternate path bypassed). These should render as
+   * "generic past" rather than "future."
+   * @param {string} nodeId
+   * @returns {boolean}
+   */
+  isPastFloorBypassedNode(nodeId) {
+    const node = this._graph.getNode(nodeId);
+    if (!node) return false;
+    // Must be on a past or current-depth floor
+    if (!this.isPastDepth(node.depth)) return false;
+    // Must NOT be the current node
+    if (node.state.current) return false;
+    // Must NOT have been visited (not in history)
+    return !this._history.includes(nodeId);
+  }
+
+  /**
    * Move the player to a new node.
    * Validates that the target is reachable from the current node.
    * Marks current as completed, updates reachable/current states.

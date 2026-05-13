@@ -33,26 +33,32 @@ const DOT_GAP = 7;
 const DOT_RADIUS = 3.0;
 /** Alpha for neutral/default edges (dimmer grey) */
 const EDGE_DEFAULT_ALPHA = 0.38;
-/** Alpha for traversed/completed edges (darker) */
-const EDGE_TRAVERSED_ALPHA = 0.30;
-/** Alpha for available-next edges (brighter highlight) */
-const EDGE_AVAILABLE_ALPHA = 0.90;
+/** Alpha for generic past/traversed edges (darkened, desaturated) */
+const EDGE_TRAVERSED_ALPHA = 0.25;
+/** Alpha for exact-route edges (warmer, brighter than generic past) */
+const EDGE_EXACT_ROUTE_ALPHA = 0.50;
+/** Alpha for available-next edges (brightest highlight) */
+const EDGE_AVAILABLE_ALPHA = 0.92;
 /** Alpha for edge path line behind dots */
 const EDGE_PATH_ALPHA = 0.18;
 /** Edge path line width */
 const EDGE_PATH_WIDTH = 1.5;
 /** Maximum control-point offset for curve (fraction of horizontal distance) */
 const CURVE_FACTOR = 0.04;
-/** Color for available-next edges (beige/gold highlight — was default, now promoted) */
+/** Color for available-next edges (beige/gold highlight) */
 const EDGE_AVAILABLE_COLOR = '#b8a070';
 /** Color for default/inactive edges (dimmer grey) */
 const EDGE_DEFAULT_COLOR = '#7a7a76';
-/** Color for traversed edges */
-const EDGE_TRAVERSED_COLOR = '#5a4a3a';
+/** Color for generic past/traversed edges (darkened, desaturated) */
+const EDGE_TRAVERSED_COLOR = '#4a3a2a';
+/** Color for exact-route edges (warmer tone, slightly brighter than traversed) */
+const EDGE_EXACT_ROUTE_COLOR = '#b89858';
 /** Path line color (subtle continuous line behind dots) */
 const EDGE_PATH_COLOR = '#80807a';
 /** Pulse magnitude for available edges */
 const EDGE_AVAILABLE_PULSE = 0.5;
+/** Subtle glow radius for exact-route edge dots */
+const EDGE_EXACT_ROUTE_GLOW = 4;
 
 // ── Type → icon asset key mapping ────────────────────
 const ICON_MAP = {
@@ -265,28 +271,48 @@ export default class MapRenderer {
   // ── Edges ──────────────────────────────────────────
 
   /**
-   * Classify an edge into one of three visual states.
+   * Classify an edge into one of four visual states.
+   *
+   * Priority order:
+   *   1. 'available'   — current node → reachable next node (brightest)
+   *   2. 'exactRoute'  — the exact path the player took (warmer, faint glow)
+   *   3. 'traversed'   — generic past/completed floor edges (darkened)
+   *   4. 'default'     — future, undiscovered, neutral
+   *
    * @param {MapNode} fromNode
    * @param {MapNode} toNode
-   * @returns {'available'|'traversed'|'default'}
+   * @returns {'available'|'exactRoute'|'traversed'|'default'}
    */
   _edgeState(fromNode, toNode) {
     const fs = fromNode.state;
     const ts = toNode.state;
 
-    // Available: from is current, to is directly reachable
+    // 1. Available: from is current, to is directly reachable
     if (fs.current && ts.reachable) {
       return 'available';
     }
 
-    // Traversed: edge that has already been traveled by the player.
-    // Covers the entire completed chain (both ends completed) as well as
-    // the most recent step from a completed node into the current node.
-    if ((fs.completed && ts.completed) || (fs.completed && ts.current)) {
-      return 'traversed';
+    // 2. Exact route: this specific edge is part of the player's actual
+    //    traveled path (consecutive entries in the traversal history)
+    if (this._traversal && this._traversal.isEdgeOnExactRoute(fromNode.id, toNode.id)) {
+      return 'exactRoute';
     }
 
-    // Default: future, undiscovered, or otherwise neutral
+    // 3. Generic traversed/past: edge between two nodes that are both on
+    //    past or current-depth floors.  This covers:
+    //    - Both nodes completed (but edge not on exact route)
+    //    - From completed to current
+    //    - Both on past floors (bypassed alternate paths)
+    //    - Past-floor node to another past-floor node
+    if (this._traversal) {
+      const bothPast = this._traversal.isPastDepth(fromNode.depth)
+                    && this._traversal.isPastDepth(toNode.depth);
+      if (bothPast || (fs.completed && ts.completed) || (fs.completed && ts.current)) {
+        return 'traversed';
+      }
+    }
+
+    // 4. Default: future, undiscovered, or otherwise neutral
     return 'default';
   }
 
@@ -318,9 +344,10 @@ export default class MapRenderer {
   /**
    * Draw a single edge between two nodes as a dotted curved line
    * over a subtle continuous path line. Styling varies by state:
-   *   - available: bright gold highlight with pulse
-   *   - traversed: darker, muted
-   *   - default: neutral/natural
+   *   - available:  bright gold highlight with pulse (strongest)
+   *   - exactRoute: warmer tone, stronger opacity, faint glow (distinct traveled path)
+   *   - traversed:  darker, desaturated, muted (generic past)
+   *   - default:    neutral/natural (future/undiscovered)
    */
   _drawEdge(ctx, fromNode, x1, y1, toNode, x2, y2, dt) {
     const dx = x2 - x1;
@@ -344,36 +371,53 @@ export default class MapRenderer {
     const cpY = midY + perpY * offset;
 
     // ── 1. Subtle continuous path line behind the dots ──
-    ctx.save();
-    ctx.globalAlpha = EDGE_PATH_ALPHA;
-    ctx.strokeStyle = EDGE_PATH_COLOR;
-    ctx.lineWidth = EDGE_PATH_WIDTH;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.quadraticCurveTo(cpX, cpY, x2, y2);
-    ctx.stroke();
-    ctx.restore();
+    //    (only for non-traversed states — traversed is already muted)
+    if (state !== 'traversed') {
+      ctx.save();
+      ctx.globalAlpha = EDGE_PATH_ALPHA;
+      ctx.strokeStyle = state === 'exactRoute' ? EDGE_EXACT_ROUTE_COLOR : EDGE_PATH_COLOR;
+      ctx.lineWidth = state === 'exactRoute' ? EDGE_PATH_WIDTH + 0.5 : EDGE_PATH_WIDTH;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // ── 2. Dotted overlay — state-based styling ─────────
     ctx.save();
 
-    let dotAlpha, dotColor, dotPulseMag;
+    let dotAlpha, dotColor, dotPulseMag, useGlow;
     if (state === 'available') {
       dotAlpha = EDGE_AVAILABLE_ALPHA;
       dotColor = EDGE_AVAILABLE_COLOR;
       dotPulseMag = EDGE_AVAILABLE_PULSE;
+      useGlow = false;
+    } else if (state === 'exactRoute') {
+      dotAlpha = EDGE_EXACT_ROUTE_ALPHA;
+      dotColor = EDGE_EXACT_ROUTE_COLOR;
+      dotPulseMag = 0;           // no pulse — static, warm
+      useGlow = true;            // faint glow differentiates from generic past
     } else if (state === 'traversed') {
       dotAlpha = EDGE_TRAVERSED_ALPHA;
       dotColor = EDGE_TRAVERSED_COLOR;
-      dotPulseMag = 0; // no pulse on traversed edges
+      dotPulseMag = 0;           // no pulse on traversed edges
+      useGlow = false;
     } else {
       dotAlpha = EDGE_DEFAULT_ALPHA;
       dotColor = EDGE_DEFAULT_COLOR;
-      dotPulseMag = 0.15; // subtle pulse on inactive edges
+      dotPulseMag = 0.15;        // subtle pulse on inactive edges
+      useGlow = false;
     }
 
     ctx.globalAlpha = dotAlpha;
     ctx.fillStyle = dotColor;
+
+    // Exact route: apply subtle shadow/glow to each dot
+    if (useGlow) {
+      ctx.shadowColor = EDGE_EXACT_ROUTE_COLOR;
+      ctx.shadowBlur = EDGE_EXACT_ROUTE_GLOW;
+    }
 
     const steps = Math.max(10, Math.floor(dist / DOT_GAP));
 
@@ -401,12 +445,14 @@ export default class MapRenderer {
   /**
    * Draw a single node (circle + icon) with state-based highlighting.
    *
-   * Highlighting rules (gameplay state only — NOT type-based):
-   *   - Current node: strongest/clearest highlight (bright ring + glow + pulse)
-   *   - Available next nodes: distinct highlight (different color ring + subtle glow)
-   *   - Completed nodes: slightly darkened, no colored ring/glow, subtle checkmark
-   *   - Future/undiscovered: natural asset color, no glow, no colored ring
-   *   - Boss node: no special red treatment unless current or available
+   * State priority (strongest → weakest):
+   *   1. Current node      — strongest highlight (bright ring + glow + pulse)
+   *   2. Available next    — distinct ring + subtle glow (selectable)
+   *   3. Exact route       — visited, in history; subtle warm tint, less darkened
+   *   4. Past bypassed     — on past floor, not visited; desaturated, darkened
+   *   5. Future/inactive   — natural asset color, no special treatment
+   *
+   * Boss nodes receive NO special type-based treatment outside of state.
    */
   _drawNode(ctx, node, x, y, dt) {
     const traversal = this._traversal;
@@ -414,9 +460,10 @@ export default class MapRenderer {
 
     let iconAlpha = 1.0;
     let scale = 1.0;
-    let isCurrent = false;       // player is on this node
-    let isNextNode = false;      // reachable from current
-    let isCompleted = false;     // already traversed
+    let isCurrent = false;         // player is on this node (priority 1)
+    let isNextNode = false;        // reachable from current (priority 2)
+    let isExactRoute = false;      // visited, in history (priority 3)
+    let isPastBypassed = false;    // on past floor, not visited (priority 4)
 
     if (traversal) {
       if (node.state.current) {
@@ -425,10 +472,16 @@ export default class MapRenderer {
       } else if (node.state.reachable) {
         isNextNode = true;
         scale = 1.04;
-      } else if (node.state.completed) {
-        isCompleted = true;
-        scale = 0.92;
-        iconAlpha = 0.45;
+      } else if (node.state.completed && traversal.isOnExactRoute(node.id)) {
+        // Visited node on the exact traveled route
+        isExactRoute = true;
+        scale = 0.94;
+        iconAlpha = 0.60;
+      } else if (traversal.isPastFloorBypassedNode(node.id)) {
+        // Past-floor node the player bypassed (alternate path)
+        isPastBypassed = true;
+        scale = 0.90;
+        iconAlpha = 0.35;
       }
     }
 
@@ -462,7 +515,7 @@ export default class MapRenderer {
       ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Completed and neutral nodes: no glow
+    // Exact-route, bypassed, and future nodes: no glow
 
     // ── Dark backing circle (all nodes) ────────────
     ctx.beginPath();
@@ -538,13 +591,29 @@ export default class MapRenderer {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
     }
-    // Completed and neutral nodes: NO colored ring
+    // Exact-route, bypassed, and future nodes: NO colored ring
 
-    // ── Dark overlay for completed/traveled nodes ───
-    if (isCompleted) {
+    // ── Dark overlays for past states ──────────────
+    if (isExactRoute) {
+      // Visited exact-route node: lighter dark overlay + subtle warm tint
+      // to differentiate from generic bypassed past nodes
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      ctx.fill();
+
+      // Subtle warm inner rim (faint glow from within)
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.88, 0, Math.PI * 2);
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 0.28;
+      ctx.strokeStyle = '#8a7040';
+      ctx.stroke();
+    } else if (isPastBypassed) {
+      // Bypassed past-floor node: stronger dark overlay, desaturated look
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
       ctx.fill();
     }
 
@@ -570,10 +639,10 @@ export default class MapRenderer {
       ctx.fillText(letter, x, y + 1);
     }
 
-    // ── Completed checkmark ────────────────────────
-    if (node.state.completed && !node.state.current) {
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = '#a09070';
+    // ── Checkmark for visited exact-route nodes ────
+    if (isExactRoute) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#b89858';
       ctx.font = `${Math.floor(r * 0.45)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
