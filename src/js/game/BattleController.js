@@ -310,7 +310,7 @@ export default class BattleController {
 
     // Do pre-check: would this swap create a match?
     this.board.swap(col1, row1, col2, row2);
-    const analysis = this.resolver.analyzeMatches(this.board);
+    const analysis = this.resolver.analyzeMatches(this.board, this.playerState);
     const valid = analysis !== null;
     this.board.swap(col1, row1, col2, row2); // revert
 
@@ -530,7 +530,7 @@ export default class BattleController {
     const targetState = this._opponentState();
 
     // 1. Compute tile rewards using shared path
-    const rewards = this.resolver.resolveDestroyedTileRewards(this.board, positions);
+    const rewards = this.resolver.resolveDestroyedTileRewards(this.board, positions, activeState);
 
     // 2. Award mana from colored gems
     for (const [color, count] of Object.entries(rewards.mana)) {
@@ -637,7 +637,7 @@ export default class BattleController {
     }
 
     // 5. Check if conversion created any matches
-    const analysis = this.resolver.analyzeMatches(this.board);
+    const analysis = this.resolver.analyzeMatches(this.board, src);
     if (analysis) {
       // Save swap trigger pos for cascade effects; null since no swap occurred
       this._swapTriggerPos = null;
@@ -850,7 +850,7 @@ export default class BattleController {
     this.fallCells = [];
     this._cascadePhase = null;
 
-    const next = this.resolver.analyzeMatches(this.board);
+    const next = this.resolver.analyzeMatches(this.board, this._activeState());
     if (next) {
       this._enterShowMatch(next);
     } else {
@@ -958,7 +958,7 @@ export default class BattleController {
         this.swapAnim = null;
 
         if (valid) {
-          const analysis = this.resolver.analyzeMatches(this.board);
+          const analysis = this.resolver.analyzeMatches(this.board, this.playerState);
           // Determine which swapped position caused the 4+ match
           this._swapTriggerPos = this._computeSwapCausePos(from, to, analysis);
           this._beginResolving('player', analysis);
@@ -1031,7 +1031,7 @@ export default class BattleController {
     if (swap) {
       this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
       this.log.add(`${this.enemyState.name} swaps tiles.`);
-      const analysis = this.resolver.analyzeMatches(this.board);
+      const analysis = this.resolver.analyzeMatches(this.board, this.enemyState);
       if (analysis) {
         // Determine which swapped position caused the 4+ match
         const from = { col: swap.col1, row: swap.row1 };

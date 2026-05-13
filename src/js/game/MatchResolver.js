@@ -5,12 +5,15 @@
  *   - analyzeMatches() — find matches and calculate rewards (does NOT modify board)
  *   - applyDamage() — static helper for armor→block→HP damage
  *   - resolveDestroyedTileRewards() — shared reward computation for any tile destruction
+ *   - calculateSkullDamage() — centralised skull damage (match vs destroyed)
+ *   - calculateMatchedSkullDamage() — skull match formula
+ *   - calculateDestroyedSkullDamage() — non-match destruction formula
  *
  * BattleController drives the visual phases and applies board modifications
  * (removeTiles, gravity, refill) at the appropriate times.
  */
 
-import { isSkull, SKULL_DAMAGE_CONFIG } from './TileTypes.js';
+import { isSkull } from './TileTypes.js';
 
 /**
  * Skill effect type constants.
@@ -25,6 +28,69 @@ export const SKILL_EFFECT_TYPES = {
   CREATE_TILES: 'create_tiles',
 };
 
+/**
+ * Skull damage source constants.
+ * @enum {string}
+ */
+export const SKULL_DAMAGE_SOURCE = {
+  MATCH: 'match',
+  DESTROYED: 'destroyed',
+};
+
+/**
+ * Calculate skull damage for a matched skull group.
+ *
+ * Formula: matchedSkullCount + max(0, attack - 1)
+ *
+ * Examples:
+ *   1 attack, 3 skulls → 3 damage
+ *   2 attack, 3 skulls → 4 damage
+ *   10 attack, 3 skulls → 12 damage
+ *
+ * @param {{ attack: number }} attacker - combatant with attack stat
+ * @param {number} skullCount - number of skulls in the match group
+ * @returns {number}
+ */
+export function calculateMatchedSkullDamage(attacker, skullCount) {
+  const attack = (attacker && typeof attacker.attack === 'number') ? attacker.attack : 1;
+  return skullCount + Math.max(0, attack - 1);
+}
+
+/**
+ * Calculate damage for skulls destroyed by non-match effects
+ * (Explode, destroy_tiles, destroy_tiles_row, etc.).
+ *
+ * Formula: skullCount * (1 + floor(attack / 3))
+ *
+ * Examples:
+ *   1 attack → 1 damage per skull
+ *   3 attack → 2 damage per skull
+ *   6 attack → 3 damage per skull
+ *   9 attack → 4 damage per skull
+ *
+ * @param {{ attack: number }} attacker - combatant with attack stat
+ * @param {number} skullCount - number of skull tiles destroyed
+ * @returns {number}
+ */
+export function calculateDestroyedSkullDamage(attacker, skullCount) {
+  const attack = (attacker && typeof attacker.attack === 'number') ? attacker.attack : 1;
+  return skullCount * (1 + Math.floor(attack / 3));
+}
+
+/**
+ * Centralised skull damage calculation — routes to the correct formula
+ * based on destruction source.
+ *
+ * @param {{ attacker: { attack: number }, skullCount: number, source: 'match'|'destroyed' }} params
+ * @returns {number}
+ */
+export function calculateSkullDamage({ attacker, skullCount, source }) {
+  if (source === SKULL_DAMAGE_SOURCE.MATCH) {
+    return calculateMatchedSkullDamage(attacker, skullCount);
+  }
+  return calculateDestroyedSkullDamage(attacker, skullCount);
+}
+
 export default class MatchResolver {
   constructor() {
     this.maxCascades = 50;
@@ -35,9 +101,10 @@ export default class MatchResolver {
    * Returns all information needed to process rewards and drive visual phases.
    *
    * @param {import('./BoardModel.js').default} board
+   * @param {{ attack: number }} [attacker] - combatant whose attack stat scales skull damage (defaults to { attack: 1 })
    * @returns {MatchAnalysis|null} null if no matches found
    */
-  analyzeMatches(board) {
+  analyzeMatches(board, attacker) {
     const matches = board.findAllConnectedMatches();
     if (matches.length === 0) return null;
 
@@ -54,8 +121,7 @@ export default class MatchResolver {
       const count = match.count;
 
       if (isSkull(match.typeId)) {
-        const damage = Math.min(count, SKULL_DAMAGE_CONFIG.maxDamage)
-          * SKULL_DAMAGE_CONFIG.baseMultiplier;
+        const damage = calculateMatchedSkullDamage(attacker || { attack: 1 }, count);
         cascadeSkullDamage += damage;
         if (count >= 4) cascadeExtraTurn = true;
       } else {
@@ -120,27 +186,31 @@ export default class MatchResolver {
    * (match, skill, cascade, explode, etc.). Does NOT mutate board or states.
    *
    * Each destroyed colored gem grants 1 mana of its color to the active combatant.
-   * Each destroyed skull deals 1 damage (baseMultiplier) to the opposing combatant.
+   * Each destroyed skull deals damage based on the attacker's Attack stat
+   * using the non-match destruction formula: skullCount * (1 + floor(attack / 3)).
    *
    * @param {import('./BoardModel.js').default} board
    * @param {Array<{col:number, row:number}>} positions
+   * @param {{ attack: number }} [attacker] - combatant whose attack stat scales skull damage (defaults to { attack: 1 })
    * @returns {{ mana: Object<string,number>, skullDamage: number, tilesDestroyed: number }}
    */
-  resolveDestroyedTileRewards(board, positions) {
+  resolveDestroyedTileRewards(board, positions, attacker) {
     const mana = {};
-    let skullDamage = 0;
+    let skullCount = 0;
 
     for (const pos of positions) {
       const tileId = board.get(pos.col, pos.row);
       if (!tileId) continue;
       if (isSkull(tileId)) {
-        skullDamage += SKULL_DAMAGE_CONFIG.baseMultiplier;
+        skullCount++;
       } else {
         mana[tileId] = (mana[tileId] || 0) + 1;
       }
     }
 
-    return { mana, skullDamage: Math.min(skullDamage, SKULL_DAMAGE_CONFIG.maxDamage), tilesDestroyed: positions.length };
+    const skullDamage = calculateDestroyedSkullDamage(attacker || { attack: 1 }, skullCount);
+
+    return { mana, skullDamage, tilesDestroyed: positions.length };
   }
 }
 

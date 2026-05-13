@@ -13,7 +13,8 @@
  * preferring damage-dealing skills over defensive ones.
  */
 
-import { isSkull, SKULL_DAMAGE_CONFIG } from './TileTypes.js';
+import { isSkull } from './TileTypes.js';
+import { calculateMatchedSkullDamage } from './MatchResolver.js';
 
 export default class EnemyAI {
   /**
@@ -172,7 +173,7 @@ export default class EnemyAI {
 
       if (isSkull(match.typeId)) {
         // Priority 2a: skull matches deal direct damage
-        const damage = Math.min(count, SKULL_DAMAGE_CONFIG.maxDamage);
+        const damage = calculateMatchedSkullDamage(this.enemyState, count);
         score += damage * 100;
       } else {
         // Base mana value
