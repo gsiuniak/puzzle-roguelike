@@ -12,6 +12,7 @@ import BoardModel from './BoardModel.js';
 import MatchResolver, { SKILL_EFFECT_TYPES } from './MatchResolver.js';
 import CombatLog from './CombatLog.js';
 import EnemyAI from './EnemyAI.js';
+import { TILE_TYPES } from './TileTypes.js';
 
 /** @enum {string} */
 export const BattleState = {
@@ -141,6 +142,15 @@ export default class BattleController {
     this._destroyedTilesThisStep = null;
 
     /**
+     * Tiles converted by a CREATE_TILES skill effect.
+     * Each entry: { col, row, typeId } where typeId is the new tile type.
+     * Read & cleared by BattleScene via getState() so it can spawn
+     * a conversion shimmer effect on each converted tile.
+     * @type {Array<{col:number, row:number, typeId:string}>|null}
+     */
+    this._convertedTilePositions = null;
+
+    /**
      * Pending screen-shake intensity (0-1). Set when damage is dealt,
      * read & cleared by BattleScene each frame via getState().
      * @type {number}
@@ -222,6 +232,11 @@ export default class BattleController {
     const destroyedTiles = this._destroyedTilesThisStep;
     this._destroyedTilesThisStep = null;
 
+    // Capture converted tile info and clear so scene spawns
+    // conversion shimmer effects once per CREATE_TILES resolution.
+    const convertedTiles = this._convertedTilePositions;
+    this._convertedTilePositions = null;
+
     // Capture pending skill resolve sound and clear so scene
     // plays it once per skill resolution.
     const pendingSkillSound = this._pendingSkillSound;
@@ -238,6 +253,7 @@ export default class BattleController {
       skullDamageDealt,
       turnAnnouncement,
       destroyedTiles,
+      convertedTiles,
       pendingSkillSound,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
@@ -341,6 +357,9 @@ export default class BattleController {
 
     // Record resolve sound for immediate skills
     this._setSkillSound(skill);
+
+    // If _applyEffect entered a cascade (e.g. CREATE_TILES), let it resolve
+    if (this.state === BattleState.RESOLVING) return true;
 
     // Check for game over before proceeding to next turn
     if (this._checkGameOver()) return true;
@@ -571,6 +590,59 @@ export default class BattleController {
     this.fallCells = [];
     this._cascadePhase = CascadePhase.REMOVE;
     this._phaseTimer = 0;
+  }
+
+  /**
+   * Execute a CREATE_TILES effect: convert random non-target tiles into
+   * the requested type. Does NOT award mana or deal damage.
+   * After conversion, checks for matches and enters RESOLVING if any found.
+   * @param {object} skill - skill definition with createTiles: { amount, type }
+   * @param {string} side - 'player' or 'enemy'
+   */
+  _executeCreateTiles(skill, side) {
+    const createTiles = skill.createTiles;
+    if (!createTiles || typeof createTiles.amount !== 'number' || !createTiles.type) {
+      console.warn('[CREATE_TILES] Missing or invalid createTiles config on skill:', skill.name);
+      return;
+    }
+
+    const targetType = createTiles.type;
+    const amount = createTiles.amount;
+
+    // Validate the target type exists
+    if (!TILE_TYPES[targetType.toUpperCase()]) {
+      console.warn(`[CREATE_TILES] Unknown target tile type: "${targetType}". Skipping.`);
+      return;
+    }
+
+    // 1. Find tiles NOT already of the target type
+    const candidates = this.board.getTilesNotOfType(targetType);
+
+    if (candidates.length === 0) {
+      this.log.add(`No tiles to convert for ${skill.name} — board is all ${targetType}.`);
+      return;
+    }
+
+    // 2. Randomly select up to `amount`
+    const selected = BoardModel.pickRandomTiles(candidates, amount);
+
+    // 3. Convert the selected tiles
+    const convertedCount = this.board.convertTilesToType(selected, targetType);
+    this.log.add(`${skill.name} converts ${convertedCount} tiles to ${targetType}.`);
+
+    // 4. Capture converted positions for visual feedback (BEFORE _beginResolving clears highlightCells)
+    this._convertedTilePositions = [];
+    for (const pos of selected.slice(0, convertedCount)) {
+      this._convertedTilePositions.push({ col: pos.col, row: pos.row, typeId: targetType });
+    }
+
+    // 5. Check if conversion created any matches
+    const analysis = this.resolver.analyzeMatches(this.board);
+    if (analysis) {
+      // Save swap trigger pos for cascade effects; null since no swap occurred
+      this._swapTriggerPos = null;
+      this._beginResolving(side, analysis);
+    }
   }
 
   // ── Resolution ────────────────────────────────────────
@@ -946,6 +1018,9 @@ export default class BattleController {
       // Record resolve sound for enemy skills
       this._setSkillSound(skill);
 
+      // If _applyEffect entered a cascade (e.g. CREATE_TILES), let it resolve
+      if (this.state === BattleState.RESOLVING) return;
+
       // Check for game over before proceeding to next turn
       if (this._checkGameOver()) return;
       this._endTurn('enemy');
@@ -1023,6 +1098,10 @@ export default class BattleController {
       case SKILL_EFFECT_TYPES.ARMOR:
         src.armor += baseAmount;
         this.log.add(`${src.name} gains ${baseAmount} armor.`);
+        break;
+
+      case SKILL_EFFECT_TYPES.CREATE_TILES:
+        this._executeCreateTiles(skill, side);
         break;
 
       case SKILL_EFFECT_TYPES.DAMAGE:

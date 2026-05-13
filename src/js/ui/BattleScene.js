@@ -485,6 +485,13 @@ export default class BattleScene extends UIPanel {
       }
     }
 
+    // ── Spawn tile conversion shimmer effects ──
+    if (state.convertedTiles && state.convertedTiles.length > 0 && this._board) {
+      for (const ct of state.convertedTiles) {
+        this._spawnTileConvertParticles(ct);
+      }
+    }
+
     // Update turn label
     if (this._turnLabel) {
       this._turnLabel.text = this._battleController.getTurnLabel();
@@ -670,6 +677,39 @@ export default class BattleScene extends UIPanel {
         minSpeed: metrics.cellSize * 0.12,
         maxSpeed: metrics.cellSize * 0.55,
         gravity: metrics.cellSize * 0.03,
+      }
+    );
+
+    this._particleEffects.push(effect);
+  }
+
+  /**
+   * Spawn a shimmer/pop conversion effect for a tile changed by CREATE_TILES.
+   * Uses an inward particle burst (smaller, directed inward) with the new
+   * tile type's color to visually communicate "this tile transformed."
+   * @param {{col:number, row:number, typeId:string}} convertedTile
+   */
+  _spawnTileConvertParticles(convertedTile) {
+    const screen = this._cellToScreen(convertedTile);
+    if (!screen) return;
+
+    const tileType = getTileType(convertedTile.typeId);
+    const metrics = this._board.getCellMetrics();
+    // Slightly larger base size for conversion shimmer
+    const baseSize = Math.max(2, Math.min(6, metrics.cellSize * 0.07));
+
+    const effect = new TileParticleEffect(
+      screen.x, screen.y,
+      tileType.particleColor,
+      baseSize,
+      {
+        particleCount: 8,
+        sparkCount: 4,
+        minLife: 200,
+        maxLife: 400,
+        minSpeed: metrics.cellSize * 0.04,
+        maxSpeed: metrics.cellSize * 0.25,
+        gravity: metrics.cellSize * -0.02,  // slight upward drift for "magic" feel
       }
     );
 

@@ -502,6 +502,66 @@ export default class BoardModel {
     this.initialize();
   }
 
+  // ── CREATE_TILES helpers ────────────────────────────
+
+  /**
+   * Get all board positions whose tile is NOT of the given type.
+   * Excludes empty (null) cells.
+   * @param {string} typeId - the tile type to exclude
+   * @returns {Array<{col:number, row:number}>}
+   */
+  getTilesNotOfType(typeId) {
+    const positions = [];
+    for (let x = 0; x < this.cols; x++) {
+      for (let y = 0; y < this.rows; y++) {
+        const tile = this.grid[x][y];
+        if (tile !== null && tile !== typeId) {
+          positions.push({ col: x, row: y });
+        }
+      }
+    }
+    return positions;
+  }
+
+  /**
+   * Randomly select up to `amount` tiles from an array using Fisher-Yates sampling.
+   * Returns a new array; does not mutate the input.
+   * @param {Array<{col:number, row:number}>} tiles
+   * @param {number} amount
+   * @returns {Array<{col:number, row:number}>}
+   */
+  static pickRandomTiles(tiles, amount) {
+    if (tiles.length === 0) return [];
+    const n = Math.min(amount, tiles.length);
+    // Fisher-Yates partial shuffle
+    const copy = [...tiles];
+    for (let i = 0; i < n; i++) {
+      const j = i + Math.floor(Math.random() * (copy.length - i));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy.slice(0, n);
+  }
+
+  /**
+   * Convert the given positions to the specified tile type in-place.
+   * Silently skips out-of-bounds or null positions.
+   * @param {Array<{col:number, row:number}>} positions
+   * @param {string} typeId - new tile type
+   * @returns {number} count of tiles actually converted
+   */
+  convertTilesToType(positions, typeId) {
+    let count = 0;
+    for (const pos of positions) {
+      if (pos.col >= 0 && pos.col < this.cols && pos.row >= 0 && pos.row < this.rows) {
+        if (this.grid[pos.col][pos.row] !== null) {
+          this.grid[pos.col][pos.row] = typeId;
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
   // ── Grid Snapshot ────────────────────────────────────
 
   /** Return a 2D array snapshot (rows × cols) for rendering. */

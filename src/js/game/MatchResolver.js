@@ -22,6 +22,7 @@ export const SKILL_EFFECT_TYPES = {
   ARMOR: 'armor',
   DESTROY_TILES: 'destroy_tiles',
   DESTROY_TILES_ROW: 'destroy_tiles_row',
+  CREATE_TILES: 'create_tiles',
 };
 
 export default class MatchResolver {
