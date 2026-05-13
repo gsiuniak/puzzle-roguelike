@@ -15,10 +15,10 @@
  *   past      — darkened, desaturated (all nodes on floors behind the player)
  *   default   — natural asset color, no special treatment (future/unreachable)
  *
- * Edge hierarchy (simplified from 4 states):
- *   available — current → reachable next nodes (bright gold, strongest)
- *   traveled  — edges originating from past floors (dark muted)
- *   default   — future, undiscovered, neutral (dim grey, most subdued)
+ * Edge hierarchy (3 states):
+ *   available — edges leading to reachable/outgoing nodes (bright gold, dotted)
+ *   traveled  — edges from past floors (thin washed-out solid line, no dots)
+ *   default   — future, undiscovered, neutral (clearly dotted, visible)
  *
  * @dependency MapGraph, MapTraversalController, AssetManager
  */
@@ -48,10 +48,10 @@ const CURVE_FACTOR = 0.04;
  *  Higher values create more dramatic diagonal slant. */
 const DIAGONAL_SPREAD = 0.22;
 
-// ── Edge colors (rebalanced: default=dim grey, available=bright gold, traveled=dark muted) ──
-/** Alpha for neutral/default edges (dim grey, most subdued) */
-const EDGE_DEFAULT_ALPHA = 0.38;
-/** Alpha for traveled/past edges (darkened, muted) */
+// ── Edge colors (available=bright gold, default=visible dotted, traveled=washed-out solid) ──
+/** Alpha for neutral/default edges (clearly visible dotted) */
+const EDGE_DEFAULT_ALPHA = 0.55;
+/** Alpha for traveled/past edges (thin washed-out solid line only) */
 const EDGE_TRAVELED_ALPHA = 0.28;
 /** Alpha for available-next edges (brightest highlight) */
 const EDGE_AVAILABLE_ALPHA = 0.90;
@@ -60,8 +60,8 @@ const EDGE_PATH_ALPHA = 0.18;
 /** Edge path line width */
 const EDGE_PATH_WIDTH = 1.5;
 
-/** Color for default/inactive edges (dim grey — the most subdued) */
-const EDGE_DEFAULT_COLOR = '#5a5a54';
+/** Color for default/inactive edges (warm neutral — clearly visible) */
+const EDGE_DEFAULT_COLOR = '#8a8a70';
 /** Color for available-next edges (bright gold highlight) */
 const EDGE_AVAILABLE_COLOR = '#c8b870';
 /** Color for traveled/past edges (darkened, desaturated) */
@@ -320,17 +320,23 @@ export default class MapRenderer {
    */
   _edgeState(fromNode, toNode) {
     const fs = fromNode.state;
+    const traversal = this._traversal;
 
-    // 1. Available: from is current, to is directly reachable
-    if (fs.current && toNode.state.reachable) {
+    // 1. Available: edge leads to a node the player can travel to.
+    //    a) toNode is flagged as reachable (set by completeCurrentAndRevealNext)
+    if (toNode.state.reachable) {
+      return 'available';
+    }
+    //    b) Preview from current node to its outgoing neighbours —
+    //       but NOT on the starting floor (history is still empty there).
+    if (fs.current && fromNode.outgoing.includes(toNode.id)
+        && traversal && traversal.history.length > 0) {
       return 'available';
     }
 
     // 2. Traveled: edge originates from a floor the player has left behind.
-    //    All edges starting from past floors use the subdued "traveled" style,
-    //    whether the player actually traversed them or bypassed them.
-    if (this._traversal) {
-      const effectiveDepth = this._traversal.getEffectiveCurrentDepth();
+    if (traversal) {
+      const effectiveDepth = traversal.getEffectiveCurrentDepth();
       if (fromNode.depth < effectiveDepth) {
         return 'traveled';
       }
@@ -366,11 +372,12 @@ export default class MapRenderer {
   }
 
   /**
-   * Draw a single edge between two nodes as a dotted curved line
-   * over a subtle continuous path line. Styling varies by state:
-   *   - available: bright gold highlight with pulse (strongest)
-   *   - traveled:  dark, muted (past floors)
-   *   - default:   dim grey, most subdued (future/undiscovered)
+   * Draw a single edge between two nodes.
+   *
+   * Styling by state:
+   *   - available: bright gold dotted path + glow pulse (strongest)
+   *   - traveled:  thin washed-out solid line only, no dots (past floors)
+   *   - default:   clearly dotted neutral line (future/undiscovered)
    */
   _drawEdge(ctx, fromNode, x1, y1, toNode, x2, y2, dt) {
     const dx = x2 - x1;
@@ -386,25 +393,36 @@ export default class MapRenderer {
     const midY = (y1 + y2) / 2;
     const perpX = -dy / dist;
     const perpY = dx / dist;
-    // Gentle, consistent curve — lane only shifts direction subtly
     const laneSign = ((fromNode.lane + toNode.lane) % 2 === 0) ? 1 : -1;
     const offset = dist * CURVE_FACTOR * laneSign;
 
     const cpX = midX + perpX * offset;
     const cpY = midY + perpY * offset;
 
-    // ── 1. Subtle continuous path line behind the dots ──
-    ctx.save();
+    // ── Traveled edges: thin washed-out solid line only (no dots) ──
     if (state === 'traveled') {
-      ctx.globalAlpha = EDGE_PATH_ALPHA * 0.45;
+      ctx.save();
+      ctx.globalAlpha = EDGE_TRAVELED_ALPHA;
       ctx.strokeStyle = EDGE_TRAVELED_COLOR;
-      ctx.lineWidth = EDGE_PATH_WIDTH * 0.6;
-    } else if (state === 'available') {
+      ctx.lineWidth = EDGE_PATH_WIDTH * 0.65;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    // ── Available & Default: dotted path line + dots ──
+
+    // 1. Subtle continuous path line behind the dots
+    ctx.save();
+    if (state === 'available') {
       ctx.globalAlpha = EDGE_PATH_ALPHA * 1.4;
       ctx.strokeStyle = EDGE_AVAILABLE_COLOR;
       ctx.lineWidth = EDGE_PATH_WIDTH + 0.5;
     } else {
-      ctx.globalAlpha = EDGE_PATH_ALPHA;
+      ctx.globalAlpha = EDGE_PATH_ALPHA * 0.8;
       ctx.strokeStyle = EDGE_PATH_COLOR;
       ctx.lineWidth = EDGE_PATH_WIDTH;
     }
@@ -414,7 +432,7 @@ export default class MapRenderer {
     ctx.stroke();
     ctx.restore();
 
-    // ── 2. Dotted overlay — state-based styling ─────────
+    // 2. Dotted overlay
     ctx.save();
 
     let dotAlpha, dotColor, dotPulseMag;
@@ -422,10 +440,8 @@ export default class MapRenderer {
       dotAlpha = EDGE_AVAILABLE_ALPHA;
       dotColor = EDGE_AVAILABLE_COLOR;
       dotPulseMag = EDGE_AVAILABLE_PULSE;
-    } else if (state === 'traveled') {
-      dotAlpha = EDGE_TRAVELED_ALPHA;
-      dotColor = EDGE_TRAVELED_COLOR;
-      dotPulseMag = 0;
+      ctx.shadowColor = EDGE_AVAILABLE_COLOR;
+      ctx.shadowBlur = 6;
     } else {
       dotAlpha = EDGE_DEFAULT_ALPHA;
       dotColor = EDGE_DEFAULT_COLOR;
@@ -435,12 +451,6 @@ export default class MapRenderer {
     ctx.globalAlpha = dotAlpha;
     ctx.fillStyle = dotColor;
 
-    // Available edges get a subtle shadow/glow on dots
-    if (state === 'available') {
-      ctx.shadowColor = EDGE_AVAILABLE_COLOR;
-      ctx.shadowBlur = 6;
-    }
-
     const steps = Math.max(10, Math.floor(dist / DOT_GAP));
 
     for (let i = 0; i <= steps; i++) {
@@ -448,7 +458,6 @@ export default class MapRenderer {
       const bx = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * cpX + t * t * x2;
       const by = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cpY + t * t * y2;
 
-      // Pulse animation for available and default edges
       const pulse = dotPulseMag > 0
         ? Math.sin(dt * 0.002 + i * 0.35) * dotPulseMag
         : 0;
@@ -555,6 +564,19 @@ export default class MapRenderer {
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(8, 4, 2, 0.42)';
+      ctx.fill();
+    }
+
+    // ── Current-node highlighted overlay ───────────
+    // Bright golden fill on the node face itself (in addition to rings).
+    if (isCurrent) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      const overlayGrad = ctx.createRadialGradient(x, y, r * 0.25, x, y, r);
+      overlayGrad.addColorStop(0, 'rgba(240, 224, 80, 0.38)');
+      overlayGrad.addColorStop(0.5, 'rgba(212, 160, 32, 0.18)');
+      overlayGrad.addColorStop(1, 'rgba(160, 100, 16, 0.06)');
+      ctx.fillStyle = overlayGrad;
       ctx.fill();
     }
 
