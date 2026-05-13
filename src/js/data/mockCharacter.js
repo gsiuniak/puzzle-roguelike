@@ -30,7 +30,7 @@ const warriorCharacter = {
   skills: [
     {
       name: 'Bash',
-      description: 'Deal 5 damage.\nGain a turn.',
+      description: 'Deal 5 damage\nGain a turn',
       icon: 'skill_bash',
       sound: 'skill_bash',
       cost: { red: 7 },
@@ -41,7 +41,7 @@ const warriorCharacter = {
     },
     {
       name: 'Defend',
-      description: 'Gain 5 armor.\nCreate 3 blue tiles.',
+      description: 'Gain 5 armor\nCreate 3 blue',
       icon: 'skill_defend',
       sound: 'skill_defend',
       cost: { blue: 5 },
@@ -77,7 +77,7 @@ const mageCharacter = {
   skills: [
     {
       name: 'Fracture',
-      description: 'Destroy 1 row\nCreate 5 purple tiles',
+      description: 'Destroy 1 row\nCreate 5 purple',
       icon: 'skill_fracture',
       sound: 'skill_fracture',
       targeting: 'board_tile',
@@ -119,7 +119,7 @@ const witchDoctorCharacter = {
   mana: {
     red: 0,
     blue: 0,
-    green: 100,
+    green: 3,
     yellow: 0,
     purple: 4,
   },
@@ -127,7 +127,7 @@ const witchDoctorCharacter = {
   skills: [
     {
       name: 'Summon Dead',
-      description: 'Create 10 skull tiles',
+      description: 'Create 10 skulls',
       icon: 'skill_summon_dead',
       sound: 'skill_create_skull',
       cost: { purple: 4 },
@@ -140,7 +140,7 @@ const witchDoctorCharacter = {
     },
     {
       name: 'Oungan',
-      description: 'Heal 5 HP\nCreate 5 green tiles.',
+      description: 'Heal 5 HP\nCreate 5 green',
       icon: 'skill_oungan',
       sound: 'skill_oungan',
       cost: { green: 6 },
