@@ -245,25 +245,28 @@ export default class MapRenderer {
    * Subtle parchment-style background with faint depth markers.
    */
   _drawBackground(ctx, w, h) {
-    // Base fill — parchment tone
     ctx.save();
 
-    // Gradient: subtle parchment with slightly darker edges
-    const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
-    grad.addColorStop(0, '#3a3020');
-    grad.addColorStop(0.5, '#2e2618');
-    grad.addColorStop(1, '#1a1410');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // Subtle vertical parchment grain lines
-    ctx.strokeStyle = 'rgba(140, 110, 70, 0.04)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < w; x += 4) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
+    // Draw the map_splash image as the full background
+    const splashImg = this._am ? this._am.get('map_splash') : null;
+    if (splashImg && splashImg.complete) {
+      // Scale to cover the canvas, maintaining aspect ratio with overflow
+      const imgW = splashImg.width;
+      const imgH = splashImg.height;
+      const scale = Math.max(w / imgW, h / imgH);
+      const sw = imgW * scale;
+      const sh = imgH * scale;
+      const sx = (w - sw) / 2;
+      const sy = (h - sh) / 2;
+      ctx.drawImage(splashImg, sx, sy, sw, sh);
+    } else {
+      // Fallback: dark parchment gradient
+      const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+      grad.addColorStop(0, '#3a3020');
+      grad.addColorStop(0.5, '#2e2618');
+      grad.addColorStop(1, '#1a1410');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
     }
 
     ctx.restore();

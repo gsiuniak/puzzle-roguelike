@@ -103,6 +103,10 @@ export default class MapScene extends UIPanel {
       this._traversal.deserialize(this._savedTraversalState);
       this._savedTraversalState = null;
       console.log('[MapScene] Restored traversal state from battle return.');
+
+      // Complete the node we just battled at and reveal the next depth
+      this._traversal.completeCurrentAndRevealNext();
+      console.log('[MapScene] Current node completed, next depth revealed.');
     }
 
     // Create the renderer

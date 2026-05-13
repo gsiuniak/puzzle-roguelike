@@ -138,6 +138,8 @@ export default class MapTraversalController {
 
   /**
    * Force-set the current node without validation (for init / load).
+   * Does NOT mark outgoing nodes as reachable — use revealNextDepth()
+   * for that, so the player must complete the current node first.
    * @param {string} nodeId
    */
   _setCurrent(nodeId) {
@@ -155,9 +157,24 @@ export default class MapTraversalController {
     // Mark as discovered + current
     node.state.discovered = true;
     node.state.current = true;
+  }
 
-    // Mark all outgoing nodes as discovered + reachable
-    for (const outId of node.outgoing) {
+  /**
+   * Complete the current node (mark it as cleared) and reveal
+   * all of its outgoing nodes as reachable for the next move.
+   * Call this after the player finishes the encounter at the current node.
+   */
+  completeCurrentAndRevealNext() {
+    const current = this.currentNode;
+    if (!current) return;
+
+    // Mark current as completed
+    current.state.current = false;
+    current.state.completed = true;
+    this._currentNodeId = null;
+
+    // Reveal all outgoing nodes as reachable
+    for (const outId of current.outgoing) {
       const outNode = this._graph.getNode(outId);
       if (outNode) {
         outNode.state.discovered = true;
