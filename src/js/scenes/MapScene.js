@@ -6,7 +6,7 @@
  * Responsibilities:
  *   - Generate (or load) a MapGraph via MapGenerator
  *   - Manage traversal state via MapTraversalController
- *   - Render the map via MapRenderer
+ *   - Render the map via MapRenderer inside a centered container
  *   - Handle click input for node selection and movement
  *   - Transition to BattleScene when a combat node is selected
  *
@@ -15,9 +15,25 @@
  * Lifecycle:
  *   onEnter()  — generate map, wire input
  *   update(dt) — advance animations, update hover
- *   render(ctx) — delegate to MapRenderer
+ *   render(ctx) — draw overlay + container, delegate to MapRenderer
  *   onExit()   — tear down input
  */
+
+// ── Container layout constants ──────────────────────
+/** Fraction of canvas width the container occupies */
+const CONTAINER_WIDTH_FRAC = 0.85;
+/** Fraction of canvas height the container occupies */
+const CONTAINER_HEIGHT_FRAC = 0.82;
+/** Minimum horizontal padding from edges */
+const CONTAINER_MIN_H_PAD = 40;
+/** Minimum vertical padding from edges */
+const CONTAINER_MIN_V_PAD = 24;
+/** Container corner radius */
+const CONTAINER_RADIUS = 16;
+/** Container border width */
+const CONTAINER_BORDER = 2;
+/** Overlay alpha */
+const OVERLAY_ALPHA = 0.55;
 
 import UIPanel from '../ui/UIPanel.js';
 import MapGenerator from '../map/MapGenerator.js';
@@ -49,6 +65,10 @@ export default class MapScene extends UIPanel {
     this._canvasW = 0;
     this._canvasH = 0;
 
+    // ── Container rect cache (recomputed each frame) ────
+    /** @type {{x:number,y:number,w:number,h:number}} */
+    this._containerRect = { x: 0, y: 0, w: 0, h: 0 };
+
     // ── Input handler references ────────────────────────
     /** @type {Function|null} */
     this._onMouseDown = null;
@@ -73,6 +93,45 @@ export default class MapScene extends UIPanel {
     // ── Saved state for battle return ──────────────────
     /** @type {object|null} serialized traversal state to restore on return */
     this._savedTraversalState = null;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Container layout
+  // ═══════════════════════════════════════════════════════
+
+  /** Target aspect ratio (16:9) */
+  static CONTAINER_ASPECT = 16 / 9;
+
+  /**
+   * Compute the centered map container rect from the current canvas size.
+   * Enforces a 16:9 aspect ratio, fitting within the canvas bounds.
+   * @returns {{x:number,y:number,w:number,h:number}}
+   */
+  _getContainerRect() {
+    const w = this._canvasW;
+    const h = this._canvasH;
+
+    // Max available area respecting padding constraints
+    const maxW = Math.min(w * CONTAINER_WIDTH_FRAC, w - CONTAINER_MIN_H_PAD * 2);
+    const maxH = Math.min(h * CONTAINER_HEIGHT_FRAC, h - CONTAINER_MIN_V_PAD * 2);
+    const targetRatio = MapScene.CONTAINER_ASPECT;
+
+    let cw, ch;
+    if (maxW / maxH > targetRatio) {
+      // Canvas is wider than 16:9 — constrain by height
+      ch = maxH;
+      cw = ch * targetRatio;
+    } else {
+      // Canvas is taller than 16:9 — constrain by width
+      cw = maxW;
+      ch = cw / targetRatio;
+    }
+
+    const cx = Math.floor((w - cw) / 2);
+    const cy = Math.floor((h - ch) / 2);
+
+    this._containerRect = { x: cx, y: cy, w: cw, h: ch };
+    return this._containerRect;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -183,14 +242,22 @@ export default class MapScene extends UIPanel {
   // ═══════════════════════════════════════════════════════
 
   /**
-   * @param {number} x
-   * @param {number} y
+   * @param {number} x — canvas-space mouse X
+   * @param {number} y — canvas-space mouse Y
    */
   _handleMouseDown(x, y) {
     if (this._transitioning) return;
     if (!this._renderer || !this._traversal) return;
 
-    const hit = this._renderer.hitTest(this._canvasW, this._canvasH, x, y);
+    // Offset into container-local coordinates
+    const cr = this._containerRect;
+    const lx = x - cr.x;
+    const ly = y - cr.y;
+
+    // Ignore clicks outside the container
+    if (lx < 0 || ly < 0 || lx > cr.w || ly > cr.h) return;
+
+    const hit = this._renderer.hitTest(cr.w, cr.h, lx, ly);
     if (!hit) return;
 
     // Allow clicking on the current node (to start/resume its encounter)
@@ -218,12 +285,24 @@ export default class MapScene extends UIPanel {
   }
 
   /**
-   * @param {number} x
-   * @param {number} y
+   * @param {number} x — canvas-space mouse X
+   * @param {number} y — canvas-space mouse Y
    */
   _handleMouseMove(x, y) {
     if (!this._renderer) return;
-    this._renderer.updateHover(this._canvasW, this._canvasH, x, y);
+
+    // Offset into container-local coordinates
+    const cr = this._containerRect;
+    const lx = x - cr.x;
+    const ly = y - cr.y;
+
+    // Ignore moves outside the container (clear hover)
+    if (lx < 0 || ly < 0 || lx > cr.w || ly > cr.h) {
+      this._renderer.updateHover(cr.w, cr.h, -999, -999);
+      return;
+    }
+
+    this._renderer.updateHover(cr.w, cr.h, lx, ly);
   }
 
   /**
@@ -382,22 +461,50 @@ export default class MapScene extends UIPanel {
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Override render to use MapRenderer instead of standard UI child rendering.
+   * Override render to use MapRenderer inside a centered container.
    * @param {CanvasRenderingContext2D} ctx
    */
   render(ctx) {
     if (!this.visible) return;
 
-    // Delegate all rendering to MapRenderer
+    const cr = this._getContainerRect();
+    const dt = 16; // ~60fps animation base
+
+    // ── 1. Semi-transparent black overlay across entire canvas ──
+    ctx.save();
+    ctx.fillStyle = `rgba(0, 0, 0, ${OVERLAY_ALPHA})`;
+    ctx.fillRect(0, 0, this._canvasW, this._canvasH);
+    ctx.restore();
+
+    // ── 2. Container background panel ──────────────────────
+    ctx.save();
+    this._drawContainerPanel(ctx, cr);
+    ctx.restore();
+
+    // ── 3. Clip & translate to container interior ──────────
+    ctx.save();
+    ctx.beginPath();
+    this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
+    ctx.clip();
+    ctx.translate(cr.x, cr.y);
+
+    // ── 4. Delegate map rendering within container bounds ──
     if (this._renderer) {
-      this._renderer.render(ctx, this._canvasW, this._canvasH, 16); // dt ~16ms for 60fps animation base
+      this._renderer.render(ctx, cr.w, cr.h, dt);
     }
 
-    // Draw depth labels
-    this._drawDepthLabels(ctx);
+    // ── 5. Depth labels (container-relative) ───────────────
+    this._drawDepthLabels(ctx, cr.w, cr.h);
 
-    // Draw current node info at bottom
-    this._drawNodeInfo(ctx);
+    // ── 6. Node info at bottom (container-relative) ────────
+    this._drawNodeInfo(ctx, cr.w, cr.h);
+
+    ctx.restore();
+
+    // ── 7. Container border (on top, after clip restore) ───
+    ctx.save();
+    this._drawContainerBorder(ctx, cr);
+    ctx.restore();
 
     if (this.debug) {
       this._drawDebug(ctx);
@@ -405,16 +512,87 @@ export default class MapScene extends UIPanel {
   }
 
   /**
-   * Draw depth/floor indicators along the top.
+   * Draw the container background fill using the map_splash image.
+   * The splash is scaled to cover the entire container area.
    */
-  _drawDepthLabels(ctx) {
+  _drawContainerPanel(ctx, cr) {
+    // Try to draw the splash image as container background
+    const splashImg = this._assetManager ? this._assetManager.get('map_splash') : null;
+
+    if (splashImg && splashImg.complete) {
+      // Scale to cover the container, maintaining aspect ratio with overflow
+      const imgW = splashImg.width;
+      const imgH = splashImg.height;
+      const scale = Math.max(cr.w / imgW, cr.h / imgH);
+      const sw = imgW * scale;
+      const sh = imgH * scale;
+      const sx = cr.x + (cr.w - sw) / 2;
+      const sy = cr.y + (cr.h - sh) / 2;
+
+      ctx.save();
+      ctx.beginPath();
+      this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
+      ctx.clip();
+      ctx.drawImage(splashImg, sx, sy, sw, sh);
+      ctx.restore();
+    } else {
+      // Fallback: dark semi-transparent fill
+      ctx.fillStyle = 'rgba(18, 14, 8, 0.92)';
+      ctx.beginPath();
+      this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
+      ctx.fill();
+    }
+  }
+
+  /**
+   * Draw the container border stroke.
+   */
+  _drawContainerBorder(ctx, cr) {
+    ctx.strokeStyle = 'rgba(180, 150, 100, 0.35)';
+    ctx.lineWidth = CONTAINER_BORDER;
+    ctx.beginPath();
+    this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
+    ctx.stroke();
+
+    // Subtle inner border for depth
+    const inset = 3;
+    ctx.strokeStyle = 'rgba(180, 150, 100, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    this._roundRect(ctx, cr.x + inset, cr.y + inset, cr.w - inset * 2, cr.h - inset * 2, CONTAINER_RADIUS - 1);
+    ctx.stroke();
+  }
+
+  /**
+   * Helper: draw a rounded rectangle path.
+   */
+  _roundRect(ctx, x, y, w, h, r) {
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+
+  /**
+   * Draw depth/floor indicators along the top of the container.
+   * @param {CanvasRenderingContext2D} ctx — already translated to container origin
+   * @param {number} cw — container width
+   * @param {number} ch — container height
+   */
+  _drawDepthLabels(ctx, cw, ch) {
     if (!this._graph) return;
 
-    const positioned = this._renderer.layoutNodes(this._canvasW, this._canvasH);
+    const positioned = this._renderer.layoutNodes(cw, ch);
     if (positioned.length === 0) return;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(180, 160, 120, 0.4)';
+    ctx.fillStyle = 'rgba(180, 160, 120, 0.45)';
     ctx.font = '15px "Marcellus SC", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -441,9 +619,12 @@ export default class MapScene extends UIPanel {
   }
 
   /**
-   * Draw info about the current node / legend at the bottom.
+   * Draw info about the current node / legend at the bottom of the container.
+   * @param {CanvasRenderingContext2D} ctx — already translated to container origin
+   * @param {number} cw — container width
+   * @param {number} ch — container height
    */
-  _drawNodeInfo(ctx) {
+  _drawNodeInfo(ctx, cw, ch) {
     const traversal = this._traversal;
     if (!traversal) return;
 
@@ -458,7 +639,7 @@ export default class MapScene extends UIPanel {
     ctx.font = '18px "Marcellus SC", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(text, this._canvasW / 2, this._canvasH - 20);
+    ctx.fillText(text, cw / 2, ch - 12);
     ctx.restore();
   }
 }

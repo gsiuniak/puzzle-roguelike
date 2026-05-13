@@ -17,10 +17,12 @@
 import MapNode from './MapNode.js';
 import MapGraph from './MapGraph.js';
 
-/** Node circle radius in CSS pixels */
+/** Base node circle radius in CSS pixels (for non-boss nodes) */
 const NODE_RADIUS = 28;
-/** Icon size fraction of node radius */
-const ICON_SCALE = 0.55;
+/** Boss node radius multiplier */
+const BOSS_RADIUS_MULT = 2;
+/** Icon size fraction of node radius (fills most of the node) */
+const ICON_SCALE = 0.92;
 /** Horizontal padding on each side */
 const H_PAD = 80;
 /** Vertical padding on each side */
@@ -166,6 +168,15 @@ export default class MapRenderer {
   // ── Hit testing ────────────────────────────────────
 
   /**
+   * Get the visual radius for a node (boss nodes are 2x larger).
+   * @param {MapNode} node
+   * @returns {number}
+   */
+  _nodeRadius(node) {
+    return node.type === 'boss' ? NODE_RADIUS * BOSS_RADIUS_MULT : NODE_RADIUS;
+  }
+
+  /**
    * Find the node at the given canvas coordinates.
    * @param {number} canvasW
    * @param {number} canvasH
@@ -178,7 +189,7 @@ export default class MapRenderer {
     for (const { node, x, y } of positioned) {
       const dx = mx - x;
       const dy = my - y;
-      const r = NODE_RADIUS + 4; // slight padding for easier click
+      const r = this._nodeRadius(node) + 4; // slight padding for easier click
       if (dx * dx + dy * dy <= r * r) {
         return node;
       }
@@ -227,49 +238,13 @@ export default class MapRenderer {
 
     const positioned = this.layoutNodes(canvasW, canvasH);
 
-    // ── 1. Draw parchment background ──────────────
-    this._drawBackground(ctx, canvasW, canvasH);
-
-    // ── 2. Draw connection edges ──────────────────
+    // ── 1. Draw connection edges ──────────────────
     this._drawAllEdges(ctx, positioned, dt);
 
-    // ── 3. Draw node containers and icons ─────────
+    // ── 2. Draw node containers and icons ─────────
     for (const { node, x, y } of positioned) {
       this._drawNode(ctx, node, x, y, dt);
     }
-  }
-
-  // ── Background ─────────────────────────────────────
-
-  /**
-   * Subtle parchment-style background with faint depth markers.
-   */
-  _drawBackground(ctx, w, h) {
-    ctx.save();
-
-    // Draw the map_splash image as the full background
-    const splashImg = this._am ? this._am.get('map_splash') : null;
-    if (splashImg && splashImg.complete) {
-      // Scale to cover the canvas, maintaining aspect ratio with overflow
-      const imgW = splashImg.width;
-      const imgH = splashImg.height;
-      const scale = Math.max(w / imgW, h / imgH);
-      const sw = imgW * scale;
-      const sh = imgH * scale;
-      const sx = (w - sw) / 2;
-      const sy = (h - sh) / 2;
-      ctx.drawImage(splashImg, sx, sy, sw, sh);
-    } else {
-      // Fallback: dark parchment gradient
-      const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
-      grad.addColorStop(0, '#3a3020');
-      grad.addColorStop(0.5, '#2e2618');
-      grad.addColorStop(1, '#1a1410');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-    }
-
-    ctx.restore();
   }
 
   // ── Edges ──────────────────────────────────────────
@@ -424,7 +399,8 @@ export default class MapRenderer {
       scale = Math.min(1.15, scale + 0.03);
     }
 
-    const r = NODE_RADIUS * scale;
+    const baseRadius = this._nodeRadius(node);
+    const r = baseRadius * scale;
 
     ctx.save();
 
@@ -443,10 +419,11 @@ export default class MapRenderer {
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
 
-    // Ring fill — dark semi-transparent
+    // Ring fill — subtle dark backing so the icon stands out
     const ringFillGrad = ctx.createRadialGradient(x, y, r * 0.5, x, y, r);
-    ringFillGrad.addColorStop(0, 'rgba(30, 22, 14, 0.85)');
-    ringFillGrad.addColorStop(1, 'rgba(20, 14, 8, 0.9)');
+    ringFillGrad.addColorStop(0, 'rgba(20, 14, 8, 0.55)');
+    ringFillGrad.addColorStop(0.7, 'rgba(14, 10, 4, 0.7)');
+    ringFillGrad.addColorStop(1, 'rgba(10, 6, 2, 0.85)');
     ctx.fillStyle = ringFillGrad;
     ctx.fill();
 
