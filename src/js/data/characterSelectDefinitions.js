@@ -51,8 +51,8 @@ const characterSelectDefinitions = [
     className: witchDoctorCharacter.className,
     portraitKey: 'character_select_portrait_witch_doctor',
     splashKey: 'character_select_splash_witch_doctor',
-    /** Aura color {r,g,b} in 0-1 range — dark green/teal voodoo */
-    auraColor: { r: 0.15, g: 0.55, b: 0.35 },
+    /** Aura color {r,g,b} in 0-1 range — greyish to complement splash art */
+    auraColor: { r: 0.35, g: 0.35, b: 0.35 },
     characterData: witchDoctorCharacter,
     order: 2,
     enabled: true,

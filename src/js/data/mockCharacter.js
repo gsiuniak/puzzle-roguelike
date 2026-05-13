@@ -100,7 +100,7 @@ const witchDoctorCharacter = {
   mana: {
     red: 0,
     blue: 0,
-    green: 6,
+    green: 0,
     yellow: 0,
     purple: 4,
   },

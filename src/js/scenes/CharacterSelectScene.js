@@ -221,7 +221,7 @@ export default class CharacterSelectScene extends UIPanel {
       alignV: 'center',
       width: 120,
       height: 26,
-      margin: { left: 40, right: 40 }
+      margin: { left: 65, right: 65 }
     });
     classRow.addChild(classText);
 
