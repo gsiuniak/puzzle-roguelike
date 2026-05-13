@@ -110,8 +110,8 @@ export default class SkillRow extends UIPanel {
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 20,
-      margin: { left: 15 }
+      height: 15,
+      margin: { left: 15, top: 5 }
     });
     infoCol.addChild(this._nameText);
 
@@ -122,8 +122,8 @@ export default class SkillRow extends UIPanel {
       italic: false,
       alignH: 'left',
       alignV: 'center',
-      height: 18,
-      maxWidth: 200,
+      height: 30,
+      maxWidth: 150,
        margin: { left: 15 }
     });
     infoCol.addChild(this._descText);

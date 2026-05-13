@@ -30,7 +30,7 @@ const warriorCharacter = {
   skills: [
     {
       name: 'Bash',
-      description: 'Deal 5 damage. Gain a turn.',
+      description: 'Deal 5 damage.\nGain a turn.',
       icon: 'skill_bash',
       sound: 'skill_bash',
       cost: { red: 7 },
@@ -41,12 +41,16 @@ const warriorCharacter = {
     },
     {
       name: 'Defend',
-      description: 'Gain 5 armor. Create 3 blue tiles.',
+      description: 'Gain 5 armor.\nCreate 3 blue tiles.',
       icon: 'skill_defend',
       sound: 'skill_defend',
       cost: { blue: 5 },
       effects: [
-        { effectType: 'armor', armor: { amount: 5 } }
+        { effectType: 'armor', armor: { amount: 5 } },
+        {
+          effectType: 'create_tiles',
+          createTiles: { amount: 3, type: 'blue' }
+        }
       ],
     }
   ],
@@ -73,14 +77,18 @@ const mageCharacter = {
   skills: [
     {
       name: 'Fracture',
-      description: 'Destroy 1 row',
+      description: 'Destroy 1 row\nCreate 5 purple tiles',
       icon: 'skill_fracture',
       sound: 'skill_fracture',
       targeting: 'board_tile',
       area: 1,
       cost: { yellow: 5 },
       effects: [
-        { effectType: 'destroy_tiles_row' }
+        { effectType: 'destroy_tiles_row' },
+        {
+          effectType: 'create_tiles',
+          createTiles: { amount: 5, type: 'purple' }
+        }
       ],
     },
     {
@@ -132,7 +140,7 @@ const witchDoctorCharacter = {
     },
     {
       name: 'Oungan',
-      description: 'Heal 5 HP',
+      description: 'Heal 5 HP\nCreate 5 green tiles.',
       icon: 'skill_oungan',
       sound: 'skill_oungan',
       cost: { green: 6 },
@@ -140,6 +148,10 @@ const witchDoctorCharacter = {
         {
           effectType: 'heal',
           heal: { amount: 5 }
+        },
+        {
+          effectType: 'create_tiles',
+          createTiles: { amount: 3, type: 'green' }
         }
       ],
     },
