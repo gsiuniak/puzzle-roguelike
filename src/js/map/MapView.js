@@ -4,15 +4,17 @@
  * Extracts all visual rendering from MapScene so the exact same map screen
  * can be used in two modes:
  *
- *   'fullscreen' — standalone MapScene (full-canvas splash + dark overlay outside)
- *   'overlay'    — BattleScene overlay (dark backdrop + splash inside container)
+ *   'fullscreen' — standalone MapScene (dark overlay + contained splash)
+ *   'overlay'    — BattleScene overlay (dark backdrop + contained splash)
  *
  * Both modes share identical:
- *   - Container layout (16:9, centered, rounded rect)
+ *   - Container layout (16:9, centered, rounded rect — acts as clip mask)
+ *   - Dark semi-transparent fullscreen overlay background
+ *   - Parchment splash filling the container interior only
  *   - Node/path rendering (via MapRenderer)
  *   - Depth/floor labels
  *   - Node info text
- *   - Container border + inner shadow
+ *   - No visible border/stroke/outline on the container
  *
  * @dependency MapRenderer, MapGraph, AssetManager
  */
@@ -23,16 +25,12 @@ const CONTAINER_WIDTH_FRAC = 0.85;
 /** Fraction of canvas height the container occupies */
 const CONTAINER_HEIGHT_FRAC = 0.82;
 /** Minimum horizontal padding from edges */
-const CONTAINER_MIN_H_PAD = 40;
+const CONTAINER_MIN_H_PAD = 150;
 /** Minimum vertical padding from edges */
 const CONTAINER_MIN_V_PAD = 24;
 /** Container corner radius */
 const CONTAINER_RADIUS = 16;
-/** Container border width */
-const CONTAINER_BORDER = 2;
-/** Overlay alpha for fullscreen dark area outside container */
-const OVERLAY_ALPHA = 0.55;
-/** Backdrop alpha for overlay mode */
+/** Backdrop alpha for the dark overlay covering the entire canvas */
 const BACKDROP_ALPHA = 0.75;
 
 export default class MapView {
@@ -107,9 +105,9 @@ export default class MapView {
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Render the map in fullscreen mode (same as standalone MapScene).
-   * Full-canvas splash background, dark overlay outside container,
-   * container with map content inside.
+   * Render the map in fullscreen mode (standalone MapScene).
+   * Dark semi-transparent overlay covering the full canvas,
+   * parchment splash contained entirely within the map panel.
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} canvasW
@@ -119,40 +117,33 @@ export default class MapView {
   renderFullscreen(ctx, canvasW, canvasH, dt) {
     const cr = this.getContainerRect(canvasW, canvasH);
 
-    // 1. Full-canvas splash background
-    this._drawFullCanvasBackground(ctx, canvasW, canvasH);
-
-    // 2. Dark overlay outside the container
-    this._drawOverlayOutsideContainer(ctx, canvasW, canvasH, cr);
-
-    // 3. Subtle inner shadow at container edges
+    // 1. Dark semi-transparent overlay over entire canvas
     ctx.save();
-    this._drawContainerInnerShadow(ctx, cr);
+    ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA})`;
+    ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.restore();
 
-    // 4. Clip & translate to container interior
+    // 2. Parchment splash background inside the container (clipped)
+    this._drawSplashInsideContainer(ctx, cr);
+
+    // 3. Clip & translate to container interior
     ctx.save();
     ctx.beginPath();
     this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
     ctx.clip();
     ctx.translate(cr.x, cr.y);
 
-    // 5. MapRenderer — nodes + paths
+    // 4. MapRenderer — nodes + paths
     if (this._renderer) {
       this._renderer.render(ctx, cr.w, cr.h, dt);
     }
 
-    // 6. Depth labels
+    // 5. Depth labels
     this._drawDepthLabels(ctx, cr.w, cr.h);
 
-    // 7. Node info at bottom
+    // 6. Node info at bottom
     this._drawNodeInfo(ctx, cr.w, cr.h);
 
-    ctx.restore();
-
-    // 8. Container border (on top, after clip restore)
-    ctx.save();
-    this._drawContainerBorder(ctx, cr);
     ctx.restore();
   }
 
@@ -176,40 +167,30 @@ export default class MapView {
     ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.restore();
 
-    // 2. Parchment splash background inside the container
+    // 2. Parchment splash background inside the container (clipped)
     this._drawSplashInsideContainer(ctx, cr);
 
-    // 3. Subtle inner shadow at container edges
-    ctx.save();
-    this._drawContainerInnerShadow(ctx, cr);
-    ctx.restore();
-
-    // 4. Clip & translate to container interior
+    // 3. Clip & translate to container interior
     ctx.save();
     ctx.beginPath();
     this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
     ctx.clip();
     ctx.translate(cr.x, cr.y);
 
-    // 5. MapRenderer — nodes + paths
+    // 4. MapRenderer — nodes + paths
     if (this._renderer) {
       this._renderer.render(ctx, cr.w, cr.h, dt);
     }
 
-    // 6. Depth labels
+    // 5. Depth labels
     this._drawDepthLabels(ctx, cr.w, cr.h);
 
-    // 7. Node info at bottom
+    // 6. Node info at bottom
     this._drawNodeInfo(ctx, cr.w, cr.h);
 
     ctx.restore();
 
-    // 8. Container border (on top, after clip restore)
-    ctx.save();
-    this._drawContainerBorder(ctx, cr);
-    ctx.restore();
-
-    // 9. "Press M or Esc to close" hint at top
+    // 7. "Press M or Esc to close" hint at top
     this._drawCloseHint(ctx, canvasW);
   }
 
@@ -266,40 +247,13 @@ export default class MapView {
   }
 
   // ═══════════════════════════════════════════════════════
-  // Private: splash / background
+  // Private: splash background
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Draw the map_splash image as a full-canvas background,
-   * scaled to cover the entire canvas. Used in fullscreen mode.
-   */
-  _drawFullCanvasBackground(ctx, canvasW, canvasH) {
-    const splashImg = this._assetManager ? this._assetManager.get('map_splash') : null;
-
-    if (splashImg && splashImg.complete) {
-      const imgW = splashImg.width;
-      const imgH = splashImg.height;
-      const scale = Math.max(canvasW / imgW, canvasH / imgH);
-      const sw = imgW * scale;
-      const sh = imgH * scale;
-      const sx = (canvasW - sw) / 2;
-      const sy = (canvasH - sh) / 2;
-
-      ctx.save();
-      ctx.drawImage(splashImg, sx, sy, sw, sh);
-      ctx.restore();
-    } else {
-      // Fallback: dark background
-      ctx.save();
-      ctx.fillStyle = 'rgba(14, 10, 4, 1)';
-      ctx.fillRect(0, 0, canvasW, canvasH);
-      ctx.restore();
-    }
-  }
-
-  /**
-   * Draw the map_splash image scaled to cover the container interior.
-   * Used in overlay mode as the container's parchment background.
+   * Draw the map_splash image scaled to cover the container interior exactly.
+   * The container's rounded-rect clip path ensures the splash does not
+   * bleed outside the container bounds.
    */
   _drawSplashInsideContainer(ctx, cr) {
     const splashImg = this._assetManager ? this._assetManager.get('map_splash') : null;
@@ -326,88 +280,6 @@ export default class MapView {
     }
 
     ctx.restore();
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // Private: overlay / vignette
-  // ═══════════════════════════════════════════════════════
-
-  /**
-   * Draw the dark overlay in 4 rects around the container.
-   * Used in fullscreen mode.
-   */
-  _drawOverlayOutsideContainer(ctx, canvasW, canvasH, cr) {
-    ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${OVERLAY_ALPHA})`;
-
-    // Top strip
-    ctx.fillRect(0, 0, canvasW, cr.y);
-    // Bottom strip
-    ctx.fillRect(0, cr.y + cr.h, canvasW, canvasH - (cr.y + cr.h));
-    // Left strip (between top and bottom)
-    ctx.fillRect(0, cr.y, cr.x, cr.h);
-    // Right strip (between top and bottom)
-    ctx.fillRect(cr.x + cr.w, cr.y, canvasW - (cr.x + cr.w), cr.h);
-
-    ctx.restore();
-  }
-
-  /**
-   * Draw a subtle inner shadow / vignette just inside the container edges.
-   */
-  _drawContainerInnerShadow(ctx, cr) {
-    const shadowWidth = 24;
-
-    // Top inner shadow
-    let grad = ctx.createLinearGradient(0, cr.y, 0, cr.y + shadowWidth);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cr.x, cr.y, cr.w, shadowWidth);
-
-    // Bottom inner shadow
-    grad = ctx.createLinearGradient(0, cr.y + cr.h, 0, cr.y + cr.h - shadowWidth);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cr.x, cr.y + cr.h - shadowWidth, cr.w, shadowWidth);
-
-    // Left inner shadow
-    grad = ctx.createLinearGradient(cr.x, 0, cr.x + shadowWidth, 0);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cr.x, cr.y, shadowWidth, cr.h);
-
-    // Right inner shadow
-    grad = ctx.createLinearGradient(cr.x + cr.w, 0, cr.x + cr.w - shadowWidth, 0);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cr.x + cr.w - shadowWidth, cr.y, shadowWidth, cr.h);
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // Private: container frame / border
-  // ═══════════════════════════════════════════════════════
-
-  /**
-   * Draw the container border stroke.
-   */
-  _drawContainerBorder(ctx, cr) {
-    ctx.strokeStyle = 'rgba(180, 150, 100, 0.35)';
-    ctx.lineWidth = CONTAINER_BORDER;
-    ctx.beginPath();
-    this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
-    ctx.stroke();
-
-    // Subtle inner border for depth
-    const inset = 3;
-    ctx.strokeStyle = 'rgba(180, 150, 100, 0.12)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    this._roundRect(ctx, cr.x + inset, cr.y + inset, cr.w - inset * 2, cr.h - inset * 2, CONTAINER_RADIUS - 1);
-    ctx.stroke();
   }
 
   // ═══════════════════════════════════════════════════════
