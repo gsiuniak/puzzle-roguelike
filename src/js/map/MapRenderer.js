@@ -136,6 +136,9 @@ export default class MapRenderer {
 
     /** @type {{nodeId:string, node:MapNode}|null} */
     this._hovered = null;
+
+    /** @type {number} Animation start time (ms) from performance.now() */
+    this._animStart = performance.now();
   }
 
   // ── Setters ────────────────────────────────────────
@@ -303,14 +306,17 @@ export default class MapRenderer {
     const graph = this._graph;
     if (!graph) return;
 
+    // Use real elapsed time for steady animation independent of caller's dt
+    const t = performance.now() - this._animStart;
+
     const positioned = this.layoutNodes(canvasW, canvasH);
 
     // ── 1. Draw connection edges ──────────────────
-    this._drawAllEdges(ctx, positioned, dt);
+    this._drawAllEdges(ctx, positioned, t);
 
     // ── 2. Draw node containers and icons ─────────
     for (const { node, x, y } of positioned) {
-      this._drawNode(ctx, node, x, y, dt);
+      this._drawNode(ctx, node, x, y, t);
     }
   }
 
@@ -509,7 +515,7 @@ export default class MapRenderer {
       const by = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cpY + t * t * y2;
 
       const pulse = dotPulseMag > 0
-        ? Math.sin(dt * 0.002 + i * 0.35) * dotPulseMag
+        ? Math.sin(dt * 0.0015 + i * 0.35) * dotPulseMag
         : 0;
       const r = DOT_RADIUS + pulse;
 
@@ -554,7 +560,8 @@ export default class MapRenderer {
      } else if (node.state.reachable) {
        // Priority 2: directly reachable from current/last-completed
        isAvailable = true;
-       scale = 1.04;
+       // Slowly pulse/grow in a steady animation
+       scale = 1.02 + Math.sin(dt * 0.0015) * 0.08;
      } else if (node.depth < effectiveDepth) {
        // Priority 3: on a floor the player has left behind
        // All past-floor nodes get uniform "traveled" treatment —
@@ -654,7 +661,7 @@ export default class MapRenderer {
       const ringColor = CURRENT_RING_COLOR;
 
       // Pulsing outer glow ring (wider, stronger)
-      const pulse = Math.sin(dt * 0.0035) * 0.3 + 0.7;
+      const pulse = Math.sin(dt * 0.002) * 0.3 + 0.7;
       ctx.save();
       ctx.globalAlpha = pulse;
       ctx.lineWidth = 5.5;
@@ -688,7 +695,7 @@ export default class MapRenderer {
       const hoverBoost = isHovered ? 1 : 0;
 
       // Subtle pulse
-      const pulse = Math.sin(dt * 0.003) * 0.18 + 0.82;
+      const pulse = Math.sin(dt * 0.0018) * 0.18 + 0.82;
       ctx.save();
       ctx.globalAlpha = pulse;
       ctx.lineWidth = 4 + hoverBoost;
