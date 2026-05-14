@@ -138,10 +138,7 @@ export default class MapView {
       this._renderer.render(ctx, cr.w, cr.h, dt);
     }
 
-    // 5. Depth labels
-    this._drawDepthLabels(ctx, cr.w, cr.h);
-
-    // 6. Node info at bottom
+    // 5. Node info at bottom
     this._drawNodeInfo(ctx, cr.w, cr.h);
 
     ctx.restore();
@@ -182,10 +179,7 @@ export default class MapView {
       this._renderer.render(ctx, cr.w, cr.h, dt);
     }
 
-    // 5. Depth labels
-    this._drawDepthLabels(ctx, cr.w, cr.h);
-
-    // 6. Node info at bottom
+    // 5. Node info at bottom
     this._drawNodeInfo(ctx, cr.w, cr.h);
 
     ctx.restore();
