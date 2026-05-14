@@ -7,6 +7,7 @@
  *   const aura = new AuraStrandsEffect();
  *   aura.setTargetColor(r, g, b);      // smooth transition
  *   aura.setColorInstant(r, g, b);     // immediate
+ *   aura.setDrawStrands(false);        // hide strands, show only floating particles
  *   aura.update(dt);                   // each frame
  *   aura.render(ctx, rect);            // draw to canvas
  *
@@ -19,11 +20,17 @@ const STRAND_COUNT = 7;
 /** Number of anchor points per strand (more = wigglier) */
 const ANCHORS_PER_STRAND = 5;
 
-/** Maximum active particles */
+/** Maximum active particles when strands are visible */
 const MAX_PARTICLES = 22;
+
+/** Maximum active particles when strands are hidden (free-floating mode) */
+const MAX_PARTICLES_FLOATING = 60;
 
 /** Interval between particle spawns (seconds) */
 const PARTICLE_SPAWN_INTERVAL = 0.18;
+
+/** Interval between particle spawns when strands are hidden (seconds) */
+const PARTICLE_SPAWN_INTERVAL_FLOATING = 0.06;
 
 /** Particle lifespan (seconds) */
 const PARTICLE_LIFESPAN = 2.5;
@@ -54,7 +61,24 @@ export default class AuraStrandsEffect {
     /** Accumulator for particle spawn timer */
     this._spawnAccum = 0;
 
+    /**
+     * Whether to render the aurora strand bezier curves.
+     * When false, only free-floating particles are rendered.
+     * @type {boolean}
+     */
+    this._drawStrands = false;
+
     this._initStrands();
+  }
+
+  /**
+   * Enable or disable aurora strand rendering.
+   * When disabled, only floating particles are drawn and
+   * particle count increases for a richer effect.
+   * @param {boolean} visible
+   */
+  setDrawStrands(visible) {
+    this._drawStrands = !!visible;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -162,10 +186,13 @@ export default class AuraStrandsEffect {
     // Update particles
     this._updateParticles(dtSec);
 
-    // Spawn new particles
+    // Spawn new particles — higher rate/count when strands are hidden
+    const maxParticles = this._drawStrands ? MAX_PARTICLES : MAX_PARTICLES_FLOATING;
+    const spawnInterval = this._drawStrands ? PARTICLE_SPAWN_INTERVAL : PARTICLE_SPAWN_INTERVAL_FLOATING;
+
     this._spawnAccum += dtSec;
-    while (this._spawnAccum >= PARTICLE_SPAWN_INTERVAL && this._particles.length < MAX_PARTICLES) {
-      this._spawnAccum -= PARTICLE_SPAWN_INTERVAL;
+    while (this._spawnAccum >= spawnInterval && this._particles.length < maxParticles) {
+      this._spawnAccum -= spawnInterval;
       this._spawnParticle();
     }
   }
@@ -175,22 +202,51 @@ export default class AuraStrandsEffect {
   // ═══════════════════════════════════════════════════════
 
   _spawnParticle() {
-    const strandIdx = Math.floor(Math.random() * this._strands.length);
-    this._particles.push({
-      strandIdx,
-      /** Position along strand 0-1 */
-      t: Math.random(),
-      /** Speed in strand-length per second */
-      speed: 0.02 + Math.random() * 0.07,
-      /** Particle radius */
-      radius: 1.0 + Math.random() * 2.5,
-      /** Current age in seconds */
-      age: 0,
-      /** Total lifespan */
-      lifespan: PARTICLE_LIFESPAN * (0.5 + Math.random() * 0.5),
-      /** Base opacity */
-      baseOpacity: 0.3 + Math.random() * 0.5,
-    });
+    if (this._drawStrands) {
+      // ── Strand-bound particle: travels along a bezier curve strand ──
+      const strandIdx = Math.floor(Math.random() * this._strands.length);
+      this._particles.push({
+        type: 'strand',
+        strandIdx,
+        /** Position along strand 0-1 */
+        t: Math.random(),
+        /** Speed in strand-length per second */
+        speed: 0.02 + Math.random() * 0.07,
+        /** Particle radius */
+        radius: 1.0 + Math.random() * 2.5,
+        /** Current age in seconds */
+        age: 0,
+        /** Total lifespan */
+        lifespan: PARTICLE_LIFESPAN * (0.5 + Math.random() * 0.5),
+        /** Base opacity */
+        baseOpacity: 0.3 + Math.random() * 0.5,
+      });
+    } else {
+      // ── Free-floating particle: drifts independently across the screen ──
+      // Normalized positions (0-1), converted to px during render
+      const angle = Math.random() * Math.PI * 2;
+      const driftSpeed = 0.008 + Math.random() * 0.035;
+      this._particles.push({
+        type: 'floating',
+        /** Normalized x position (0-1) */
+        nx: Math.random(),
+        /** Normalized y position (0-1) */
+        ny: Math.random(),
+        /** Normalized drift velocity */
+        vx: Math.cos(angle) * driftSpeed,
+        vy: Math.sin(angle) * driftSpeed,
+        /** Particle radius — slightly larger for floating mode */
+        radius: 1.2 + Math.random() * 3.5,
+        /** Current age in seconds */
+        age: 0,
+        /** Total lifespan — longer for floating mode */
+        lifespan: PARTICLE_LIFESPAN * (0.7 + Math.random() * 0.8),
+        /** Base opacity */
+        baseOpacity: 0.25 + Math.random() * 0.45,
+        /** Twinkle phase offset */
+        twinklePhase: Math.random() * Math.PI * 2,
+      });
+    }
   }
 
   /**
@@ -204,11 +260,25 @@ export default class AuraStrandsEffect {
         this._particles.splice(i, 1);
         continue;
       }
-      // Advance along strand
-      p.t += p.speed * dtSec;
-      if (p.t > 1.0) {
-        // Wrap around
-        p.t -= 1.0;
+
+      if (p.type === 'floating') {
+        // ── Free-floating: drift with slight sinusoidal wobble ──
+        const wobbleX = Math.sin(p.age * 3.5 + p.twinklePhase) * 0.003;
+        const wobbleY = Math.cos(p.age * 2.8 + p.twinklePhase) * 0.004;
+        p.nx += (p.vx + wobbleX) * dtSec;
+        p.ny += (p.vy + wobbleY) * dtSec;
+        // Wrap around edges so particles stay on screen
+        if (p.nx < -0.05) p.nx = 1.05;
+        if (p.nx > 1.05) p.nx = -0.05;
+        if (p.ny < -0.05) p.ny = 1.05;
+        if (p.ny > 1.05) p.ny = -0.05;
+      } else {
+        // ── Strand-bound: advance along strand ──
+        p.t += p.speed * dtSec;
+        if (p.t > 1.0) {
+          // Wrap around
+          p.t -= 1.0;
+        }
       }
     }
   }
@@ -230,11 +300,13 @@ export default class AuraStrandsEffect {
 
     ctx.save();
 
-    // ── Draw strands ───────────────────────────────────
-    for (const strand of this._strands) {
-      const points = this._driftPoints(strand, W, H);
-      if (points.length < 2) continue;
-      this._drawStrand(ctx, points, strand);
+    // ── Draw strands (only when enabled) ───────────────
+    if (this._drawStrands) {
+      for (const strand of this._strands) {
+        const points = this._driftPoints(strand, W, H);
+        if (points.length < 2) continue;
+        this._drawStrand(ctx, points, strand);
+      }
     }
 
     // ── Draw particles ─────────────────────────────────
@@ -338,27 +410,53 @@ export default class AuraStrandsEffect {
 
   /**
    * Draw a single glowing particle.
+   * Handles both strand-bound ('strand') and free-floating ('floating') particles.
    * @param {CanvasRenderingContext2D} ctx
    * @param {Particle} p
-   * @param {number} W
-   * @param {number} H
+   * @param {number} W - canvas width
+   * @param {number} H - canvas height
    */
   _drawParticle(ctx, p, W, H) {
-    const strand = this._strands[p.strandIdx];
-    if (!strand) return;
+    let pos;
 
-    const pos = this._getStrandPosition(strand, p.t, W, H);
+    if (p.type === 'floating') {
+      // ── Free-floating: convert normalized coords to pixels ──
+      pos = {
+        x: p.nx * W,
+        y: p.ny * H,
+      };
+    } else {
+      // ── Strand-bound: sample position from strand curve ──
+      const strand = this._strands[p.strandIdx];
+      if (!strand) return;
+      pos = this._getStrandPosition(strand, p.t, W, H);
+    }
 
     // Opacity: fade in, hold, fade out
     let fadeAlpha;
-    const fadeIn = 0.25;
-    const fadeOut = 0.4;
-    if (p.age < fadeIn) {
-      fadeAlpha = p.age / fadeIn;
-    } else if (p.age > p.lifespan - fadeOut) {
-      fadeAlpha = (p.lifespan - p.age) / fadeOut;
+    if (p.type === 'floating') {
+      // Floating particles: slower fade in/out for softer presence
+      const fadeIn = 0.4;
+      const fadeOut = 0.6;
+      if (p.age < fadeIn) {
+        fadeAlpha = p.age / fadeIn;
+      } else if (p.age > p.lifespan - fadeOut) {
+        fadeAlpha = (p.lifespan - p.age) / fadeOut;
+      } else {
+        // Add subtle twinkle during hold phase
+        const twinkle = 1.0 + Math.sin(p.age * 4.5 + p.twinklePhase) * 0.2;
+        fadeAlpha = twinkle;
+      }
     } else {
-      fadeAlpha = 1.0;
+      const fadeIn = 0.25;
+      const fadeOut = 0.4;
+      if (p.age < fadeIn) {
+        fadeAlpha = p.age / fadeIn;
+      } else if (p.age > p.lifespan - fadeOut) {
+        fadeAlpha = (p.lifespan - p.age) / fadeOut;
+      } else {
+        fadeAlpha = 1.0;
+      }
     }
 
     const alpha = p.baseOpacity * fadeAlpha;
@@ -411,9 +509,15 @@ export default class AuraStrandsEffect {
 
 /**
  * @typedef {object} Particle
- * @property {number} strandIdx
- * @property {number} t
- * @property {number} speed
+ * @property {'strand'|'floating'} type - particle movement mode
+ * @property {number} [strandIdx] - (strand type) which strand this particle rides
+ * @property {number} [t] - (strand type) position along strand 0-1
+ * @property {number} [speed] - (strand type) speed in strand-length per second
+ * @property {number} [nx] - (floating type) normalized x 0-1
+ * @property {number} [ny] - (floating type) normalized y 0-1
+ * @property {number} [vx] - (floating type) normalized x velocity
+ * @property {number} [vy] - (floating type) normalized y velocity
+ * @property {number} [twinklePhase] - (floating type) twinkle phase offset
  * @property {number} radius
  * @property {number} age
  * @property {number} lifespan
