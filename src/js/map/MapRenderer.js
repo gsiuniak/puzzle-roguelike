@@ -496,36 +496,51 @@ export default class MapRenderer {
    * Boss nodes receive NO special type-based treatment outside of state.
    */
   _drawNode(ctx, node, x, y, dt) {
-    const traversal = this._traversal;
-    const isHovered = this._hovered && this._hovered.nodeId === node.id;
+   const traversal = this._traversal;
+   const isHovered = this._hovered && this._hovered.nodeId === node.id;
 
-    let iconAlpha = 1.0;
-    let scale = 1.0;
-    let isCurrent = false;
-    let isAvailable = false;
-    let isPast = false;
+   let iconAlpha = 1.0;
+   let scale = 1.0;
+   let isCurrent = false;
+   let isAvailable = false;
+   let isPast = false;
 
-    if (traversal) {
-      const effectiveDepth = traversal.getEffectiveCurrentDepth();
+   if (traversal) {
+     const effectiveDepth = traversal.getEffectiveCurrentDepth();
 
-      if (node.state.current) {
-        // Priority 1: current node — strongest focus
-        isCurrent = true;
-        scale = 1.12;
-      } else if (node.state.reachable) {
-        // Priority 2: directly reachable from current/last-completed
-        isAvailable = true;
-        scale = 1.04;
-      } else if (node.depth < effectiveDepth) {
-        // Priority 3: on a floor the player has left behind
-        // All past-floor nodes get uniform "traveled" treatment —
-        // no distinction between visited vs bypassed.
-        isPast = true;
-        scale = 0.90;
-        iconAlpha = 0.45;
-      }
-      // Priority 4: default — future/unreachable, no special treatment
-    }
+     if (node.state.current) {
+       // Priority 1: current node — strongest focus
+       isCurrent = true;
+       scale = 1.12;
+     } else if (node.state.reachable) {
+       // Priority 2: directly reachable from current/last-completed
+       isAvailable = true;
+       scale = 1.04;
+     } else if (node.depth < effectiveDepth) {
+       // Priority 3: on a floor the player has left behind
+       // All past-floor nodes get uniform "traveled" treatment —
+       // no distinction between visited vs bypassed.
+       isPast = true;
+       scale = 0.90;
+       iconAlpha = 0.45;
+     }
+
+     // ── Last-completed node override ───────────────
+     // When the player has just completed a node (no current node set),
+     // the completed node should still be highlighted as the player's
+     // "anchor" position on the map — not dimmed as past.
+     // This matches the edge rendering which already highlights edges
+     // FROM the last-completed node as "available" (bright gold).
+     if (!isCurrent && !isAvailable) {
+       const lastId = traversal.lastCompletedNodeId;
+       if (lastId && node.id === lastId) {
+         isCurrent = true;   // reuse the "current" visual treatment
+         scale = 1.12;
+         isPast = false;
+         iconAlpha = 1.0;
+       }
+     }
+   }
 
     // Hover boost (only for available "next" nodes)
     if (isHovered && isAvailable) {
