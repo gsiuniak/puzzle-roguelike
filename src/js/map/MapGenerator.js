@@ -78,10 +78,15 @@ export class SeededRNG {
  *   - 10 depths (0–9), left → right
  *   - Depth 0 = starting battle (exactly 1 node)
  *   - Depth 9 = boss (exactly 1 node)
- *   - Depths 1–8: 2–4 nodes per depth
+ *   - Depths 1–8: 2–4 nodes per depth, smoothed (±1 node change
+ *     between consecutive depths to support local-lane routing)
  *   - Every node on depth N connects to ≥1 node on depth N+1
  *   - Every node on depth N+1 has ≥1 incoming from depth N
  *   - No dead ends: every route reaches the boss
+ *   - **Local-lane constraint:** connections between consecutive
+ *     depths may only move vertically by at most 1 lane
+ *     (|source.lane − target.lane| ≤ 1), preventing chaotic
+ *     crisscrossing paths
  *   - Elite: not before depth 4; not consecutive on same path
  *   - Rest:  not before depth 3; not consecutive on same path
  *   - Chest: usually on optional branches
@@ -128,6 +133,12 @@ export default class MapGenerator {
     const depthNodes = new Map();
 
     // ── 1. Create nodes per depth ───────────────────────
+    //
+    // Smoothing rule: consecutive depths differ by at most 1 node.
+    // This ensures every node can find a valid connection target
+    // within ±1 lane at the next depth (no stranded nodes).
+    let prevCount = 1; // depth 0 has exactly 1 start node
+
     for (let d = 0; d < depthCount; d++) {
       const nodes = [];
       if (d === 0) {
@@ -141,6 +152,7 @@ export default class MapGenerator {
         node.state.discovered = true;
         node.state.reachable = true;
         nodes.push(node);
+        prevCount = 1;
       } else if (d === depthCount - 1) {
         // Exactly one boss
         const node = new MapNode({
@@ -150,8 +162,11 @@ export default class MapGenerator {
           lane: 0,
         });
         nodes.push(node);
-      } else {
-        const count = rng.intRange(nRange.min, nRange.max);
+      } else if (d === 1) {
+        // Depth 1: fan-out from the single start node (depth 0, lane 0).
+        // With ±1 lane constraint, start can only reach lanes 0 and 1,
+        // so depth 1 is capped at 2 nodes.
+        const count = 2; // min=2 from config, max=2 for valid fan-out
         for (let i = 0; i < count; i++) {
           const node = new MapNode({
             id: `node_${allNodes.length + i}`,
@@ -161,6 +176,56 @@ export default class MapGenerator {
           });
           nodes.push(node);
         }
+        prevCount = count;
+      } else if (d === depthCount - 2) {
+        // Pre-boss depth: must converge to boss (depth 9, lane 0).
+        // Only lanes 0 and 1 can reach boss lane 0 (±1 constraint),
+        // so this depth is capped at 2 nodes.
+        const minC = Math.max(nRange.min, prevCount - 1);
+        const maxC = Math.min(2, prevCount + 1, nRange.max);
+        const count = rng.intRange(minC, Math.max(minC, maxC));
+        for (let i = 0; i < count; i++) {
+          const node = new MapNode({
+            id: `node_${allNodes.length + i}`,
+            type: NODE_TYPES.BATTLE, // placeholder — assigned below
+            depth: d,
+            lane: i,
+          });
+          nodes.push(node);
+        }
+        prevCount = count;
+      } else if (d === depthCount - 3) {
+        // Third-to-last depth: prepare smooth convergence to boss.
+        // Cap at 3 nodes so the next depth can be 2 and then boss is 1,
+        // all within ±1 lane differences.
+        const minC = Math.max(nRange.min, prevCount - 1);
+        const maxC = Math.min(3, prevCount + 1, nRange.max);
+        const count = rng.intRange(minC, Math.max(minC, maxC));
+        for (let i = 0; i < count; i++) {
+          const node = new MapNode({
+            id: `node_${allNodes.length + i}`,
+            type: NODE_TYPES.BATTLE, // placeholder — assigned below
+            depth: d,
+            lane: i,
+          });
+          nodes.push(node);
+        }
+        prevCount = count;
+      } else {
+        // Normal depth: smoothed node count (diff ≤ 1 from previous)
+        const minC = Math.max(nRange.min, prevCount - 1);
+        const maxC = Math.min(nRange.max, prevCount + 1);
+        const count = rng.intRange(minC, maxC);
+        for (let i = 0; i < count; i++) {
+          const node = new MapNode({
+            id: `node_${allNodes.length + i}`,
+            type: NODE_TYPES.BATTLE, // placeholder — assigned below
+            depth: d,
+            lane: i,
+          });
+          nodes.push(node);
+        }
+        prevCount = count;
       }
 
       depthNodes.set(d, nodes);
@@ -175,6 +240,9 @@ export default class MapGenerator {
 
     // ── 4. Validate and fix connectivity ────────────────
     MapGenerator._validateConnectivity(depthNodes, depthCount);
+
+    // ── 4b. Validate edge lane constraints ───────────
+    MapGenerator._validateEdgeConstraints(depthNodes, depthCount);
 
     // ── 5. Ensure chest at depth 6 is on at least one start→boss route ─
     MapGenerator._ensureChestRoute(depthNodes, depthCount, rng);
@@ -239,8 +307,15 @@ export default class MapGenerator {
   }
 
   /**
-   * Wire edges between consecutive depths.
-   * Ensures every node has at least one incoming and one outgoing.
+   * Wire edges between consecutive depths with strict local-lane constraint.
+   *
+   * CONSTRAINT: A connection may only move vertically by at most 1 lane.
+   *              |source.lane − target.lane| ≤ 1
+   *
+   * This prevents long crisscrossing paths, chaotic intersections, and
+   * visually confusing route jumps.  Combined with the smoothed node-count
+   * constraint in generate(), every node is guaranteed to have at least one
+   * valid neighbour at the adjacent depth within the ±1 lane window.
    */
   static _wireConnections(depthNodes, depthCount, rng) {
     for (let d = 0; d < depthCount - 1; d++) {
@@ -249,70 +324,109 @@ export default class MapGenerator {
 
       if (current.length === 0 || next.length === 0) continue;
 
-      // Each node at depth d must have at least one outgoing
-      // Each node at depth d+1 must have at least one incoming
-
-      // ── Assign edges ──────────────────────────────
+      // ── Assign edges (all paths enforce |lane diff| ≤ 1) ──
       if (current.length === 1 && next.length === 1) {
-        // Trivial: single → single
+        // Trivial: single → single (lane diff already validated by smoothing)
         current[0].outgoing.push(next[0].id);
         next[0].incoming.push(current[0].id);
+
       } else if (current.length === 1) {
-        // One current → all next (fan out)
+        // Fan-out from a single source (e.g. start node → depth 1).
+        // Only connect to next nodes whose lane is within ±1 of the source.
+        const srcLane = current[0].lane;
         for (const nextNode of next) {
-          current[0].outgoing.push(nextNode.id);
-          nextNode.incoming.push(current[0].id);
+          if (Math.abs(srcLane - nextNode.lane) <= 1) {
+            current[0].outgoing.push(nextNode.id);
+            nextNode.incoming.push(current[0].id);
+          }
         }
+
       } else if (next.length === 1) {
-        // All current → one next (fan in)
+        // Fan-in to a single target (e.g. pre-boss depth → boss).
+        // Only current nodes within ±1 lane of the target can connect.
+        const tgtLane = next[0].lane;
         for (const currNode of current) {
-          currNode.outgoing.push(next[0].id);
-          next[0].incoming.push(currNode.id);
+          if (Math.abs(currNode.lane - tgtLane) <= 1) {
+            currNode.outgoing.push(next[0].id);
+            next[0].incoming.push(currNode.id);
+          }
         }
+
       } else {
-        // General case: multiple → multiple
-        // Strategy: connect adjacent lanes, with some diagonal connections
+        // ── General case: multiple → multiple ──────────────
+        // All connections enforce |source.lane − target.lane| ≤ 1.
 
-        // Step 1: Ensure minimum connectivity — every next node gets at least one incoming
-        const currLanes = current.map((_, i) => i);
-        rng.shuffle(currLanes);
+        // Step 1: Ensure every NEXT node has at least one incoming
+        //         from a valid (±1 lane) current node.
+        const shuffledCurrent = [...current];
+        rng.shuffle(shuffledCurrent);
 
-        for (let ni = 0; ni < next.length; ni++) {
-          // Pick a primary parent (prefer closest lane)
-          const laneFraction = ni / Math.max(1, next.length - 1);
-          const targetLane = Math.round(laneFraction * (current.length - 1));
-          const primaryIdx = Math.max(0, Math.min(current.length - 1, targetLane));
+        for (const nextNode of next) {
+          if (nextNode.incoming.length > 0) continue; // already has a parent
 
-          const primary = current[primaryIdx];
-          if (primary && !primary.outgoing.includes(next[ni].id)) {
-            primary.outgoing.push(next[ni].id);
-            next[ni].incoming.push(primary.id);
+          // Prefer same-lane, then adjacent lanes
+          let best = null;
+          let bestDist = Infinity;
+          for (const cand of shuffledCurrent) {
+            const diff = Math.abs(cand.lane - nextNode.lane);
+            if (diff <= 1 && diff < bestDist) {
+              bestDist = diff;
+              best = cand;
+              if (diff === 0) break; // perfect match — stop early
+            }
           }
+
+          if (best) {
+            best.outgoing.push(nextNode.id);
+            nextNode.incoming.push(best.id);
+          }
+          // If no valid parent found, the node-count smoothing guarantee
+          // ensures this cannot happen under normal generation.
         }
 
-        // Step 2: Ensure every current node has at least one outgoing
+        // Step 2: Ensure every CURRENT node has at least one outgoing
+        //         to a valid (±1 lane) next node.
         for (const currNode of current) {
-          if (currNode.outgoing.length === 0) {
-            // Connect to a random next node
-            const target = rng.pick(next);
-            currNode.outgoing.push(target.id);
-            target.incoming.push(currNode.id);
+          if (currNode.outgoing.length > 0) continue; // already has a child
+
+          let best = null;
+          let bestDist = Infinity;
+          for (const cand of next) {
+            const diff = Math.abs(currNode.lane - cand.lane);
+            if (diff <= 1 && diff < bestDist) {
+              bestDist = diff;
+              best = cand;
+              if (diff === 0) break;
+            }
+          }
+
+          if (best) {
+            currNode.outgoing.push(best.id);
+            best.incoming.push(currNode.id);
           }
         }
 
-        // Step 3: Add some extra diagonal connections for branching
+        // Step 3: Add extra local connections for branching / convergence.
+        //         Only edges within ±1 lane are considered.
         for (let ci = 0; ci < current.length; ci++) {
+          const currNode = current[ci];
           for (let ni = 0; ni < next.length; ni++) {
+            const nextNode = next[ni];
             // Already connected
-            if (current[ci].outgoing.includes(next[ni].id)) continue;
+            if (currNode.outgoing.includes(nextNode.id)) continue;
 
-            // Add extra edges with probability based on lane distance
-            const dist = Math.abs(ci / Math.max(1, current.length - 1) - ni / Math.max(1, next.length - 1));
-            const prob = dist < 0.3 ? 0.6 : dist < 0.6 ? 0.3 : 0.05;
+            const laneDiff = Math.abs(currNode.lane - nextNode.lane);
+            // Hard constraint: never allow a jump > 1 lane
+            if (laneDiff > 1) continue;
+
+            // Probability based on lane proximity
+            //   same lane:    70% chance → encourages straight paths
+            //   adjacent lane: 50% chance → balanced branching
+            const prob = laneDiff === 0 ? 0.70 : 0.50;
 
             if (rng.next() < prob) {
-              current[ci].outgoing.push(next[ni].id);
-              next[ni].incoming.push(current[ci].id);
+              currNode.outgoing.push(nextNode.id);
+              nextNode.incoming.push(currNode.id);
             }
           }
         }
@@ -468,6 +582,58 @@ export default class MapGenerator {
       console.warn(
         `[MapGenerator] Depth 6 has only ${chestCount} chest(s). ` +
         `Expected ≥2. Check nodes-per-depth range.`
+      );
+    }
+  }
+
+  /**
+   * Validate that every generated edge satisfies local-lane constraints:
+   *   - source.depth + 1 === target.depth
+   *   - |source.lane − target.lane| ≤ 1
+   *
+   * If an invalid edge is found it is removed and a warning is logged.
+   * The connectivity validator (_validateConnectivity) runs *before* this
+   * check, so any severed connections will have already been repaired.
+   */
+  static _validateEdgeConstraints(depthNodes, depthCount) {
+    // Build lookup
+    const nodeMap = new Map();
+    for (const nodes of depthNodes.values()) {
+      for (const n of nodes) nodeMap.set(n.id, n);
+    }
+
+    let violations = 0;
+
+    for (const [, source] of nodeMap) {
+      const validOut = [];
+      for (const outId of source.outgoing) {
+        const target = nodeMap.get(outId);
+        if (!target) continue;
+
+        const depthOk = source.depth + 1 === target.depth;
+        const laneOk = Math.abs(source.lane - target.lane) <= 1;
+
+        if (depthOk && laneOk) {
+          validOut.push(outId);
+        } else {
+          violations++;
+          console.warn(
+            `[MapGenerator] Invalid edge removed: ` +
+            `${source.id} (depth ${source.depth}, lane ${source.lane}) → ` +
+            `${target.id} (depth ${target.depth}, lane ${target.lane}) | ` +
+            `depth diff=${target.depth - source.depth}, lane diff=${Math.abs(source.lane - target.lane)}`
+          );
+          // Remove from target's incoming as well
+          target.incoming = target.incoming.filter(id => id !== source.id);
+        }
+      }
+      source.outgoing = validOut;
+    }
+
+    if (violations > 0) {
+      console.warn(
+        `[MapGenerator] Removed ${violations} edge(s) that violated ` +
+        `local-lane constraints (|Δlane| > 1 or non-consecutive depth).`
       );
     }
   }

@@ -118,7 +118,7 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 
 | File | Class | Responsibility |
 |------|-------|----------------|
-| [`src/js/map/MapGenerator.js`](src/js/map/MapGenerator.js) | `MapGenerator` + `SeededRNG` | Deterministic map generation: 10 depths, node placement, type assignment (battle/elite/chest/training/rest/boss), edge wiring, connectivity validation |
+| [`src/js/map/MapGenerator.js`](src/js/map/MapGenerator.js) | `MapGenerator` + `SeededRNG` | Deterministic map generation: 10 depths, smoothed node placement (±1 count delta between depths), type assignment (battle/elite/chest/training/rest/boss), local-lane edge wiring (|Δlane| ≤ 1), connectivity & edge-constraint validation |
 | [`src/js/map/MapGraph.js`](src/js/map/MapGraph.js) | `MapGraph` | Graph container: node lookup, depth grouping, serialization |
 | [`src/js/map/MapNode.js`](src/js/map/MapNode.js) | `MapNode` | Single node: id, type, depth, lane, incoming/outgoing edges, state flags (discovered/reachable/current/completed) |
 | [`src/js/map/MapTraversalController.js`](src/js/map/MapTraversalController.js) | `MapTraversalController` | Player position, moveTo validation, completeAndRevealNext, history, reachability queries, serialize/deserialize |
@@ -181,7 +181,7 @@ When given a task, locate the owning system using this table:
 | "Audio not playing" | [`AudioManager._play()`](src/js/audio/AudioManager.js:300) | [`SoundConfig.js`](src/js/audio/SoundConfig.js), skill `.sound` field |
 | "UI overlaps / layout broken" | [`UIElement` sizing model](src/js/ui/UIElement.js) | The specific view/scene's `buildHierarchy()` / `layoutChildren()` |
 | "Enemy AI behavior" | [`EnemyAI.findBestSkill()` / `findBestSwap()`](src/js/game/EnemyAI.js) | [`EnemyAI._scoreBoard()`](src/js/game/EnemyAI.js:142) |
-| "Map generation wrong" | [`MapGenerator.generate()`](src/js/map/MapGenerator.js:119) | [`SeededRNG`](src/js/map/MapGenerator.js:8) |
+| "Map generation wrong" | [`MapGenerator.generate()`](src/js/map/MapGenerator.js:119) | [`SeededRNG`](src/js/map/MapGenerator.js:8), [`_wireConnections`](src/js/map/MapGenerator.js:315) |
 | "Tile disappear/reappear bug" | [`BoardModel.removeTiles()`](src/js/game/BoardModel.js:355) / [`applyGravity()`](src/js/game/BoardModel.js:372) | [`BattleController` cascade phases](src/js/game/BattleController.js:28) |
 | "Health/damage calculation wrong" | [`MatchResolver.applyDamage()`](src/js/game/MatchResolver.js:163) | [`BattleController._setShakeFromDamage()`](src/js/game/BattleController.js:1193) |
 | "Add new character" | [`mockCharacter.js`](src/js/data/mockCharacter.js) | [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js), [`main.js` ASSET_MAP](src/js/main.js:35) |
@@ -280,14 +280,15 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 4. **Extra turns are non-cumulative retain-turn flags.** `_extraTurnEarned` is a boolean. The scene reads `pendingExtraTurn` and `extraTurnTriggerPos` (one-shot cleared via getState).
 5. **CharacterPane must be data-driven.** `updateFromState(combatantState)` reads HP, mana, armor, block. No hardcoded character-specific logic.
 6. **Map generation is separate from map rendering.** MapGenerator creates immutable MapGraph; MapRenderer/MapView draw it; MapTraversalController manages state mutations.
-7. **MapView is shared** between MapScene (fullscreen) and BattleScene (overlay via 'm' key).
-8. **BattleScene is created on demand** (registered lazily by MapScene), not at boot.
-9. **MapScene is a singleton** — graph, renderer, and traversal survive scene switches.
-10. **Enemy difficulty scaling** happens in MapScene: elite = 1.5× HP, boss = 2.5× HP.
-11. **Music transitions are state-driven** in BattleScene: battle_theme on PLAYER/ENEMY_TURN, stopped on GAME_OVER.
-12. **All one-shot visual/SFX flags** are read-and-cleared in `BattleController.getState()` to prevent double-firing.
-13. **Player data is deep-cloned** at character select and battle entry to avoid mutating definitions.
-14. **Canvas uses DPR-aware rendering** — all layout is in CSS pixels; context is pre-scaled.
+7. **Local-lane constraint:** Connections between consecutive depths may only move vertically by at most 1 lane (|source.lane − target.lane| ≤ 1). Node counts are smoothed (±1 between depths) to guarantee valid targets exist. Edge validation enforces this at generation time.
+8. **MapView is shared** between MapScene (fullscreen) and BattleScene (overlay via 'm' key).
+9. **BattleScene is created on demand** (registered lazily by MapScene), not at boot.
+10. **MapScene is a singleton** — graph, renderer, and traversal survive scene switches.
+11. **Enemy difficulty scaling** happens in MapScene: elite = 1.5× HP, boss = 2.5× HP.
+12. **Music transitions are state-driven** in BattleScene: battle_theme on PLAYER/ENEMY_TURN, stopped on GAME_OVER.
+13. **All one-shot visual/SFX flags** are read-and-cleared in `BattleController.getState()` to prevent double-firing.
+14. **Player data is deep-cloned** at character select and battle entry to avoid mutating definitions.
+15. **Canvas uses DPR-aware rendering** — all layout is in CSS pixels; context is pre-scaled.
 
 ---
 
