@@ -141,7 +141,8 @@ export default class MapScene extends UIPanel {
     this._canvasH = sm._app.height;
 
     // ── Music ────────────────────────────────────────
-    AudioManager.playMusic('main_theme', { fadeIn: 600 });
+    // MapScene does not start music — it keeps whatever
+    // is currently playing (or silence if nothing is).
 
     // ── Wire input ────────────────────────────────────
     this._transitioning = false;
