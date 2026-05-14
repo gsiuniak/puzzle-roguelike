@@ -54,7 +54,7 @@ const DIAGONAL_SPREAD = 0.22;
 /** Alpha for neutral/default edges (clearly visible dotted) */
 const EDGE_DEFAULT_ALPHA = 0.55;
 /** Alpha for traveled/breadcrumb edges (dotted, darkened but visible) */
-const EDGE_TRAVELED_ALPHA = 0.58;
+const EDGE_TRAVELED_ALPHA = 0.75;
 /** Alpha for available-next edges (brightest highlight) */
 const EDGE_AVAILABLE_ALPHA = 0.90;
 /** Alpha for edge path line behind dots */
@@ -62,14 +62,14 @@ const EDGE_PATH_ALPHA = 0.18;
 /** Edge path line width */
 const EDGE_PATH_WIDTH = 1.5;
 /** Alpha for bypassed past-floor edges (barely visible — player didn't take them) */
-const EDGE_BYPASSED_ALPHA = 0.10;
+const EDGE_BYPASSED_ALPHA = 0.00;
 
 /** Color for default/inactive edges (warm neutral — clearly visible) */
 const EDGE_DEFAULT_COLOR = '#8a8a70';
 /** Color for available-next edges (bright gold highlight) */
 const EDGE_AVAILABLE_COLOR = '#c8b870';
 /** Color for traveled/breadcrumb edges (darkened warm brown, visible against parchment) */
-const EDGE_TRAVELED_COLOR = '#6a4a2a';
+const EDGE_TRAVELED_COLOR = '#666655';
 /** Path line color (subtle continuous line behind dots) */
 const EDGE_PATH_COLOR = '#6a6a64';
 
@@ -425,7 +425,7 @@ export default class MapRenderer {
       ctx.save();
       ctx.globalAlpha = EDGE_BYPASSED_ALPHA;
       ctx.strokeStyle = EDGE_PATH_COLOR;
-      ctx.lineWidth = EDGE_PATH_WIDTH * 0.5;
+      ctx.lineWidth = EDGE_PATH_WIDTH * 1;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.quadraticCurveTo(cpX, cpY, x2, y2);
