@@ -117,6 +117,9 @@ export default class MapView {
   renderFullscreen(ctx, canvasW, canvasH, dt) {
     const cr = this.getContainerRect(canvasW, canvasH);
 
+    // 0. Battle background image behind the dark overlay
+    this._drawBattleBackground(ctx, canvasW, canvasH);
+
     // 1. Dark semi-transparent overlay over entire canvas
     ctx.save();
     ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA})`;
@@ -238,6 +241,39 @@ export default class MapView {
     if (!this._renderer) return [];
     const cr = this._containerRect;
     return this._renderer.layoutNodes(cr.w, cr.h);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Private: battle background
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Draw the battle_background_default image scaled to fill the entire canvas.
+   * This serves as the full-screen background BEHIND the dark overlay.
+   * Uses cover-fit: scales proportionally to fill the canvas, cropping excess.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} canvasW
+   * @param {number} canvasH
+   */
+  _drawBattleBackground(ctx, canvasW, canvasH) {
+    const bgImg = this._assetManager ? this._assetManager.get('battle_background_default') : null;
+    if (!bgImg || !bgImg.complete) return;
+
+    const imgW = bgImg.width;
+    const imgH = bgImg.height;
+    if (!imgW || !imgH) return;
+
+    // Cover-fit: scale proportionally so the image fills the canvas entirely
+    const scale = Math.max(canvasW / imgW, canvasH / imgH);
+    const sw = imgW * scale;
+    const sh = imgH * scale;
+    const sx = (canvasW - sw) / 2;
+    const sy = (canvasH - sh) / 2;
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(bgImg, sx, sy, sw, sh);
+    ctx.restore();
   }
 
   // ═══════════════════════════════════════════════════════
