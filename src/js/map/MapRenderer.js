@@ -139,6 +139,9 @@ export default class MapRenderer {
 
     /** @type {number} Animation start time (ms) from performance.now() */
     this._animStart = performance.now();
+
+    /** @type {number} Inherited overlay alpha multiplier (1 = fully opaque) */
+    this._overlayAlpha = 1;
   }
 
   // ── Setters ────────────────────────────────────────
@@ -301,10 +304,18 @@ export default class MapRenderer {
    * @param {number} canvasW
    * @param {number} canvasH
    * @param {number} dt - delta time in ms (for subtle animations)
+   * @param {number} [overlayAlpha=1] - inherited alpha multiplier from parent
+   *   overlay animation (1 = fully opaque, 0 = fully transparent).
+   *   All per-node globalAlpha values are multiplied by this so the
+   *   entire map fades as one cohesive unit.
    */
-  render(ctx, canvasW, canvasH, dt) {
+  render(ctx, canvasW, canvasH, dt, overlayAlpha = 1) {
     const graph = this._graph;
     if (!graph) return;
+
+    // Store for use by _drawNode so explicit globalAlpha assignments
+    // respect the calling overlay's inherited alpha.
+    this._overlayAlpha = overlayAlpha;
 
     // Use real elapsed time for steady animation independent of caller's dt
     const t = performance.now() - this._animStart;
@@ -663,7 +674,7 @@ export default class MapRenderer {
       // Pulsing outer glow ring (wider, stronger)
       const pulse = Math.sin(dt * 0.002) * 0.3 + 0.7;
       ctx.save();
-      ctx.globalAlpha = pulse;
+      ctx.globalAlpha = pulse * this._overlayAlpha;
       ctx.lineWidth = 5.5;
       ctx.shadowColor = ringColor;
       ctx.shadowBlur = 20;
@@ -674,7 +685,7 @@ export default class MapRenderer {
       ctx.restore();
 
       // Main ring on top (clean, no glow halo)
-      ctx.globalAlpha = 1.0;
+      ctx.globalAlpha = this._overlayAlpha;
       ctx.lineWidth = 4.5;
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
@@ -687,7 +698,7 @@ export default class MapRenderer {
       ctx.beginPath();
       ctx.arc(x, y, r * 0.80, 0, Math.PI * 2);
       ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.75;
+      ctx.globalAlpha = 0.75 * this._overlayAlpha;
       ctx.strokeStyle = ringColor;
       ctx.stroke();
     } else if (isAvailable) {
@@ -697,7 +708,7 @@ export default class MapRenderer {
       // Subtle pulse
       const pulse = Math.sin(dt * 0.0018) * 0.18 + 0.82;
       ctx.save();
-      ctx.globalAlpha = pulse;
+      ctx.globalAlpha = pulse * this._overlayAlpha;
       ctx.lineWidth = 4 + hoverBoost;
       ctx.shadowColor = ringColor;
       ctx.shadowBlur = 8;
@@ -708,7 +719,7 @@ export default class MapRenderer {
       ctx.restore();
 
       // Main ring
-      ctx.globalAlpha = 1.0;
+      ctx.globalAlpha = this._overlayAlpha;
       ctx.lineWidth = 3 + hoverBoost;
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
@@ -724,7 +735,7 @@ export default class MapRenderer {
     const iconImg = this._am ? this._am.get(iconKey) : null;
 
     if (iconImg && iconImg.complete) {
-      ctx.globalAlpha = iconAlpha;
+      ctx.globalAlpha = iconAlpha * this._overlayAlpha;
       const iconSize = r * 2 * ICON_SCALE;
       const ix = x - iconSize / 2;
       const iy = y - iconSize / 2;
@@ -732,7 +743,7 @@ export default class MapRenderer {
       ctx.drawImage(iconImg, ix, iy, iconSize, iconSize);
     } else {
       // Fallback: type letter
-      ctx.globalAlpha = iconAlpha;
+      ctx.globalAlpha = iconAlpha * this._overlayAlpha;
       ctx.fillStyle = isCurrent ? '#f0e8c0' : '#c0b890';
       ctx.font = `bold ${Math.floor(r * 0.8)}px "Marcellus SC", serif`;
       ctx.textAlign = 'center';
@@ -745,7 +756,7 @@ export default class MapRenderer {
     // Only show on past-floor nodes that the player actually visited.
     // This is the ONLY distinction between visited and bypassed past nodes.
     if (isPast && traversal && traversal.isOnExactRoute(node.id)) {
-      ctx.globalAlpha = 0.55;
+      ctx.globalAlpha = 0.55 * this._overlayAlpha;
       ctx.fillStyle = '#b89858';
       ctx.font = `${Math.floor(r * 0.45)}px sans-serif`;
       ctx.textAlign = 'center';

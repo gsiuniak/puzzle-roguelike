@@ -35,7 +35,7 @@ const BACKDROP_ALPHA = 0.75;
 
 // ── Overlay animation constants ──
 /** Duration of the overlay crossfade (ms) */
-const OVERLAY_FADE_DURATION = 300;
+const OVERLAY_FADE_DURATION = 170;
 /** Fraction of canvas height the panel slides */
 const OVERLAY_SLIDE_FRACTION = 0.10;
 
@@ -229,7 +229,7 @@ export default class MapView {
 
     // 4. MapRenderer — nodes + paths
     if (this._renderer) {
-      this._renderer.render(ctx, cr.w, cr.h, dt);
+      this._renderer.render(ctx, cr.w, cr.h, dt, 1);
     }
 
     // 5. Node info at bottom
@@ -296,9 +296,9 @@ export default class MapView {
     ctx.clip();
     ctx.translate(slideCr.x, slideCr.y);
 
-    // 2c. MapRenderer — nodes + paths
+    // 2c. MapRenderer — nodes + paths (inherit overlay fade alpha)
     if (this._renderer) {
-      this._renderer.render(ctx, slideCr.w, slideCr.h, dt);
+      this._renderer.render(ctx, slideCr.w, slideCr.h, dt, overlayAlpha);
     }
 
     // 2d. Node info at bottom
