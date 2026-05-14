@@ -50,24 +50,26 @@ const CURVE_FACTOR = 0.04;
  *  Higher values create more dramatic diagonal slant. */
 const DIAGONAL_SPREAD = 0.22;
 
-// ── Edge colors (available=bright gold, default=visible dotted, traveled=washed-out solid) ──
+// ── Edge colors (available=bright gold, default=visible dotted, traveled=breadcrumb dotted, bypassed=near-hidden) ──
 /** Alpha for neutral/default edges (clearly visible dotted) */
 const EDGE_DEFAULT_ALPHA = 0.55;
-/** Alpha for traveled/past edges (thin washed-out solid line only) */
-const EDGE_TRAVELED_ALPHA = 0.28;
+/** Alpha for traveled/breadcrumb edges (dotted, darkened but visible) */
+const EDGE_TRAVELED_ALPHA = 0.58;
 /** Alpha for available-next edges (brightest highlight) */
 const EDGE_AVAILABLE_ALPHA = 0.90;
 /** Alpha for edge path line behind dots */
 const EDGE_PATH_ALPHA = 0.18;
 /** Edge path line width */
 const EDGE_PATH_WIDTH = 1.5;
+/** Alpha for bypassed past-floor edges (barely visible — player didn't take them) */
+const EDGE_BYPASSED_ALPHA = 0.10;
 
 /** Color for default/inactive edges (warm neutral — clearly visible) */
 const EDGE_DEFAULT_COLOR = '#8a8a70';
 /** Color for available-next edges (bright gold highlight) */
 const EDGE_AVAILABLE_COLOR = '#c8b870';
-/** Color for traveled/past edges (darkened, desaturated) */
-const EDGE_TRAVELED_COLOR = '#4a3a2a';
+/** Color for traveled/breadcrumb edges (darkened warm brown, visible against parchment) */
+const EDGE_TRAVELED_COLOR = '#6a4a2a';
 /** Path line color (subtle continuous line behind dots) */
 const EDGE_PATH_COLOR = '#6a6a64';
 
@@ -347,13 +349,21 @@ export default class MapRenderer {
       return 'available';
     }
 
-    // 3. Traveled — edge originates from a floor the player has left behind.
-    const effectiveDepth = traversal.getEffectiveCurrentDepth();
-    if (fromNode.depth < effectiveDepth) {
+    // 3. Traveled (breadcrumb) — edge the player actually traversed.
+    //    Only consecutive entries in the traversal history count as the
+    //    player's exact path; bypassed edges on past floors are NOT breadcrumbs.
+    if (traversal.isEdgeOnExactRoute(fromNode.id, toNode.id)) {
       return 'traveled';
     }
 
-    // 4. Default — future, undiscovered, or otherwise neutral
+    // 4. Bypassed — edge on a past floor that the player did NOT take.
+    //    Nearly invisible so the breadcrumb trail stands out clearly.
+    const effectiveDepth = traversal.getEffectiveCurrentDepth();
+    if (fromNode.depth < effectiveDepth) {
+      return 'bypassed';
+    }
+
+    // 5. Default — future, undiscovered, or otherwise neutral
     return 'default';
   }
 
@@ -410,16 +420,45 @@ export default class MapRenderer {
     const cpX = midX + perpX * offset;
     const cpY = midY + perpY * offset;
 
-    // ── Traveled edges: thin washed-out solid line only (no dots) ──
-    if (state === 'traveled') {
+    // ── Bypassed edges: barely-visible path line, no dots ──
+    if (state === 'bypassed') {
       ctx.save();
-      ctx.globalAlpha = EDGE_TRAVELED_ALPHA;
-      ctx.strokeStyle = EDGE_TRAVELED_COLOR;
-      ctx.lineWidth = EDGE_PATH_WIDTH * 0.65;
+      ctx.globalAlpha = EDGE_BYPASSED_ALPHA;
+      ctx.strokeStyle = EDGE_PATH_COLOR;
+      ctx.lineWidth = EDGE_PATH_WIDTH * 0.5;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.quadraticCurveTo(cpX, cpY, x2, y2);
       ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    // ── Traveled edges (breadcrumbs): dotted trail, darkened but visible ──
+    if (state === 'traveled') {
+      // Subtle path line + dotted breadcrumb overlay (no glow)
+      ctx.save();
+      ctx.globalAlpha = EDGE_PATH_ALPHA * 1.1;
+      ctx.strokeStyle = EDGE_TRAVELED_COLOR;
+      ctx.lineWidth = EDGE_PATH_WIDTH;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = EDGE_TRAVELED_ALPHA;
+      ctx.fillStyle = EDGE_TRAVELED_COLOR;
+      const tSteps = Math.max(10, Math.floor(dist / DOT_GAP));
+      for (let i = 0; i <= tSteps; i++) {
+        const t = i / tSteps;
+        const bx = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * cpX + t * t * x2;
+        const by = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cpY + t * t * y2;
+        ctx.beginPath();
+        ctx.arc(bx, by, DOT_RADIUS * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
       return;
     }
