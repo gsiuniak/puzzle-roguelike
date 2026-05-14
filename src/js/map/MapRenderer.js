@@ -614,15 +614,17 @@ export default class MapRenderer {
     }
     // Past and default nodes: no glow
 
-    // ── Base backing circle (all nodes, lighter and translucent) ──
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    const ringFillGrad = ctx.createRadialGradient(x, y, r * 0.4, x, y, r);
-    ringFillGrad.addColorStop(0, 'rgba(22, 14, 8, 0.78)');
-    ringFillGrad.addColorStop(0.7, 'rgba(14, 8, 4, 0.88)');
-    ringFillGrad.addColorStop(1, 'rgba(8, 4, 2, 0.94)');
-    ctx.fillStyle = ringFillGrad;
-    ctx.fill();
+    // ── Base backing circle (all non-boss nodes, lighter and translucent) ──
+    if (node.type !== 'boss') {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      const ringFillGrad = ctx.createRadialGradient(x, y, r * 0.4, x, y, r);
+      ringFillGrad.addColorStop(0, 'rgba(22, 14, 8, 0.78)');
+      ringFillGrad.addColorStop(0.7, 'rgba(14, 8, 4, 0.88)');
+      ringFillGrad.addColorStop(1, 'rgba(8, 4, 2, 0.94)');
+      ctx.fillStyle = ringFillGrad;
+      ctx.fill();
+    }
 
     // ── Past-floor darkening overlay ───────────────
     // Applies uniformly to all nodes on floors behind the player.
