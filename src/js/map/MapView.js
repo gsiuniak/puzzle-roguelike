@@ -33,6 +33,24 @@ const CONTAINER_RADIUS = 16;
 /** Backdrop alpha for the dark overlay covering the entire canvas */
 const BACKDROP_ALPHA = 0.75;
 
+// ── Overlay animation constants ──
+/** Duration of the overlay crossfade (ms) */
+const OVERLAY_FADE_DURATION = 300;
+/** Fraction of canvas height the panel slides */
+const OVERLAY_SLIDE_FRACTION = 0.10;
+
+/**
+ * Overlay animation state enum.
+ * @readonly
+ * @enum {string}
+ */
+const OverlayState = Object.freeze({
+  CLOSED: 'closed',
+  OPENING: 'opening',
+  OPEN: 'open',
+  CLOSING: 'closing',
+});
+
 export default class MapView {
   /**
    * @param {object} deps
@@ -53,6 +71,79 @@ export default class MapView {
 
     /** @type {{x:number,y:number,w:number,h:number}} cached container rect */
     this._containerRect = { x: 0, y: 0, w: 0, h: 0 };
+
+    // ── Overlay animation state ──
+    /** @type {string} one of OverlayState values */
+    this._overlayState = OverlayState.CLOSED;
+    /** @type {number} elapsed animation time in ms */
+    this._overlayTimer = 0;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Overlay animation API (used by BattleScene)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Begin the overlay open animation (CLOSED → OPENING).
+   * No-op if already open or currently opening.
+   */
+  openOverlay() {
+    if (this._overlayState === OverlayState.OPEN || this._overlayState === OverlayState.OPENING) return;
+    this._overlayState = OverlayState.OPENING;
+    this._overlayTimer = 0;
+  }
+
+  /**
+   * Begin the overlay close animation (OPEN → CLOSING).
+   * No-op if already closed or currently closing.
+   */
+  closeOverlay() {
+    if (this._overlayState === OverlayState.CLOSED || this._overlayState === OverlayState.CLOSING) return;
+    this._overlayState = OverlayState.CLOSING;
+    this._overlayTimer = 0;
+  }
+
+  /** @returns {boolean} true if the overlay is not CLOSED */
+  isOverlayActive() {
+    return this._overlayState !== OverlayState.CLOSED;
+  }
+
+  /** @returns {boolean} true while an animation is in progress */
+  isOverlayAnimating() {
+    return this._overlayState === OverlayState.OPENING || this._overlayState === OverlayState.CLOSING;
+  }
+
+  /** @returns {string} the current OverlayState value */
+  getOverlayState() {
+    return this._overlayState;
+  }
+
+  /**
+   * Advance the overlay animation timer.
+   * Call once per frame from the owning scene's update().
+   * @param {number} dt — delta time in ms
+   */
+  updateOverlayAnimation(dt) {
+    if (this._overlayState !== OverlayState.OPENING && this._overlayState !== OverlayState.CLOSING) return;
+
+    this._overlayTimer += dt;
+
+    if (this._overlayTimer >= OVERLAY_FADE_DURATION) {
+      if (this._overlayState === OverlayState.OPENING) {
+        this._overlayState = OverlayState.OPEN;
+      } else {
+        this._overlayState = OverlayState.CLOSED;
+      }
+    }
+  }
+
+  /**
+   * Force-reset the overlay to CLOSED with no animation.
+   * Use when the owning scene is exiting to ensure clean state.
+   */
+  resetOverlay() {
+    this._overlayState = OverlayState.CLOSED;
+    this._overlayTimer = 0;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -159,36 +250,64 @@ export default class MapView {
    * @param {number} dt - delta time in ms
    */
   renderOverlay(ctx, canvasW, canvasH, dt) {
-    const cr = this.getContainerRect(canvasW, canvasH);
+    // ── Compute animation parameters ──
+    let overlayAlpha = 1;
+    let containerSlideY = 0;
 
-    // 1. Dark semi-transparent backdrop over entire canvas
+    if (this._overlayState === OverlayState.CLOSED) {
+      return; // nothing to render
+    }
+
+    if (this._overlayState === OverlayState.OPENING) {
+      const rawT = Math.min(1, this._overlayTimer / OVERLAY_FADE_DURATION);
+      // ease-out cubic: fast start, gentle settle
+      const easedT = 1 - Math.pow(1 - rawT, 3);
+      overlayAlpha = easedT;
+      containerSlideY = (1 - easedT) * canvasH * OVERLAY_SLIDE_FRACTION;
+    } else if (this._overlayState === OverlayState.CLOSING) {
+      const rawT = Math.min(1, this._overlayTimer / OVERLAY_FADE_DURATION);
+      // ease-in cubic: gentle start, fast exit
+      const easedT = Math.pow(rawT, 3);
+      overlayAlpha = 1 - easedT;
+      containerSlideY = easedT * canvasH * OVERLAY_SLIDE_FRACTION;
+    }
+    // OPEN state: overlayAlpha=1, containerSlideY=0 (defaults)
+
+    const cr = this.getContainerRect(canvasW, canvasH);
+    // Container Y is shifted downward by the slide offset
+    const slideCr = { x: cr.x, y: cr.y + containerSlideY, w: cr.w, h: cr.h };
+
+    // 1. Dark semi-transparent backdrop over entire canvas (fades, does NOT slide)
     ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA})`;
+    ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA * overlayAlpha})`;
     ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.restore();
 
-    // 2. Parchment splash background inside the container (clipped)
-    this._drawSplashInsideContainer(ctx, cr);
-
-    // 3. Clip & translate to container interior
+    // 2. Map panel with combined fade + slide
     ctx.save();
-    ctx.beginPath();
-    this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
-    ctx.clip();
-    ctx.translate(cr.x, cr.y);
+    ctx.globalAlpha = overlayAlpha;
 
-    // 4. MapRenderer — nodes + paths
+    // 2a. Parchment splash background inside the container (clipped)
+    this._drawSplashInsideContainer(ctx, slideCr);
+
+    // 2b. Clip & translate to container interior
+    ctx.beginPath();
+    this._roundRect(ctx, slideCr.x, slideCr.y, slideCr.w, slideCr.h, CONTAINER_RADIUS);
+    ctx.clip();
+    ctx.translate(slideCr.x, slideCr.y);
+
+    // 2c. MapRenderer — nodes + paths
     if (this._renderer) {
-      this._renderer.render(ctx, cr.w, cr.h, dt);
+      this._renderer.render(ctx, slideCr.w, slideCr.h, dt);
     }
 
-    // 5. Node info at bottom
-    this._drawNodeInfo(ctx, cr.w, cr.h);
+    // 2d. Node info at bottom
+    this._drawNodeInfo(ctx, slideCr.w, slideCr.h);
 
     ctx.restore();
 
-    // 7. "Press M or Esc to close" hint at top
-    this._drawCloseHint(ctx, canvasW);
+    // 3. "Press M or Esc to close" hint at top (fades with overlay)
+    this._drawCloseHint(ctx, canvasW, overlayAlpha);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -384,9 +503,9 @@ export default class MapView {
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} canvasW
    */
-  _drawCloseHint(ctx, canvasW) {
+  _drawCloseHint(ctx, canvasW, alpha = 1) {
     ctx.save();
-    ctx.fillStyle = 'rgba(220, 200, 160, 0.6)';
+    ctx.fillStyle = `rgba(220, 200, 160, ${0.6 * alpha})`;
     ctx.font = '14px "Marcellus SC", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';

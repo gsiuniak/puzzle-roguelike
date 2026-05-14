@@ -109,9 +109,7 @@ export default class BattleScene extends UIPanel {
      */
     this._onBattleComplete = null;
 
-    // ── Map overlay (toggled with 'm' key) ──
-    /** @type {boolean} */
-    this._mapVisible = false;
+    // ── Map overlay (toggled with 'm' key, animated via MapView) ──
     /** @type {import('../map/MapView.js').default|null} shared MapView borrowed from MapScene */
     this._mapView = null;
 
@@ -256,10 +254,9 @@ export default class BattleScene extends UIPanel {
     this._hoveredCell = null;
     this._dragStartCell = null;
 
-    // Reset map overlay state
-    this._mapVisible = false;
-
     // ── Borrow MapView from MapScene for 'm' overlay ──
+    // Ensure overlay starts closed (MapView.resetOverlay was already
+    // called by the previous onExit or initial construction).
     const mapScene = this._sceneManager._scenes['MapScene'];
     if (mapScene && mapScene._mapView) {
       this._mapView = mapScene._mapView;
@@ -298,8 +295,10 @@ export default class BattleScene extends UIPanel {
    * Removes all battle input handlers.
    */
   onExit() {
-    // Reset map overlay state
-    this._mapVisible = false;
+    // Force-close the map overlay if it was open/animating
+    if (this._mapView) {
+      this._mapView.resetOverlay();
+    }
 
     const input = this._sceneManager._input;
     if (!input) return;
@@ -344,7 +343,7 @@ export default class BattleScene extends UIPanel {
   // ── Input handlers ───────────────────────────────────
 
   _handleMouseDown(x, y) {
-    if (this._mapVisible) return;
+    if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
     if (!board) return;
 
@@ -374,7 +373,7 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseMove(x, y) {
-    if (this._mapVisible) return;
+    if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
     if (!board) return;
 
@@ -410,7 +409,7 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseUp(x, y) {
-    if (this._mapVisible) return;
+    if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
     if (!board || !this._selectedCell || !this._canAct() || this._isTargeting()) {
       this._selectedCell = null;
@@ -440,7 +439,7 @@ export default class BattleScene extends UIPanel {
 
   _handleContextMenu(e) {
     e.preventDefault();
-    if (this._mapVisible) return;
+    if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._isTargeting()) {
       this._battleController.cancelTargeting();
     }
@@ -455,14 +454,25 @@ export default class BattleScene extends UIPanel {
 
     // ── Map overlay toggle ('m') ──
     if (e.key === 'm' || e.key === 'M') {
-      this._mapVisible = !this._mapVisible;
+      if (this._mapView) {
+        const state = this._mapView.getOverlayState();
+        if (state === 'closed') {
+          this._mapView.openOverlay();
+          if (this._audioManager) this._audioManager.playSfx('sfx_map_overlay_open');
+        } else if (state === 'open') {
+          this._mapView.closeOverlay();
+          if (this._audioManager) this._audioManager.playSfx('sfx_map_overlay_close');
+        }
+        // If animating (opening/closing), ignore to avoid restarting.
+      }
       return;
     }
 
-    // ── When map is visible, Escape hides it ──
-    if (this._mapVisible) {
+    // ── When map overlay is active, Escape hides it ──
+    if (this._mapView && this._mapView.isOverlayActive()) {
       if (e.key === 'Escape') {
-        this._mapVisible = false;
+        this._mapView.closeOverlay();
+        if (this._audioManager) this._audioManager.playSfx('sfx_map_overlay_close');
       }
       return;
     }
@@ -779,6 +789,11 @@ export default class BattleScene extends UIPanel {
   // ── Update (override) ───────────────────────────────
 
   update(dt) {
+    // ── Advance map overlay animation ──
+    if (this._mapView) {
+      this._mapView.updateOverlayAnimation(dt);
+    }
+
     // Update game logic first (battle state machine, AI, etc.)
     if (this._battleController) {
       this._battleController.update(dt);
@@ -842,8 +857,8 @@ export default class BattleScene extends UIPanel {
       ctx.restore();
     }
 
-    // ── Map overlay (toggled with 'm' key) ──
-    if (this._mapVisible && this._mapView && this._sceneManager) {
+    // ── Map overlay (animated, toggled with 'm' key) ──
+    if (this._mapView && this._mapView.isOverlayActive() && this._sceneManager) {
       this._mapView.renderOverlay(ctx, this._sceneManager._app.width, this._sceneManager._app.height, 16);
     }
   }

@@ -156,6 +156,14 @@ const SOUNDS = {
     src: ['assets/audio/sfx/map/sfx_map_click_node.mp3'],
     category: AudioCategory.SFX,
   },
+  sfx_map_overlay_open: {
+    src: ['assets/audio/sfx/map/sfx_map_overlay_open.mp3'],
+    category: AudioCategory.SFX,
+  },
+  sfx_map_overlay_close: {
+    src: ['assets/audio/sfx/map/sfx_map_overlay_close.mp3'],
+    category: AudioCategory.SFX,
+  },
 
   // ── UI ──────────────────────────────────────────────────
   ui_button_hover: {

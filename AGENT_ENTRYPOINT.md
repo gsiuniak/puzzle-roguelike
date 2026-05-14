@@ -123,7 +123,7 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 | [`src/js/map/MapNode.js`](src/js/map/MapNode.js) | `MapNode` | Single node: id, type, depth, lane, incoming/outgoing edges, state flags (discovered/reachable/current/completed) |
 | [`src/js/map/MapTraversalController.js`](src/js/map/MapTraversalController.js) | `MapTraversalController` | Player position, moveTo validation, completeAndRevealNext, history, reachability queries, serialize/deserialize |
 | [`src/js/map/MapRenderer.js`](src/js/map/MapRenderer.js) | `MapRenderer` | Node layout, SVG-like icon drawing, path/edge rendering, hover state, hit-testing |
-| [`src/js/map/MapView.js`](src/js/map/MapView.js) | `MapView` | **Shared rendering component.** Used by MapScene (fullscreen) AND BattleScene (overlay with 'm' key). Container layout, backdrop, splash, depth labels, node info |
+| [`src/js/map/MapView.js`](src/js/map/MapView.js) | `MapView` | **Shared rendering component.** Used by MapScene (fullscreen) AND BattleScene (overlay with 'm' key). Container layout, backdrop, splash, depth labels, node info. Owns the overlay animation state machine (closed→opening→open→closing→closed) with crossfade + slide transitions |
 
 ### 4.5 Audio System
 
