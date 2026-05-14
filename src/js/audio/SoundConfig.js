@@ -151,6 +151,12 @@ const SOUNDS = {
     category: AudioCategory.SFX,
   },
 
+  // ── Map ─────────────────────────────────────────────────
+  sfx_map_click_node: {
+    src: ['assets/audio/sfx/map/sfx_map_click_node.mp3'],
+    category: AudioCategory.SFX,
+  },
+
   // ── UI ──────────────────────────────────────────────────
   ui_button_hover: {
     src: ['assets/audio/ui/button_hover.mp3'],

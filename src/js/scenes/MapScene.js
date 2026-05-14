@@ -218,7 +218,7 @@ export default class MapScene extends UIPanel {
     // Allow clicking on the current node (to start/resume its encounter)
     if (hit.state.current) {
       console.log(`[MapScene] Entering current node: ${hit.id} (type: ${hit.type}, depth: ${hit.depth})`);
-      AudioManager.playSfx('character_select_pick');
+      AudioManager.playSfx('sfx_map_click_node');
       this._onNodeEntered(hit);
       return;
     }
@@ -233,7 +233,7 @@ export default class MapScene extends UIPanel {
     console.log(`[MapScene] Moved to node: ${hit.id} (type: ${hit.type}, depth: ${hit.depth})`);
 
     // Play node select sound
-    AudioManager.playSfx('character_select_pick');
+    AudioManager.playSfx('sfx_map_click_node');
 
     // Handle node type
     this._onNodeEntered(hit);
