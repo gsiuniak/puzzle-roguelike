@@ -97,6 +97,8 @@ const ASSET_MAP = {
   map_icon_train:   'assets/sprites/map/map_icon_train.png',
   map_icon_rest:    'assets/sprites/map/map_icon_rest.png',
   map_icon_boss:    'assets/sprites/map/map_icon_boss.png',
+  // ── Reward screen assets ────────────────────────────
+  reward_screen_temp_panel: 'assets/sprites/reward_screen/reward_screen_temp_panel.png',
 };
 
 // ── Scene sizing ────────────────────────────────────────

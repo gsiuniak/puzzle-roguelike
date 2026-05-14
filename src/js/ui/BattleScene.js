@@ -7,6 +7,7 @@ import FloatingImageEffect from './FloatingImageEffect.js';
 import FloatingTextEffect from './FloatingTextEffect.js';
 import TileParticleEffect from './TileParticleEffect.js';
 import ScreenShake from './ScreenShake.js';
+import RewardOverlay from './RewardOverlay.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
 
@@ -94,12 +95,12 @@ export default class BattleScene extends UIPanel {
     /** @type {ScreenShake} */
     this._screenShake = new ScreenShake();
 
-    /** Delay after game over before returning to map (ms) */
+    /** Delay after game over before showing reward overlay (ms) */
     this._gameOverDelay = 400;
     /** Timer tracking elapsed time in game over state */
     this._gameOverTimer = 0;
-    /** Whether a return-to-map transition has been initiated */
-    this._returnToMapPending = false;
+    /** Whether the reward overlay has been shown after game over */
+    this._rewardOverlayShown = false;
 
     /**
      * Callback invoked when the battle ends. Set by MapScene before
@@ -112,6 +113,10 @@ export default class BattleScene extends UIPanel {
     // ── Map overlay (toggled with 'm' key, animated via MapView) ──
     /** @type {import('../map/MapView.js').default|null} shared MapView borrowed from MapScene */
     this._mapView = null;
+
+    // ── Reward overlay (post-battle reward screen) ──
+    /** @type {RewardOverlay|null} */
+    this._rewardOverlay = null;
 
     // ── Board drag/swap input state ──
     /** @type {{col:number, row:number}|null} */
@@ -264,6 +269,18 @@ export default class BattleScene extends UIPanel {
       this._mapView = null;
     }
 
+    // ── Reward overlay (post-battle reward screen) ──
+    // Created once per battle scene instance; reset on each entry.
+    if (!this._rewardOverlay) {
+      const assetManager = this._assetManager;
+      this._rewardOverlay = new RewardOverlay({
+        assetManager,
+        onDismiss: () => this._returnToMap(),
+      });
+    }
+    this._rewardOverlay.reset();
+    this._rewardOverlayShown = false;
+
     // Create bound handlers (stored for cleanup in onExit)
     this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
     this._onMouseMove = (x, y) => this._handleMouseMove(x, y);
@@ -298,6 +315,11 @@ export default class BattleScene extends UIPanel {
     // Force-close the map overlay if it was open/animating
     if (this._mapView) {
       this._mapView.resetOverlay();
+    }
+
+    // Reset reward overlay (ensure clean state on next entry)
+    if (this._rewardOverlay) {
+      this._rewardOverlay.reset();
     }
 
     const input = this._sceneManager._input;
@@ -343,6 +365,7 @@ export default class BattleScene extends UIPanel {
   // ── Input handlers ───────────────────────────────────
 
   _handleMouseDown(x, y) {
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
     if (!board) return;
@@ -373,6 +396,7 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseMove(x, y) {
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
     if (!board) return;
@@ -409,6 +433,7 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseUp(x, y) {
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
     if (!board || !this._selectedCell || !this._canAct() || this._isTargeting()) {
@@ -439,6 +464,7 @@ export default class BattleScene extends UIPanel {
 
   _handleContextMenu(e) {
     e.preventDefault();
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._isTargeting()) {
       this._battleController.cancelTargeting();
@@ -446,6 +472,14 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleKeyDown(e) {
+    // ── Reward overlay: ESC dismisses, blocks all other input ──
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) {
+      if (e.key === 'Escape') {
+        this._rewardOverlay.dismiss();
+      }
+      return;
+    }
+
     // ── Debug: instant win with 'K' key ──
     if ((e.key === 'k' || e.key === 'K') && window.__DEBUG_MODE) {
       this._debugWinBattle();
@@ -794,6 +828,11 @@ export default class BattleScene extends UIPanel {
       this._mapView.updateOverlayAnimation(dt);
     }
 
+    // ── Update reward overlay animation (placeholder for future transitions) ──
+    if (this._rewardOverlay) {
+      this._rewardOverlay.update(dt);
+    }
+
     // Update game logic first (battle state machine, AI, etc.)
     if (this._battleController) {
       this._battleController.update(dt);
@@ -802,12 +841,14 @@ export default class BattleScene extends UIPanel {
     // Sync UI state from game state
     this.updateFromController();
 
-    // ── Detect game over and transition back to map ──
+    // ── Detect game over and show reward overlay ──
     if (this._battleController && this._battleController.state === BattleState.GAME_OVER) {
       this._gameOverTimer += dt;
-      if (this._gameOverTimer >= this._gameOverDelay && !this._returnToMapPending) {
-        this._returnToMapPending = true;
-        this._returnToMap();
+      if (this._gameOverTimer >= this._gameOverDelay && !this._rewardOverlayShown) {
+        this._rewardOverlayShown = true;
+        if (this._rewardOverlay) {
+          this._rewardOverlay.show();
+        }
       }
     }
 
@@ -860,6 +901,11 @@ export default class BattleScene extends UIPanel {
     // ── Map overlay (animated, toggled with 'm' key) ──
     if (this._mapView && this._mapView.isOverlayActive() && this._sceneManager) {
       this._mapView.renderOverlay(ctx, this._sceneManager._app.width, this._sceneManager._app.height, 16);
+    }
+
+    // ── Reward overlay (post-battle, renders on top of everything) ──
+    if (this._rewardOverlay && this._rewardOverlay.isActive() && this._sceneManager) {
+      this._rewardOverlay.render(ctx, this._sceneManager._app.width, this._sceneManager._app.height);
     }
   }
 
@@ -950,6 +996,7 @@ export default class BattleScene extends UIPanel {
 
   /**
    * Transition back to the MapScene after battle ends.
+   * Called when the reward overlay is dismissed (via onDismiss callback).
    * Calls _onBattleComplete so the map/run controller can update
    * node completion and reachability before the scene switch.
    */
@@ -999,7 +1046,7 @@ export default class BattleScene extends UIPanel {
    * Debug: instantly win the current battle.
    * Only callable when DEBUG_MODE is true (checked in _handleKeyDown).
    * Sets enemy HP to 0, triggers GAME_OVER, and lets the normal
-   * game-over → return-to-map flow handle the rest.
+   * game-over → reward overlay → return-to-map flow handle the rest.
    */
   _debugWinBattle() {
     if (!this._battleController) return;

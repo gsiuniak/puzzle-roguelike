@@ -33,7 +33,7 @@ src/
     scenes/               — scene lifecycle + SceneManager
     game/                 — pure game logic (board, match resolution, battle, AI)
     map/                  — roguelike map generation and traversal
-    ui/                   — custom UI framework + battle scene + visual effects
+    ui/                   — custom UI framework + battle scene + visual effects + overlays
     audio/                — Howler-based audio manager + sound config
     data/                 — character, enemy, and selection definitions
     lib/                  — third-party libraries (Howler.js)
@@ -47,7 +47,12 @@ src/
 
 ```
 TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
-                                          (roam)       (combat)
+                                           (roam)       (combat)
+                                                           ↓
+                                                     RewardOverlay
+                                                    (post-battle)
+                                                           ↓
+                                                        MapScene
 ```
 
 ---
@@ -90,7 +95,7 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 | [`src/js/scenes/TitleScreen.js`](src/js/scenes/TitleScreen.js) | `TitleScreen` | Cover-fit title image, fade-in, any-input → CharacterSelectScene |
 | [`src/js/scenes/CharacterSelectScene.js`](src/js/scenes/CharacterSelectScene.js) | `CharacterSelectScene` | Character selection, splash cross-fade, info panel, aura effect, → MapScene |
 | [`src/js/scenes/MapScene.js`](src/js/scenes/MapScene.js) | `MapScene` | Map traversal, node clicking, battle transition, battle result handling |
-| [`src/js/ui/BattleScene.js`](src/js/ui/BattleScene.js) | `BattleScene` | Full battle layout (3-column), input handling, visual effects, game-over transition |
+| [`src/js/ui/BattleScene.js`](src/js/ui/BattleScene.js) | `BattleScene` | Full battle layout (3-column), input handling, visual effects, game-over → reward overlay transition |
 
 **Scene lifecycle:** Each scene must implement `onEnter()` and `onExit()`. Scenes receive `_sceneManager` back-reference from SceneManager.
 
@@ -110,6 +115,10 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 TURN_INTRO → PLAYER_TURN → SWAPPING → RESOLVING → (check extra turn) → TURN_INTRO → ENEMY_TURN → RESOLVING → (check extra turn) → TURN_INTRO → PLAYER_TURN ...
                                                                               ↓
 TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAME_OVER
+                                                                          ↓
+                                                                   RewardOverlay
+                                                                          ↓
+                                                                       MapScene
 ```
 
 **Cascade Sub-phases:** SHOW_MATCH → REMOVE → FALL → (re-analyze → SHOW_MATCH or finish)
@@ -155,6 +164,7 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 | [`src/js/ui/TileParticleEffect.js`](src/js/ui/TileParticleEffect.js) | `TileParticleEffect` | Particle burst for tile destruction and conversion effects |
 | [`src/js/ui/ScreenShake.js`](src/js/ui/ScreenShake.js) | `ScreenShake` | Screen shake on damage, triggered by shakeIntensity from BattleController |
 | [`src/js/ui/AuraStrandsEffect.js`](src/js/ui/AuraStrandsEffect.js) | `AuraStrandsEffect` | Animated aura strands on character select screen |
+| [`src/js/ui/RewardOverlay.js`](src/js/ui/RewardOverlay.js) | `RewardOverlay` | **Post-battle reward screen overlay.** Renders above BattleScene with semi-transparent black backdrop + centered reward panel (`reward_screen_temp_panel`). Blocks all gameplay input. ESC dismisses → transitions to MapScene. Designed to be reusable for future reward/loot/event overlays (level-up choices, post-battle rewards). |
 
 ### 4.7 Data Definitions
 
@@ -189,6 +199,7 @@ When given a task, locate the owning system using this table:
 | "Add new tile type" | [`TILE_TYPES`](src/js/game/TileTypes.js:11) | [`BoardModel` spawn weights](src/js/game/BoardModel.js:26), tile sprite in [`main.js` ASSET_MAP](src/js/main.js:35) |
 | "Board rendering wrong" | [`BoardPlaceholder`](src/js/ui/BoardPlaceholder.js) | [`BattleScene.updateFromController()`](src/js/ui/BattleScene.js:481) |
 | "Combat log issues" | [`CombatLog`](src/js/game/CombatLog.js) | [`BattleScene.updateFromController()`](src/js/ui/BattleScene.js:481) |
+| "Post-battle reward/overlay issues" | [`RewardOverlay`](src/js/ui/RewardOverlay.js) | [`BattleScene._handleKeyDown()`](src/js/ui/BattleScene.js:448) (ESC dismiss), BattleScene `update()` (GAME_OVER → show) |
 | "Performance issues" | [`GameLoop` delta time](src/js/engine/GameLoop.js) | [`CanvasApp` DPR handling](src/js/engine/CanvasApp.js), AssetManager pre-scaling |
 
 ---
@@ -247,10 +258,13 @@ Per-frame: BattleScene.update(dt)
      → spawns visual effects (floating images, particles, screen shake)
      → plays SFX (turn announcement, extra turn, skull damage, skill sound, tile destroy)
      → manages music transitions on state change
-  → on GAME_OVER: delay → _returnToMap()
-     → _onBattleComplete({result, nodeId})
-     → MapScene._handleBattleComplete() sets flag
-     → fadeToScene('MapScene')
+  → on GAME_OVER: delay → RewardOverlay.show()
+     → Battle scene remains visible behind overlay
+     → All battle input blocked
+     → ESC → RewardOverlay.dismiss()
+        → _onBattleComplete({result, nodeId})
+        → MapScene._handleBattleComplete() sets flag
+        → fadeToScene('MapScene')
 ```
 
 ### Skill Resolution Flow
@@ -289,6 +303,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 13. **All one-shot visual/SFX flags** are read-and-cleared in `BattleController.getState()` to prevent double-firing.
 14. **Player data is deep-cloned** at character select and battle entry to avoid mutating definitions.
 15. **Canvas uses DPR-aware rendering** — all layout is in CSS pixels; context is pre-scaled.
+16. **Post-battle flow uses RewardOverlay** — GAME_OVER does NOT immediately return to MapScene. Instead, RewardOverlay appears over the (still-visible) BattleScene. ESC dismisses the overlay and triggers the MapScene transition. This allows future reward/loot/level-up screens to be inserted without modifying battle logic.
 
 ---
 
@@ -344,6 +359,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 | `MANA_COLORS` | [`TileTypes.js:21`](src/js/game/TileTypes.js:21) | ['red', 'blue', 'green', 'yellow', 'purple'] |
 | `DEBUG_MODE` | [`main.js:32`](src/js/main.js:32) | `true` — press 'K' in battle for instant win |
 | Scene names | [`main.js:150`](src/js/main.js:150) | 'TitleScreen', 'CharacterSelectScene', 'MapScene', 'BattleScene' |
+| `RewardOverlay` state | [`RewardOverlay.js:49`](src/js/ui/RewardOverlay.js:49) | INACTIVE, ACTIVE |
 
 ---
 
@@ -354,6 +370,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 | Scene input wiring | Each scene's `onEnter()` | `input.on('mousedown', handler)` — cleared in `onExit()` |
 | Skill click → controller | [`CharacterPane.onSkillClick`](src/js/ui/CharacterPane.js:43) | Set by BattleScene to `battleController.tryPlayerSkill()` |
 | Battle complete → map | [`BattleScene._onBattleComplete`](src/js/ui/BattleScene.js:110) | Set by MapScene to `_handleBattleComplete()` |
+| Reward overlay dismiss → map | [`RewardOverlay.onDismiss`](src/js/ui/RewardOverlay.js:74) | Set by BattleScene to `_returnToMap()` |
 | State change notification | [`BattleController.onStateChange`](src/js/game/BattleController.js:182) | Callback; currently unused (BattleScene polls via getState) |
 | One-shot visual/SFX flags | [`BattleController.getState()`](src/js/game/BattleController.js:207) | Read-and-clear pattern: extraTurnTriggerPos, shakeIntensity, skullDamageDealt, pendingSkillSound, destroyedTiles, convertedTiles, matchTextTriggers |
 
