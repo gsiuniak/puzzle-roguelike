@@ -54,10 +54,10 @@ import AudioManager from '../audio/AudioManager.js';
 const SPLASH_ALPHA = 1.0;
 
 /** Maximum fraction of canvas width the reward panel occupies */
-const PANEL_MAX_WIDTH_FRAC = 0.72;
+const PANEL_MAX_WIDTH_FRAC = 0.66;
 
 /** Maximum fraction of canvas height the reward panel occupies */
-const PANEL_MAX_HEIGHT_FRAC = 0.70;
+const PANEL_MAX_HEIGHT_FRAC = 0.6;
 
 /**
  * Vertical offset for the main panel from the canvas center.
@@ -84,10 +84,10 @@ const PRIMARY_PANEL_PADDING = { top: 28, right: 36, bottom: 24, left: 36 };
 const PRIMARY_PANEL_GAP = 18;
 
 /** Gap between reward option panels in the row */
-const REWARD_OPTION_SPACING = 20;
+const REWARD_OPTION_SPACING = 10;
 
 /** Width of each reward option panel as a fraction of the primary panel's content width */
-const REWARD_OPTION_WIDTH_FRAC = 0.30;
+const REWARD_OPTION_WIDTH_FRAC = 0.31;
 
 /**
  * Extra top margin for the Skip Rewards button.
@@ -97,7 +97,7 @@ const REWARD_OPTION_WIDTH_FRAC = 0.30;
 const SKIP_REWARDS_BUTTON_Y_OFFSET = 4;
 
 /** Height of the Skip Rewards button (contain fit mode within) */
-const SKIP_BUTTON_HEIGHT = 32;
+const SKIP_BUTTON_HEIGHT = 50;
 
 /** Width of the Skip Rewards button as a fraction of the primary panel's content width */
 const SKIP_BUTTON_WIDTH_FRAC = 0.22;
@@ -449,6 +449,7 @@ export default class RewardOverlay {
       gap: REWARD_OPTION_SPACING,
       justifyContent: 'center',
       alignItems: 'center',
+      margin: { top: 20 }
     });
 
     this._rewardOptions = [];
