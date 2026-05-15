@@ -10,7 +10,6 @@
  *   3. Victory title image positioned above the main panel
  *   4. Centered reward panel (reward_screen_panel) containing:
  *      - Three reward option containers in a row
- *      - Centered Claim Reward button
  *      - Centered Skip Rewards button near bottom
  *
  * Lifecycle:
@@ -30,13 +29,13 @@
  *   EXITING  — dismissed; rendered at full opacity (SceneManager handles cross-fade)
  *
  * Input behavior:
- *   - Only ACTIVE state allows click/hover on claim/skip buttons
+ *   - Only ACTIVE state allows click/hover on the skip button
  *   - During ENTERING/EXITING all input is ignored (handled by BattleScene)
  *   - ESC key dismisses (triggers EXITING → onDismiss → fadeToScene transition)
  *
  * Architecture:
  *   The overlay uses the UI framework (UIContainer/UIPanel/UIImage) for the
- *   primary panel's internal layout (rewards row + buttons). The splash backdrop
+ *   primary panel's internal layout (rewards row + skip button). The splash backdrop
  *   and victory title are drawn directly via raw Canvas 2D for simpler
  *   absolute positioning. Reward option containers are UIPanels with
  *   rewards_option_panel backgrounds — extensible for future content.
@@ -55,7 +54,7 @@ import AudioManager from '../audio/AudioManager.js';
 const SPLASH_ALPHA = 1.0;
 
 /** Maximum fraction of canvas width the reward panel occupies */
-const PANEL_MAX_WIDTH_FRAC = 0.55;
+const PANEL_MAX_WIDTH_FRAC = 0.72;
 
 /** Maximum fraction of canvas height the reward panel occupies */
 const PANEL_MAX_HEIGHT_FRAC = 0.70;
@@ -81,25 +80,19 @@ const TITLE_WIDTH_FRAC = 0.45;
 /** Primary panel internal padding */
 const PRIMARY_PANEL_PADDING = { top: 28, right: 36, bottom: 24, left: 36 };
 
-/** Gap between sections inside the primary panel (rewards row / claim button / skip button) */
+/** Gap between sections inside the primary panel (rewards row / skip button) */
 const PRIMARY_PANEL_GAP = 18;
 
 /** Gap between reward option panels in the row */
 const REWARD_OPTION_SPACING = 20;
 
 /** Width of each reward option panel as a fraction of the primary panel's content width */
-const REWARD_OPTION_WIDTH_FRAC = 0.28;
-
-/** Height of the Claim Reward button (contain fit mode within) */
-const CLAIM_BUTTON_HEIGHT = 56;
-
-/** Width of the Claim Reward button as a fraction of the primary panel's content width */
-const CLAIM_BUTTON_WIDTH_FRAC = 0.50;
+const REWARD_OPTION_WIDTH_FRAC = 0.30;
 
 /**
  * Extra top margin for the Skip Rewards button.
  * Tweak this to adjust the skip button's vertical position relative to the
- * element above it (claim button).
+ * element above it (rewards row).
  */
 const SKIP_REWARDS_BUTTON_Y_OFFSET = 4;
 
@@ -151,7 +144,7 @@ export default class RewardOverlay {
     this._timer = 0;
 
     /**
-     * Which button is currently hovered: null, 'claim', or 'skip'.
+     * Which button is currently hovered: null or 'skip'.
      * @type {string|null}
      */
     this._hoveredButton = null;
@@ -163,8 +156,6 @@ export default class RewardOverlay {
     this._rewardsRow = null;
     /** @type {UIPanel[]} three reward option containers */
     this._rewardOptions = [];
-    /** @type {UIImage} claim reward button */
-    this._claimButton = null;
     /** @type {UIImage} skip rewards button */
     this._skipButton = null;
 
@@ -239,7 +230,7 @@ export default class RewardOverlay {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Handle mouse movement for hover effects on claim/skip buttons.
+   * Handle mouse movement for hover effects on the skip button.
    * Swaps the button's assetKey between normal and _hover variant based
    * on whether the cursor is over the button.
    *
@@ -254,25 +245,19 @@ export default class RewardOverlay {
 
     // Determine which button (if any) is hovered
     let newHover = null;
-    if (hit === this._claimButton) {
-      newHover = 'claim';
-    } else if (hit === this._skipButton) {
+    if (hit === this._skipButton) {
       newHover = 'skip';
     }
 
     // Only swap assetKeys when hover state changes
     if (newHover !== this._hoveredButton) {
       // Restore previous hovered button to its normal asset
-      if (this._hoveredButton === 'claim' && this._claimButton) {
-        this._claimButton.assetKey = 'rewards_button_confirm';
-      } else if (this._hoveredButton === 'skip' && this._skipButton) {
+      if (this._hoveredButton === 'skip' && this._skipButton) {
         this._skipButton.assetKey = 'rewards_button_skip';
       }
 
       // Set new hovered button to its hover asset
-      if (newHover === 'claim' && this._claimButton) {
-        this._claimButton.assetKey = 'rewards_button_confirm_hover';
-      } else if (newHover === 'skip' && this._skipButton) {
+      if (newHover === 'skip' && this._skipButton) {
         this._skipButton.assetKey = 'rewards_button_skip_hover';
       }
 
@@ -281,8 +266,8 @@ export default class RewardOverlay {
   }
 
   /**
-   * Handle mouse click on claim/skip buttons.
-   * Both buttons dismiss the overlay and proceed to the next screen.
+   * Handle mouse click on the skip button.
+   * Dismisses the overlay and proceeds to the next screen.
    *
    * @param {number} x — mouse x in canvas coordinates
    * @param {number} y — mouse y in canvas coordinates
@@ -293,7 +278,7 @@ export default class RewardOverlay {
 
     const hit = this._primaryPanel ? this._primaryPanel.hitTest(x, y) : null;
 
-    if (hit === this._claimButton || hit === this._skipButton) {
+    if (hit === this._skipButton) {
       this.dismiss();
     }
   }
@@ -309,7 +294,7 @@ export default class RewardOverlay {
    *   1. rewards_background_splash drawn cover-style with controlled opacity (raw canvas)
    *   2. Primary panel background image (raw canvas)
    *   3. Victory title image on top, bottom nestled into panel groove (raw canvas)
-   *   4. Panel children via UI framework (rewards row, claim button, skip button)
+   *   4. Panel children via UI framework (rewards row, skip button)
    *
    * Animation:
    *   ENTERING — ease-out cubic: fades in + slides up from bottom
@@ -444,7 +429,6 @@ export default class RewardOverlay {
    *   primaryPanel (UIContainer, column)
    *     rewardsRow (UIContainer, row)
    *       rewardOptionContainer (UIPanel with rewards_option_panel) × 3
-   *     claimButton (UIImage with rewards_button_confirm)
    *     skipButton (UIImage with rewards_button_skip)
    */
   _buildHierarchy() {
@@ -483,17 +467,6 @@ export default class RewardOverlay {
     }
 
     this._primaryPanel.addChild(this._rewardsRow);
-
-    // ── Claim Reward button ─────────────────────────────
-    this._claimButton = new UIImage('rewards_button_confirm', this._assetManager);
-    this._claimButton.setStyle({
-      fitMode: 'contain',
-      imageAlignH: 'center',
-      imageAlignV: 'center',
-      // width/height set dynamically in _renderPanelChildren
-    });
-    this._claimButton.userData = { action: 'claim' };
-    this._primaryPanel.addChild(this._claimButton);
 
     // ── Skip Rewards button ─────────────────────────────
     this._skipButton = new UIImage('rewards_button_skip', this._assetManager);
@@ -536,7 +509,7 @@ export default class RewardOverlay {
     const optionW = contentW * REWARD_OPTION_WIDTH_FRAC;
 
     // Height from option panel image aspect ratio (with fallback)
-    let optionH = optionW * 1.4;
+    let optionH = optionW * 1.7;
     if (this._assetManager) {
       const optImg = this._assetManager.get('rewards_option_panel');
       if (optImg && optImg.width && optImg.height) {
@@ -549,10 +522,7 @@ export default class RewardOverlay {
       opt.height = Math.floor(optionH);
     }
 
-    // ── Compute button sizes ────────────────────────────
-    this._claimButton.width = Math.floor(contentW * CLAIM_BUTTON_WIDTH_FRAC);
-    this._claimButton.height = CLAIM_BUTTON_HEIGHT;
-
+    // ── Compute skip button size ────────────────────────
     this._skipButton.width = Math.floor(contentW * SKIP_BUTTON_WIDTH_FRAC);
     this._skipButton.height = SKIP_BUTTON_HEIGHT;
 
