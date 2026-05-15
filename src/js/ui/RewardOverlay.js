@@ -108,6 +108,14 @@ const OVERLAY_FADE_DURATION = 170;
 /** Fraction of canvas height the panel slides up on entrance */
 const OVERLAY_SLIDE_FRACTION = 0.10;
 
+// ── Reward option hover animation constants ──────────────
+/** Scale factor applied to a hovered reward option (subtle UI emphasis) */
+const HOVER_SCALE = 1.04;
+/** Duration of the hover-in / hover-out scale animation (ms) */
+const HOVER_ANIM_DURATION = 100;
+/** Multiplier for animation responsiveness (higher = snappier lerp) */
+const HOVER_ANIM_SPEED = 4;
+
 // ── Overlay state enum ────────────────────────────────────
 /** @readonly @enum {string} */
 const OverlayState = Object.freeze({
@@ -149,6 +157,26 @@ export default class RewardOverlay {
      */
     this._hoveredButton = null;
 
+    /**
+     * Index of the currently hovered reward option (-1 = none).
+     * @type {number}
+     */
+    this._hoveredRewardIndex = -1;
+
+    /**
+     * Current hover scale animation progress (0-1).
+     * Lerps toward 1 when a reward is hovered, toward 0 when not.
+     * @type {number}
+     */
+    this._hoverAnimT = 0;
+
+    /**
+     * Guard flag: prevents double-click / multi-transition once a reward
+     * has been selected or the skip button has been pressed.
+     * @type {boolean}
+     */
+    this._isResolvingReward = false;
+
     // ── UI tree references (built once) ──
     /** @type {UIContainer} primary panel container — parent of all reward UI */
     this._primaryPanel = null;
@@ -171,24 +199,21 @@ export default class RewardOverlay {
     if (this._state === OverlayState.ENTERING || this._state === OverlayState.ACTIVE) return;
     this._state = OverlayState.ENTERING;
     this._timer = 0;
+    this._hoveredRewardIndex = -1;
+    this._hoverAnimT = 0;
+    this._isResolvingReward = false;
+    this._hoveredButton = null;
     AudioManager.playSfx('sfx_rewards_open');
   }
 
   /**
-   * Dismiss the overlay and fire the onDismiss callback immediately.
-   * The SceneManager's fadeToScene handles the visual cross-fade — the reward
-   * overlay stays rendered (in EXITING state, drawn at full opacity) during
-   * the fade-out phase so it dissolves to black alongside the battle scene.
+   * Dismiss the overlay and transition to the next scene.
+   * Delegates to proceedToNextScene() for shared transition logic.
    * No-op if not ACTIVE (prevents double-dismiss).
    */
   dismiss() {
     if (this._state !== OverlayState.ACTIVE) return;
-    this._state = OverlayState.EXITING;
-    this._timer = 0;
-
-    if (typeof this.onDismiss === 'function') {
-      this.onDismiss();
-    }
+    this.proceedToNextScene();
   }
 
   /** @returns {boolean} true if the overlay is currently visible (any non-INACTIVE state) */
@@ -203,6 +228,66 @@ export default class RewardOverlay {
   reset() {
     this._state = OverlayState.INACTIVE;
     this._timer = 0;
+    this._hoveredRewardIndex = -1;
+    this._hoverAnimT = 0;
+    this._isResolvingReward = false;
+    this._hoveredButton = null;
+  }
+
+  /**
+   * Intermediary handler called when a specific reward option is clicked.
+   *
+   * This is the designated place to add future reward-granting logic:
+   *   - grant card / relic / stat reward
+   *   - update player run state
+   *   - play reward animation / sound
+   *   - save chosen reward
+   *   - disable further input while resolving
+   *
+   * Guards against double-click; delegates the actual transition to
+   * proceedToNextScene() which is the single point for setting the
+   * resolving flag and firing the dismiss callback.
+   *
+   * Currently advances to the next scene immediately.
+   *
+   * @param {UIPanel} rewardOption — the clicked reward option UI element
+   * @param {number} rewardIndex — index of the chosen reward (0-2)
+   */
+  handleRewardSelected(rewardOption, rewardIndex) {
+    if (this._isResolvingReward) return;
+
+    // ── Future reward-granting logic goes here ──────────
+    // console.log(`[RewardOverlay] Reward ${rewardIndex} selected.`);
+    // TODO: grant card/relic/stat, update player run state, play animation, etc.
+    // ─────────────────────────────────────────────────────
+
+    this.proceedToNextScene();
+  }
+
+  /**
+   * Shared transition: exits the overlay and fires the onDismiss callback
+   * which triggers the SceneManager's fadeToScene back to the map.
+   *
+   * This is the single point that sets _isResolvingReward and transitions
+   * state to EXITING. All exit paths (reward click, skip button, ESC key)
+   * flow through here so double-click / double-skip cannot trigger
+   * multiple scene transitions.
+   */
+  proceedToNextScene() {
+    if (this._isResolvingReward) return;
+    this._isResolvingReward = true;
+
+    this._state = OverlayState.EXITING;
+    this._timer = 0;
+
+    // Disable further hover / click interactions
+    this._hoveredRewardIndex = -1;
+    this._hoverAnimT = 0;
+    this._hoveredButton = null;
+
+    if (typeof this.onDismiss === 'function') {
+      this.onDismiss();
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -210,18 +295,31 @@ export default class RewardOverlay {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Advance overlay animation timer and handle state transitions.
+   * Advance overlay animation timer and hover scale animation.
    * Call once per frame from the owning scene's update().
    *
    * @param {number} dt — delta time in ms
    */
   update(dt) {
-    if (this._state !== OverlayState.ENTERING) return;
+    // ── Entrance animation timer ──
+    if (this._state === OverlayState.ENTERING) {
+      this._timer += dt;
+      if (this._timer >= OVERLAY_FADE_DURATION) {
+        this._state = OverlayState.ACTIVE;
+      }
+    }
 
-    this._timer += dt;
+    // ── Hover scale animation ──
+    // Interactable only while ACTIVE and not resolving
+    if (this._state === OverlayState.ACTIVE && !this._isResolvingReward) {
+      const target = this._hoveredRewardIndex >= 0 ? 1 : 0;
+      const speed = Math.min(1, (dt / HOVER_ANIM_DURATION) * HOVER_ANIM_SPEED);
+      this._hoverAnimT += (target - this._hoverAnimT) * speed;
+    }
 
-    if (this._timer >= OVERLAY_FADE_DURATION) {
-      this._state = OverlayState.ACTIVE;
+    // Always return to 0 when exiting or resolving
+    if (this._state === OverlayState.EXITING || this._isResolvingReward) {
+      this._hoverAnimT = 0;
     }
   }
 
@@ -230,56 +328,82 @@ export default class RewardOverlay {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Handle mouse movement for hover effects on the skip button.
-   * Swaps the button's assetKey between normal and _hover variant based
-   * on whether the cursor is over the button.
+   * Handle mouse movement for hover effects on reward options and the skip button.
+   *
+   * Reward options: Animate a subtle scale-up (HOVER_SCALE) on hover.
+   * Skip button: Swaps assetKey between normal and _hover variant.
    *
    * @param {number} x — mouse x in canvas coordinates
    * @param {number} y — mouse y in canvas coordinates
    */
   handleMouseMove(x, y) {
-    // Only allow interaction while fully active (ignore during animations)
-    if (this._state !== OverlayState.ACTIVE) return;
+    // Only allow interaction while fully active and not resolving
+    if (this._state !== OverlayState.ACTIVE || this._isResolvingReward) return;
 
     const hit = this._primaryPanel ? this._primaryPanel.hitTest(x, y) : null;
 
-    // Determine which button (if any) is hovered
-    let newHover = null;
-    if (hit === this._skipButton) {
-      newHover = 'skip';
+    // ── Reward option hover detection ──────────────────
+    let newRewardHover = -1;
+    if (hit) {
+      for (let i = 0; i < this._rewardOptions.length; i++) {
+        if (hit === this._rewardOptions[i]) {
+          newRewardHover = i;
+          break;
+        }
+      }
     }
 
-    // Only swap assetKeys when hover state changes
-    if (newHover !== this._hoveredButton) {
+    // Update hovered reward index (scale animation lerps toward target in update())
+    this._hoveredRewardIndex = newRewardHover;
+
+    // ── Skip button hover detection ────────────────────
+    let newButtonHover = null;
+    if (hit === this._skipButton) {
+      newButtonHover = 'skip';
+    }
+
+    // Only swap assetKeys when button hover state changes
+    if (newButtonHover !== this._hoveredButton) {
       // Restore previous hovered button to its normal asset
       if (this._hoveredButton === 'skip' && this._skipButton) {
         this._skipButton.assetKey = 'rewards_button_skip';
       }
 
       // Set new hovered button to its hover asset
-      if (newHover === 'skip' && this._skipButton) {
+      if (newButtonHover === 'skip' && this._skipButton) {
         this._skipButton.assetKey = 'rewards_button_skip_hover';
       }
 
-      this._hoveredButton = newHover;
+      this._hoveredButton = newButtonHover;
     }
   }
 
   /**
-   * Handle mouse click on the skip button.
-   * Dismisses the overlay and proceeds to the next screen.
+   * Handle mouse click on reward options or the skip button.
+   *
+   * Reward option click → handleRewardSelected() → proceedToNextScene()
+   * Skip button click    → proceedToNextScene()
    *
    * @param {number} x — mouse x in canvas coordinates
    * @param {number} y — mouse y in canvas coordinates
    */
   handleMouseDown(x, y) {
-    // Only allow interaction while fully active (ignore during animations)
-    if (this._state !== OverlayState.ACTIVE) return;
+    // Only allow interaction while fully active and not resolving
+    if (this._state !== OverlayState.ACTIVE || this._isResolvingReward) return;
 
     const hit = this._primaryPanel ? this._primaryPanel.hitTest(x, y) : null;
 
+    // ── Check reward option clicks ─────────────────────
+    for (let i = 0; i < this._rewardOptions.length; i++) {
+      if (hit === this._rewardOptions[i]) {
+        this.handleRewardSelected(this._rewardOptions[i], i);
+        return;
+      }
+    }
+
+    // ── Check skip button click ────────────────────────
     if (hit === this._skipButton) {
-      this.dismiss();
+      this.proceedToNextScene();
     }
   }
 
@@ -530,7 +654,48 @@ export default class RewardOverlay {
     // ── Run flexbox layout ──────────────────────────────
     this._primaryPanel.layoutChildren();
 
-    // ── Render children (skips panel background — drawn manually above) ──
-    this._primaryPanel.renderChildren(ctx);
+    // ── Render children with hover scale transform ──────
+    // The hovered reward option is scaled around its center and rendered
+    // on top of neighboring items for clean visual layering.
+    const hoverIndex = this._hoveredRewardIndex;
+    const currentScale = 1 + (HOVER_SCALE - 1) * this._hoverAnimT;
+
+    // 1) Render reward options: non-hovered first, hovered last (on top)
+    const rewardChildren = this._rewardsRow.children;
+    const nonHovered = [];
+    let hoveredOption = null;
+
+    for (let i = 0; i < rewardChildren.length; i++) {
+      if (i === hoverIndex) {
+        hoveredOption = rewardChildren[i];
+      } else {
+        nonHovered.push(rewardChildren[i]);
+      }
+    }
+
+    // Render non-hovered reward options normally
+    for (const child of nonHovered) {
+      child.render(ctx);
+    }
+
+    // Render the hovered reward option with scale transform around its center
+    if (hoveredOption && currentScale > 1.0) {
+      const r = hoveredOption.rect;
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(currentScale, currentScale);
+      ctx.translate(-cx, -cy);
+      hoveredOption.render(ctx);
+      ctx.restore();
+    } else if (hoveredOption) {
+      // No active scale — render normally
+      hoveredOption.render(ctx);
+    }
+
+    // 2) Render skip button
+    this._skipButton.render(ctx);
   }
 }
