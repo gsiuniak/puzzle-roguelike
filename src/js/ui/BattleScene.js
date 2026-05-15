@@ -366,7 +366,10 @@ export default class BattleScene extends UIPanel {
   // ── Input handlers ───────────────────────────────────
 
   _handleMouseDown(x, y) {
-    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) {
+      this._rewardOverlay.handleMouseDown(x, y);
+      return;
+    }
     if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
     if (!board) return;
@@ -397,7 +400,10 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseMove(x, y) {
-    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) {
+      this._rewardOverlay.handleMouseMove(x, y);
+      return;
+    }
     if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
     if (!board) return;

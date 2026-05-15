@@ -8,7 +8,7 @@
  *   1. Battle scene remains visible underneath (non-interactive)
  *   2. Semi-transparent black fullscreen backdrop
  *   3. Victory title image positioned above the main panel
- *   4. Centered reward panel (reward_screen_temp_panel) containing:
+ *   4. Centered reward panel (reward_screen_panel) containing:
  *      - Three reward option containers in a row
  *      - Centered Claim Reward button
  *      - Centered Skip Rewards button near bottom
@@ -135,6 +135,12 @@ export default class RewardOverlay {
     /** @type {boolean} whether dismiss has already been triggered */
     this._dismissTriggered = false;
 
+    /**
+     * Which button is currently hovered: null, 'claim', or 'skip'.
+     * @type {string|null}
+     */
+    this._hoveredButton = null;
+
     // ── UI tree references (built once) ──
     /** @type {UIContainer} primary panel container — parent of all reward UI */
     this._primaryPanel = null;
@@ -210,6 +216,68 @@ export default class RewardOverlay {
   }
 
   // ═══════════════════════════════════════════════════════════
+  // Input handling (called by BattleScene when overlay is active)
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Handle mouse movement for hover effects on claim/skip buttons.
+   * Swaps the button's assetKey between normal and _hover variant based
+   * on whether the cursor is over the button.
+   *
+   * @param {number} x — mouse x in canvas coordinates
+   * @param {number} y — mouse y in canvas coordinates
+   */
+  handleMouseMove(x, y) {
+    if (this._state !== OverlayState.ACTIVE) return;
+
+    const hit = this._primaryPanel ? this._primaryPanel.hitTest(x, y) : null;
+
+    // Determine which button (if any) is hovered
+    let newHover = null;
+    if (hit === this._claimButton) {
+      newHover = 'claim';
+    } else if (hit === this._skipButton) {
+      newHover = 'skip';
+    }
+
+    // Only swap assetKeys when hover state changes
+    if (newHover !== this._hoveredButton) {
+      // Restore previous hovered button to its normal asset
+      if (this._hoveredButton === 'claim' && this._claimButton) {
+        this._claimButton.assetKey = 'rewards_button_confirm';
+      } else if (this._hoveredButton === 'skip' && this._skipButton) {
+        this._skipButton.assetKey = 'rewards_button_skip';
+      }
+
+      // Set new hovered button to its hover asset
+      if (newHover === 'claim' && this._claimButton) {
+        this._claimButton.assetKey = 'rewards_button_confirm_hover';
+      } else if (newHover === 'skip' && this._skipButton) {
+        this._skipButton.assetKey = 'rewards_button_skip_hover';
+      }
+
+      this._hoveredButton = newHover;
+    }
+  }
+
+  /**
+   * Handle mouse click on claim/skip buttons.
+   * Both buttons dismiss the overlay and proceed to the next screen.
+   *
+   * @param {number} x — mouse x in canvas coordinates
+   * @param {number} y — mouse y in canvas coordinates
+   */
+  handleMouseDown(x, y) {
+    if (this._state !== OverlayState.ACTIVE) return;
+
+    const hit = this._primaryPanel ? this._primaryPanel.hitTest(x, y) : null;
+
+    if (hit === this._claimButton || hit === this._skipButton) {
+      this.dismiss();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // Render
   // ═══════════════════════════════════════════════════════════
 
@@ -237,7 +305,7 @@ export default class RewardOverlay {
 
     // ── 2. Calculate primary panel dimensions from image aspect ratio ──
     const panelImg = this._assetManager
-      ? this._assetManager.get('reward_screen_temp_panel')
+      ? this._assetManager.get('reward_screen_panel')
       : null;
     if (!panelImg || !panelImg.width || !panelImg.height) return;
 

@@ -98,11 +98,13 @@ const ASSET_MAP = {
   map_icon_rest:    'assets/sprites/map/map_icon_rest.png',
   map_icon_boss:    'assets/sprites/map/map_icon_boss.png',
   // ── Reward screen assets ────────────────────────────
-  reward_screen_temp_panel: 'assets/sprites/reward_screen/reward_screen_temp_panel.png',
-  reward_victory_text:      'assets/sprites/reward_screen/reward_victory_text.png',
+  reward_screen_panel: 'assets/sprites/reward_screen/rewards_panel.png',
+  reward_victory_text:      'assets/sprites/reward_screen/rewards_victory_text.png',
   rewards_option_panel:     'assets/sprites/reward_screen/rewards_option_panel.png',
-  rewards_button_confirm:   'assets/sprites/reward_screen/rewards_button_confirm.png',
-  rewards_button_skip:      'assets/sprites/reward_screen/rewards_button_skip.png',
+  rewards_button_confirm:        'assets/sprites/reward_screen/rewards_button_confirm.png',
+  rewards_button_confirm_hover:  'assets/sprites/reward_screen/rewards_button_confirm_hover.png',
+  rewards_button_skip:           'assets/sprites/reward_screen/rewards_button_skip.png',
+  rewards_button_skip_hover:     'assets/sprites/reward_screen/rewards_button_skip_hover.png',
 };
 
 // ── Scene sizing ────────────────────────────────────────
