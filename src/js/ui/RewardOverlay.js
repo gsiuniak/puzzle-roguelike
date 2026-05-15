@@ -54,18 +54,19 @@ const PANEL_MAX_HEIGHT_FRAC = 0.70;
  * Vertical offset for the main panel from the canvas center.
  * Positive = shifted down, negative = shifted up.
  */
-const MAIN_PANEL_Y_OFFSET = 10;
+const MAIN_PANEL_Y_OFFSET = 40;
 
 /**
- * Vertical offset for the victory title relative to the top of the primary panel.
- * Negative = title sits above / overlaps the panel top edge.
+ * How far the bottom of the victory title image extends past the top edge
+ * of the primary panel (in px). Positive = title overlaps/nestles into the
+ * panel's top groove.
  */
-const REWARD_TITLE_Y_OFFSET = -28;
+const TITLE_NESTLE_OVERLAP = 14;
 
 /**
  * Width of the victory title as a fraction of the primary panel width.
  */
-const TITLE_WIDTH_FRAC = 0.78;
+const TITLE_WIDTH_FRAC = 0.45;
 
 /** Primary panel internal padding */
 const PRIMARY_PANEL_PADDING = { top: 28, right: 36, bottom: 24, left: 36 };
@@ -286,8 +287,8 @@ export default class RewardOverlay {
    *
    * Draws in this order:
    *   1. Semi-transparent black fullscreen backdrop (raw canvas)
-   *   2. Victory title image centered above the panel (raw canvas)
-   *   3. Primary panel background image (raw canvas)
+   *   2. Primary panel background image (raw canvas)
+   *   3. Victory title image on top, bottom nestled into panel groove (raw canvas)
    *   4. Panel children via UI framework (rewards row, claim button, skip button)
    *
    * @param {CanvasRenderingContext2D} ctx
@@ -327,14 +328,27 @@ export default class RewardOverlay {
     const panelX = Math.floor((canvasW - panelW) / 2);
     const panelY = Math.floor((canvasH - panelH) / 2) + MAIN_PANEL_Y_OFFSET;
 
-    // ── 3. Victory title image — centered above the primary panel ──
+    // ── 3. Primary panel background ──
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(
+      panelImg,
+      panelX,
+      panelY,
+      Math.ceil(panelW),
+      Math.ceil(panelH),
+    );
+    ctx.restore();
+
+    // ── 4. Victory title image — on top, bottom nestled into panel groove ──
     if (this._assetManager) {
       const titleImg = this._assetManager.get('reward_victory_text');
       if (titleImg && titleImg.width && titleImg.height) {
         const titleW = panelW * TITLE_WIDTH_FRAC;
         const titleH = titleW * (titleImg.height / titleImg.width);
         const titleX = Math.floor(panelX + (panelW - titleW) / 2);
-        const titleY = Math.floor(panelY + REWARD_TITLE_Y_OFFSET);
+        // Position so the bottom of the title overlaps the panel top by TITLE_NESTLE_OVERLAP px
+        const titleY = Math.floor(panelY - titleH + TITLE_NESTLE_OVERLAP);
 
         ctx.save();
         ctx.imageSmoothingEnabled = true;
@@ -348,18 +362,6 @@ export default class RewardOverlay {
         ctx.restore();
       }
     }
-
-    // ── 4. Primary panel background ──
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(
-      panelImg,
-      panelX,
-      panelY,
-      Math.ceil(panelW),
-      Math.ceil(panelH),
-    );
-    ctx.restore();
 
     // ── 5. Layout and render panel children via UI framework ──
     this._renderPanelChildren(ctx, panelX, panelY, panelW, panelH);
