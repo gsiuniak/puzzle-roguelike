@@ -165,6 +165,12 @@ const SOUNDS = {
     category: AudioCategory.SFX,
   },
 
+  // ── Rewards ─────────────────────────────────────────────
+  sfx_rewards_open: {
+    src: ['assets/audio/sfx/rewards/sfx_rewards_open.mp3'],
+    category: AudioCategory.SFX,
+  },
+
   // ── UI ──────────────────────────────────────────────────
   ui_button_hover: {
     src: ['assets/audio/ui/button_hover.mp3'],

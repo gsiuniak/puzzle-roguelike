@@ -15,8 +15,10 @@
  *
  * Lifecycle:
  *   show()     — begin entrance animation (fade + slide, same as map overlay)
- *   dismiss()  — begin exit cross-fade animation, fires onDismiss when complete
- *   update(dt) — advance animation timers and transition states
+ *   dismiss()  — fire onDismiss immediately; EXITING state guards against
+ *                double-trigger. Overlay stays rendered at full opacity during
+ *                the SceneManager's fadeToScene transition.
+ *   update(dt) — advance entrance animation timer
  *   render(ctx, w, h) — draw backdrop + reward UI tree with animated transform
  *   isActive() — true while the overlay is visible (any non-INACTIVE state)
  *   reset()    — force-reset to INACTIVE without callback (cleanup on scene exit)
@@ -25,12 +27,12 @@
  *   INACTIVE — not rendered, no interaction
  *   ENTERING — entrance animation: ease-out cubic fade + slide up from bottom
  *   ACTIVE   — fully visible, interactive
- *   EXITING  — exit animation: ease-in cubic cross-fade out, no interaction
+ *   EXITING  — dismissed; rendered at full opacity (SceneManager handles cross-fade)
  *
  * Input behavior:
  *   - Only ACTIVE state allows click/hover on claim/skip buttons
  *   - During ENTERING/EXITING all input is ignored (handled by BattleScene)
- *   - ESC key dismisses (triggers EXITING → onDismiss → MapScene transition)
+ *   - ESC key dismisses (triggers EXITING → onDismiss → fadeToScene transition)
  *
  * Architecture:
  *   The overlay uses the UI framework (UIContainer/UIPanel/UIImage) for the
@@ -43,6 +45,7 @@
 import UIContainer from './UIContainer.js';
 import UIPanel from './UIPanel.js';
 import UIImage from './UIImage.js';
+import AudioManager from '../audio/AudioManager.js';
 
 // ═══════════════════════════════════════════════════════════
 // Tunable layout constants
@@ -177,18 +180,24 @@ export default class RewardOverlay {
     if (this._state === OverlayState.ENTERING || this._state === OverlayState.ACTIVE) return;
     this._state = OverlayState.ENTERING;
     this._timer = 0;
+    AudioManager.playSfx('sfx_rewards_open');
   }
 
   /**
-   * Begin the exit cross-fade animation.
-   * The onDismiss callback fires when the animation completes.
-   * No-op if not ACTIVE (i.e. already dismissing, entering, or inactive).
+   * Dismiss the overlay and fire the onDismiss callback immediately.
+   * The SceneManager's fadeToScene handles the visual cross-fade — the reward
+   * overlay stays rendered (in EXITING state, drawn at full opacity) during
+   * the fade-out phase so it dissolves to black alongside the battle scene.
+   * No-op if not ACTIVE (prevents double-dismiss).
    */
   dismiss() {
     if (this._state !== OverlayState.ACTIVE) return;
     this._state = OverlayState.EXITING;
     this._timer = 0;
-    // onDismiss will be called when the EXITING animation completes (in update)
+
+    if (typeof this.onDismiss === 'function') {
+      this.onDismiss();
+    }
   }
 
   /** @returns {boolean} true if the overlay is currently visible (any non-INACTIVE state) */
@@ -216,19 +225,12 @@ export default class RewardOverlay {
    * @param {number} dt — delta time in ms
    */
   update(dt) {
-    if (this._state !== OverlayState.ENTERING && this._state !== OverlayState.EXITING) return;
+    if (this._state !== OverlayState.ENTERING) return;
 
     this._timer += dt;
 
     if (this._timer >= OVERLAY_FADE_DURATION) {
-      if (this._state === OverlayState.ENTERING) {
-        this._state = OverlayState.ACTIVE;
-      } else { // EXITING → INACTIVE
-        this._state = OverlayState.INACTIVE;
-        if (typeof this.onDismiss === 'function') {
-          this.onDismiss();
-        }
-      }
+      this._state = OverlayState.ACTIVE;
     }
   }
 
@@ -331,14 +333,10 @@ export default class RewardOverlay {
       const easedT = 1 - Math.pow(1 - rawT, 3);
       overlayAlpha = easedT;
       containerSlideY = (1 - easedT) * canvasH * OVERLAY_SLIDE_FRACTION;
-    } else if (this._state === OverlayState.EXITING) {
-      const rawT = Math.min(1, this._timer / OVERLAY_FADE_DURATION);
-      // ease-in cubic: gentle start, fast exit (cross-fade out)
-      const easedT = Math.pow(rawT, 3);
-      overlayAlpha = 1 - easedT;
-      // No slide on exit — cross-fade only
     }
-    // ACTIVE state: overlayAlpha=1, containerSlideY=0 (defaults)
+    // ACTIVE / EXITING: overlayAlpha=1, containerSlideY=0 (full opacity, no transform)
+    // EXITING renders at full opacity — the SceneManager's fadeToScene handles
+    // the cross-fade to black on top of the overlay.
 
     // Wrap all drawing in a save/restore with globalAlpha for cross-fade
     ctx.save();
