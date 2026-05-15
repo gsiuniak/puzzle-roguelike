@@ -90,11 +90,11 @@ const REWARD_OPTION_SPACING = 10;
 const REWARD_OPTION_WIDTH_FRAC = 0.31;
 
 /**
- * Extra top margin for the Skip Rewards button.
- * Tweak this to adjust the skip button's vertical position relative to the
- * element above it (rewards row).
+ * Extra bottom margin for the Skip Rewards button.
+ * Provides a little padding beneath the button so it sits slightly higher
+ * and nestles into the panel's bottom notch.
  */
-const SKIP_REWARDS_BUTTON_Y_OFFSET = 4;
+const SKIP_REWARDS_BUTTON_BOTTOM_MARGIN = 8;
 
 /** Height of the Skip Rewards button (contain fit mode within) */
 const SKIP_BUTTON_HEIGHT = 50;
@@ -437,7 +437,7 @@ export default class RewardOverlay {
     this._primaryPanel.setStyle({
       direction: 'column',
       alignItems: 'center',
-      justifyContent: 'start',
+      justifyContent: 'space-between',
       gap: PRIMARY_PANEL_GAP,
       padding: PRIMARY_PANEL_PADDING,
     });
@@ -475,7 +475,7 @@ export default class RewardOverlay {
       fitMode: 'contain',
       imageAlignH: 'center',
       imageAlignV: 'center',
-      margin: { top: SKIP_REWARDS_BUTTON_Y_OFFSET },
+      margin: { bottom: SKIP_REWARDS_BUTTON_BOTTOM_MARGIN },
       // width/height set dynamically in _renderPanelChildren
     });
     this._skipButton.userData = { action: 'skip' };
