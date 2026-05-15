@@ -1,12 +1,18 @@
 /**
  * Mock character data — the single source of truth for gameplay definitions.
  *
- * Each character defines its base stats, skills, mana, and portrait.
- * The Mage definition (previously commented out) is now fully enabled.
+ * Each character defines its immutable base stats, skills, mana, and portrait.
+ * Character definitions are NEVER mutated during gameplay.
+ *
+ * Architecture:
+ *   characterDefinition.baseStats = immutable template
+ *   playerRunState.statModifiers  = persistent run-level progression
+ *   effectiveStats = baseStats + statModifiers (resolved via playerStats.js)
+ *   battleState    = fresh instance created from effectiveStats each battle
  *
  * Exports:
- *   warriorCharacter, mageCharacter — individual character definitions
- *   mockCharacter (default)         — Warrior for backward compatibility
+ *   warriorCharacter, mageCharacter, witchDoctorCharacter — individual definitions
+ *   mockCharacter (default) — Warrior for backward compatibility
  */
 
 const warriorCharacter = {
@@ -15,18 +21,22 @@ const warriorCharacter = {
   className: 'Warrior',
   description: 'A stalwart defender who wields shield and blade with equal mastery. His indomitable will turns the tide of any battle.',
   level: 1,
-  hp: 30,
-  maxHp: 30,
-  attack: 1,
-  armor: 0,
-  mana: {
-    red: 0,
-    blue: 5,
-    green: 0,
-    yellow: 0,
-    purple: 0,
-  },
   portrait: 'warrior', // maps to 'portrait_warrior' asset key
+
+  /** Immutable base stats — never modified during a run */
+  baseStats: {
+    maxHp: 30,
+    startingAttack: 1,
+    startingArmor: 0,
+    startingMana: {
+      red: 0,
+      blue: 5,
+      green: 0,
+      yellow: 0,
+      purple: 0,
+    },
+  },
+
   skills: [
     {
       name: 'Bash',
@@ -62,18 +72,22 @@ const mageCharacter = {
   className: 'Mage',
   description: 'A master of the arcane arts, channeling raw magical energy into devastating spells that reshape the battlefield.',
   level: 1,
-  hp: 25,
-  maxHp: 25,
-  attack: 1,
-  armor: 0,
-  mana: {
-    red: 0,
-    blue: 0,
-    green: 0,
-    yellow: 5,
-    purple: 5,
-  },
   portrait: 'mage', // maps to 'portrait_mage' asset key
+
+  /** Immutable base stats — never modified during a run */
+  baseStats: {
+    maxHp: 25,
+    startingAttack: 1,
+    startingArmor: 0,
+    startingMana: {
+      red: 0,
+      blue: 0,
+      green: 0,
+      yellow: 5,
+      purple: 5,
+    },
+  },
+
   skills: [
     {
       name: 'Fracture',
@@ -112,18 +126,22 @@ const witchDoctorCharacter = {
   className: 'Witch Doctor',
   description: 'A shadowy practitioner of forbidden arts, Kalfou commands the dead and mends wounds with dark rituals.',
   level: 1,
-  hp: 25,
-  maxHp: 25,
-  attack: 1,
-  armor: 0,
-  mana: {
-    red: 0,
-    blue: 0,
-    green: 3,
-    yellow: 0,
-    purple: 4,
-  },
   portrait: 'witch_doctor', // maps to 'portrait_witch_doctor' asset key
+
+  /** Immutable base stats — never modified during a run */
+  baseStats: {
+    maxHp: 25,
+    startingAttack: 1,
+    startingArmor: 0,
+    startingMana: {
+      red: 0,
+      blue: 0,
+      green: 3,
+      yellow: 0,
+      purple: 4,
+    },
+  },
+
   skills: [
     {
       name: 'Summon Dead',

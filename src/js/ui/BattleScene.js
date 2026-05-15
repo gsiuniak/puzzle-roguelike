@@ -10,6 +10,7 @@ import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
+import { syncBattleResultsToRunState } from '../data/playerStats.js';
 
 /**
  * BattleScene — full battle layout with three columns.
@@ -1025,14 +1026,16 @@ export default class BattleScene extends UIPanel {
 
     // Restore map state if available
     if (mapScene && mapData) {
-      // Restore seed and player data
+      // Restore seed
       if (mapData.mapSeed) {
         mapScene.setSeed(mapData.mapSeed);
       }
-      if (mapData.playerData) {
-        // Heal/update player after battle
-        const healed = this._getPostBattlePlayerData(mapData.playerData);
-        mapScene.setPlayerData(healed);
+      // Sync battle results back to run state (persistent HP)
+      if (mapData.runState && this._battleController) {
+        syncBattleResultsToRunState(mapData.runState, this._battleController.playerState);
+        // Apply post-battle healing
+        this._applyPostBattleHealing(mapData.runState, this._battleController.playerState);
+        mapScene.setRunState(mapData.runState, null);
       }
     }
 
@@ -1069,27 +1072,20 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * Get player data after battle, with some recovery.
-   * @param {object} playerData
-   * @returns {object}
+   * Apply post-battle healing to the run state's currentHp.
+   * Heals 0% of max effective HP after a battle — HP persists as-is
+   * between battles. Healing comes from in-battle skills (e.g. Oungan)
+   * and rest-site nodes on the map.
+   * @param {object} runState — player run state (mutated in place)
+   * @param {object} playerBattleState — player state from the concluded battle
    */
-  _getPostBattlePlayerData(playerData) {
-    // Get actual player state from the battle controller if available
-    if (this._battleController && this._battleController.playerState) {
-      const ps = this._battleController.playerState;
-      // Heal a portion after non-boss fights
-      const healPct = 0.3;
-      const healAmount = Math.floor(ps.maxHp * healPct);
-      const newHp = Math.min(ps.maxHp, ps.hp + healAmount);
-
-      return {
-        ...playerData,
-        hp: newHp,
-        maxHp: ps.maxHp,
-        mana: { ...ps.mana },
-      };
+  _applyPostBattleHealing(runState, playerBattleState) {
+    if (!runState || !playerBattleState) return;
+    const healPct = 0.0;
+    const healAmount = Math.floor(playerBattleState.maxHp * healPct);
+    if (healAmount > 0) {
+      runState.currentHp = Math.min(playerBattleState.maxHp, runState.currentHp + healAmount);
     }
-    return playerData;
   }
 
   // ── style passthrough ───────────────────────────────

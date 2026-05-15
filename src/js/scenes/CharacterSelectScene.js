@@ -26,6 +26,7 @@ import mockEnemy from '../data/mockEnemy.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
 import AuraStrandsEffect from '../ui/AuraStrandsEffect.js';
+import { createRunState } from '../data/runState.js';
 
 /** Duration of the cross-fade transition between splash backgrounds (ms) */
 const CROSS_FADE_DURATION = 400;
@@ -263,7 +264,8 @@ export default class CharacterSelectScene extends UIPanel {
     heartIcon.setStyle({ width: 22, height: 22, fitMode: 'contain' });
     statManaRow.addChild(heartIcon);
 
-    const healthText = new UIText(`${cd.hp ?? 0} / ${cd.maxHp ?? 0}`);
+    const baseStats = cd.baseStats || {};
+    const healthText = new UIText(`${baseStats.maxHp ?? 0} / ${baseStats.maxHp ?? 0}`);
     healthText.setStyle({
       fontSize: 18,
       color: '#ff6666',
@@ -283,7 +285,7 @@ export default class CharacterSelectScene extends UIPanel {
     statManaRow.addChild(spacer);
 
     // Mana groups: icon + count, evenly spaced, same baseline
-    const manaData = cd.mana || {};
+    const manaData = cd.baseStats ? cd.baseStats.startingMana : {};
     const MANA_COLORS = [
       { key: 'red',    color: '#ff5555' },
       { key: 'blue',   color: '#5599ff' },
@@ -724,15 +726,17 @@ export default class CharacterSelectScene extends UIPanel {
     // Play confirm sound
     AudioManager.playSfx('character_select_confirm');
 
-    // Deep-clone character data so runtime state does not mutate the definition
-    const playerClone = JSON.parse(JSON.stringify(def.characterData));
+    // Create run state from the immutable character definition.
+    // This preserves baseStats as the immutable template and initializes
+    // statModifiers to zero — ready for run progression.
+    const runState = createRunState(def.characterData);
 
     // Set up MapScene for this run
     const mapScene = sm._scenes['MapScene'];
     if (mapScene) {
       // Generate a fresh seed for this run
       mapScene.setSeed('run_' + Date.now());
-      mapScene.setPlayerData(playerClone);
+      mapScene.setRunState(runState, def.characterData);
 
       // Fade transition to map scene
       sm.fadeToScene('MapScene', 500);
@@ -740,6 +744,7 @@ export default class CharacterSelectScene extends UIPanel {
       // Fallback: direct to battle (shouldn't happen if MapScene is registered)
       console.warn('MapScene not found, falling back to direct BattleScene');
       const enemyClone = JSON.parse(JSON.stringify(mockEnemy));
+      const playerClone = JSON.parse(JSON.stringify(def.characterData));
       const battleController = new BattleController(playerClone, enemyClone);
       const battleScene = new BattleScene(
         playerClone,

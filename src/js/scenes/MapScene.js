@@ -30,6 +30,8 @@ import AudioManager from '../audio/AudioManager.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
 import mockEnemy from '../data/mockEnemy.js';
+import { createPlayerBattleState, syncBattleResultsToRunState } from '../data/playerStats.js';
+import { createRunState } from '../data/runState.js';
 
 export default class MapScene extends UIPanel {
   constructor() {
@@ -67,9 +69,11 @@ export default class MapScene extends UIPanel {
     /** @type {import('./SceneManager.js').default|null} */
     this._sceneManager = null;
 
-    // ── Player character data (passed from character select) ─
-    /** @type {object|null} */
-    this._playerData = null;
+    // ── Run state and character definition (persist between battles) ─
+    /** @type {object|null} immutable character definition */
+    this._characterDef = null;
+    /** @type {object|null} player run state with statModifiers and currentHp */
+    this._runState = null;
 
     // ── Transition flag ────────────────────────────────
     this._transitioning = false;
@@ -192,11 +196,28 @@ export default class MapScene extends UIPanel {
   }
 
   /**
-   * Set the player character data (passed from CharacterSelectScene).
-   * @param {object} playerData
+   * Set the run state and optionally the character definition.
+   * Stores both the immutable character def and the persistent run state.
+   * When characterDef is null/undefined, the existing _characterDef is preserved.
+   * @param {object} runState — created by createRunState()
+   * @param {object|null} characterDef — immutable character definition from mockCharacter.js
    */
-  setPlayerData(playerData) {
-    this._playerData = playerData;
+  setRunState(runState, characterDef) {
+    this._runState = runState;
+    if (characterDef) {
+      this._characterDef = characterDef;
+    }
+  }
+
+  /**
+   * Set the player character data from post-battle healing.
+   * Updates runState.currentHp from the healed value.
+   * @param {object} healedData — { hp, ... } from BattleScene
+   */
+  setPlayerData(healedData) {
+    if (this._runState && typeof healedData.hp === 'number') {
+      this._runState.currentHp = healedData.hp;
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -334,8 +355,14 @@ export default class MapScene extends UIPanel {
       this._savedTraversalState = this._traversal.serialize();
     }
 
-    // Build player data if not already set
-    const playerData = this._playerData || this._getDefaultPlayerData();
+    // Ensure we have a run state and character def
+    if (!this._runState || !this._characterDef) {
+      this._initDefaultRunState();
+    }
+
+    // Create a fresh player battle state from effective stats + persistent HP
+    const playerBattleState = createPlayerBattleState(this._characterDef, this._runState);
+
     const enemyData = JSON.parse(JSON.stringify(mockEnemy));
 
     // Scale enemy difficulty based on depth and node type
@@ -351,12 +378,12 @@ export default class MapScene extends UIPanel {
 
     // Create battle controller and scene
     const battleController = new BattleController(
-      JSON.parse(JSON.stringify(playerData)),
+      JSON.parse(JSON.stringify(playerBattleState)),
       enemyData
     );
 
     const battleScene = new BattleScene(
-      playerData,
+      playerBattleState,
       enemyData,
       this._assetManager,
       battleController
@@ -366,7 +393,7 @@ export default class MapScene extends UIPanel {
     // Store map context for battle scene (seed for regeneration + node tracking)
     battleScene.userData = {
       mapSeed: this._seed,
-      playerData: this._playerData,
+      runState: this._runState,
       nodeId: node.id,
       nodeType: node.type,
       nodeDepth: node.depth,
@@ -417,20 +444,28 @@ export default class MapScene extends UIPanel {
   }
 
   /**
-   * Get a default player data object if none was passed.
-   * @returns {object}
+   * Initialize a default run state and character def if none was set.
+   * Used as a fallback when MapScene is entered without character select
+   * (e.g., during development/testing).
    */
-  _getDefaultPlayerData() {
-    // Return a reasonable default character
-    return {
+  _initDefaultRunState() {
+    const defaultDef = {
+      id: 'warrior',
       name: 'Adventurer',
       className: 'Warrior',
-      hp: 100,
-      maxHp: 100,
-      mana: { red: 5, blue: 5, green: 5, yellow: 5, purple: 5 },
+      level: 1,
+      portrait: 'warrior',
+      baseStats: {
+        maxHp: 30,
+        startingAttack: 1,
+        startingArmor: 0,
+        startingMana: { red: 0, blue: 5, green: 0, yellow: 0, purple: 0 },
+      },
       skills: [],
       description: 'A brave adventurer.',
     };
+    this._characterDef = defaultDef;
+    this._runState = createRunState(defaultDef);
   }
 
   // ═══════════════════════════════════════════════════════

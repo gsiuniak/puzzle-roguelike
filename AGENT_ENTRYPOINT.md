@@ -72,7 +72,10 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 9. **Old/reference directories are read-only** unless explicitly instructed. See §8.
 10. **Enemy data uses the same structure as character data** (hp, mana, skills, portrait).
 11. **All asset keys are registered in [`main.js` ASSET_MAP](src/js/main.js:35).** Adding a new sprite requires adding it there.
-12. **New characters require:** (a) definition in [`mockCharacter.js`](src/js/data/mockCharacter.js), (b) entry in [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js), (c) asset registration in [`main.js` ASSET_MAP](src/js/main.js:35).
+12. **New characters require:** (a) definition in [`mockCharacter.js`](src/js/data/mockCharacter.js) with `baseStats` structure, (b) entry in [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js), (c) asset registration in [`main.js` ASSET_MAP](src/js/main.js:35).
+13. **Character definitions are immutable.** Never mutate `baseStats` during gameplay. Run modifiers go in `runState.statModifiers` via [`playerStats.applyRunModifier()`](src/js/data/playerStats.js).
+14. **All stat math goes through [`playerStats.js`](src/js/data/playerStats.js).** Use `getEffectivePlayerStats()` to resolve stats, `createPlayerBattleState()` for battle init, `syncBattleResultsToRunState()` for persistence. Never scatter `base + modifier` math outside this module.
+15. **Rewards modify runState.statModifiers, never baseStats.** Use `applyRunModifier(runState, 'startingMana.purple', 2)` pattern.
 
 ---
 
@@ -172,9 +175,11 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 
 | File | Exports | Content |
 |------|---------|---------|
-| [`src/js/data/mockCharacter.js`](src/js/data/mockCharacter.js) | `warriorCharacter`, `mageCharacter`, `witchDoctorCharacter`, default: `mockCharacter` | Character definitions: id, name, className, hp, maxHp, attack, armor, mana pools, skills[]. **Single source of truth for character gameplay data.** |
+| [`src/js/data/mockCharacter.js`](src/js/data/mockCharacter.js) | `warriorCharacter`, `mageCharacter`, `witchDoctorCharacter`, default: `mockCharacter` | **Immutable character definitions.** Each has `baseStats` (maxHp, startingMana, startingArmor, startingAttack) + skills[]. Never mutated during gameplay. |
 | [`src/js/data/mockEnemy.js`](src/js/data/mockEnemy.js) | `mockEnemy` (default) | Goblin enemy: same structure as character. HP scaled by MapScene for elite/boss. |
 | [`src/js/data/characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js) | `characterSelectDefinitions` (default) | UI metadata for CharacterSelectScene: portraitKey, splashKey, auraColor, order, enabled. References characterData from mockCharacter.js. |
+| [`src/js/data/playerStats.js`](src/js/data/playerStats.js) | `getEffectivePlayerStats`, `createPlayerBattleState`, `syncBattleResultsToRunState`, `createDefaultStatModifiers`, `applyRunModifier` | **Centralized stat resolution.** Resolves baseStats + statModifiers -> effectiveStats -> battle state. Single source of truth for all stat math. |
+| [`src/js/data/runState.js`](src/js/data/runState.js) | `createRunState`, `serializeRunState`, `deserializeRunState` | **Run state factory.** Tracks characterId, currentHp (persistent), statModifiers (persistent run progression), relics/upgrades/rewards placeholders. |
 | [`src/js/game/TileTypes.js`](src/js/game/TileTypes.js) | `TILE_TYPES`, `MANA_COLORS`, constants, helpers | Tile type definitions with spawn weights, particle colors, board dimensions. |
 
 ---
@@ -189,7 +194,7 @@ When given a task, locate the owning system using this table:
 | "Tile matching wrong" | [`MatchResolver.analyzeMatches()`](src/js/game/MatchResolver.js:109) | [`BoardModel.findAllConnectedMatches()`](src/js/game/BoardModel.js:239) |
 | "Scene transition wrong" | [`SceneManager.switchTo()`](src/js/scenes/SceneManager.js:105) | Scene `onEnter`/`onExit` methods |
 | "Map node highlight wrong" | [`MapRenderer`](src/js/map/MapRenderer.js) | [`MapTraversalController`](src/js/map/MapTraversalController.js) state queries |
-| "Character select data wrong" | [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js) | [`mockCharacter.js`](src/js/data/mockCharacter.js) |
+| "Character select data wrong" | [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js) | [`mockCharacter.js` baseStats](src/js/data/mockCharacter.js) |
 | "Audio not playing" | [`AudioManager._play()`](src/js/audio/AudioManager.js:300) | [`SoundConfig.js`](src/js/audio/SoundConfig.js), skill `.sound` field |
 | "UI overlaps / layout broken" | [`UIElement` sizing model](src/js/ui/UIElement.js) | The specific view/scene's `buildHierarchy()` / `layoutChildren()` |
 | "Enemy AI behavior" | [`EnemyAI.findBestSkill()` / `findBestSwap()`](src/js/game/EnemyAI.js) | [`EnemyAI._scoreBoard()`](src/js/game/EnemyAI.js:142) |
@@ -203,6 +208,9 @@ When given a task, locate the owning system using this table:
 | "Board rendering wrong" | [`BoardPlaceholder`](src/js/ui/BoardPlaceholder.js) | [`BattleScene.updateFromController()`](src/js/ui/BattleScene.js:481) |
 | "Combat log issues" | [`CombatLog`](src/js/game/CombatLog.js) | [`BattleScene.updateFromController()`](src/js/ui/BattleScene.js:481) |
 | "Post-battle reward/overlay issues" | [`RewardOverlay`](src/js/ui/RewardOverlay.js) | [`BattleScene._handleKeyDown()`](src/js/ui/BattleScene.js:448) (ESC dismiss), BattleScene `update()` (GAME_OVER → show) |
+| "Stat calculation wrong" | [`playerStats.getEffectivePlayerStats()`](src/js/data/playerStats.js) | [`runState.js`](src/js/data/runState.js), [`mockCharacter.js` baseStats](src/js/data/mockCharacter.js) |
+| "Run modifier not persisting" | [`playerStats.applyRunModifier()`](src/js/data/playerStats.js) | [`runState.js` statModifiers](src/js/data/runState.js) |
+| "Battle starts with wrong HP/mana" | [`playerStats.createPlayerBattleState()`](src/js/data/playerStats.js) | [`syncBattleResultsToRunState()`](src/js/data/playerStats.js), MapScene `_transitionToBattle()` |
 | "Performance issues" | [`GameLoop` delta time](src/js/engine/GameLoop.js) | [`CanvasApp` DPR handling](src/js/engine/CanvasApp.js), AssetManager pre-scaling |
 
 ---
@@ -215,9 +223,10 @@ main.js init()
   → TitleScreen (any input)
   → CharacterSelectScene.onEnter()
   → characterSelectDefinitions[] (filtered enabled, sorted by order)
-  → _selectIndex() → _updateInfoPanel() (rebuilds from characterData)
+  → _selectIndex() → _updateInfoPanel() (rebuilds from characterData.baseStats)
   → _chooseHero()
-     → deep-clone characterData → MapScene.setPlayerData()
+     → createRunState(def.characterData) → fresh runState with zero statModifiers
+     → MapScene.setRunState(runState, characterDef)
      → MapScene.setSeed('run_' + Date.now())
      → fadeToScene('MapScene')
 ```
@@ -231,11 +240,14 @@ MapScene.onEnter()
   → click reachable node → _traversal.moveTo(nodeId)
   → _onNodeEntered(node)
      → if battle/elite/boss: _transitionToBattle(node)
-        → deep-clone playerData, scale enemy HP for elite/boss
-        → new BattleController(playerData, enemyData)
+        → createPlayerBattleState(characterDef, runState) → fresh battle state
+        → scale enemy HP for elite/boss
+        → new BattleController(playerBattleState, enemyData)
         → new BattleScene(...) with _onBattleComplete callback
         → fadeToScene('BattleScene')
   → [on return from battle]
+     → syncBattleResultsToRunState(runState, playerState) — persists currentHp
+     → _applyPostBattleHealing(runState, playerState) — 30% HP heal
      → _handleBattleComplete() sets _needsCompleteAndReveal flag
      → onEnter: completeCurrentAndRevealNext()
      → re-wire input, ready for next node click
@@ -265,10 +277,41 @@ Per-frame: BattleScene.update(dt)
      → Battle scene remains visible behind overlay
      → All battle input blocked
      → ESC → RewardOverlay.dismiss()
+        → syncBattleResultsToRunState(runState, playerState)
+        → _applyPostBattleHealing(runState, playerState)
         → _onBattleComplete({result, nodeId})
         → MapScene._handleBattleComplete() sets flag
         → fadeToScene('MapScene')
 ```
+
+### Stat Architecture Flow (NEW)
+```
+Character Definition (immutable template)
+  mockCharacter.js: { id, baseStats: { maxHp, startingMana, startingArmor, startingAttack }, skills, ... }
+        +
+Run State (persistent progression)
+  runState.js: { characterId, currentHp, statModifiers: { maxHp, startingMana: {...}, ... }, relics, ... }
+        =
+Effective Stats (computed each battle via playerStats.js)
+  getEffectivePlayerStats(characterDef, runState)
+        +
+  runState.currentHp
+        =
+Battle State (fresh each battle via playerStats.js)
+  createPlayerBattleState(characterDef, runState)
+        |
+  [Battle plays out, playerState mutated by BattleController]
+        |
+  syncBattleResultsToRunState(runState, playerState) — only currentHp persists back
+```
+
+**Key rules:**
+- Character definitions are **immutable** — never mutate `baseStats`
+- Run modifiers (`statModifiers`) are **additive** — rewards/relics/upgrades modify these, not base stats
+- Effective stats are resolved through **centralized helpers** only — no scattered `base + modifier` math
+- Battle state is **temporary** — created fresh each battle; mana/armor/attack reset from effective stats
+- Only `currentHp` syncs back to run state after battle; mana/armor/attack are reset each battle
+- Rewards use `applyRunModifier(runState, statPath, amount)` to modify run statModifiers
 
 ### Skill Resolution Flow
 ```
@@ -300,14 +343,20 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 7. **Local-lane constraint:** Connections between consecutive depths may only move vertically by at most 1 lane (|source.lane − target.lane| ≤ 1). Node counts are smoothed (±1 between depths) to guarantee valid targets exist. Edge validation enforces this at generation time.
 8. **MapView is shared** between MapScene (fullscreen) and BattleScene (overlay via 'm' key).
 9. **BattleScene is created on demand** (registered lazily by MapScene), not at boot.
-10. **MapScene is a singleton** — graph, renderer, and traversal survive scene switches.
+10. **MapScene is a singleton** — graph, renderer, traversal, `_runState`, and `_characterDef` all survive scene switches.
 11. **Enemy difficulty scaling** happens in MapScene: elite = 1.5× HP, boss = 2.5× HP.
 12. **Music transitions are state-driven** in BattleScene: battle_theme on PLAYER/ENEMY_TURN, stopped on GAME_OVER.
 13. **All one-shot visual/SFX flags** are read-and-cleared in `BattleController.getState()` to prevent double-firing.
-14. **Player data is deep-cloned** at character select and battle entry to avoid mutating definitions.
-15. **Canvas uses DPR-aware rendering** — all layout is in CSS pixels; context is pre-scaled.
-16. **Post-battle flow uses RewardOverlay** — GAME_OVER does NOT immediately return to MapScene. Instead, RewardOverlay appears over the (still-visible) BattleScene. ESC dismisses the overlay and triggers the MapScene transition. This allows future reward/loot/level-up screens to be inserted without modifying battle logic.
-17. **Enemy AI overrides are dispatch-based, not conditional.** Custom AI is registered in [`enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) as handler functions keyed by `aiBehavior`. [`customEnemyAi.js`](src/js/game/customEnemyAi.js) orchestrates: try custom → fallback to standard `EnemyAI`. Enemy definitions link via optional `aiBehavior` field. No `if enemy.name === "..."` checks exist in shared AI or battle loop code.
+14. **Player stat architecture uses three-layer separation** (NEW):
+    - **Layer 1 — Character definitions** ([`mockCharacter.js`](src/js/data/mockCharacter.js)): Immutable `baseStats` templates. Never mutated.
+    - **Layer 2 — Run state** ([`runState.js`](src/js/data/runState.js)): Persistent `statModifiers` that accumulate from rewards/relics/upgrades. `currentHp` persists between battles.
+    - **Layer 3 — Battle state**: Fresh instance created each battle via [`createPlayerBattleState()`](src/js/data/playerStats.js). Mana/armor/attack reset from effective stats each battle.
+15. **Stat resolution is centralized** in [`playerStats.js`](src/js/data/playerStats.js). `getEffectivePlayerStats()` is the single source for computing baseStats + statModifiers. No scattered math elsewhere.
+16. **Rewards modify run modifiers, not base stats.** Use `applyRunModifier(runState, statPath, amount)`. Example: `applyRunModifier(runState, 'startingMana.purple', 2)`.
+17. **Only currentHp syncs back** from battle state to run state via `syncBattleResultsToRunState()`. Battle mana/armor/attack/temporary effects do NOT persist.
+18. **Canvas uses DPR-aware rendering** — all layout is in CSS pixels; context is pre-scaled.
+19. **Post-battle flow uses RewardOverlay** — GAME_OVER does NOT immediately return to MapScene. Instead, RewardOverlay appears over the (still-visible) BattleScene. ESC dismisses the overlay and triggers the MapScene transition.
+20. **Enemy AI overrides are dispatch-based, not conditional.** Custom AI is registered in [`enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) as handler functions keyed by `aiBehavior`. [`customEnemyAi.js`](src/js/game/customEnemyAi.js) orchestrates: try custom → fallback to standard `EnemyAI`. Enemy definitions link via optional `aiBehavior` field.
 
 ---
 
