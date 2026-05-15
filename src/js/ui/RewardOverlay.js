@@ -7,37 +7,96 @@
  * Visual layering:
  *   1. Battle scene remains visible underneath (non-interactive)
  *   2. Semi-transparent black fullscreen backdrop
- *   3. Centered reward panel (reward_screen_temp_panel)
+ *   3. Victory title image positioned above the main panel
+ *   4. Centered reward panel (reward_screen_temp_panel) containing:
+ *      - Three reward option containers in a row
+ *      - Centered Claim Reward button
+ *      - Centered Skip Rewards button near bottom
  *
  * Lifecycle:
  *   show()     — activate the overlay (called by BattleScene on GAME_OVER)
  *   dismiss()  — deactivate and fire onDismiss callback
  *   update(dt) — advance animations (placeholder for future cross-fade transition)
- *   render(ctx, w, h) — draw backdrop + reward panel
+ *   render(ctx, w, h) — draw backdrop + reward UI tree
  *   isActive() — true while the overlay is visible
  *   reset()    — force-reset to inactive (cleanup on scene exit)
  *
  * Input behavior:
- *   - Blocks all gameplay input while active
+ *   - Blocks all gameplay input while active (handled by BattleScene)
  *   - ESC key advances to next state (triggers dismiss → MapScene transition)
  *
  * Architecture:
- *   This is designed to be a reusable overlay structure. Future reward types
- *   (level-up choices, loot selection, event dialogs) can extend or compose
- *   this pattern. The overlay owns its own rendering and input handling,
- *   and notifies the parent scene via onDismiss when the player is done.
- *
- *   Currently a minimal implementation — no reward selection logic.
- *   Will potentially handle some sort of rewards later.
+ *   The overlay uses the UI framework (UIContainer/UIPanel/UIImage) for the
+ *   primary panel's internal layout (rewards row + buttons). The dark backdrop
+ *   and victory title are drawn directly via raw Canvas 2D for simpler
+ *   absolute positioning. Reward option containers are UIPanels with
+ *   rewards_option_panel backgrounds — extensible for future content.
  */
 
-// ── Layout constants ──────────────────────────────────────
+import UIContainer from './UIContainer.js';
+import UIPanel from './UIPanel.js';
+import UIImage from './UIImage.js';
+
+// ═══════════════════════════════════════════════════════════
+// Tunable layout constants
+// ═══════════════════════════════════════════════════════════
+
 /** Backdrop alpha for the dark overlay covering the entire canvas */
 const BACKDROP_ALPHA = 0.72;
+
 /** Maximum fraction of canvas width the reward panel occupies */
 const PANEL_MAX_WIDTH_FRAC = 0.55;
+
 /** Maximum fraction of canvas height the reward panel occupies */
 const PANEL_MAX_HEIGHT_FRAC = 0.70;
+
+/**
+ * Vertical offset for the main panel from the canvas center.
+ * Positive = shifted down, negative = shifted up.
+ */
+const MAIN_PANEL_Y_OFFSET = 10;
+
+/**
+ * Vertical offset for the victory title relative to the top of the primary panel.
+ * Negative = title sits above / overlaps the panel top edge.
+ */
+const REWARD_TITLE_Y_OFFSET = -28;
+
+/**
+ * Width of the victory title as a fraction of the primary panel width.
+ */
+const TITLE_WIDTH_FRAC = 0.78;
+
+/** Primary panel internal padding */
+const PRIMARY_PANEL_PADDING = { top: 28, right: 36, bottom: 24, left: 36 };
+
+/** Gap between sections inside the primary panel (rewards row / claim button / skip button) */
+const PRIMARY_PANEL_GAP = 18;
+
+/** Gap between reward option panels in the row */
+const REWARD_OPTION_SPACING = 20;
+
+/** Width of each reward option panel as a fraction of the primary panel's content width */
+const REWARD_OPTION_WIDTH_FRAC = 0.28;
+
+/** Height of the Claim Reward button (contain fit mode within) */
+const CLAIM_BUTTON_HEIGHT = 56;
+
+/** Width of the Claim Reward button as a fraction of the primary panel's content width */
+const CLAIM_BUTTON_WIDTH_FRAC = 0.50;
+
+/**
+ * Extra top margin for the Skip Rewards button.
+ * Tweak this to adjust the skip button's vertical position relative to the
+ * element above it (claim button).
+ */
+const SKIP_REWARDS_BUTTON_Y_OFFSET = 4;
+
+/** Height of the Skip Rewards button (contain fit mode within) */
+const SKIP_BUTTON_HEIGHT = 32;
+
+/** Width of the Skip Rewards button as a fraction of the primary panel's content width */
+const SKIP_BUTTON_WIDTH_FRAC = 0.22;
 
 // ── Overlay state enum ────────────────────────────────────
 /** @readonly @enum {string} */
@@ -75,6 +134,20 @@ export default class RewardOverlay {
 
     /** @type {boolean} whether dismiss has already been triggered */
     this._dismissTriggered = false;
+
+    // ── UI tree references (built once) ──
+    /** @type {UIContainer} primary panel container — parent of all reward UI */
+    this._primaryPanel = null;
+    /** @type {UIContainer} rewards row container */
+    this._rewardsRow = null;
+    /** @type {UIPanel[]} three reward option containers */
+    this._rewardOptions = [];
+    /** @type {UIImage} claim reward button */
+    this._claimButton = null;
+    /** @type {UIImage} skip rewards button */
+    this._skipButton = null;
+
+    this._buildHierarchy();
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -134,7 +207,6 @@ export default class RewardOverlay {
     if (this._state !== OverlayState.ACTIVE) return;
     this._timer += dt;
     // TODO: Future transition animations will interpolate based on _timer.
-    // For now there is no transition/cross-fade — the overlay appears instantly.
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -143,9 +215,12 @@ export default class RewardOverlay {
 
   /**
    * Render the reward overlay on top of the battle scene.
+   *
    * Draws in this order:
-   *   1. Semi-transparent black fullscreen backdrop
-   *   2. Centered reward panel image
+   *   1. Semi-transparent black fullscreen backdrop (raw canvas)
+   *   2. Victory title image centered above the panel (raw canvas)
+   *   3. Primary panel background image (raw canvas)
+   *   4. Panel children via UI framework (rewards row, claim button, skip button)
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} canvasW — full canvas width
@@ -154,41 +229,21 @@ export default class RewardOverlay {
   render(ctx, canvasW, canvasH) {
     if (this._state !== OverlayState.ACTIVE) return;
 
-    // TODO: When transition animation is added, interpolate alpha based on _timer.
-
-    // 1. Semi-transparent black fullscreen backdrop
+    // ── 1. Semi-transparent black fullscreen backdrop ──
     ctx.save();
     ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA})`;
     ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.restore();
 
-    // 2. Centered reward panel
-    this._renderPanel(ctx, canvasW, canvasH);
-  }
+    // ── 2. Calculate primary panel dimensions from image aspect ratio ──
+    const panelImg = this._assetManager
+      ? this._assetManager.get('reward_screen_temp_panel')
+      : null;
+    if (!panelImg || !panelImg.width || !panelImg.height) return;
 
-  // ═══════════════════════════════════════════════════════════
-  // Private: panel rendering
-  // ═══════════════════════════════════════════════════════════
-
-  /**
-   * Draw the reward_screen_temp_panel centered on screen.
-   * Scales to fit within PANEL_MAX_WIDTH_FRAC × PANEL_MAX_HEIGHT_FRAC
-   * of the canvas, maintaining the image's natural aspect ratio.
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {number} canvasW
-   * @param {number} canvasH
-   */
-  _renderPanel(ctx, canvasW, canvasH) {
-    if (!this._assetManager) return;
-
-    const img = this._assetManager.get('reward_screen_temp_panel');
-    if (!img || !img.complete || !img.width || !img.height) return;
-
-    // Compute target size: fit within fraction of canvas, maintain aspect ratio
     const maxW = canvasW * PANEL_MAX_WIDTH_FRAC;
     const maxH = canvasH * PANEL_MAX_HEIGHT_FRAC;
-    const imgAspect = img.width / img.height;
+    const imgAspect = panelImg.width / panelImg.height;
 
     let panelW, panelH;
     if (maxW / maxH > imgAspect) {
@@ -201,13 +256,174 @@ export default class RewardOverlay {
       panelH = panelW / imgAspect;
     }
 
-    // Center on screen
-    const px = Math.floor((canvasW - panelW) / 2);
-    const py = Math.floor((canvasH - panelH) / 2);
+    const panelX = Math.floor((canvasW - panelW) / 2);
+    const panelY = Math.floor((canvasH - panelH) / 2) + MAIN_PANEL_Y_OFFSET;
 
+    // ── 3. Victory title image — centered above the primary panel ──
+    if (this._assetManager) {
+      const titleImg = this._assetManager.get('reward_victory_text');
+      if (titleImg && titleImg.width && titleImg.height) {
+        const titleW = panelW * TITLE_WIDTH_FRAC;
+        const titleH = titleW * (titleImg.height / titleImg.width);
+        const titleX = Math.floor(panelX + (panelW - titleW) / 2);
+        const titleY = Math.floor(panelY + REWARD_TITLE_Y_OFFSET);
+
+        ctx.save();
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(
+          titleImg,
+          titleX,
+          titleY,
+          Math.ceil(titleW),
+          Math.ceil(titleH),
+        );
+        ctx.restore();
+      }
+    }
+
+    // ── 4. Primary panel background ──
     ctx.save();
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(img, px, py, Math.ceil(panelW), Math.ceil(panelH));
+    ctx.drawImage(
+      panelImg,
+      panelX,
+      panelY,
+      Math.ceil(panelW),
+      Math.ceil(panelH),
+    );
     ctx.restore();
+
+    // ── 5. Layout and render panel children via UI framework ──
+    this._renderPanelChildren(ctx, panelX, panelY, panelW, panelH);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Private: hierarchy construction
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Build the UI framework tree for the primary panel's contents.
+   *
+   * Hierarchy:
+   *   primaryPanel (UIContainer, column)
+   *     rewardsRow (UIContainer, row)
+   *       rewardOptionContainer (UIPanel with rewards_option_panel) × 3
+   *     claimButton (UIImage with rewards_button_confirm)
+   *     skipButton (UIImage with rewards_button_skip)
+   */
+  _buildHierarchy() {
+    // ── Primary panel container ─────────────────────────
+    this._primaryPanel = new UIContainer();
+    this._primaryPanel.setStyle({
+      direction: 'column',
+      alignItems: 'center',
+      justifyContent: 'start',
+      gap: PRIMARY_PANEL_GAP,
+      padding: PRIMARY_PANEL_PADDING,
+    });
+
+    // ── Rewards row — 3 reward option containers ────────
+    this._rewardsRow = new UIContainer();
+    this._rewardsRow.setStyle({
+      direction: 'row',
+      gap: REWARD_OPTION_SPACING,
+      justifyContent: 'center',
+      alignItems: 'center',
+    });
+
+    this._rewardOptions = [];
+    for (let i = 0; i < 3; i++) {
+      const option = new UIPanel();
+      option.setStyle({
+        backgroundAssetKey: 'rewards_option_panel',
+        assetManager: this._assetManager,
+        // width/height set dynamically in _renderPanelChildren based on
+        // panel content dimensions and reward option image aspect ratio.
+      });
+      // userData for future identification (selection state, tooltip anchor, etc.)
+      option.userData = { rewardIndex: i };
+      this._rewardOptions.push(option);
+      this._rewardsRow.addChild(option);
+    }
+
+    this._primaryPanel.addChild(this._rewardsRow);
+
+    // ── Claim Reward button ─────────────────────────────
+    this._claimButton = new UIImage('rewards_button_confirm', this._assetManager);
+    this._claimButton.setStyle({
+      fitMode: 'contain',
+      imageAlignH: 'center',
+      imageAlignV: 'center',
+      // width/height set dynamically in _renderPanelChildren
+    });
+    this._claimButton.userData = { action: 'claim' };
+    this._primaryPanel.addChild(this._claimButton);
+
+    // ── Skip Rewards button ─────────────────────────────
+    this._skipButton = new UIImage('rewards_button_skip', this._assetManager);
+    this._skipButton.setStyle({
+      fitMode: 'contain',
+      imageAlignH: 'center',
+      imageAlignV: 'center',
+      margin: { top: SKIP_REWARDS_BUTTON_Y_OFFSET },
+      // width/height set dynamically in _renderPanelChildren
+    });
+    this._skipButton.userData = { action: 'skip' };
+    this._primaryPanel.addChild(this._skipButton);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Private: panel children layout & render
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Size, layout, and render the primary panel's children using the UI
+   * framework's flexbox layout system.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} panelX
+   * @param {number} panelY
+   * @param {number} panelW
+   * @param {number} panelH
+   */
+  _renderPanelChildren(ctx, panelX, panelY, panelW, panelH) {
+    // Set the primary panel's rect for layout calculations
+    this._primaryPanel.rect.x = panelX;
+    this._primaryPanel.rect.y = panelY;
+    this._primaryPanel.rect.w = panelW;
+    this._primaryPanel.rect.h = panelH;
+
+    // ── Compute reward option panel sizes ───────────────
+    const padding = this._primaryPanel._resolvePadding();
+    const contentW = panelW - padding.left - padding.right;
+
+    const optionW = contentW * REWARD_OPTION_WIDTH_FRAC;
+
+    // Height from option panel image aspect ratio (with fallback)
+    let optionH = optionW * 1.4;
+    if (this._assetManager) {
+      const optImg = this._assetManager.get('rewards_option_panel');
+      if (optImg && optImg.width && optImg.height) {
+        optionH = optionW * (optImg.height / optImg.width);
+      }
+    }
+
+    for (const opt of this._rewardOptions) {
+      opt.width = Math.floor(optionW);
+      opt.height = Math.floor(optionH);
+    }
+
+    // ── Compute button sizes ────────────────────────────
+    this._claimButton.width = Math.floor(contentW * CLAIM_BUTTON_WIDTH_FRAC);
+    this._claimButton.height = CLAIM_BUTTON_HEIGHT;
+
+    this._skipButton.width = Math.floor(contentW * SKIP_BUTTON_WIDTH_FRAC);
+    this._skipButton.height = SKIP_BUTTON_HEIGHT;
+
+    // ── Run flexbox layout ──────────────────────────────
+    this._primaryPanel.layoutChildren();
+
+    // ── Render children (skips panel background — drawn manually above) ──
+    this._primaryPanel.renderChildren(ctx);
   }
 }

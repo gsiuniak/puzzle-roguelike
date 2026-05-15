@@ -169,7 +169,7 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 | [`src/js/ui/TileParticleEffect.js`](src/js/ui/TileParticleEffect.js) | `TileParticleEffect` | Particle burst for tile destruction and conversion effects |
 | [`src/js/ui/ScreenShake.js`](src/js/ui/ScreenShake.js) | `ScreenShake` | Screen shake on damage, triggered by shakeIntensity from BattleController |
 | [`src/js/ui/AuraStrandsEffect.js`](src/js/ui/AuraStrandsEffect.js) | `AuraStrandsEffect` | Animated aura strands on character select screen |
-| [`src/js/ui/RewardOverlay.js`](src/js/ui/RewardOverlay.js) | `RewardOverlay` | **Post-battle reward screen overlay.** Renders above BattleScene with semi-transparent black backdrop + centered reward panel (`reward_screen_temp_panel`). Blocks all gameplay input. ESC dismisses → transitions to MapScene. Designed to be reusable for future reward/loot/event overlays (level-up choices, post-battle rewards). |
+| [`src/js/ui/RewardOverlay.js`](src/js/ui/RewardOverlay.js) | `RewardOverlay` | **Post-battle reward screen overlay.** Renders above BattleScene with semi-transparent black backdrop (`BACKDROP_ALPHA`), victory title image (`reward_victory_text`), and centered primary reward panel (`reward_screen_temp_panel`). Panel contents use the UI framework (UIContainer/UIPanel/UIImage): three reward option containers (`rewards_option_panel`), centered Claim Reward button (`rewards_button_confirm`), and centered Skip Rewards button (`rewards_button_skip`) with tunable vertical offset. All layout values are named constants at the top of the file. Blocks all gameplay input. ESC dismisses → transitions to MapScene. Designed to be reusable for future reward/loot/event overlays. |
 
 ### 4.7 Data Definitions
 
