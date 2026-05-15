@@ -9,6 +9,20 @@
  *   - undefined / null / missing → uses standard EnemyAI
  *   - e.g. "necromancer" → looks up enemyAiOverrides.necromancer
  *   - If key is present but no handler exists → warns + falls back to standard AI
+ *
+ * === music ===
+ * Optional music metadata for the encounter.
+ *   - trackKey: SoundConfig key for the battle music track (default: 'battle_theme')
+ *   - persistAfterBattle: whether the track persists across scenes after battle ends
+ *   - isSpecialTrack: when true, music stops after battle and does NOT carry into rewards/map
+ *
+ *   For normal/default battles:
+ *     music: { trackKey: 'battle_theme', persistAfterBattle: true, isSpecialTrack: false }
+ *
+ *   For boss/elite/special encounters:
+ *     music: { trackKey: 'boss_theme', persistAfterBattle: false, isSpecialTrack: true }
+ *
+ *   When music is undefined/null, the default normal battle music is used.
  */
 const mockEnemy = {
   name: 'Goblin',
@@ -27,6 +41,11 @@ const mockEnemy = {
     purple: 0,
   },
   portrait: 'goblin', // maps to 'portrait_goblin' asset key
+  music: {
+    trackKey: 'battle_theme',
+    persistAfterBattle: true,
+    isSpecialTrack: false,
+  },
   skills: [
     {
       name: 'Slash',

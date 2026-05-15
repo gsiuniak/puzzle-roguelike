@@ -147,6 +147,9 @@ export default class MapScene extends UIPanel {
     // ── Music ────────────────────────────────────────
     // MapScene does not start music — it keeps whatever
     // is currently playing (or silence if nothing is).
+    // In persistent battle music mode, ensure normal battle
+    // music is playing at the reduced background volume.
+    AudioManager.onRewardsOrMapEntered();
 
     // ── Wire input ────────────────────────────────────
     this._transitioning = false;
@@ -391,12 +394,19 @@ export default class MapScene extends UIPanel {
     battleScene.setAudioManager(sm.audioManager);
 
     // Store map context for battle scene (seed for regeneration + node tracking)
+    // Also pass music metadata so BattleScene can use the correct track.
+    const music = enemyData.music || {
+      trackKey: 'battle_theme',
+      persistAfterBattle: true,
+      isSpecialTrack: false,
+    };
     battleScene.userData = {
       mapSeed: this._seed,
       runState: this._runState,
       nodeId: node.id,
       nodeType: node.type,
       nodeDepth: node.depth,
+      music,
     };
 
     // Wire onBattleComplete callback so BattleScene reports back

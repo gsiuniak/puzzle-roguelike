@@ -204,6 +204,10 @@ export default class RewardOverlay {
     this._isResolvingReward = false;
     this._hoveredButton = null;
     AudioManager.playSfx('sfx_rewards_open');
+    // Notify the audio system that we're entering the rewards screen.
+    // In persistent battle music mode this ensures normal battle music
+    // is playing at the reduced background volume.
+    AudioManager.onRewardsOrMapEntered();
   }
 
   /**

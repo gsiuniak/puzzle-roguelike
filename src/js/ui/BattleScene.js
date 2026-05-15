@@ -11,6 +11,7 @@ import RewardOverlay from './RewardOverlay.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
 import { syncBattleResultsToRunState } from '../data/playerStats.js';
+import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
 
 /**
  * BattleScene — full battle layout with three columns.
@@ -974,6 +975,15 @@ export default class BattleScene extends UIPanel {
   /**
    * React to battle state transitions for music playback.
    * Only fires on state *change*, not every frame.
+   *
+   * When ENABLE_PERSISTENT_BATTLE_MUSIC is true:
+   *   - Uses the AudioManager battle music lifecycle API.
+   *   - Normal battle music persists across scenes (battle → rewards → map).
+   *   - Special encounter music stops after battle.
+   *
+   * When ENABLE_PERSISTENT_BATTLE_MUSIC is false:
+   *   - Original behavior: music stops on GAME_OVER, restarts each battle.
+   *
    * @param {string} currentState — BattleState enum value
    */
   _updateMusicFromState(currentState) {
@@ -983,6 +993,19 @@ export default class BattleScene extends UIPanel {
     if (currentState === this._previousBattleState) return;
     this._previousBattleState = currentState;
 
+    if (ENABLE_PERSISTENT_BATTLE_MUSIC) {
+      this._updateMusicFromState_persistent(currentState);
+    } else {
+      this._updateMusicFromState_original(currentState);
+    }
+  }
+
+  /**
+   * Original music behavior (ENABLE_PERSISTENT_BATTLE_MUSIC = false).
+   * Music stops on GAME_OVER, restarts fresh each battle.
+   * @param {string} currentState
+   */
+  _updateMusicFromState_original(currentState) {
     switch (currentState) {
       case BattleState.PLAYER_TURN:
       case BattleState.ENEMY_TURN:
@@ -999,6 +1022,45 @@ export default class BattleScene extends UIPanel {
         // TURN_INTRO, RESOLVING, SWAPPING, TARGETING — no music change
         break;
     }
+  }
+
+  /**
+   * Persistent music behavior (ENABLE_PERSISTENT_BATTLE_MUSIC = true).
+   * Normal battle music continues across scenes; special music stops after battle.
+   * @param {string} currentState
+   */
+  _updateMusicFromState_persistent(currentState) {
+    const music = this._getMusicInfo();
+
+    switch (currentState) {
+      case BattleState.PLAYER_TURN:
+      case BattleState.ENEMY_TURN:
+        // Start/restore battle music via lifecycle API
+        this._audioManager.startBattleMusic(music.trackKey, music.isSpecialTrack);
+        break;
+
+      case BattleState.GAME_OVER:
+        // End battle — stop special music, or dim normal music
+        this._audioManager.onBattleEnd(music.isSpecialTrack);
+        break;
+
+      default:
+        // TURN_INTRO, RESOLVING, SWAPPING, TARGETING — no music change
+        break;
+    }
+  }
+
+  /**
+   * Resolve music metadata for the current battle.
+   * Reads from userData.music (set by MapScene) with a fallback to the default.
+   * @returns {{ trackKey: string, isSpecialTrack: boolean }}
+   */
+  _getMusicInfo() {
+    const music = (this.userData && this.userData.music) || {};
+    return {
+      trackKey: music.trackKey || DEFAULT_BATTLE_MUSIC_KEY,
+      isSpecialTrack: music.isSpecialTrack || false,
+    };
   }
 
   /**

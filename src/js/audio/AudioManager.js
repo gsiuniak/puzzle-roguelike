@@ -19,6 +19,13 @@
  */
 
 import { AudioCategory } from './SoundConfig.js';
+import {
+  ENABLE_PERSISTENT_BATTLE_MUSIC,
+  DEFAULT_BATTLE_MUSIC_KEY,
+  NORMAL_BATTLE_MUSIC_VOLUME,
+  BACKGROUND_BATTLE_MUSIC_VOLUME,
+  MUSIC_FADE_DURATION,
+} from './BattleMusicConfig.js';
 
 class _AudioManager {
   constructor() {
@@ -68,6 +75,20 @@ class _AudioManager {
     this._uiVolume = 1.0;
     this._ambientVolume = 1.0;
     this._muted = false;
+
+    // ── Persistent battle music state ──────────────────
+    /**
+     * Whether battle music has been started via the battle music lifecycle API.
+     * @type {boolean}
+     */
+    this._battleMusicActive = false;
+
+    /**
+     * Whether the currently active battle music is a special (non-persistent) track.
+     * Special tracks are stopped after battle instead of being carried into rewards/map.
+     * @type {boolean}
+     */
+    this._isSpecialBattleMusic = false;
   }
 
   // ── Initialization ────────────────────────────────────
@@ -462,6 +483,135 @@ class _AudioManager {
    */
   getCurrentMusicKey() {
     return this._currentMusicKey;
+  }
+
+  // ── Battle Music Lifecycle (persistent battle music) ───
+
+  /**
+   * Start battle music for a combat encounter.
+   *
+   * Behavior depends on track type:
+   *   - Special tracks (boss, elite, etc.): Always start fresh.
+   *     Previous music (if any) is stopped.
+   *   - Normal/default tracks: If the same normal track is already
+   *     playing (e.g., carried over from a previous battle), just
+   *     fade volume back to full. Otherwise start fresh.
+   *
+   * When ENABLE_PERSISTENT_BATTLE_MUSIC is false, this delegates
+   * to the standard playMusic() call.
+   *
+   * @param {string}  trackKey        — SoundConfig key for the music track
+   * @param {boolean} [isSpecialTrack=false] — true if this track should NOT persist after battle
+   */
+  startBattleMusic(trackKey, isSpecialTrack = false) {
+    if (!ENABLE_PERSISTENT_BATTLE_MUSIC) {
+      // Original behavior: just play the music
+      this.playMusic(trackKey, { fadeIn: MUSIC_FADE_DURATION });
+      return;
+    }
+
+    if (isSpecialTrack) {
+      // Special music — always start fresh
+      this.stopMusic(0);
+      this.playMusic(trackKey, { fadeIn: MUSIC_FADE_DURATION });
+      this._battleMusicActive = true;
+      this._isSpecialBattleMusic = true;
+      return;
+    }
+
+    // Normal (default) battle music
+    if (this._currentMusicKey === trackKey && this._battleMusicActive) {
+      // Same normal track already playing — just restore full volume
+      this.fadeMusic(NORMAL_BATTLE_MUSIC_VOLUME, MUSIC_FADE_DURATION);
+      this._isSpecialBattleMusic = false;
+      return;
+    }
+
+    // Start fresh (first battle or different normal track)
+    this.playMusic(trackKey, { fadeIn: MUSIC_FADE_DURATION });
+    this._battleMusicActive = true;
+    this._isSpecialBattleMusic = false;
+  }
+
+  /**
+   * Called when a battle ends (GAME_OVER state).
+   *
+   * - Special tracks: stopped with fade-out (do not carry into rewards/map).
+   * - Normal tracks: faded to background volume (persist into rewards/map).
+   *
+   * When ENABLE_PERSISTENT_BATTLE_MUSIC is false, this delegates
+   * to the standard stopMusic() call.
+   *
+   * @param {boolean} [wasSpecialTrack=false] — true if the ending battle used special music
+   */
+  onBattleEnd(wasSpecialTrack = false) {
+    if (!ENABLE_PERSISTENT_BATTLE_MUSIC) {
+      // Original behavior: stop music
+      this.stopMusic(MUSIC_FADE_DURATION);
+      return;
+    }
+
+    if (wasSpecialTrack || this._isSpecialBattleMusic) {
+      // Special music — stop completely, don't carry over
+      this.stopMusic(MUSIC_FADE_DURATION);
+      this._battleMusicActive = false;
+      this._isSpecialBattleMusic = false;
+      return;
+    }
+
+    // Normal music — fade to background volume for rewards/map
+    this.fadeMusic(BACKGROUND_BATTLE_MUSIC_VOLUME, MUSIC_FADE_DURATION);
+  }
+
+  /**
+   * Called when entering the rewards overlay or map scene.
+   *
+   * Ensures normal battle music is playing at the reduced background volume.
+   * If special music was playing (shouldn't happen — it's stopped in onBattleEnd),
+   * this is a no-op.
+   *
+   * When ENABLE_PERSISTENT_BATTLE_MUSIC is false, this is a no-op.
+   */
+  onRewardsOrMapEntered() {
+    if (!ENABLE_PERSISTENT_BATTLE_MUSIC) return;
+
+    // If no battle music is active, nothing to manage
+    if (!this._battleMusicActive) return;
+
+    // If special music is somehow still playing, leave it alone
+    if (this._isSpecialBattleMusic) return;
+
+    // Ensure normal battle music is at background volume
+    this.fadeMusic(BACKGROUND_BATTLE_MUSIC_VOLUME, MUSIC_FADE_DURATION);
+  }
+
+  /**
+   * Called when a battle scene resumes (new battle starts from map).
+   *
+   * If normal battle music is already active → fade volume back to full.
+   * If nothing is playing → start the default normal battle music.
+   *
+   * When ENABLE_PERSISTENT_BATTLE_MUSIC is false, this is a no-op.
+   */
+  onBattleResumed() {
+    if (!ENABLE_PERSISTENT_BATTLE_MUSIC) return;
+
+    if (this._battleMusicActive && !this._isSpecialBattleMusic && this._currentMusicKey) {
+      // Normal battle music already playing — restore full volume
+      this.fadeMusic(NORMAL_BATTLE_MUSIC_VOLUME, MUSIC_FADE_DURATION);
+      return;
+    }
+
+    // No active battle music (or special was stopped) — start default
+    this.startBattleMusic(DEFAULT_BATTLE_MUSIC_KEY, false);
+  }
+
+  /**
+   * Check if battle music is currently active via the lifecycle API.
+   * @returns {boolean}
+   */
+  isBattleMusicActive() {
+    return this._battleMusicActive;
   }
 }
 
