@@ -14,16 +14,23 @@
  *      - Centered Skip Rewards button near bottom
  *
  * Lifecycle:
- *   show()     — activate the overlay (called by BattleScene on GAME_OVER)
- *   dismiss()  — deactivate and fire onDismiss callback
- *   update(dt) — advance animations (placeholder for future cross-fade transition)
- *   render(ctx, w, h) — draw backdrop + reward UI tree
- *   isActive() — true while the overlay is visible
- *   reset()    — force-reset to inactive (cleanup on scene exit)
+ *   show()     — begin entrance animation (fade + slide, same as map overlay)
+ *   dismiss()  — begin exit cross-fade animation, fires onDismiss when complete
+ *   update(dt) — advance animation timers and transition states
+ *   render(ctx, w, h) — draw backdrop + reward UI tree with animated transform
+ *   isActive() — true while the overlay is visible (any non-INACTIVE state)
+ *   reset()    — force-reset to INACTIVE without callback (cleanup on scene exit)
+ *
+ * States (OverlayState):
+ *   INACTIVE — not rendered, no interaction
+ *   ENTERING — entrance animation: ease-out cubic fade + slide up from bottom
+ *   ACTIVE   — fully visible, interactive
+ *   EXITING  — exit animation: ease-in cubic cross-fade out, no interaction
  *
  * Input behavior:
- *   - Blocks all gameplay input while active (handled by BattleScene)
- *   - ESC key advances to next state (triggers dismiss → MapScene transition)
+ *   - Only ACTIVE state allows click/hover on claim/skip buttons
+ *   - During ENTERING/EXITING all input is ignored (handled by BattleScene)
+ *   - ESC key dismisses (triggers EXITING → onDismiss → MapScene transition)
  *
  * Architecture:
  *   The overlay uses the UI framework (UIContainer/UIPanel/UIImage) for the
@@ -99,25 +106,33 @@ const SKIP_BUTTON_HEIGHT = 32;
 /** Width of the Skip Rewards button as a fraction of the primary panel's content width */
 const SKIP_BUTTON_WIDTH_FRAC = 0.22;
 
+// ── Overlay animation constants ────────────────────────────
+/** Duration of the entrance/exit animation (ms) */
+const OVERLAY_FADE_DURATION = 170;
+/** Fraction of canvas height the panel slides up on entrance */
+const OVERLAY_SLIDE_FRACTION = 0.10;
+
 // ── Overlay state enum ────────────────────────────────────
 /** @readonly @enum {string} */
 const OverlayState = Object.freeze({
   INACTIVE: 'inactive',
+  ENTERING: 'entering',
   ACTIVE: 'active',
+  EXITING: 'exiting',
 });
 
 export default class RewardOverlay {
   /**
    * @param {object} deps
    * @param {import('../engine/AssetManager.js').default} deps.assetManager
-   * @param {Function} [deps.onDismiss] — callback invoked when overlay is dismissed
+   * @param {Function} [deps.onDismiss] — callback invoked when exit animation completes
    */
   constructor({ assetManager, onDismiss } = {}) {
     /** @type {import('../engine/AssetManager.js').default|null} */
     this._assetManager = assetManager || null;
 
     /**
-     * Callback invoked when the overlay is dismissed (ESC pressed).
+     * Callback invoked when the overlay exit animation completes.
      * The parent scene (BattleScene) wires this to transition back to MapScene.
      * @type {Function|null}
      */
@@ -127,14 +142,10 @@ export default class RewardOverlay {
     this._state = OverlayState.INACTIVE;
 
     /**
-     * Elapsed time since activation (ms).
-     * Reserved for future cross-fade / transition animation.
+     * Elapsed animation time (ms). Tracks entrance and exit animation progress.
      * @type {number}
      */
     this._timer = 0;
-
-    /** @type {boolean} whether dismiss has already been triggered */
-    this._dismissTriggered = false;
 
     /**
      * Which button is currently hovered: null, 'claim', or 'skip'.
@@ -161,32 +172,28 @@ export default class RewardOverlay {
   // Public API
   // ═══════════════════════════════════════════════════════════
 
-  /** Activate the overlay. No-op if already active. */
+  /** Begin the entrance animation. No-op if already entering or active. */
   show() {
-    if (this._state === OverlayState.ACTIVE) return;
-    this._state = OverlayState.ACTIVE;
+    if (this._state === OverlayState.ENTERING || this._state === OverlayState.ACTIVE) return;
+    this._state = OverlayState.ENTERING;
     this._timer = 0;
-    this._dismissTriggered = false;
   }
 
   /**
-   * Dismiss the overlay and fire the onDismiss callback.
-   * No-op if already dismissed or not active.
+   * Begin the exit cross-fade animation.
+   * The onDismiss callback fires when the animation completes.
+   * No-op if not ACTIVE (i.e. already dismissing, entering, or inactive).
    */
   dismiss() {
-    if (this._state !== OverlayState.ACTIVE || this._dismissTriggered) return;
-    this._dismissTriggered = true;
-    this._state = OverlayState.INACTIVE;
+    if (this._state !== OverlayState.ACTIVE) return;
+    this._state = OverlayState.EXITING;
     this._timer = 0;
-
-    if (typeof this.onDismiss === 'function') {
-      this.onDismiss();
-    }
+    // onDismiss will be called when the EXITING animation completes (in update)
   }
 
-  /** @returns {boolean} true if the overlay is currently visible */
+  /** @returns {boolean} true if the overlay is currently visible (any non-INACTIVE state) */
   isActive() {
-    return this._state === OverlayState.ACTIVE;
+    return this._state !== OverlayState.INACTIVE;
   }
 
   /**
@@ -196,7 +203,6 @@ export default class RewardOverlay {
   reset() {
     this._state = OverlayState.INACTIVE;
     this._timer = 0;
-    this._dismissTriggered = false;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -204,16 +210,26 @@ export default class RewardOverlay {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Advance overlay animation timer.
-   * Currently a no-op; reserved for future cross-fade / slide-in transition.
+   * Advance overlay animation timer and handle state transitions.
    * Call once per frame from the owning scene's update().
    *
    * @param {number} dt — delta time in ms
    */
   update(dt) {
-    if (this._state !== OverlayState.ACTIVE) return;
+    if (this._state !== OverlayState.ENTERING && this._state !== OverlayState.EXITING) return;
+
     this._timer += dt;
-    // TODO: Future transition animations will interpolate based on _timer.
+
+    if (this._timer >= OVERLAY_FADE_DURATION) {
+      if (this._state === OverlayState.ENTERING) {
+        this._state = OverlayState.ACTIVE;
+      } else { // EXITING → INACTIVE
+        this._state = OverlayState.INACTIVE;
+        if (typeof this.onDismiss === 'function') {
+          this.onDismiss();
+        }
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -229,6 +245,7 @@ export default class RewardOverlay {
    * @param {number} y — mouse y in canvas coordinates
    */
   handleMouseMove(x, y) {
+    // Only allow interaction while fully active (ignore during animations)
     if (this._state !== OverlayState.ACTIVE) return;
 
     const hit = this._primaryPanel ? this._primaryPanel.hitTest(x, y) : null;
@@ -269,6 +286,7 @@ export default class RewardOverlay {
    * @param {number} y — mouse y in canvas coordinates
    */
   handleMouseDown(x, y) {
+    // Only allow interaction while fully active (ignore during animations)
     if (this._state !== OverlayState.ACTIVE) return;
 
     const hit = this._primaryPanel ? this._primaryPanel.hitTest(x, y) : null;
@@ -291,12 +309,40 @@ export default class RewardOverlay {
    *   3. Victory title image on top, bottom nestled into panel groove (raw canvas)
    *   4. Panel children via UI framework (rewards row, claim button, skip button)
    *
+   * Animation:
+   *   ENTERING — ease-out cubic: fades in + slides up from bottom
+   *   EXITING  — ease-in cubic: cross-fades out (no slide)
+   *   ACTIVE   — full opacity, no transform
+   *
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} canvasW — full canvas width
    * @param {number} canvasH — full canvas height
    */
   render(ctx, canvasW, canvasH) {
-    if (this._state !== OverlayState.ACTIVE) return;
+    if (this._state === OverlayState.INACTIVE) return;
+
+    // ── Compute animation parameters ──
+    let overlayAlpha = 1;
+    let containerSlideY = 0;
+
+    if (this._state === OverlayState.ENTERING) {
+      const rawT = Math.min(1, this._timer / OVERLAY_FADE_DURATION);
+      // ease-out cubic: fast start, gentle settle (same as map overlay)
+      const easedT = 1 - Math.pow(1 - rawT, 3);
+      overlayAlpha = easedT;
+      containerSlideY = (1 - easedT) * canvasH * OVERLAY_SLIDE_FRACTION;
+    } else if (this._state === OverlayState.EXITING) {
+      const rawT = Math.min(1, this._timer / OVERLAY_FADE_DURATION);
+      // ease-in cubic: gentle start, fast exit (cross-fade out)
+      const easedT = Math.pow(rawT, 3);
+      overlayAlpha = 1 - easedT;
+      // No slide on exit — cross-fade only
+    }
+    // ACTIVE state: overlayAlpha=1, containerSlideY=0 (defaults)
+
+    // Wrap all drawing in a save/restore with globalAlpha for cross-fade
+    ctx.save();
+    ctx.globalAlpha = overlayAlpha;
 
     // ── 1. Background splash drawn cover-style with controlled opacity ──
     const splashImg = this._assetManager
@@ -304,7 +350,6 @@ export default class RewardOverlay {
       : null;
 
     ctx.save();
-    ctx.globalAlpha = SPLASH_ALPHA;
     if (splashImg && splashImg.width && splashImg.height) {
       const imgW = splashImg.width;
       const imgH = splashImg.height;
@@ -325,7 +370,10 @@ export default class RewardOverlay {
     const panelImg = this._assetManager
       ? this._assetManager.get('reward_screen_panel')
       : null;
-    if (!panelImg || !panelImg.width || !panelImg.height) return;
+    if (!panelImg || !panelImg.width || !panelImg.height) {
+      ctx.restore();
+      return;
+    }
 
     const maxW = canvasW * PANEL_MAX_WIDTH_FRAC;
     const maxH = canvasH * PANEL_MAX_HEIGHT_FRAC;
@@ -343,7 +391,8 @@ export default class RewardOverlay {
     }
 
     const panelX = Math.floor((canvasW - panelW) / 2);
-    const panelY = Math.floor((canvasH - panelH) / 2) + MAIN_PANEL_Y_OFFSET;
+    // Slide the panel and title upward on entrance
+    const panelY = Math.floor((canvasH - panelH) / 2) + MAIN_PANEL_Y_OFFSET + containerSlideY;
 
     // ── 3. Primary panel background ──
     ctx.save();
@@ -382,6 +431,8 @@ export default class RewardOverlay {
 
     // ── 5. Layout and render panel children via UI framework ──
     this._renderPanelChildren(ctx, panelX, panelY, panelW, panelH);
+
+    ctx.restore(); // globalAlpha
   }
 
   // ═══════════════════════════════════════════════════════════
