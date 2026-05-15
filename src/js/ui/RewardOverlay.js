@@ -6,7 +6,7 @@
  *
  * Visual layering:
  *   1. Battle scene remains visible underneath (non-interactive)
- *   2. Semi-transparent black fullscreen backdrop
+ *   2. rewards_background_splash drawn cover-style with controlled opacity
  *   3. Victory title image positioned above the main panel
  *   4. Centered reward panel (reward_screen_panel) containing:
  *      - Three reward option containers in a row
@@ -27,7 +27,7 @@
  *
  * Architecture:
  *   The overlay uses the UI framework (UIContainer/UIPanel/UIImage) for the
- *   primary panel's internal layout (rewards row + buttons). The dark backdrop
+ *   primary panel's internal layout (rewards row + buttons). The splash backdrop
  *   and victory title are drawn directly via raw Canvas 2D for simpler
  *   absolute positioning. Reward option containers are UIPanels with
  *   rewards_option_panel backgrounds — extensible for future content.
@@ -41,8 +41,8 @@ import UIImage from './UIImage.js';
 // Tunable layout constants
 // ═══════════════════════════════════════════════════════════
 
-/** Backdrop alpha for the dark overlay covering the entire canvas */
-const BACKDROP_ALPHA = 0.72;
+/** Global alpha (opacity) for the background splash image covering the entire canvas */
+const SPLASH_ALPHA = 1.0;
 
 /** Maximum fraction of canvas width the reward panel occupies */
 const PANEL_MAX_WIDTH_FRAC = 0.55;
@@ -286,7 +286,7 @@ export default class RewardOverlay {
    * Render the reward overlay on top of the battle scene.
    *
    * Draws in this order:
-   *   1. Semi-transparent black fullscreen backdrop (raw canvas)
+   *   1. rewards_background_splash drawn cover-style with controlled opacity (raw canvas)
    *   2. Primary panel background image (raw canvas)
    *   3. Victory title image on top, bottom nestled into panel groove (raw canvas)
    *   4. Panel children via UI framework (rewards row, claim button, skip button)
@@ -298,10 +298,27 @@ export default class RewardOverlay {
   render(ctx, canvasW, canvasH) {
     if (this._state !== OverlayState.ACTIVE) return;
 
-    // ── 1. Semi-transparent black fullscreen backdrop ──
+    // ── 1. Background splash drawn cover-style with controlled opacity ──
+    const splashImg = this._assetManager
+      ? this._assetManager.get('rewards_background_splash')
+      : null;
+
     ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA})`;
-    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.globalAlpha = SPLASH_ALPHA;
+    if (splashImg && splashImg.width && splashImg.height) {
+      const imgW = splashImg.width;
+      const imgH = splashImg.height;
+      const scale = Math.max(canvasW / imgW, canvasH / imgH);
+      const sw = imgW * scale;
+      const sh = imgH * scale;
+      const sx = (canvasW - sw) / 2;
+      const sy = (canvasH - sh) / 2;
+      ctx.drawImage(splashImg, sx, sy, sw, sh);
+    } else {
+      // Fallback: semi-transparent black fill
+      ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+    }
     ctx.restore();
 
     // ── 2. Calculate primary panel dimensions from image aspect ratio ──
