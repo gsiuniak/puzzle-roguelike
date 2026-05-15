@@ -109,6 +109,8 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 | [`src/js/game/TileTypes.js`](src/js/game/TileTypes.js) | (module) | Tile type definitions (RED/BLUE/GREEN/YELLOW/PURPLE/SKULL), spawn weights, constants (BOARD_COLS=8, BOARD_ROWS=8), helpers (isSkull, getRandomTileType) |
 | [`src/js/game/CombatLog.js`](src/js/game/CombatLog.js) | `CombatLog` | Ring buffer for combat messages, turn counter |
 | [`src/js/game/EnemyAI.js`](src/js/game/EnemyAI.js) | `EnemyAI` | Enemy decision: skill-first (damage preferred), then board evaluation with priority scoring (4+ match > skull damage > skill mana > contest player mana) |
+| [`src/js/game/customEnemyAi.js`](src/js/game/customEnemyAi.js) | (module) | **AI override dispatch.** Exports `chooseEnemyAction(enemyState, context)` and `getEnemyAiHandler(aiBehavior)`. Tries custom AI first; falls back to standard EnemyAI. Used by BattleController._doEnemyTurn(). |
+| [`src/js/game/enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) | (module) | **Custom AI registry.** Plain object keyed by `aiBehavior` string → handler function. Handlers receive `{ enemy, player, board, battleState, standardAI }` and return `{ action, skill?, swap? }` or `null`. Add new enemy behaviors here. |
 
 **Battle State Machine:**
 ```
@@ -191,6 +193,7 @@ When given a task, locate the owning system using this table:
 | "Audio not playing" | [`AudioManager._play()`](src/js/audio/AudioManager.js:300) | [`SoundConfig.js`](src/js/audio/SoundConfig.js), skill `.sound` field |
 | "UI overlaps / layout broken" | [`UIElement` sizing model](src/js/ui/UIElement.js) | The specific view/scene's `buildHierarchy()` / `layoutChildren()` |
 | "Enemy AI behavior" | [`EnemyAI.findBestSkill()` / `findBestSwap()`](src/js/game/EnemyAI.js) | [`EnemyAI._scoreBoard()`](src/js/game/EnemyAI.js:142) |
+| "Add custom enemy AI" | [`enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) | [`customEnemyAi.js`](src/js/game/customEnemyAi.js), set `aiBehavior` on enemy definition in [`mockEnemy.js`](src/js/data/mockEnemy.js) |
 | "Map generation wrong" | [`MapGenerator.generate()`](src/js/map/MapGenerator.js:119) | [`SeededRNG`](src/js/map/MapGenerator.js:8), [`_wireConnections`](src/js/map/MapGenerator.js:315) |
 | "Tile disappear/reappear bug" | [`BoardModel.removeTiles()`](src/js/game/BoardModel.js:355) / [`applyGravity()`](src/js/game/BoardModel.js:372) | [`BattleController` cascade phases](src/js/game/BattleController.js:28) |
 | "Health/damage calculation wrong" | [`MatchResolver.applyDamage()`](src/js/game/MatchResolver.js:163) | [`BattleController._setShakeFromDamage()`](src/js/game/BattleController.js:1193) |
@@ -304,6 +307,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 14. **Player data is deep-cloned** at character select and battle entry to avoid mutating definitions.
 15. **Canvas uses DPR-aware rendering** — all layout is in CSS pixels; context is pre-scaled.
 16. **Post-battle flow uses RewardOverlay** — GAME_OVER does NOT immediately return to MapScene. Instead, RewardOverlay appears over the (still-visible) BattleScene. ESC dismisses the overlay and triggers the MapScene transition. This allows future reward/loot/level-up screens to be inserted without modifying battle logic.
+17. **Enemy AI overrides are dispatch-based, not conditional.** Custom AI is registered in [`enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) as handler functions keyed by `aiBehavior`. [`customEnemyAi.js`](src/js/game/customEnemyAi.js) orchestrates: try custom → fallback to standard `EnemyAI`. Enemy definitions link via optional `aiBehavior` field. No `if enemy.name === "..."` checks exist in shared AI or battle loop code.
 
 ---
 

@@ -12,6 +12,7 @@ import BoardModel from './BoardModel.js';
 import MatchResolver, { SKILL_EFFECT_TYPES } from './MatchResolver.js';
 import CombatLog from './CombatLog.js';
 import EnemyAI from './EnemyAI.js';
+import { chooseEnemyAction } from './customEnemyAi.js';
 import { TILE_TYPES } from './TileTypes.js';
 
 /** @enum {string} */
@@ -193,6 +194,8 @@ export default class BattleController {
       mana: d.mana ? { ...d.mana } : {},
       portrait: d.portrait || '',
       skills: (d.skills || []).map(s => ({ ...s })),
+      // Preserve custom AI behavior key from enemy definition (if any)
+      aiBehavior: d.aiBehavior || null,
     };
   }
 
@@ -1011,6 +1014,20 @@ export default class BattleController {
   // ── Enemy ─────────────────────────────────────────────
 
   _doEnemyTurn() {
+    // ── 1. Try custom AI handler (if any) ──────────────────
+    const customAction = chooseEnemyAction(this.enemyState, {
+      enemy: this.enemyState,
+      player: this.playerState,
+      board: this.board,
+      battleState: this,
+    });
+
+    if (customAction) {
+      this._dispatchCustomEnemyAction(customAction);
+      return;
+    }
+
+    // ── 2. Standard AI fallback ────────────────────────────
     this.enemyAI = new EnemyAI(this.enemyState, this.playerState);
 
     const skill = this.enemyAI.findBestSkill();
@@ -1068,6 +1085,74 @@ export default class BattleController {
 
     this.log.add('No valid moves. Board reshuffled.');
     this.board.reshuffle();
+    this._endTurn('enemy');
+  }
+
+  /**
+   * Dispatch a custom AI action returned by an enemyAiOverrides handler.
+   * Supports three action types: 'skill', 'swap', and 'pass'.
+   * @param {object} action — { action: 'skill'|'swap'|'pass', skill?, swap? }
+   * @private
+   */
+  _dispatchCustomEnemyAction(action) {
+    if (action.action === 'skill' && action.skill) {
+      this._spendCost(this.enemyState, action.skill);
+      this._setSkillSound(action.skill);
+      this.log.add(`${this.enemyState.name} uses ${action.skill.name}.`);
+
+      let enteredCascade = false;
+      for (const effect of (action.skill.effects || [])) {
+        if (this._resolveEffect(effect, action.skill, 'enemy')) {
+          enteredCascade = true;
+        }
+      }
+
+      if (enteredCascade) return;
+      if (this._checkGameOver()) return;
+
+      if (this._extraTurnEarned) {
+        this._extraTurnEarned = false;
+        this.pendingExtraTurn = true;
+        this.log.add('--- Extra Turn (Enemy) ---');
+        if (this.onStateChange) this.onStateChange();
+        return;
+      }
+
+      this._endTurn('enemy');
+      return;
+    }
+
+    if (action.action === 'swap' && action.swap) {
+      const sw = action.swap;
+      this.board.swap(sw.col1, sw.row1, sw.col2, sw.row2);
+      this.log.add(`${this.enemyState.name} swaps tiles.`);
+      const analysis = this.resolver.analyzeMatches(this.board, this.enemyState);
+      if (analysis) {
+        const from = { col: sw.col1, row: sw.row1 };
+        const to = { col: sw.col2, row: sw.row2 };
+        this._swapTriggerPos = this._computeSwapCausePos(from, to, analysis);
+        this._beginResolving('enemy', analysis);
+      } else {
+        this.board.swap(sw.col1, sw.row1, sw.col2, sw.row2);
+        this._swapTriggerPos = null;
+        this.log.add('No valid match. Board reshuffled.');
+        this.board.reshuffle();
+        this._endTurn('enemy');
+      }
+      return;
+    }
+
+    // action === 'pass' or unrecognized action type
+    // Treat as a deliberate pass — do nothing, end the turn
+    if (action.action === 'pass') {
+      this.log.add(`${this.enemyState.name} waits.`);
+    } else {
+      console.warn(
+        `[BattleController] Custom AI returned unrecognized action: "${action.action}". ` +
+        `Treating as pass.`
+      );
+      this.log.add(`${this.enemyState.name} waits.`);
+    }
     this._endTurn('enemy');
   }
 
