@@ -59,6 +59,16 @@ export default class CanvasApp {
     /** Callback after resize: (designWidth, designHeight) => {} */
     this.onResize = null;
 
+    /**
+     * Optional image used by `clear()` to fill the entire physical canvas
+     * (including letterbox/pillarbox bars) instead of solid black.
+     * Set via `setBackgroundImage()`; null = default black fill.
+     * Drawn with 'cover' aspect-preserving scaling so the image fills
+     * the canvas without distortion.
+     * @type {HTMLImageElement|HTMLCanvasElement|null}
+     */
+    this._barFillImage = null;
+
     if (this.autoResize) {
       this._onResize = this._handleResize.bind(this);
       window.addEventListener('resize', this._onResize);
@@ -122,21 +132,60 @@ export default class CanvasApp {
   }
 
   /**
-   * Clear the canvas: black on the side/letterbox bars, viewport color inside
-   * the design rect. All coordinates passed to subsequent draw calls are in
-   * design space.
+   * Clear the canvas: bar fill image OR black on the side/letterbox bars,
+   * viewport color inside the design rect. All coordinates passed to
+   * subsequent draw calls are in design space.
+   *
+   * If a bar fill image has been registered via `setBackgroundImage()`,
+   * the image is drawn across the entire physical canvas (cover-fit) so
+   * there are no visible black bars.
    */
   clear(viewportColor = '#1a0a0a') {
     const ctx = this.ctx;
-    // 1. Fill the entire physical canvas (including bars) with black.
+    // 1. Fill the entire physical canvas (including bars).
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);
+    if (this._barFillImage) {
+      this._drawCoverImage(ctx, this._barFillImage, 0, 0, this._cssWidth, this._cssHeight);
+    } else {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);
+    }
     ctx.restore();
     // 2. Restored transform is the design-space one — paint viewport background.
-    ctx.fillStyle = viewportColor;
-    ctx.fillRect(0, 0, this.designWidth, this.designHeight);
+    //    When a bar fill image is active, skip the viewport color so the
+    //    image shows through across the entire canvas (no seam).
+    if (!this._barFillImage) {
+      ctx.fillStyle = viewportColor;
+      ctx.fillRect(0, 0, this.designWidth, this.designHeight);
+    }
+  }
+
+  /**
+   * Set an image used to fill the entire physical canvas in `clear()`,
+   * eliminating black bars on letterbox/pillarbox axes. Pass null to
+   * restore the default black bar fill.
+   * @param {HTMLImageElement|HTMLCanvasElement|null} img
+   */
+  setBackgroundImage(img) {
+    this._barFillImage = img || null;
+  }
+
+  /**
+   * Draw an image into the given rect using "cover" aspect-preserving scale
+   * (image fills the rect; cropped if aspect differs).
+   */
+  _drawCoverImage(ctx, img, x, y, w, h) {
+    if (!img || !img.width || !img.height) return;
+    const scale = Math.max(w / img.width, h / img.height);
+    const sw = img.width * scale;
+    const sh = img.height * scale;
+    const sx = x + (w - sw) / 2;
+    const sy = y + (h - sh) / 2;
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, sx, sy, sw, sh);
+    ctx.imageSmoothingEnabled = prevSmoothing;
   }
 
   /**

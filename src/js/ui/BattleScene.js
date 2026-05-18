@@ -20,9 +20,13 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 // ── Tunable layout constants ─────────────────────────────
 const MAIN_ROW_MAX_WIDTH = 1820;
 // Horizontal gap between the side columns and the central board panel.
-// Small value = panels snug against the board frame (mock-style).
-const MAIN_ROW_GAP = -10;
-const MAIN_ROW_PADDING = { top: 20, right: 0, bottom: 20, left: 0 };
+// Negative = the column rects overlap, which pulls the visible side
+// panels tighter against the board frame (since each side panel image
+// has its own transparent inner margin).
+const MAIN_ROW_GAP = -30;
+// Vertical padding around the main row. Smaller top/bottom = the board
+// frame can stretch to a taller square.
+const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 
 // Width of each side (player/enemy) column. Reduce to bring the
 // visible panel art closer to the board frame; the side panel
@@ -90,9 +94,12 @@ export default class BattleScene extends UIPanel {
     this._enemyData = enemyData;
     this._assetManager = assetManager;
 
-    // UIPanel background image — large background benefits from smoothing
+    // Background is drawn at the CanvasApp level (cover-fit across the
+    // entire physical canvas, eliminating letterbox/pillarbox bars).
+    // The UIPanel's own backgroundAssetKey is intentionally left null
+    // so we don't double-render the bg over the design rect.
     this.assetManager = assetManager;
-    this.backgroundAssetKey = 'battle_background_default';
+    this.backgroundAssetKey = null;
     this.smoothing = true;
 
     /** @type {import('../game/BattleController.js').default|null} */
@@ -318,6 +325,14 @@ export default class BattleScene extends UIPanel {
     const input = this._sceneManager._input;
     if (!input) return;
 
+    // ── Full-canvas background (covers letterbox/pillarbox bars) ──
+    const bgImg = this._assetManager
+      ? this._assetManager.get('battle_background_default')
+      : null;
+    if (this._sceneManager._app && this._sceneManager._app.setBackgroundImage) {
+      this._sceneManager._app.setBackgroundImage(bgImg);
+    }
+
     // Reset drag/swap state
     this._selectedCell = null;
     this._hoveredCell = null;
@@ -375,6 +390,12 @@ export default class BattleScene extends UIPanel {
    * Removes all battle input handlers.
    */
   onExit() {
+    // ── Clear the full-canvas background hook so other scenes get
+    //    the default black-bar behavior back.
+    if (this._sceneManager && this._sceneManager._app && this._sceneManager._app.setBackgroundImage) {
+      this._sceneManager._app.setBackgroundImage(null);
+    }
+
     // Force-close the map overlay if it was open/animating
     if (this._mapView) {
       this._mapView.resetOverlay();
