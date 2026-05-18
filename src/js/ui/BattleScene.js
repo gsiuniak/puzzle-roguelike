@@ -30,7 +30,7 @@ const MAIN_ROW_PADDING = { top: 20, right: 0, bottom: 20, left: 0 };
 // is typically larger than the visible art.
 const SIDE_COL_WIDTH = 360;
 const SIDE_COL_MIN_WIDTH = 360;
-const SIDE_COL_MAX_WIDTH = 4200;
+const SIDE_COL_MAX_WIDTH = 420;
 const SIDE_COL_GAP = 8;
 
 // Fixed width for the center (board + combat log) column. Should be
@@ -44,7 +44,7 @@ const SIDE_COL_GAP = 8;
 // Design height 1080 - main row top/bottom padding (40) - combat log
 // (80) - center column gap (8) ≈ 952 → 940 leaves a small breathing
 // margin. Reduce to pull side panels even closer.
-const CENTER_COL_WIDTH = 940;
+const CENTER_COL_WIDTH = 1080;
 const CENTER_COL_GAP = 8;
 // Height of the combat log strip below the board. Bump this to make
 // the log strip taller; reduce to give the board more vertical room.
@@ -257,7 +257,7 @@ export default class BattleScene extends UIPanel {
     this._combatLogPanel = new CombatLogPanel(this._assetManager);
     this._combatLogPanel.setStyle({ height: COMBAT_LOG_HEIGHT, margin: { right: 40, left: 40 } });
     this._combatLogText = this._combatLogPanel.textElement;
-    centerCol.addChild(this._combatLogPanel);
+    // centerCol.addChild(this._combatLogPanel);
 
     mainRow.addChild(centerCol);
 
