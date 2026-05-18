@@ -102,7 +102,7 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 | [`src/js/scenes/TitleScreen.js`](src/js/scenes/TitleScreen.js) | `TitleScreen` | Cover-fit title image, fade-in, any-input → CharacterSelectScene |
 | [`src/js/scenes/CharacterSelectScene.js`](src/js/scenes/CharacterSelectScene.js) | `CharacterSelectScene` | Character selection, splash cross-fade, info panel, aura effect, → MapScene |
 | [`src/js/scenes/MapScene.js`](src/js/scenes/MapScene.js) | `MapScene` | Map traversal, node clicking, battle transition, battle result handling |
-| [`src/js/ui/BattleScene.js`](src/js/ui/BattleScene.js) | `BattleScene` | Full battle layout (3-column), input handling, visual effects, game-over → reward overlay transition |
+| [`src/js/ui/BattleScene.js`](src/js/ui/BattleScene.js) | `BattleScene` | Battle layout (3-column: compact stacked player column \| board+combat-log center \| compact stacked enemy column), input handling, visual effects, game-over → reward overlay transition. Hidden turn label retained for backwards-compat (state/data binding only — visual display disabled). |
 
 **Scene lifecycle:** Each scene must implement `onEnter()` and `onExit()`. Scenes receive `_sceneManager` back-reference from SceneManager.
 
@@ -164,9 +164,16 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 | [`src/js/ui/UIProgressBar.js`](src/js/ui/UIProgressBar.js) | `UIProgressBar` | Health bar with fill, border, color interpolation |
 | [`src/js/ui/UIOrb.js`](src/js/ui/UIOrb.js) | `UIOrb` | Mana orb with icon + count text |
 | [`src/js/ui/Rect.js`](src/js/ui/Rect.js) | `Rect` | Simple {x, y, w, h} value object |
-| [`src/js/ui/CharacterPane.js`](src/js/ui/CharacterPane.js) | `CharacterPane` | Player/enemy stat panel: portrait, name, class, HP bar, attack/armor, mana orbs, skill rows. Data-driven via `updateFromState()` |
-| [`src/js/ui/SkillRow.js`](src/js/ui/SkillRow.js) | `SkillRow` | Single skill entry: icon, name, description, mana cost row, click callback |
-| [`src/js/ui/ManaCostRow.js`](src/js/ui/ManaCostRow.js) | `ManaCostRow` | Mana cost icons for skills |
+| [`src/js/ui/CharacterPane.js`](src/js/ui/CharacterPane.js) | `CharacterPane` | **Legacy tall pane** (portrait + HP + mana + skills inline). Still exported but **no longer used** by BattleScene — kept for backwards compatibility / future reuse. |
+| [`src/js/ui/CharacterInfoPane.js`](src/js/ui/CharacterInfoPane.js) | `CharacterInfoPane` | Compact horizontal info pane used in the new battle layout. Two rows: (portrait \| name/class/HP bar/attack-armor) and a 5-orb mana bar. Background asset: `character_pane_panel`. Data-driven via `updateFromState()`. |
+| [`src/js/ui/SkillRow.js`](src/js/ui/SkillRow.js) | `SkillRow` | **Legacy** single skill entry used by `CharacterPane`. Not used by the new SkillsPane. |
+| [`src/js/ui/SkillButton.js`](src/js/ui/SkillButton.js) | `SkillButton` | Compact skill button used by `SkillsPane`. Two columns: icon \| (name + cost row). Supports a `locked` placeholder mode that renders `skills_locked_button` and disables hit-testing. |
+| [`src/js/ui/SkillsPane.js`](src/js/ui/SkillsPane.js) | `SkillsPane` | 2×3 grid of `SkillButton`s with background `skill_pane_panel`. Fills slots with the character's skills, pads remaining slots with locked placeholders. Exposes `onSkillClick`, `setManaState()`, and `skillButtons` accessor. |
+| [`src/js/ui/RelicButton.js`](src/js/ui/RelicButton.js) | `RelicButton` | Single relic slot. Currently always renders `relics_locked_button` and is non-interactive. Future-proofed for active relic icons. |
+| [`src/js/ui/RelicsPane.js`](src/js/ui/RelicsPane.js) | `RelicsPane` | 6×2 grid of `RelicButton`s with background `relics_pane_panel`. All slots locked for now. |
+| [`src/js/ui/BattleBoardPanel.js`](src/js/ui/BattleBoardPanel.js) | `BattleBoardPanel` | Decorative wrapper panel around `BoardPlaceholder`. Uses `battle_board_panel` background asset and provides internal padding so the board lays out inside the frame. |
+| [`src/js/ui/CombatLogPanel.js`](src/js/ui/CombatLogPanel.js) | `CombatLogPanel` | Compact panel below the board displaying recent log messages. No dedicated asset yet — falls back to styled dark background. Designed to later host the hidden turn-status messages. |
+| [`src/js/ui/ManaCostRow.js`](src/js/ui/ManaCostRow.js) | `ManaCostRow` | Mana cost icons for skills (used by legacy `SkillRow`). |
 | [`src/js/ui/BoardPlaceholder.js`](src/js/ui/BoardPlaceholder.js) | `BoardPlaceholder` | Board grid rendering: tile sprites, highlights, empty cells, fall animation, swap animation, targeting overlay, particle effects |
 | [`src/js/ui/FloatingImageEffect.js`](src/js/ui/FloatingImageEffect.js) | `FloatingImageEffect` | Animated floating image (turn announcement, extra turn) with grow/settle/hold/fade phases |
 | [`src/js/ui/FloatingTextEffect.js`](src/js/ui/FloatingTextEffect.js) | `FloatingTextEffect` | Floating "+N" match count text |

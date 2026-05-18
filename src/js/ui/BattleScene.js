@@ -1,6 +1,10 @@
 import UIContainer from './UIContainer.js';
 import UIPanel from './UIPanel.js';
-import CharacterPane from './CharacterPane.js';
+import CharacterInfoPane from './CharacterInfoPane.js';
+import SkillsPane from './SkillsPane.js';
+import RelicsPane from './RelicsPane.js';
+import BattleBoardPanel from './BattleBoardPanel.js';
+import CombatLogPanel from './CombatLogPanel.js';
 import BoardPlaceholder from './BoardPlaceholder.js';
 import UIText from './UIText.js';
 import FloatingImageEffect from './FloatingImageEffect.js';
@@ -13,22 +17,40 @@ import { getTileType } from '../game/TileTypes.js';
 import { syncBattleResultsToRunState } from '../data/playerStats.js';
 import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
 
+// ── Tunable layout constants ─────────────────────────────
+const MAIN_ROW_MAX_WIDTH = 1820;
+const MAIN_ROW_GAP = 14;
+const MAIN_ROW_PADDING = { top: 12, right: 12, bottom: 12, left: 12 };
+
+const SIDE_COL_WIDTH = 320;
+const SIDE_COL_MIN_WIDTH = 260;
+const SIDE_COL_MAX_WIDTH = 360;
+const SIDE_COL_GAP = 8;
+
+const CENTER_COL_GAP = 8;
+const COMBAT_LOG_HEIGHT = 56;
+
 /**
- * BattleScene — full battle layout with three columns.
+ * BattleScene — battle layout with three compact columns.
  *
  * Structure:
  *   BattleScene (column, UIPanel with battle_background_default)
- *     MainRow (row, flexGrow=1)
- *       PlayerPane   (CharacterPane, ~24% width)
- *       CenterColumn (column, flexGrow=1)
- *         TurnLabel  (dynamic: "Player Turn" / "Enemy Turn" / etc.)
- *         BoardPlaceholder (square, flexGrow=1)
- *         CombatLogContainer (scrollable log area)
- *       EnemyPane    (CharacterPane, ~24% width)
+ *     MainRow (row, flexGrow=1, maxWidth=MAIN_ROW_MAX_WIDTH)
+ *       PlayerColumn  (column, fixed-narrow)
+ *         CharacterInfoPane (compact portrait + stats + mana)
+ *         SkillsPane        (2x3 grid; locked fillers)
+ *         RelicsPane        (6x2 grid; all locked)
+ *       CenterColumn  (column, flexGrow=1)
+ *         TurnLabel (hidden — preserved for state/data binding only)
+ *         BattleBoardPanel  (background asset + BoardPlaceholder child)
+ *         CombatLogPanel
+ *       EnemyColumn   (mirror of PlayerColumn)
  *
- * BattleScene now accepts a BattleController reference and updates
- * character panes, turn label, and combat log from real game state.
- * Also manages floating image effects (e.g., "Extra Turn" feedback).
+ * BattleScene accepts a BattleController reference and updates character
+ * info panes, skill affordability, and the combat log from real game state.
+ * The old top-of-board turn-status text element is retained (and still
+ * updated) but hidden — its logic is preserved so it can later be routed
+ * into CombatLogPanel.
  */
 export default class BattleScene extends UIPanel {
   /**
@@ -80,9 +102,18 @@ export default class BattleScene extends UIPanel {
     // Child references
     this._playerPane = null;
     this._enemyPane = null;
+    this._playerSkillsPane = null;
+    this._enemySkillsPane = null;
+    this._playerRelicsPane = null;
+    this._enemyRelicsPane = null;
     this._board = null;
+    this._boardPanel = null;
+    /** Retained for backwards-compat: the old visible turn label is hidden
+     *  in the new layout but the text element + data binding are preserved
+     *  so the underlying logic still works and the message can later be
+     *  surfaced in CombatLogPanel. */
     this._turnLabel = null;
-    this._combatLogContainer = null;
+    this._combatLogPanel = null;
     this._combatLogText = null;
 
     // ── Floating image effects ──
@@ -152,35 +183,28 @@ export default class BattleScene extends UIPanel {
     // ── Main row: three columns, centered ──
     const mainRow = new UIContainer();
     mainRow.direction = 'row';
-    mainRow.gap = 10;
+    mainRow.gap = MAIN_ROW_GAP;
     mainRow.alignItems = 'stretch';
     mainRow.justifyContent = 'center';
     mainRow.flexGrow = 1;
-    mainRow.maxWidth = 1600;
-    mainRow.padding = { top: 12, right: 12, bottom: 12, left: 12 };
+    mainRow.maxWidth = MAIN_ROW_MAX_WIDTH;
+    mainRow.padding = MAIN_ROW_PADDING;
 
-    // ── LEFT: Player CharacterPane ───────────────────
-    this._playerPane = new CharacterPane(this._playerData, this._assetManager);
-    this._playerPane.setStyle({
-      widthPercent: 0.24,
-      minWidth: 400,
-      maxWidth: 440,
-      backgroundAssetKey: 'character_pane_background',
-      borderColor: '#1c1c1d',
-      borderWidth: 2,
-      cornerRadius: 8,
-      padding: { top: 14, right: 16, bottom: 16, left: 16 },
-      gap: 10,
-    });
-    mainRow.addChild(this._playerPane);
+    // ── LEFT: compact stacked player column ───────────
+    const playerCol = this._buildSideColumn('player');
+    mainRow.addChild(playerCol);
 
-    // ── CENTER: turn label + board + combat log ──────
+    // ── CENTER: hidden turn label + board panel + combat log ──
     const centerCol = new UIContainer();
     centerCol.direction = 'column';
-    centerCol.gap = 6;
+    centerCol.gap = CENTER_COL_GAP;
     centerCol.flexGrow = 1;
+    centerCol.alignItems = 'stretch';
 
-    // Turn label (dynamic)
+    // Turn label — KEPT for state/data binding compatibility but
+    // hidden from the visible layout. Its text is still updated by
+    // updateFromController() so future logic can route it elsewhere
+    // (e.g. into CombatLogPanel) without re-introducing scaffolding.
     this._turnLabel = new UIText('Player Turn');
     this._turnLabel.setStyle({
       fontSize: 18,
@@ -188,62 +212,78 @@ export default class BattleScene extends UIPanel {
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      height: 26,
-      margin: { top: 2, bottom: 0, left: 60 },
+      height: 0,
+      visible: false,
     });
     centerCol.addChild(this._turnLabel);
 
-    // Board placeholder — driven by BoardModel
+    // Board panel — wraps the existing BoardPlaceholder.
+    this._boardPanel = new BattleBoardPanel(this._assetManager);
+    this._boardPanel.flexGrow = 1;
+
     const boardModel = this._battleController ? this._battleController.board : null;
     this._board = new BoardPlaceholder(this._assetManager, boardModel);
     this._board.setStyle({
       flexGrow: 1,
       minWidth: 280,
       minHeight: 280,
-      margin: { top: 4, right: 8, bottom: 4, left: 8 },
     });
-    centerCol.addChild(this._board);
+    this._boardPanel.addChild(this._board);
+    centerCol.addChild(this._boardPanel);
 
-    // Combat log container
-    this._combatLogContainer = new UIContainer();
-    this._combatLogContainer.setStyle({
-      background: 'rgba(0,0,0,0.45)',
-      borderColor: '#1c1c1d',
-      borderWidth: 1,
-      cornerRadius: 4,
-      height: 60,
-      padding: 6,
-      margin: { top: 2, bottom: 2 },
-    });
+    // Combat log panel
+    this._combatLogPanel = new CombatLogPanel(this._assetManager);
+    this._combatLogPanel.setStyle({ height: COMBAT_LOG_HEIGHT });
+    this._combatLogText = this._combatLogPanel.textElement;
+    centerCol.addChild(this._combatLogPanel);
 
-    this._combatLogText = new UIText('Combat log...');
-    this._combatLogText.setStyle({
-      fontSize: 11,
-      color: '#aaaaaa',
-      alignH: 'left',
-      alignV: 'center',
-    });
-    this._combatLogContainer.addChild(this._combatLogText);
-
-    centerCol.addChild(this._combatLogContainer);
     mainRow.addChild(centerCol);
 
-    // ── RIGHT: Enemy CharacterPane ───────────────────
-    this._enemyPane = new CharacterPane(this._enemyData, this._assetManager);
-    this._enemyPane.setStyle({
-      widthPercent: 0.24,
-      minWidth: 400,
-      maxWidth: 440,
-      backgroundAssetKey: 'character_pane_background',
-      borderColor: '#1c1c1d',
-      borderWidth: 2,
-      cornerRadius: 8,
-      padding: { top: 14, right: 16, bottom: 16, left: 16 },
-      gap: 10,
-    });
-    mainRow.addChild(this._enemyPane);
+    // ── RIGHT: compact stacked enemy column ───────────
+    const enemyCol = this._buildSideColumn('enemy');
+    mainRow.addChild(enemyCol);
 
     this.addChild(mainRow);
+  }
+
+  /**
+   * Build a compact stacked side column (character info + skills + relics).
+   * @param {'player'|'enemy'} side
+   * @returns {UIContainer}
+   */
+  _buildSideColumn(side) {
+    const col = new UIContainer();
+    col.direction = 'column';
+    col.gap = SIDE_COL_GAP;
+    col.alignItems = 'stretch';
+    col.width = SIDE_COL_WIDTH;
+    col.minWidth = SIDE_COL_MIN_WIDTH;
+    col.maxWidth = SIDE_COL_MAX_WIDTH;
+
+    const isPlayer = side === 'player';
+    const data    = isPlayer ? this._playerData : this._enemyData;
+    const skills  = (data && data.skills) || [];
+
+    // 1) Compact character info pane (portrait + stats + mana)
+    const infoPane = new CharacterInfoPane(data, this._assetManager);
+    if (isPlayer) this._playerPane = infoPane; else this._enemyPane = infoPane;
+    col.addChild(infoPane);
+
+    // 2) Skills pane (2x3 grid; remaining slots = skills_locked_button)
+    const skillsPane = new SkillsPane(skills, this._assetManager);
+    if (isPlayer) this._playerSkillsPane = skillsPane;
+    else          this._enemySkillsPane  = skillsPane;
+    skillsPane.flexGrow = 0;
+    col.addChild(skillsPane);
+
+    // 3) Relics pane (6x2 grid; all locked for now)
+    const relicsPane = new RelicsPane([], this._assetManager);
+    if (isPlayer) this._playerRelicsPane = relicsPane;
+    else          this._enemyRelicsPane  = relicsPane;
+    relicsPane.flexGrow = 0;
+    col.addChild(relicsPane);
+
+    return col;
   }
 
   // ── Scene lifecycle ──────────────────────────────────
@@ -300,10 +340,9 @@ export default class BattleScene extends UIPanel {
     input.canvas.style.outline = 'none';
     input.canvas.focus();
 
-    // Wire skill click callbacks
-    const playerPane = this._playerPane;
-    if (playerPane && this._battleController) {
-      playerPane.onSkillClick = (skill) => {
+    // Wire skill click callbacks on the new SkillsPane
+    if (this._playerSkillsPane && this._battleController) {
+      this._playerSkillsPane.onSkillClick = (skill) => {
         this._battleController.tryPlayerSkill(skill);
       };
     }
@@ -432,10 +471,9 @@ export default class BattleScene extends UIPanel {
     board.hoveredCell = cell;
 
     const hit = this.hitTest(x, y);
-    const playerPane = this._playerPane;
-    if (playerPane) {
-      for (const row of playerPane._skillRows) {
-        row._hovered = (hit === row && row.onClick && this._canAct());
+    if (this._playerSkillsPane) {
+      for (const btn of this._playerSkillsPane.skillButtons) {
+        btn._hovered = (hit === btn && btn.onClick && this._canAct());
       }
     }
   }
@@ -632,10 +670,16 @@ export default class BattleScene extends UIPanel {
     if (this._playerPane && state.playerState) {
       this._playerPane.updateFromState(state.playerState);
     }
+    if (this._playerSkillsPane && state.playerState && state.playerState.mana) {
+      this._playerSkillsPane.setManaState(state.playerState.mana);
+    }
 
     // Update enemy pane from real state
     if (this._enemyPane && state.enemyState) {
       this._enemyPane.updateFromState(state.enemyState);
+    }
+    if (this._enemySkillsPane && state.enemyState && state.enemyState.mana) {
+      this._enemySkillsPane.setManaState(state.enemyState.mana);
     }
 
     // Update combat log
@@ -942,11 +986,19 @@ export default class BattleScene extends UIPanel {
   setPlayerData(data) {
     this._playerData = data;
     if (this._playerPane) this._playerPane.setCharacterData(data);
+    if (this._playerSkillsPane) this._playerSkillsPane.setSkills((data && data.skills) || []);
+    // Re-wire skill click after rebuild
+    if (this._playerSkillsPane && this._battleController) {
+      this._playerSkillsPane.onSkillClick = (skill) => {
+        this._battleController.tryPlayerSkill(skill);
+      };
+    }
   }
 
   setEnemyData(data) {
     this._enemyData = data;
     if (this._enemyPane) this._enemyPane.setCharacterData(data);
+    if (this._enemySkillsPane) this._enemySkillsPane.setSkills((data && data.skills) || []);
   }
 
   updateFromData() {
@@ -961,12 +1013,12 @@ export default class BattleScene extends UIPanel {
     return this._board;
   }
 
-  /** @returns {CharacterPane|null} */
+  /** @returns {CharacterInfoPane|null} */
   getPlayerPane() {
     return this._playerPane;
   }
 
-  /** @returns {CharacterPane|null} */
+  /** @returns {CharacterInfoPane|null} */
   getEnemyPane() {
     return this._enemyPane;
   }
@@ -977,6 +1029,12 @@ export default class BattleScene extends UIPanel {
     this._assetManager = am;
     if (this._playerPane) this._playerPane.setAssetManager(am);
     if (this._enemyPane) this._enemyPane.setAssetManager(am);
+    if (this._playerSkillsPane) this._playerSkillsPane.setAssetManager(am);
+    if (this._enemySkillsPane)  this._enemySkillsPane.setAssetManager(am);
+    if (this._playerRelicsPane) this._playerRelicsPane.setAssetManager(am);
+    if (this._enemyRelicsPane)  this._enemyRelicsPane.setAssetManager(am);
+    if (this._boardPanel) this._boardPanel.setAssetManager(am);
+    if (this._combatLogPanel) this._combatLogPanel.assetManager = am;
     if (this._board) this._board.setAssetManager(am);
   }
 
