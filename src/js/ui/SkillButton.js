@@ -5,17 +5,23 @@ import UIText from './UIText.js';
 import UIOrb from './UIOrb.js';
 
 // ── Tunable layout constants ─────────────────────────────
-const BTN_PADDING = { top: 6, right: 8, bottom: 6, left: 6 };
-const BTN_GAP = 6;
-const ICON_SIZE = 60;
-const NAME_FONT_SIZE = 16;
-const COST_FONT_SIZE = 14;
-const COST_ORB_SIZE = 18;
-// Fixed width for the cost amount text — prevents it from flexing
-// and pushing the orb to the far edge of the cost row.
-const COST_TEXT_WIDTH = 14;
-// Gap between the cost number and its mana orb. Smaller = tighter.
-const COST_PAIR_GAP = 2;
+const BTN_PADDING = { top: 8, right: 12, bottom: 8, left: 10 };
+// Horizontal gap between the three main columns: icon | info | cost.
+const BTN_GAP = 10;
+const ICON_SIZE = 70;
+const NAME_FONT_SIZE = 18;
+const DESC_FONT_SIZE = 13;
+const DESC_LINE_HEIGHT = 15;
+// Maximum width for the description text before it word-wraps onto
+// additional lines (0 = no wrap, single line).
+const DESC_MAX_WIDTH = 120;
+const COST_FONT_SIZE = 16;
+const COST_ORB_SIZE = 22;
+// Width allocated to the right-hand cost column. Wide enough to fit a
+// two-digit amount + orb. Increase if you need more than one cost.
+const COST_COL_WIDTH = 56;
+// Gap between the cost number and its mana orb.
+const COST_PAIR_GAP = 4;
 
 const MANA_COLORS = {
   red:    '#cc3333',
@@ -26,12 +32,12 @@ const MANA_COLORS = {
 };
 
 /**
- * SkillButton — compact skill button used by the new SkillsPane.
+ * SkillButton — skill button used by the new SkillsPane.
  *
- * Two layout columns:
- *   [icon] [name / cost row]
+ * Three layout columns:
+ *   [icon] [name + description (stacked)] [mana cost (number + orb)]
  *
- * Three rendered modes:
+ * Two rendered modes:
  *   - locked  — empty placeholder slot (background = `skills_locked_button`, no interactivity)
  *   - active  — skill rendered, clickable when affordable
  *
@@ -73,7 +79,8 @@ export default class SkillButton extends UIPanel {
     // Refs
     this._iconImage = null;
     this._nameText = null;
-    this._costRow = null;
+    this._descText = null;
+    this._costCol = null;
 
     if (!this._locked) this.buildHierarchy();
   }
@@ -88,7 +95,7 @@ export default class SkillButton extends UIPanel {
     const sd = this._skillData;
     if (!sd) return;
 
-    // Icon
+    // ── Column 1: icon ──
     this._iconImage = new UIImage(sd.icon || 'placeholder', this._assetManager);
     this._iconImage.setStyle({
       width: ICON_SIZE,
@@ -98,7 +105,7 @@ export default class SkillButton extends UIPanel {
     });
     this.addChild(this._iconImage);
 
-    // Info column
+    // ── Column 2: name (top row) + description (bottom row) ──
     const info = new UIContainer();
     info.direction = 'column';
     info.gap = 2;
@@ -117,36 +124,50 @@ export default class SkillButton extends UIPanel {
     });
     info.addChild(this._nameText);
 
-    // Compact cost row: e.g. "7 [red orb]"
-    this._costRow = this._buildCostRow(sd.cost);
-    info.addChild(this._costRow);
+    // Description (may contain '\n' line breaks — UIText supports them).
+    this._descText = new UIText(sd.description || '');
+    this._descText.setStyle({
+      fontSize: DESC_FONT_SIZE,
+      color: '#cfc8a8',
+      alignH: 'left',
+      alignV: 'top',
+      lineHeight: DESC_LINE_HEIGHT,
+      maxWidth: DESC_MAX_WIDTH,
+      flexGrow: 1,
+    });
+    info.addChild(this._descText);
 
     this.addChild(info);
+
+    // ── Column 3: mana cost (number + orb) ──
+    this._costCol = this._buildCostColumn(sd.cost);
+    this.addChild(this._costCol);
   }
 
-  _buildCostRow(costData) {
-    const row = new UIContainer();
-    row.direction = 'row';
-    row.gap = 6;
-    row.alignItems = 'center';
-    row.justifyContent = 'start';
-    row.height = COST_ORB_SIZE + 2;
+  /**
+   * Right-hand cost column. Each cost (color, amount) renders as a row
+   * of [number] [orb]; multiple costs stack vertically. Centered within
+   * the fixed-width column so it stays out of the description's way.
+   */
+  _buildCostColumn(costData) {
+    const col = new UIContainer();
+    col.direction = 'column';
+    col.gap = 4;
+    col.alignItems = 'end';
+    col.justifyContent = 'center';
+    col.width = COST_COL_WIDTH;
 
-    if (!costData || typeof costData !== 'object') return row;
+    if (!costData || typeof costData !== 'object') return col;
 
     const activeColors = Object.keys(costData).filter(c => costData[c] > 0);
-    for (let i = 0; i < activeColors.length; i++) {
-      const color = activeColors[i];
+    for (const color of activeColors) {
       const amount = costData[color];
 
-      // Wrap each [value, orb] pair in a tight inner container so they
-      // stick together. Without this, the unsized text auto-flexes and
-      // pushes the orb to the far edge of the row.
       const pair = new UIContainer();
       pair.direction = 'row';
       pair.gap = COST_PAIR_GAP;
       pair.alignItems = 'center';
-      pair.width = COST_TEXT_WIDTH + COST_PAIR_GAP + COST_ORB_SIZE;
+      pair.height = COST_ORB_SIZE;
 
       const value = new UIText(String(amount));
       value.setStyle({
@@ -155,8 +176,6 @@ export default class SkillButton extends UIPanel {
         bold: true,
         alignH: 'right',
         alignV: 'center',
-        width: COST_TEXT_WIDTH,
-        margin: { left: 5 }
       });
       pair.addChild(value);
 
@@ -180,9 +199,9 @@ export default class SkillButton extends UIPanel {
       }
       pair.addChild(orb);
 
-      row.addChild(pair);
+      col.addChild(pair);
     }
-    return row;
+    return col;
   }
 
   // ── Mana affordability ──────────────────────────────

@@ -8,12 +8,12 @@ import UIOrb from './UIOrb.js';
 // ── Tunable layout constants ─────────────────────────────
 const PANE_PADDING = { top: 10, right: 12, bottom: 12, left: 12 };
 const HEADER_HEIGHT = 96;
-const PORTRAIT_WIDTH = 110;
-const PORTRAIT_HEIGHT = 110;
+const PORTRAIT_WIDTH = 120;
+const PORTRAIT_HEIGHT = 120;
 const HEADER_GAP = 12;
 
-const NAME_FONT_SIZE = 24;
-const CLASS_FONT_SIZE = 16;
+const NAME_FONT_SIZE = 26;
+const CLASS_FONT_SIZE = 18;
 const HEALTH_BAR_HEIGHT = 25;
 const HEALTH_LABEL_FONT_SIZE = 13;
 const STATS_HEIGHT = 22;
@@ -22,8 +22,8 @@ const STAT_VALUE_FONT_SIZE = 14;
 
 const MANA_ROW_HEIGHT = 100;
 const MANA_GAP = 6;
-const MANA_ORB_WIDTH = 50;
-const MANA_ORB_HEIGHT = 60;
+const MANA_ORB_WIDTH = 60;
+const MANA_ORB_HEIGHT = 70;
 const MANA_FONT_SIZE = 13;
 
 /**
