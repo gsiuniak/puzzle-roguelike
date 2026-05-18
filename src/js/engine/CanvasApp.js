@@ -1,20 +1,23 @@
 /**
- * CanvasApp — wraps an HTML5 Canvas, handles DPR-aware resize, provides context.
+ * CanvasApp — wraps an HTML5 Canvas with a fixed design-space viewport.
  *
- * The canvas fills the browser window and renders crisply on high-DPI screens
- * by setting internal resolution to CSS size × devicePixelRatio.
+ * The canvas always covers the full browser window (CSS + backing store at
+ * devicePixelRatio for crispness). Internally, the 2D context is pre-scaled
+ * and pre-translated so all drawing code uses a fixed design coordinate
+ * system (default 1920×1080). The design rect is fit-scaled into the window
+ * uniformly, producing letterbox/pillarbox black bars on whichever axis has
+ * extra room.
  *
- * Defaults:
- *   - imageSmoothingEnabled = false  (crisp sprites; override per-draw-call)
- *   - alpha = false                  (opaque canvas for performance)
+ * width / height getters return DESIGN-space dimensions, so existing scene
+ * layout code that reads them continues to work without modification.
  */
 export default class CanvasApp {
   /**
    * @param {string|HTMLCanvasElement} canvasOrId - canvas element or id
    * @param {object} [opts]
    * @param {boolean} [opts.autoResize=true]
-   * @param {number}  [opts.minWidth=320]
-   * @param {number}  [opts.minHeight=480]
+   * @param {number}  [opts.designWidth=1920]
+   * @param {number}  [opts.designHeight=1080]
    */
   constructor(canvasOrId, opts = {}) {
     this.canvas = typeof canvasOrId === 'string'
@@ -34,18 +37,26 @@ export default class CanvasApp {
     this.dpr = window.devicePixelRatio || 1;
 
     this.autoResize = opts.autoResize !== false;
-    this.minWidth = opts.minWidth || 320;
-    this.minHeight = opts.minHeight || 480;
 
-    /** Logical CSS-pixel dimensions (used by layout code) */
+    /** Fixed design-space dimensions — all scene code lays out into this rect */
+    this.designWidth  = opts.designWidth  || 1920;
+    this.designHeight = opts.designHeight || 1080;
+
+    /** Physical CSS-pixel size of the canvas (== window.innerWidth/Height) */
     this._cssWidth = 0;
     this._cssHeight = 0;
+
+    /** Uniform scale that fits design rect into the window */
+    this._scale = 1;
+    /** CSS-pixel offset from canvas top-left to the design rect (centers the viewport) */
+    this._offsetX = 0;
+    this._offsetY = 0;
 
     // Default to crisp rendering for pixel-art sprites / UI.
     // Individual draw calls may override via imageSmoothingEnabled.
     this.ctx.imageSmoothingEnabled = false;
 
-    /** Callback after resize: (cssWidth, cssHeight) => {} */
+    /** Callback after resize: (designWidth, designHeight) => {} */
     this.onResize = null;
 
     if (this.autoResize) {
@@ -59,57 +70,105 @@ export default class CanvasApp {
     }
   }
 
-  /** Logical (CSS-pixel) width the layout system should use */
-  get width() { return this._cssWidth; }
-  /** Logical (CSS-pixel) height the layout system should use */
-  get height() { return this._cssHeight; }
+  /** Design-space width (constant — what scene layout code reads) */
+  get width()  { return this.designWidth; }
+  /** Design-space height (constant — what scene layout code reads) */
+  get height() { return this.designHeight; }
+
+  /** Physical CSS-pixel canvas width (= window.innerWidth) */
+  get cssWidth()  { return this._cssWidth; }
+  /** Physical CSS-pixel canvas height (= window.innerHeight) */
+  get cssHeight() { return this._cssHeight; }
+
+  /** Uniform design-to-CSS scale factor */
+  get scale()   { return this._scale; }
+  /** CSS-pixel X offset from canvas left to design (0,0) */
+  get offsetX() { return this._offsetX; }
+  /** CSS-pixel Y offset from canvas top to design (0,0) */
+  get offsetY() { return this._offsetY; }
 
   _handleResize() {
-    const prevDpr = this.dpr;
-    // Update DPR in case it changed (monitor switch)
     this.dpr = window.devicePixelRatio || 1;
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
 
-    const w = Math.max(this.minWidth, window.innerWidth);
-    const h = Math.max(this.minHeight, window.innerHeight);
+    this._cssWidth = winW;
+    this._cssHeight = winH;
 
-    const sizeChanged = this._cssWidth !== w || this._cssHeight !== h;
-    const dprChanged = prevDpr !== this.dpr;
+    // Backing store covers the full window at DPR.
+    this.canvas.width  = Math.max(1, Math.floor(winW * this.dpr));
+    this.canvas.height = Math.max(1, Math.floor(winH * this.dpr));
+    this.canvas.style.width  = winW + 'px';
+    this.canvas.style.height = winH + 'px';
 
-    // Update when CSS size OR DPR changes
-    if (sizeChanged || dprChanged) {
-      this._cssWidth = w;
-      this._cssHeight = h;
+    // Uniform scale that fits the entire design rect inside the window.
+    this._scale = Math.min(winW / this.designWidth, winH / this.designHeight);
+    this._offsetX = (winW - this.designWidth  * this._scale) / 2;
+    this._offsetY = (winH - this.designHeight * this._scale) / 2;
 
-      // Internal resolution = CSS size × DPR for sharp rendering
-      this.canvas.width = w * this.dpr;
-      this.canvas.height = h * this.dpr;
+    // Apply combined design-scale × DPR transform so all draw calls use design coords.
+    this._applyDesignTransform();
+    this.ctx.imageSmoothingEnabled = false;
 
-      // CSS display size matches layout coordinates
-      this.canvas.style.width = w + 'px';
-      this.canvas.style.height = h + 'px';
-
-      // Scale the context so all drawing code uses CSS-pixel coordinates.
-      // setTransform() resets any prior transform, avoiding cumulative scaling.
-      this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-
-      // Re-apply default smoothing after reset
-      this.ctx.imageSmoothingEnabled = false;
-
-      // Only fire onResize callback for actual size changes (layout recalc)
-      if (sizeChanged && this.onResize) {
-        this.onResize(w, h);
-      }
+    if (this.onResize) {
+      this.onResize(this.designWidth, this.designHeight);
     }
   }
 
+  /** Re-apply the design-space transform (used after temporary resets). */
+  _applyDesignTransform() {
+    const s = this._scale * this.dpr;
+    this.ctx.setTransform(s, 0, 0, s, this._offsetX * this.dpr, this._offsetY * this.dpr);
+  }
+
   /**
-   * Clear the entire canvas.
-   * All coordinates are in CSS pixels (context is pre-scaled by DPR).
+   * Clear the canvas: black on the side/letterbox bars, viewport color inside
+   * the design rect. All coordinates passed to subsequent draw calls are in
+   * design space.
    */
-  clear(color = '#111111') {
+  clear(viewportColor = '#1a0a0a') {
     const ctx = this.ctx;
-    ctx.fillStyle = color;
+    // 1. Fill the entire physical canvas (including bars) with black.
+    ctx.save();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);
+    ctx.restore();
+    // 2. Restored transform is the design-space one — paint viewport background.
+    ctx.fillStyle = viewportColor;
+    ctx.fillRect(0, 0, this.designWidth, this.designHeight);
+  }
+
+  /**
+   * Push a clip rect equal to the design viewport so scenes cannot draw into
+   * the letterbox bars. Pair with endViewportClip().
+   */
+  beginViewportClip() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, this.designWidth, this.designHeight);
+    ctx.clip();
+  }
+
+  /** Restore the state pushed by beginViewportClip(). */
+  endViewportClip() {
+    this.ctx.restore();
+  }
+
+  /**
+   * Convert a CSS-pixel coordinate (e.g. from a pointer event relative to
+   * the canvas top-left) into design-space coordinates.
+   * @param {number} cssX
+   * @param {number} cssY
+   * @returns {{x:number, y:number}}
+   */
+  cssToDesign(cssX, cssY) {
+    const s = this._scale || 1;
+    return {
+      x: (cssX - this._offsetX) / s,
+      y: (cssY - this._offsetY) / s,
+    };
   }
 
   /**

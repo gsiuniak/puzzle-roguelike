@@ -108,9 +108,12 @@ const ASSET_MAP = {
   rewards_background_splash:     'assets/sprites/reward_screen/rewards_background_splash.png',
 };
 
-// ── Scene sizing ────────────────────────────────────────
-const MIN_WIDTH = 1024;
-const MIN_HEIGHT = 640;
+// ── Game viewport configuration ─────────────────────────
+// The game renders against a fixed design resolution and is uniformly
+// scaled to fit the device window. Black bars (letterbox/pillarbox) fill
+// any unused space outside the aspect-correct viewport.
+const DESIGN_WIDTH  = 1920;
+const DESIGN_HEIGHT = 1080;
 
 // ── Initialize ─────────────────────────────────────────
 async function init() {
@@ -131,12 +134,12 @@ async function init() {
   // 3. CanvasApp
   const app = new CanvasApp(null, {
     autoResize: true,
-    minWidth: MIN_WIDTH,
-    minHeight: MIN_HEIGHT,
+    designWidth: DESIGN_WIDTH,
+    designHeight: DESIGN_HEIGHT,
   });
 
-  // 4. InputManager
-  const input = new InputManager(app.canvas);
+  // 4. InputManager — receives `app` so pointer events convert to design space
+  const input = new InputManager(app.canvas, app);
 
   // 5. GameLoop
   const loop = new GameLoop();

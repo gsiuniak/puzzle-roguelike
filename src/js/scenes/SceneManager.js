@@ -223,7 +223,9 @@ export default class SceneManager {
         // Render current scene with darkening overlay
         this._app.clear('#1a0a0a');
         if (this._currentScene) {
+          this._app.beginViewportClip();
           this._currentScene.render(this._app.ctx);
+          this._app.endViewportClip();
         }
         this._renderTransitionOverlay();
 
@@ -245,7 +247,9 @@ export default class SceneManager {
 
         this._app.clear('#1a0a0a');
         if (this._currentScene) {
+          this._app.beginViewportClip();
           this._currentScene.render(this._app.ctx);
+          this._app.endViewportClip();
         }
         this._renderTransitionOverlay();
 
@@ -270,7 +274,9 @@ export default class SceneManager {
 
     // Render
     this._app.clear('#1a0a0a');
+    this._app.beginViewportClip();
     this._currentScene.render(this._app.ctx);
+    this._app.endViewportClip();
   }
 
   /**

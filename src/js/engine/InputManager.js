@@ -7,14 +7,23 @@
  *   - hit testing delegation to a root UIElement tree
  *
  * Usage:
- *   const input = new InputManager(canvas);
+ *   const input = new InputManager(canvas, canvasApp);
  *   input.on('click', (x, y) => { ... });
  *   input.on('keydown', (event) => { ... });
  *   input.setRootUI(rootUIElement); // for hit testing
+ *
+ * Pointer coordinates are converted from CSS pixels into design-space via
+ * canvasApp.cssToDesign(), so scenes always receive coords in the same
+ * coordinate system they laid out into.
  */
 export default class InputManager {
-  constructor(canvas) {
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {import('./CanvasApp.js').default} [canvasApp] — for design-space coord conversion
+   */
+  constructor(canvas, canvasApp = null) {
     this.canvas = canvas;
+    this._app = canvasApp;
     this._rootUI = null;
 
     // Mouse state
@@ -84,12 +93,12 @@ export default class InputManager {
 
   _getPos(e) {
     const rect = this.canvas.getBoundingClientRect();
-    // Canvas CSS size matches our logical coordinate space,
-    // so getBoundingClientRect coords are already in the correct units.
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
+    const cssX = e.clientX - rect.left;
+    const cssY = e.clientY - rect.top;
+    if (this._app) {
+      return this._app.cssToDesign(cssX, cssY);
+    }
+    return { x: cssX, y: cssY };
   }
 
   _onClick(e) {
