@@ -21,7 +21,7 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 const MAIN_ROW_MAX_WIDTH = 1820;
 // Horizontal gap between the side columns and the central board panel.
 // Small value = panels snug against the board frame (mock-style).
-const MAIN_ROW_GAP = 0;
+const MAIN_ROW_GAP = -10;
 const MAIN_ROW_PADDING = { top: 12, right: 12, bottom: 12, left: 12 };
 
 const SIDE_COL_WIDTH = 320;

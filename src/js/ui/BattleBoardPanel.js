@@ -4,7 +4,7 @@ import UIPanel from './UIPanel.js';
 // Inset inside the (already-square) panel art frame. These values
 // represent the visible decorative border of `battle_board_panel.png`
 // so the inner playable square sits within the frame.
-const FRAME_INSET = { top: 58, right: 18, bottom: 45, left: 18 };
+const FRAME_INSET = { top: 60, right: 28, bottom: 50, left: 28 };
 
 /**
  * BattleBoardPanel — decorative square wrapper around the BoardPlaceholder.
