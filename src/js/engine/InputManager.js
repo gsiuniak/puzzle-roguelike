@@ -58,9 +58,15 @@ export default class InputManager {
     this.canvas.addEventListener('mousemove', this._handleMouseMove);
     this.canvas.addEventListener('keydown', this._handleKeyDown);
 
-    // Touch support
-    this.canvas.addEventListener('touchstart', this._handleTouchStart.bind(this), { passive: false });
-    this.canvas.addEventListener('touchend', this._handleTouchEnd.bind(this), { passive: false });
+    // Touch support — bind once so we can remove on destroy()
+    this._handleTouchStartBound  = this._handleTouchStart.bind(this);
+    this._handleTouchMoveBound   = this._handleTouchMove.bind(this);
+    this._handleTouchEndBound    = this._handleTouchEnd.bind(this);
+    this._handleTouchCancelBound = this._handleTouchCancel.bind(this);
+    this.canvas.addEventListener('touchstart',  this._handleTouchStartBound,  { passive: false });
+    this.canvas.addEventListener('touchmove',   this._handleTouchMoveBound,   { passive: false });
+    this.canvas.addEventListener('touchend',    this._handleTouchEndBound,    { passive: false });
+    this.canvas.addEventListener('touchcancel', this._handleTouchCancelBound, { passive: false });
   }
 
   /** Set the root UI element for hit testing */
@@ -126,22 +132,49 @@ export default class InputManager {
     this._fire('keydown', e);
   }
 
+  // ── Touch ───────────────────────────────────────────
+  // Mirror desktop mouse events 1:1:
+  //   touchstart  → mousemove + mousedown
+  //   touchmove   → mousemove
+  //   touchend    → mouseup + click
+  //   touchcancel → mouseup
+  // Tracks only the primary (first) touch — multi-touch is ignored.
+
   _handleTouchStart(e) {
     e.preventDefault();
-    if (e.touches.length > 0) {
-      const pos = this._getPos(e.touches[0]);
-      this.mouseX = pos.x;
-      this.mouseY = pos.y;
-      this.mouseDown = true;
-      this._fire('mousedown', pos.x, pos.y);
-    }
+    if (e.touches.length === 0) return;
+    const pos = this._getPos(e.touches[0]);
+    this.mouseX = pos.x;
+    this.mouseY = pos.y;
+    this.mouseDown = true;
+    // Fire mousemove first so scenes that rely on hover state (BattleScene
+    // tile-swap highlight, CharacterSelect button hover) update before the
+    // mousedown handler reads the tapped position.
+    this._fire('mousemove', pos.x, pos.y);
+    this._fire('mousedown', pos.x, pos.y);
+  }
+
+  _handleTouchMove(e) {
+    e.preventDefault();
+    if (e.touches.length === 0) return;
+    const pos = this._getPos(e.touches[0]);
+    this.mouseX = pos.x;
+    this.mouseY = pos.y;
+    this._fire('mousemove', pos.x, pos.y);
   }
 
   _handleTouchEnd(e) {
     e.preventDefault();
+    // touches[] is empty on touchend — use the last cached position.
     this.mouseDown = false;
     this._fire('mouseup', this.mouseX, this.mouseY);
     this._fire('click', this.mouseX, this.mouseY);
+  }
+
+  _handleTouchCancel(e) {
+    e.preventDefault();
+    this.mouseDown = false;
+    this._fire('mouseup', this.mouseX, this.mouseY);
   }
 
   _fire(eventName, ...args) {
@@ -173,6 +206,10 @@ export default class InputManager {
     this.canvas.removeEventListener('mouseup', this._handleMouseUp);
     this.canvas.removeEventListener('mousemove', this._handleMouseMove);
     this.canvas.removeEventListener('keydown', this._handleKeyDown);
+    this.canvas.removeEventListener('touchstart',  this._handleTouchStartBound);
+    this.canvas.removeEventListener('touchmove',   this._handleTouchMoveBound);
+    this.canvas.removeEventListener('touchend',    this._handleTouchEndBound);
+    this.canvas.removeEventListener('touchcancel', this._handleTouchCancelBound);
     this._listeners = {};
   }
 }

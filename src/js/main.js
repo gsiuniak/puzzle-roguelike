@@ -164,10 +164,17 @@ async function init() {
   sceneManager.registerScene('MapScene', mapScene);
   // BattleScene is registered lazily by MapScene._transitionToBattle()
 
-  // 11. Boot into title screen
+  // 11. Wire the fullscreen toggle button.
+  // The Fullscreen API requires a user gesture, so we attach a tap/click
+  // handler rather than auto-entering. On iOS Safari the API is unavailable
+  // outside <video>, but the apple-mobile-web-app-capable meta tag in
+  // index.html makes "Add to Home Screen" launch the app fullscreen.
+  setupFullscreenButton();
+
+  // 12. Boot into title screen
   sceneManager.switchTo('TitleScreen');
 
-  // 12. Start the game loop
+  // 13. Start the game loop
   sceneManager.start();
 
   // Attach debug flags to window for runtime access across modules
@@ -193,6 +200,46 @@ function setDebugRecursive(element, enabled) {
   for (const child of element.children) {
     setDebugRecursive(child, enabled);
   }
+}
+
+// ── Fullscreen toggle ──────────────────────────────────
+function setupFullscreenButton() {
+  const btn = document.getElementById('fullscreen-btn');
+  if (!btn) return;
+
+  const docEl = document.documentElement;
+  const reqFs  = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+  const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
+
+  // Hide the button entirely on browsers that don't support the API
+  // (e.g. iOS Safari outside of <video>). The home-screen-install path
+  // via apple-mobile-web-app-capable still provides fullscreen there.
+  if (!reqFs) {
+    btn.style.display = 'none';
+    return;
+  }
+
+  const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+  const toggle = (e) => {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (isFs()) {
+      if (exitFs) exitFs.call(document).catch(() => {});
+    } else {
+      reqFs.call(docEl).catch(() => {});
+    }
+  };
+
+  btn.addEventListener('click', toggle);
+  // touchend instead of touchstart so it doesn't fire during a scroll/drag
+  btn.addEventListener('touchend', toggle, { passive: false });
+
+  const syncState = () => {
+    btn.classList.toggle('is-fs', isFs());
+  };
+  document.addEventListener('fullscreenchange', syncState);
+  document.addEventListener('webkitfullscreenchange', syncState);
+  syncState();
 }
 
 // ── Boot ───────────────────────────────────────────────
