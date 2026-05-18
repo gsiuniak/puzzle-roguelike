@@ -1,3 +1,7 @@
+# SPECIAL NOTE
+
+- This is in WSL. Assume linux commands, the base of the project at ~/test/game/gems. never use powershell commands, or include wsl.localhost in grep/ls etc commands
+
 # AGENT ENTRYPOINT — Project Implementation Map
 
 > **AUDIENCE:** Coding agents (not end users).
