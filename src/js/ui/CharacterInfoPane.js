@@ -8,22 +8,22 @@ import UIOrb from './UIOrb.js';
 // ── Tunable layout constants ─────────────────────────────
 const PANE_PADDING = { top: 10, right: 12, bottom: 12, left: 12 };
 const HEADER_HEIGHT = 96;
-const PORTRAIT_WIDTH = 88;
-const PORTRAIT_HEIGHT = 88;
+const PORTRAIT_WIDTH = 110;
+const PORTRAIT_HEIGHT = 110;
 const HEADER_GAP = 12;
 
-const NAME_FONT_SIZE = 20;
-const CLASS_FONT_SIZE = 12;
-const HEALTH_BAR_HEIGHT = 18;
-const HEALTH_LABEL_FONT_SIZE = 11;
+const NAME_FONT_SIZE = 24;
+const CLASS_FONT_SIZE = 16;
+const HEALTH_BAR_HEIGHT = 25;
+const HEALTH_LABEL_FONT_SIZE = 13;
 const STATS_HEIGHT = 22;
 const STAT_ICON_SIZE = 16;
 const STAT_VALUE_FONT_SIZE = 14;
 
-const MANA_ROW_HEIGHT = 56;
+const MANA_ROW_HEIGHT = 100;
 const MANA_GAP = 6;
-const MANA_ORB_WIDTH = 36;
-const MANA_ORB_HEIGHT = 52;
+const MANA_ORB_WIDTH = 50;
+const MANA_ORB_HEIGHT = 60;
 const MANA_FONT_SIZE = 13;
 
 const MANA_COLORS = {
@@ -110,6 +110,7 @@ export default class CharacterInfoPane extends UIPanel {
       height: PORTRAIT_HEIGHT,
       fitMode: 'cover',
       alignSelfV: 'center',
+      margin: { top: 20, left: 5}
     });
     header.addChild(this._portrait);
 
@@ -118,7 +119,7 @@ export default class CharacterInfoPane extends UIPanel {
     info.direction = 'column';
     info.gap = 2;
     info.flexGrow = 1;
-    info.padding = { top: 2, right: 4 };
+    info.padding = { top: 10, right: 4 };
 
     // Name
     this._nameText = new UIText(cd.name || '');
@@ -186,7 +187,8 @@ export default class CharacterInfoPane extends UIPanel {
     manaRow.alignItems = 'center';
     manaRow.gap = MANA_GAP;
     manaRow.height = MANA_ROW_HEIGHT;
-    manaRow.padding = { top: 4, right: 2, bottom: 2, left: 2 };
+    manaRow.padding = { top: 20, right: 2, bottom: 2, left: 2 };
+    manaRow.margin = { top: 20 };
 
     const manaData = cd.mana || {};
     for (const color of MANA_ORDER) {
@@ -234,6 +236,7 @@ export default class CharacterInfoPane extends UIPanel {
       alignH: 'left',
       alignV: 'center',
       height: STAT_VALUE_FONT_SIZE + 4,
+      margin: { left: 5 }
     });
     setValueRef(valueText);
     group.addChild(valueText);

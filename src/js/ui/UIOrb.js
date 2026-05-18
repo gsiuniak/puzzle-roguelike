@@ -124,8 +124,8 @@ export default class UIOrb extends UIElement {
     const orbRadius = orbSize / 2 - this.borderWidth;
 
     // Plate: positioned to overlap orb bottom, extending below
-    const plateW = Math.ceil(orbSize * 0.82);
-    const plateH = Math.ceil(orbSize * 0.38);
+    const plateW = Math.ceil(orbSize * 1.1);
+    const plateH = Math.ceil(orbSize * 0.5);
     const plateX = Math.floor(r.x + (r.w - plateW) / 2);
     const plateY = Math.floor(orbCy + orbRadius * 0.55);
 
