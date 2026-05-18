@@ -26,6 +26,14 @@ const MANA_ORB_WIDTH = 50;
 const MANA_ORB_HEIGHT = 60;
 const MANA_FONT_SIZE = 13;
 
+/**
+ * Natural height of the pane = top + bottom padding + header + mana row + gap.
+ * Locks the pane height so it doesn't stretch inside its column.
+ */
+const NATURAL_HEIGHT =
+  PANE_PADDING.top + PANE_PADDING.bottom +
+  HEADER_HEIGHT + MANA_ROW_HEIGHT + 6 /* outer column gap */ + 20 /* mana row top margin */;
+
 const MANA_COLORS = {
   red:    '#cc3333',
   blue:   '#3366cc',
@@ -60,6 +68,8 @@ export default class CharacterInfoPane extends UIPanel {
     this.gap = 6;
     this.padding = PANE_PADDING;
     this.backgroundAssetKey = 'character_pane_panel';
+    // Lock height so the pane sizes to content instead of stretching.
+    this.height = NATURAL_HEIGHT;
 
     // Refs for fast update
     this._portrait = null;

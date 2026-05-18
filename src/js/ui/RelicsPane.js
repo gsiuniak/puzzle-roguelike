@@ -6,7 +6,7 @@ import RelicButton from './RelicButton.js';
 // Top padding is intentionally larger to clear the decorative
 // `relics_pane_panel` top frame art (the panel image leaves a
 // visual gap above its inner grid area).
-const PANE_PADDING = { top: 68, right: 14, bottom: 14, left: 14 };
+const PANE_PADDING = { top: 38, right: 14, bottom: 19, left: 14 };
 const GRID_GAP = 6;
 // Relic slots are vertically oriented (taller than wide) per
 // the `relics_locked_button` art aspect ratio.
@@ -15,6 +15,16 @@ const SLOT_HEIGHT = 60;
 const COLS = 6;
 const ROWS = 2;
 const SLOT_COUNT = COLS * ROWS;
+
+/**
+ * Natural height of the pane = top + bottom padding + N rows + gaps.
+ * Used to lock the pane's height so it doesn't stretch inside its column.
+ */
+const NATURAL_HEIGHT =
+  PANE_PADDING.top +
+  PANE_PADDING.bottom +
+  ROWS * SLOT_HEIGHT +
+  (ROWS - 1) * GRID_GAP;
 
 /**
  * RelicsPane — 6×2 grid of RelicButtons.
@@ -36,6 +46,9 @@ export default class RelicsPane extends UIPanel {
     this.gap = GRID_GAP;
     this.padding = PANE_PADDING;
     this.backgroundAssetKey = 'relics_pane_panel';
+    // Lock height so the pane stops at the bottom of its last row
+    // instead of stretching to fill the column.
+    this.height = NATURAL_HEIGHT;
 
     /** @type {RelicButton[]} */
     this._buttons = [];

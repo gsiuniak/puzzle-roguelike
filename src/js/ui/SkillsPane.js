@@ -6,7 +6,7 @@ import SkillButton from './SkillButton.js';
 // Top padding is intentionally larger to clear the decorative
 // `skill_pane_panel` top frame art (a "Skills" label / arc area
 // is reserved in the panel image).
-const PANE_PADDING = { top: 52, right: 14, bottom: 14, left: 14 };
+const PANE_PADDING = { top: 30, right: 14, bottom: 14, left: 14 };
 const GRID_GAP = 6;
 const SLOT_HEIGHT = 56;
 
@@ -14,6 +14,16 @@ const SLOT_HEIGHT = 56;
 const COLS = 2;
 const ROWS = 3;
 const SLOT_COUNT = COLS * ROWS;
+
+/**
+ * Natural height of the pane = top + bottom padding + N rows + gaps.
+ * Used to lock the pane's height so it doesn't stretch inside its column.
+ */
+const NATURAL_HEIGHT =
+  PANE_PADDING.top +
+  PANE_PADDING.bottom +
+  ROWS * SLOT_HEIGHT +
+  (ROWS - 1) * GRID_GAP;
 
 /**
  * SkillsPane — 2x3 grid of SkillButtons.
@@ -35,6 +45,9 @@ export default class SkillsPane extends UIPanel {
     this.gap = GRID_GAP;
     this.padding = PANE_PADDING;
     this.backgroundAssetKey = 'skill_pane_panel';
+    // Lock height so the pane stops at the bottom of its last row
+    // instead of stretching to fill the column.
+    this.height = NATURAL_HEIGHT;
 
     /** @type {Function|null} (skillData) => void */
     this.onSkillClick = null;

@@ -22,19 +22,29 @@ const MAIN_ROW_MAX_WIDTH = 1820;
 // Horizontal gap between the side columns and the central board panel.
 // Small value = panels snug against the board frame (mock-style).
 const MAIN_ROW_GAP = -10;
-const MAIN_ROW_PADDING = { top: 12, right: 12, bottom: 12, left: 12 };
+const MAIN_ROW_PADDING = { top: 20, right: 0, bottom: 20, left: 0 };
 
+// Width of each side (player/enemy) column. Reduce to bring the
+// visible panel art closer to the board frame; the side panel
+// images include some transparent inner margin so the column rect
+// is typically larger than the visible art.
 const SIDE_COL_WIDTH = 320;
-const SIDE_COL_MIN_WIDTH = 260;
-const SIDE_COL_MAX_WIDTH = 360;
+const SIDE_COL_MIN_WIDTH = 240;
+const SIDE_COL_MAX_WIDTH = 320;
 const SIDE_COL_GAP = 8;
 
-// Fixed width for the center (board + combat log) column. Picked to
-// roughly match the natural square board size given the design height,
-// so the BattleBoardPanel renders as a near-perfect square inside it.
-// Tune this to bring the side columns closer to / further from the
-// board frame.
-const CENTER_COL_WIDTH = 1000;
+// Fixed width for the center (board + combat log) column. Should be
+// roughly equal to the available vertical space for the board frame
+// (canvas height minus padding minus combat log height) so the
+// `BattleBoardPanel` square fills the column with minimal slack on
+// either side. If this is larger than the available height, you get
+// empty space inside the center column between the board frame and
+// the side columns.
+//
+// Design height 1080 - main row top/bottom padding (40) - combat log
+// (80) - center column gap (8) ≈ 952 → 940 leaves a small breathing
+// margin. Reduce to pull side panels even closer.
+const CENTER_COL_WIDTH = 940;
 const CENTER_COL_GAP = 8;
 // Height of the combat log strip below the board. Bump this to make
 // the log strip taller; reduce to give the board more vertical room.
