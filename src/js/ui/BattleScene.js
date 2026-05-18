@@ -28,9 +28,9 @@ const MAIN_ROW_PADDING = { top: 20, right: 0, bottom: 20, left: 0 };
 // visible panel art closer to the board frame; the side panel
 // images include some transparent inner margin so the column rect
 // is typically larger than the visible art.
-const SIDE_COL_WIDTH = 320;
-const SIDE_COL_MIN_WIDTH = 240;
-const SIDE_COL_MAX_WIDTH = 320;
+const SIDE_COL_WIDTH = 360;
+const SIDE_COL_MIN_WIDTH = 360;
+const SIDE_COL_MAX_WIDTH = 4200;
 const SIDE_COL_GAP = 8;
 
 // Fixed width for the center (board + combat log) column. Should be

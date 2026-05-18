@@ -7,9 +7,9 @@ import UIOrb from './UIOrb.js';
 // ── Tunable layout constants ─────────────────────────────
 const BTN_PADDING = { top: 6, right: 8, bottom: 6, left: 6 };
 const BTN_GAP = 6;
-const ICON_SIZE = 44;
-const NAME_FONT_SIZE = 12;
-const COST_FONT_SIZE = 12;
+const ICON_SIZE = 60;
+const NAME_FONT_SIZE = 16;
+const COST_FONT_SIZE = 14;
 const COST_ORB_SIZE = 18;
 // Fixed width for the cost amount text — prevents it from flexing
 // and pushing the orb to the far edge of the cost row.
@@ -156,6 +156,7 @@ export default class SkillButton extends UIPanel {
         alignH: 'right',
         alignV: 'center',
         width: COST_TEXT_WIDTH,
+        margin: { left: 5 }
       });
       pair.addChild(value);
 
