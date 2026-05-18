@@ -444,23 +444,42 @@ export default class BattleScene extends UIPanel {
     if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     const board = this._board;
-    if (!board || !this._selectedCell || !this._canAct() || this._isTargeting()) {
+    if (!board || !this._dragStartCell || !this._canAct() || this._isTargeting()) {
       this._selectedCell = null;
       this._dragStartCell = null;
       if (board) board.selectedCell = null;
       return;
     }
 
-    const releaseCell = board.screenToCell(x, y);
+    // ── Direction-based swap ──────────────────────────
+    // Use the drag vector (from the start cell's center to the release point)
+    // rather than which cell the release point landed in. This is much more
+    // forgiving for touch: a finger lifted slightly off the target cell, or
+    // released past it, still produces the intended swap. The dominant axis
+    // of the drag picks the orthogonal neighbor.
+    const metrics = board.getCellMetrics();
+    const startCx = metrics.offsetX + (this._dragStartCell.col + 0.5) * metrics.cellSize;
+    const startCy = metrics.offsetY + (this._dragStartCell.row + 0.5) * metrics.cellSize;
+    const dx = x - startCx;
+    const dy = y - startCy;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    // Threshold = 1/3 of a tile — enough to reject taps but lenient on swipes.
+    const threshold = metrics.cellSize * 0.33;
 
-    if (releaseCell && this._dragStartCell) {
-      const dc = Math.abs(releaseCell.col - this._dragStartCell.col);
-      const dr = Math.abs(releaseCell.row - this._dragStartCell.row);
-
-      if ((dc === 1 && dr === 0) || (dc === 0 && dr === 1)) {
+    if (Math.max(adx, ady) >= threshold) {
+      let targetCol = this._dragStartCell.col;
+      let targetRow = this._dragStartCell.row;
+      if (adx >= ady) {
+        targetCol += dx > 0 ? 1 : -1;
+      } else {
+        targetRow += dy > 0 ? 1 : -1;
+      }
+      if (targetCol >= 0 && targetCol < board.cols
+          && targetRow >= 0 && targetRow < board.rows) {
         this._battleController.tryPlayerSwap(
           this._dragStartCell.col, this._dragStartCell.row,
-          releaseCell.col, releaseCell.row
+          targetCol, targetRow
         );
       }
     }

@@ -165,16 +165,32 @@ export default class InputManager {
 
   _handleTouchEnd(e) {
     e.preventDefault();
-    // touches[] is empty on touchend — use the last cached position.
+    // e.touches is empty here — the lifted finger lives in e.changedTouches.
+    // Cached mouseX/Y from the last touchmove can be stale by 10–30ms on a
+    // fast drag, so read the actual lift position from changedTouches.
+    let x = this.mouseX;
+    let y = this.mouseY;
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      const pos = this._getPos(e.changedTouches[0]);
+      x = pos.x; y = pos.y;
+    }
+    this.mouseX = x;
+    this.mouseY = y;
     this.mouseDown = false;
-    this._fire('mouseup', this.mouseX, this.mouseY);
-    this._fire('click', this.mouseX, this.mouseY);
+    this._fire('mouseup', x, y);
+    this._fire('click', x, y);
   }
 
   _handleTouchCancel(e) {
     e.preventDefault();
+    let x = this.mouseX;
+    let y = this.mouseY;
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      const pos = this._getPos(e.changedTouches[0]);
+      x = pos.x; y = pos.y;
+    }
     this.mouseDown = false;
-    this._fire('mouseup', this.mouseX, this.mouseY);
+    this._fire('mouseup', x, y);
   }
 
   _fire(eventName, ...args) {
