@@ -288,7 +288,6 @@ export default class BattleScene extends UIPanel {
     col.width = SIDE_COL_WIDTH;
     col.minWidth = SIDE_COL_MIN_WIDTH;
     col.maxWidth = SIDE_COL_MAX_WIDTH;
-    col.margin = { top: 40 }
 
     const isPlayer = side === 'player';
     const data    = isPlayer ? this._playerData : this._enemyData;

@@ -6,13 +6,13 @@ import RelicButton from './RelicButton.js';
 // Top padding is intentionally larger to clear the decorative
 // `relics_pane_panel` top frame art (the panel image leaves a
 // visual gap above its inner grid area).
-const PANE_PADDING = { top: 48, right: 14, bottom: 19, left: 14 };
+const PANE_PADDING = { top: 38, right: 14, bottom: 19, left: 14 };
 const GRID_GAP = 6;
 // Relic slots are vertically oriented (taller than wide) per
 // the `relics_locked_button` art aspect ratio.
-const SLOT_HEIGHT = 90;
+const SLOT_HEIGHT = 60;
 
-const COLS = 5;
+const COLS = 6;
 const ROWS = 2;
 const SLOT_COUNT = COLS * ROWS;
 
