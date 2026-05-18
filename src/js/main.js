@@ -108,8 +108,10 @@ const ASSET_MAP = {
   rewards_background_splash:     'assets/sprites/reward_screen/rewards_background_splash.png',
   // ── New battle screen panel assets ──────────────────
   battle_board_panel:        'assets/sprites/battle/board/battle_board_panel.png',
+  combat_log_panel:          'assets/sprites/battle/log/combat_log_panel.png',
   character_pane_panel:      'assets/sprites/battle/character_pane/character_pane_panel.png',
   skill_pane_panel:          'assets/sprites/battle/skills_pane/skill_pane_panel.png',
+  skills_button:             'assets/sprites/battle/skills_pane/skills_button.png',
   skills_locked_button:      'assets/sprites/battle/skills_pane/skills_locked_button.png',
   relics_pane_panel:         'assets/sprites/battle/relics_pane/relics_pane_panel.png',
   relics_locked_button:      'assets/sprites/battle/relics_pane/relics_locked_button.png',

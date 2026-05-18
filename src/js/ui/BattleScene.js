@@ -19,7 +19,9 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 
 // ── Tunable layout constants ─────────────────────────────
 const MAIN_ROW_MAX_WIDTH = 1820;
-const MAIN_ROW_GAP = 14;
+// Horizontal gap between the side columns and the central board panel.
+// Small value = panels snug against the board frame (mock-style).
+const MAIN_ROW_GAP = 0;
 const MAIN_ROW_PADDING = { top: 12, right: 12, bottom: 12, left: 12 };
 
 const SIDE_COL_WIDTH = 320;
@@ -27,8 +29,16 @@ const SIDE_COL_MIN_WIDTH = 260;
 const SIDE_COL_MAX_WIDTH = 360;
 const SIDE_COL_GAP = 8;
 
+// Fixed width for the center (board + combat log) column. Picked to
+// roughly match the natural square board size given the design height,
+// so the BattleBoardPanel renders as a near-perfect square inside it.
+// Tune this to bring the side columns closer to / further from the
+// board frame.
+const CENTER_COL_WIDTH = 1000;
 const CENTER_COL_GAP = 8;
-const COMBAT_LOG_HEIGHT = 56;
+// Height of the combat log strip below the board. Bump this to make
+// the log strip taller; reduce to give the board more vertical room.
+const COMBAT_LOG_HEIGHT = 80;
 
 /**
  * BattleScene — battle layout with three compact columns.
@@ -195,10 +205,12 @@ export default class BattleScene extends UIPanel {
     mainRow.addChild(playerCol);
 
     // ── CENTER: hidden turn label + board panel + combat log ──
+    // Fixed width (no flexGrow) so the side columns cluster snug
+    // against the board frame thanks to mainRow.justifyContent='center'.
     const centerCol = new UIContainer();
     centerCol.direction = 'column';
     centerCol.gap = CENTER_COL_GAP;
-    centerCol.flexGrow = 1;
+    centerCol.width = CENTER_COL_WIDTH;
     centerCol.alignItems = 'stretch';
 
     // Turn label — KEPT for state/data binding compatibility but
@@ -233,7 +245,7 @@ export default class BattleScene extends UIPanel {
 
     // Combat log panel
     this._combatLogPanel = new CombatLogPanel(this._assetManager);
-    this._combatLogPanel.setStyle({ height: COMBAT_LOG_HEIGHT });
+    this._combatLogPanel.setStyle({ height: COMBAT_LOG_HEIGHT, margin: { right: 40, left: 40 } });
     this._combatLogText = this._combatLogPanel.textElement;
     centerCol.addChild(this._combatLogPanel);
 

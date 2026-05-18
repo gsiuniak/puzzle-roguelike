@@ -11,6 +11,11 @@ const ICON_SIZE = 44;
 const NAME_FONT_SIZE = 12;
 const COST_FONT_SIZE = 12;
 const COST_ORB_SIZE = 18;
+// Fixed width for the cost amount text — prevents it from flexing
+// and pushing the orb to the far edge of the cost row.
+const COST_TEXT_WIDTH = 14;
+// Gap between the cost number and its mana orb. Smaller = tighter.
+const COST_PAIR_GAP = 2;
 
 const MANA_COLORS = {
   red:    '#cc3333',
@@ -53,9 +58,9 @@ export default class SkillButton extends UIPanel {
     this.gap = BTN_GAP;
     this.alignItems = 'center';
     this.padding = BTN_PADDING;
-    // Locked uses placeholder; active leaves the panel transparent so the
-    // surrounding SkillsPane background shows through.
-    this.backgroundAssetKey = this._locked ? 'skills_locked_button' : null;
+    // Locked uses the locked placeholder; active uses the unlocked
+    // skill button background art so each slot has the same frame.
+    this.backgroundAssetKey = this._locked ? 'skills_locked_button' : 'skills_button';
 
     /** @type {Function|null} */
     this.onClick = null;
@@ -124,6 +129,7 @@ export default class SkillButton extends UIPanel {
     row.direction = 'row';
     row.gap = 6;
     row.alignItems = 'center';
+    row.justifyContent = 'start';
     row.height = COST_ORB_SIZE + 2;
 
     if (!costData || typeof costData !== 'object') return row;
@@ -133,15 +139,25 @@ export default class SkillButton extends UIPanel {
       const color = activeColors[i];
       const amount = costData[color];
 
+      // Wrap each [value, orb] pair in a tight inner container so they
+      // stick together. Without this, the unsized text auto-flexes and
+      // pushes the orb to the far edge of the row.
+      const pair = new UIContainer();
+      pair.direction = 'row';
+      pair.gap = COST_PAIR_GAP;
+      pair.alignItems = 'center';
+      pair.width = COST_TEXT_WIDTH + COST_PAIR_GAP + COST_ORB_SIZE;
+
       const value = new UIText(String(amount));
       value.setStyle({
         fontSize: COST_FONT_SIZE,
         color: '#ffffff',
         bold: true,
-        alignH: 'left',
+        alignH: 'right',
         alignV: 'center',
+        width: COST_TEXT_WIDTH,
       });
-      row.addChild(value);
+      pair.addChild(value);
 
       const orb = new UIOrb();
       orb.setStyle({
@@ -161,7 +177,9 @@ export default class SkillButton extends UIPanel {
           orb.assetManager = this._assetManager;
         }
       }
-      row.addChild(orb);
+      pair.addChild(orb);
+
+      row.addChild(pair);
     }
     return row;
   }

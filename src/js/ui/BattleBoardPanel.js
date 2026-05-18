@@ -1,20 +1,23 @@
 import UIPanel from './UIPanel.js';
 
 // ── Tunable layout constants ─────────────────────────────
-// Padding is biased to match the decorative `battle_board_panel`
-// frame artwork — the inner playable area sits inset from the panel
-// edges. Tune these per asset.
-const PANEL_PADDING = { top: 36, right: 36, bottom: 36, left: 36 };
+// Inset inside the (already-square) panel art frame. These values
+// represent the visible decorative border of `battle_board_panel.png`
+// so the inner playable square sits within the frame.
+const FRAME_INSET = { top: 58, right: 18, bottom: 45, left: 18 };
 
 /**
- * BattleBoardPanel — wrapper panel that visually encases the board.
+ * BattleBoardPanel — decorative square wrapper around the BoardPlaceholder.
  *
- * Uses `battle_board_panel` as the background image and provides
- * internal padding so the BoardPlaceholder child can lay out inside
- * the decorative frame without overlapping its borders.
- *
- * The actual board (BoardPlaceholder) is added as a child by the
- * BattleScene; this component only owns layout and background art.
+ * Behavior:
+ *   - The panel rect itself can be wider than tall (it fills the available
+ *     center-column space), but we render the `battle_board_panel` art as
+ *     a centered SQUARE inside that rect. The square's side length is
+ *     `Math.min(rect.w, rect.h)`. This keeps the decorative frame from
+ *     stretching horizontally.
+ *   - The single child (BoardPlaceholder) is laid out into the same
+ *     centered square, minus FRAME_INSET, so the 8×8 tile grid sits
+ *     squarely inside the frame.
  */
 export default class BattleBoardPanel extends UIPanel {
   constructor(assetManager = null) {
@@ -24,11 +27,70 @@ export default class BattleBoardPanel extends UIPanel {
 
     this.direction = 'column';
     this.alignItems = 'stretch';
-    this.padding = PANEL_PADDING;
+    this.padding = 0; // explicit — we use _getFrameRect() instead
     this.backgroundAssetKey = 'battle_board_panel';
   }
 
   setAssetManager(am) {
     this.assetManager = am;
+  }
+
+  /** Largest centered square inside this.rect — where the frame art renders. */
+  _getFrameRect() {
+    const r = this.rect;
+    const size = Math.min(r.w, r.h);
+    return {
+      x: r.x + (r.w - size) / 2,
+      y: r.y + (r.h - size) / 2,
+      w: size,
+      h: size,
+    };
+  }
+
+  /** Inner rect (frame minus decorative inset) — where the board sits. */
+  _getInnerRect() {
+    const f = this._getFrameRect();
+    return {
+      x: f.x + FRAME_INSET.left,
+      y: f.y + FRAME_INSET.top,
+      w: f.w - FRAME_INSET.left - FRAME_INSET.right,
+      h: f.h - FRAME_INSET.top - FRAME_INSET.bottom,
+    };
+  }
+
+  /** Override: draw the panel art as a centered square instead of stretching. */
+  renderSelf(ctx) {
+    if (this.backgroundAssetKey && this.assetManager) {
+      const img = this.assetManager.get(this.backgroundAssetKey);
+      if (img) {
+        this._applySmoothing(ctx);
+        const f = this._getFrameRect();
+        ctx.drawImage(
+          img,
+          Math.floor(f.x), Math.floor(f.y),
+          Math.ceil(f.w), Math.ceil(f.h)
+        );
+        this._restoreSmoothing(ctx);
+      }
+    }
+    if (this.background) this._drawBackground(ctx);
+    if (this.borderColor && this.borderWidth > 0) this._drawBorder(ctx);
+  }
+
+  /**
+   * Override the container layout so the single board child is placed at
+   * a centered square, regardless of how the parent column sized us.
+   * The board renders its 8×8 cells inside this square cleanly.
+   */
+  layoutChildren() {
+    const inner = this._getInnerRect();
+    for (const child of this.children) {
+      if (!child.visible) continue;
+      child.rect.x = inner.x;
+      child.rect.y = inner.y;
+      child.rect.w = inner.w;
+      child.rect.h = inner.h;
+      child.layoutChildren();
+    }
   }
 }

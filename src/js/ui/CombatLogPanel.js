@@ -2,8 +2,10 @@ import UIPanel from './UIPanel.js';
 import UIText from './UIText.js';
 
 // ── Tunable layout constants ─────────────────────────────
-const PANEL_PADDING = { top: 8, right: 14, bottom: 8, left: 14 };
-const LOG_FONT_SIZE = 12;
+// Inner padding around the log text. Increase to push text further
+// from the panel edges; decrease to fit more text per line.
+const PANEL_PADDING = { top: 14, right: 24, bottom: 14, left: 24 };
+const LOG_FONT_SIZE = 14;
 const LOG_COLOR = '#cfc8a8';
 
 /**
@@ -24,21 +26,15 @@ export default class CombatLogPanel extends UIPanel {
 
     this.direction = 'row';
     this.alignItems = 'center';
+    this.justifyContent = 'center';
     this.padding = PANEL_PADDING;
-    this.background = 'rgba(12, 11, 8, 0.78)';
-    this.borderColor = '#2a2520';
-    this.borderWidth = 1;
-    this.cornerRadius = 4;
-    // No asset for combat_log_panel yet — leave key null so we fall
-    // back to the styled background/border. Future art can be wired
-    // here without changing call sites.
-    this.backgroundAssetKey = null;
+    this.backgroundAssetKey = 'combat_log_panel';
 
     this._logText = new UIText('');
     this._logText.setStyle({
       fontSize: LOG_FONT_SIZE,
       color: LOG_COLOR,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'center',
       flexGrow: 1,
     });
