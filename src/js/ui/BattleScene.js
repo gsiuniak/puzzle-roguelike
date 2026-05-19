@@ -32,9 +32,9 @@ const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 // visible panel art closer to the board frame; the side panel
 // images include some transparent inner margin so the column rect
 // is typically larger than the visible art.
-const SIDE_COL_WIDTH = 360;
-const SIDE_COL_MIN_WIDTH = 360;
-const SIDE_COL_MAX_WIDTH = 420;
+const SIDE_COL_WIDTH = 420;
+const SIDE_COL_MIN_WIDTH = 440;
+const SIDE_COL_MAX_WIDTH = 440;
 const SIDE_COL_GAP = 8;
 
 // Fixed width for the center (board + combat log) column. Should be
@@ -311,7 +311,7 @@ export default class BattleScene extends UIPanel {
     if (isPlayer) this._playerRelicsPane = relicsPane;
     else          this._enemyRelicsPane  = relicsPane;
     relicsPane.flexGrow = 0;
-    col.addChild(relicsPane);
+    // col.addChild(relicsPane);
 
     return col;
   }

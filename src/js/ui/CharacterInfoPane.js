@@ -6,25 +6,25 @@ import UIProgressBar from './UIProgressBar.js';
 import UIOrb from './UIOrb.js';
 
 // ── Tunable layout constants ─────────────────────────────
-const PANE_PADDING = { top: 10, right: 12, bottom: 12, left: 12 };
+const PANE_PADDING = { top: 30, right: 12, bottom: 12, left: 12 };
 const HEADER_HEIGHT = 96;
-const PORTRAIT_WIDTH = 120;
-const PORTRAIT_HEIGHT = 120;
+const PORTRAIT_WIDTH = 150;
+const PORTRAIT_HEIGHT = 150;
 const HEADER_GAP = 12;
 
-const NAME_FONT_SIZE = 26;
-const CLASS_FONT_SIZE = 18;
-const HEALTH_BAR_HEIGHT = 25;
-const HEALTH_LABEL_FONT_SIZE = 13;
+const NAME_FONT_SIZE = 36;
+const CLASS_FONT_SIZE = 24;
+const HEALTH_BAR_HEIGHT = 36;
+const HEALTH_LABEL_FONT_SIZE = 20;
 const STATS_HEIGHT = 22;
-const STAT_ICON_SIZE = 20;
-const STAT_VALUE_FONT_SIZE = 14;
+const STAT_ICON_SIZE = 28;
+const STAT_VALUE_FONT_SIZE = 22;
 
-const MANA_ROW_HEIGHT = 100;
-const MANA_GAP = 6;
-const MANA_ORB_WIDTH = 60;
-const MANA_ORB_HEIGHT = 70;
-const MANA_FONT_SIZE = 13;
+const MANA_ROW_HEIGHT = 150;
+const MANA_GAP = 5;
+const MANA_ORB_WIDTH = 75;
+const MANA_ORB_HEIGHT = 85;
+const MANA_FONT_SIZE = 20;
 
 /**
  * Natural height of the pane = top + bottom padding + header + mana row + gap.
@@ -170,8 +170,8 @@ export default class CharacterInfoPane extends UIPanel {
       borderWidth: 1,
       cornerRadius: 3,
       height: HEALTH_BAR_HEIGHT,
-      widthPercent: 1,
-      margin: { top: 4, bottom: 4 },
+      widthPercent: 0.95,
+      margin: { top: 4, bottom: 8 },
     });
     info.addChild(this._healthBar);
 
@@ -198,7 +198,7 @@ export default class CharacterInfoPane extends UIPanel {
     manaRow.gap = MANA_GAP;
     manaRow.height = MANA_ROW_HEIGHT;
     manaRow.padding = { top: 20, right: 2, bottom: 2, left: 2 };
-    manaRow.margin = { top: 20 };
+    manaRow.margin = { top: 40 };
 
     const manaData = cd.mana || {};
     for (const color of MANA_ORDER) {

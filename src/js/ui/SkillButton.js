@@ -5,18 +5,18 @@ import UIText from './UIText.js';
 import UIOrb from './UIOrb.js';
 
 // ── Tunable layout constants ─────────────────────────────
-const BTN_PADDING = { top: 8, right: 12, bottom: 8, left: 10 };
+const BTN_PADDING = { top: 8, right: 20, bottom: 8, left: 20 };
 // Horizontal gap between the three main columns: icon | info | cost.
 const BTN_GAP = 10;
-const ICON_SIZE = 70;
-const NAME_FONT_SIZE = 18;
-const DESC_FONT_SIZE = 13;
-const DESC_LINE_HEIGHT = 15;
+const ICON_SIZE = 90;
+const NAME_FONT_SIZE = 24;
+const DESC_FONT_SIZE = 18;
+const DESC_LINE_HEIGHT = 20;
 // Maximum width for the description text before it word-wraps onto
 // additional lines (0 = no wrap, single line).
-const DESC_MAX_WIDTH = 120;
-const COST_FONT_SIZE = 16;
-const COST_ORB_SIZE = 22;
+const DESC_MAX_WIDTH = 180;
+const COST_FONT_SIZE = 24;
+const COST_ORB_SIZE = 28;
 // Width allocated to the right-hand cost column. Wide enough to fit a
 // two-digit amount + orb. Increase if you need more than one cost.
 const COST_COL_WIDTH = 56;
