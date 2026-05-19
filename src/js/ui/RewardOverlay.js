@@ -50,9 +50,6 @@ import AudioManager from '../audio/AudioManager.js';
 // Tunable layout constants
 // ═══════════════════════════════════════════════════════════
 
-/** Global alpha (opacity) for the background splash image covering the entire canvas */
-const SPLASH_ALPHA = 1.0;
-
 /** Maximum fraction of canvas width the reward panel occupies */
 const PANEL_MAX_WIDTH_FRAC = 0.66;
 
@@ -223,6 +220,22 @@ export default class RewardOverlay {
   /** @returns {boolean} true if the overlay is currently visible (any non-INACTIVE state) */
   isActive() {
     return this._state !== OverlayState.INACTIVE;
+  }
+
+  /**
+   * Current entrance fade alpha (0–1). 0 while INACTIVE; eased ramp during
+   * ENTERING; 1 while ACTIVE/EXITING. Used by BattleScene to fade the
+   * rewards_background_splash across the entire physical canvas in sync
+   * with the overlay's panel entrance.
+   * @returns {number}
+   */
+  getEntranceAlpha() {
+    if (this._state === OverlayState.INACTIVE) return 0;
+    if (this._state === OverlayState.ENTERING) {
+      const rawT = Math.min(1, this._timer / OVERLAY_FADE_DURATION);
+      return 1 - Math.pow(1 - rawT, 3); // ease-out cubic (matches render())
+    }
+    return 1;
   }
 
   /**
@@ -451,31 +464,12 @@ export default class RewardOverlay {
     // EXITING renders at full opacity — the SceneManager's fadeToScene handles
     // the cross-fade to black on top of the overlay.
 
-    // Wrap all drawing in a save/restore with globalAlpha for cross-fade
+    // Wrap all drawing in a save/restore with globalAlpha for cross-fade.
+    // The rewards_background_splash is painted full-canvas (covering the
+    // letterbox/pillarbox bars) by BattleScene.renderBackground, in sync with
+    // this overlay's entrance fade via getEntranceAlpha().
     ctx.save();
     ctx.globalAlpha = overlayAlpha;
-
-    // ── 1. Background splash drawn cover-style with controlled opacity ──
-    const splashImg = this._assetManager
-      ? this._assetManager.get('rewards_background_splash')
-      : null;
-
-    ctx.save();
-    if (splashImg && splashImg.width && splashImg.height) {
-      const imgW = splashImg.width;
-      const imgH = splashImg.height;
-      const scale = Math.max(canvasW / imgW, canvasH / imgH);
-      const sw = imgW * scale;
-      const sh = imgH * scale;
-      const sx = (canvasW - sw) / 2;
-      const sy = (canvasH - sh) / 2;
-      ctx.drawImage(splashImg, sx, sy, sw, sh);
-    } else {
-      // Fallback: semi-transparent black fill
-      ctx.fillStyle = 'rgba(0, 0, 0, 1)';
-      ctx.fillRect(0, 0, canvasW, canvasH);
-    }
-    ctx.restore();
 
     // ── 2. Calculate primary panel dimensions from image aspect ratio ──
     const panelImg = this._assetManager

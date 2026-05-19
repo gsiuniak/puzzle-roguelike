@@ -780,33 +780,31 @@ export default class CharacterSelectScene extends UIPanel {
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Override renderSelf to draw only the character splash backgrounds.
-   * The info panel background is drawn separately in render() so the aura
-   * can layer correctly between splash and UI.
+   * Paint the character splash cross-fade across the entire physical canvas.
+   * Called by SceneManager before the design-space viewport clip, so the
+   * splash fills the letterbox/pillarbox bars. UI (info panel, heroes row,
+   * button) is still drawn inside the design viewport via render().
    */
-  renderSelf(ctx) {
+  renderBackground(_ctx) {
     const am = this._assetManager;
-    if (!am) return;
+    const app = this._sceneManager && this._sceneManager._app;
+    if (!am || !app) return;
 
-    const r = this.rect;
-    if (r.w <= 0 || r.h <= 0) return;
-
-    // ── Draw previous splash (cross-fade out) ──────────
+    // Previous splash (cross-fade out)
     if (this._prevSplashKey && this._crossFadeAlpha < 1.0) {
       const prevImg = am.get(this._prevSplashKey);
-      if (prevImg) {
-        this._drawCoverImage(ctx, prevImg, r, 1.0 - this._crossFadeAlpha);
-      }
+      if (prevImg) app.drawFullCanvasImage(prevImg, 1.0 - this._crossFadeAlpha);
     }
 
-    // ── Draw current splash (cross-fade in) ────────────
+    // Current splash (cross-fade in)
     if (this._currSplashKey) {
       const currImg = am.get(this._currSplashKey);
-      if (currImg) {
-        this._drawCoverImage(ctx, currImg, r, Math.min(1.0, this._crossFadeAlpha));
-      }
+      if (currImg) app.drawFullCanvasImage(currImg, Math.min(1.0, this._crossFadeAlpha));
     }
   }
+
+  /** No in-viewport background — splashes are drawn full-canvas in renderBackground. */
+  renderSelf(_ctx) {}
 
   /**
    * Draw the info panel background image. Called from render() after the

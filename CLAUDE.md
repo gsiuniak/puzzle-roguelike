@@ -106,6 +106,18 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 
 **Scene lifecycle:** Each scene must implement `onEnter()` and `onExit()`. Scenes receive `_sceneManager` back-reference from SceneManager.
 
+**Scene render pipeline (per frame):**
+```
+CanvasApp.clear()              — fills entire physical canvas with one color (or barFillImage)
+scene.renderBackground(ctx)?   — OPTIONAL hook. Paints full-canvas backgrounds covering letterbox/pillarbox bars (use CanvasApp.drawFullCanvasImage / fillFullCanvas)
+CanvasApp.beginViewportClip()  — clips to 1920×1080 design space
+scene.render(ctx)              — normal UI rendering (clipped to design space)
+CanvasApp.endViewportClip()
+scene.renderForeground(ctx)?   — OPTIONAL hook. Full-canvas overlays on top of UI (e.g. reward splash, map overlay backdrop)
+SceneManager transition fade   — full-canvas black overlay (via CanvasApp.fillFullCanvas)
+```
+Use `renderBackground` for splashes that sit BEHIND the scene's UI but must cover the bars. Use `renderForeground` for splashes/backdrops that sit ON TOP of the scene's UI but must cover the bars. UI inside the design viewport is drawn from `render()` as usual.
+
 ### 4.3 Battle / Game Logic
 
 | File | Class | Responsibility |

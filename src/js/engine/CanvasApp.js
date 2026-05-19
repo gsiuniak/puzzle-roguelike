@@ -132,33 +132,30 @@ export default class CanvasApp {
   }
 
   /**
-   * Clear the canvas: bar fill image OR black on the side/letterbox bars,
-   * viewport color inside the design rect. All coordinates passed to
-   * subsequent draw calls are in design space.
+   * Clear the canvas: bar fill image, or a single solid color spanning the
+   * entire physical canvas (bars + design space). No design-space tint —
+   * scenes that want a colored design-space backdrop should paint it from
+   * their `renderBackground(ctx)` hook so it composes consistently with
+   * full-canvas splashes during fade-ins/transitions.
    *
    * If a bar fill image has been registered via `setBackgroundImage()`,
    * the image is drawn across the entire physical canvas (cover-fit) so
    * there are no visible black bars.
+   *
+   * @param {string} [fillColor='#000000'] color used when no bar fill image
+   *   is registered. Applied uniformly across the entire canvas.
    */
-  clear(viewportColor = '#1a0a0a') {
+  clear(fillColor = '#000000') {
     const ctx = this.ctx;
-    // 1. Fill the entire physical canvas (including bars).
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     if (this._barFillImage) {
       this._drawCoverImage(ctx, this._barFillImage, 0, 0, this._cssWidth, this._cssHeight);
     } else {
-      ctx.fillStyle = '#000000';
+      ctx.fillStyle = fillColor;
       ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);
     }
     ctx.restore();
-    // 2. Restored transform is the design-space one — paint viewport background.
-    //    When a bar fill image is active, skip the viewport color so the
-    //    image shows through across the entire canvas (no seam).
-    if (!this._barFillImage) {
-      ctx.fillStyle = viewportColor;
-      ctx.fillRect(0, 0, this.designWidth, this.designHeight);
-    }
   }
 
   /**
@@ -186,6 +183,42 @@ export default class CanvasApp {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(img, sx, sy, sw, sh);
     ctx.imageSmoothingEnabled = prevSmoothing;
+  }
+
+  /**
+   * Draw an image cover-fit across the entire physical canvas (CSS pixels),
+   * bypassing the design-space transform. Restores state on exit so subsequent
+   * draws continue in design space. Intended for use from a scene's
+   * `renderBackground(ctx)` hook, which runs before the viewport clip is
+   * applied — so the image fills the letterbox/pillarbox bars too.
+   *
+   * @param {HTMLImageElement|HTMLCanvasElement|null} img
+   * @param {number} [alpha=1]
+   */
+  drawFullCanvasImage(img, alpha = 1) {
+    if (!img || !img.width || !img.height || alpha <= 0) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.globalAlpha = alpha;
+    this._drawCoverImage(ctx, img, 0, 0, this._cssWidth, this._cssHeight);
+    ctx.restore();
+  }
+
+  /**
+   * Fill the entire physical canvas (CSS pixels) with a color, bypassing the
+   * design-space transform. Companion to `drawFullCanvasImage` for tints /
+   * dark overlays that should also cover the letterbox/pillarbox bars.
+   *
+   * @param {string} color — any CSS color or rgba() string
+   */
+  fillFullCanvas(color) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);
+    ctx.restore();
   }
 
   /**

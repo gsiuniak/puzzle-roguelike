@@ -221,11 +221,13 @@ export default class SceneManager {
         }
 
         // Render current scene with darkening overlay
-        this._app.clear('#1a0a0a');
+        this._app.clear();
         if (this._currentScene) {
+          this._renderSceneBackground();
           this._app.beginViewportClip();
           this._currentScene.render(this._app.ctx);
           this._app.endViewportClip();
+          this._renderSceneForeground();
         }
         this._renderTransitionOverlay();
 
@@ -245,11 +247,13 @@ export default class SceneManager {
           this._layoutCurrentScene();
         }
 
-        this._app.clear('#1a0a0a');
+        this._app.clear();
         if (this._currentScene) {
+          this._renderSceneBackground();
           this._app.beginViewportClip();
           this._currentScene.render(this._app.ctx);
           this._app.endViewportClip();
+          this._renderSceneForeground();
         }
         this._renderTransitionOverlay();
 
@@ -273,10 +277,39 @@ export default class SceneManager {
     this._layoutCurrentScene();
 
     // Render
-    this._app.clear('#1a0a0a');
+    this._app.clear();
+    this._renderSceneBackground();
     this._app.beginViewportClip();
     this._currentScene.render(this._app.ctx);
     this._app.endViewportClip();
+    this._renderSceneForeground();
+  }
+
+  /**
+   * Invoke the current scene's optional `renderBackground(ctx)` hook,
+   * which runs after `clear()` but before the design-space viewport clip
+   * is applied. Use it to paint full-canvas backgrounds (covering the
+   * letterbox/pillarbox bars) without escaping the clip from inside render().
+   */
+  _renderSceneBackground() {
+    const scene = this._currentScene;
+    if (scene && typeof scene.renderBackground === 'function') {
+      scene.renderBackground(this._app.ctx);
+    }
+  }
+
+  /**
+   * Invoke the current scene's optional `renderForeground(ctx)` hook,
+   * which runs after the design-space viewport clip is closed. Use it to
+   * paint full-canvas overlays that sit on top of the scene's UI — e.g.
+   * a darkened map overlay or a post-battle reward splash that must cover
+   * both the design space AND the letterbox/pillarbox bars.
+   */
+  _renderSceneForeground() {
+    const scene = this._currentScene;
+    if (scene && typeof scene.renderForeground === 'function') {
+      scene.renderForeground(this._app.ctx);
+    }
   }
 
   /**
@@ -311,16 +344,13 @@ export default class SceneManager {
   }
 
   /**
-   * Draw a full-screen black overlay at the current transition alpha.
+   * Draw a full-canvas black overlay at the current transition alpha.
+   * Covers the entire physical canvas (including the letterbox/pillarbox
+   * bars) so scene-driven full-canvas backgrounds fade out cleanly.
    */
   _renderTransitionOverlay() {
     if (this._transitionAlpha <= 0) return;
-    const ctx = this._app.ctx;
-    ctx.save();
-    ctx.globalAlpha = this._transitionAlpha;
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, this._app.width, this._app.height);
-    ctx.restore();
+    this._app.fillFullCanvas(`rgba(0, 0, 0, ${this._transitionAlpha})`);
   }
 
   // ── Layout ────────────────────────────────────────────

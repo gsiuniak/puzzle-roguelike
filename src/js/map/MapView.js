@@ -208,14 +208,8 @@ export default class MapView {
   renderFullscreen(ctx, canvasW, canvasH, dt) {
     const cr = this.getContainerRect(canvasW, canvasH);
 
-    // 0. Battle background image behind the dark overlay
-    this._drawBattleBackground(ctx, canvasW, canvasH);
-
-    // 1. Dark semi-transparent overlay over entire canvas
-    ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA})`;
-    ctx.fillRect(0, 0, canvasW, canvasH);
-    ctx.restore();
+    // (battle background + dark backdrop are painted full-canvas by
+    //  MapScene.renderBackground before the viewport clip is applied)
 
     // 2. Parchment splash background inside the container (clipped)
     this._drawSplashInsideContainer(ctx, cr);
@@ -240,16 +234,21 @@ export default class MapView {
 
   /**
    * Render the map in overlay mode (for BattleScene).
-   * Dark semi-transparent backdrop over the battle, then the map
-   * container with parchment splash background inside, framed identically
-   * to the standalone map.
+   * Dark semi-transparent backdrop covering the entire physical canvas
+   * (including letterbox/pillarbox bars), then the map container with
+   * parchment splash background inside, framed identically to the
+   * standalone map. The caller passes `app` so the backdrop can escape
+   * the design-space viewport clip via `fillFullCanvas`.
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} canvasW
    * @param {number} canvasH
    * @param {number} dt - delta time in ms
+   * @param {import('../engine/CanvasApp.js').default} [app] - optional
+   *   CanvasApp used to draw the backdrop full-canvas. When omitted, falls
+   *   back to a design-space fillRect (legacy behavior).
    */
-  renderOverlay(ctx, canvasW, canvasH, dt) {
+  renderOverlay(ctx, canvasW, canvasH, dt, app) {
     // ── Compute animation parameters ──
     let overlayAlpha = 1;
     let containerSlideY = 0;
@@ -277,11 +276,17 @@ export default class MapView {
     // Container Y is shifted downward by the slide offset
     const slideCr = { x: cr.x, y: cr.y + containerSlideY, w: cr.w, h: cr.h };
 
-    // 1. Dark semi-transparent backdrop over entire canvas (fades, does NOT slide)
-    ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA * overlayAlpha})`;
-    ctx.fillRect(0, 0, canvasW, canvasH);
-    ctx.restore();
+    // 1. Dark semi-transparent backdrop covering the entire physical canvas
+    //    (including letterbox/pillarbox bars). Fades with overlayAlpha but
+    //    does NOT slide.
+    if (app && typeof app.fillFullCanvas === 'function') {
+      app.fillFullCanvas(`rgba(0, 0, 0, ${BACKDROP_ALPHA * overlayAlpha})`);
+    } else {
+      ctx.save();
+      ctx.fillStyle = `rgba(0, 0, 0, ${BACKDROP_ALPHA * overlayAlpha})`;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.restore();
+    }
 
     // 2. Map panel with combined fade + slide
     ctx.save();
@@ -360,39 +365,6 @@ export default class MapView {
     if (!this._renderer) return [];
     const cr = this._containerRect;
     return this._renderer.layoutNodes(cr.w, cr.h);
-  }
-
-  // ═══════════════════════════════════════════════════════
-  // Private: battle background
-  // ═══════════════════════════════════════════════════════
-
-  /**
-   * Draw the battle_background_default image scaled to fill the entire canvas.
-   * This serves as the full-screen background BEHIND the dark overlay.
-   * Uses cover-fit: scales proportionally to fill the canvas, cropping excess.
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {number} canvasW
-   * @param {number} canvasH
-   */
-  _drawBattleBackground(ctx, canvasW, canvasH) {
-    const bgImg = this._assetManager ? this._assetManager.get('battle_background_default') : null;
-    if (!bgImg || !bgImg.complete) return;
-
-    const imgW = bgImg.width;
-    const imgH = bgImg.height;
-    if (!imgW || !imgH) return;
-
-    // Cover-fit: scale proportionally so the image fills the canvas entirely
-    const scale = Math.max(canvasW / imgW, canvasH / imgH);
-    const sw = imgW * scale;
-    const sh = imgH * scale;
-    const sx = (canvasW - sw) / 2;
-    const sy = (canvasH - sh) / 2;
-
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(bgImg, sx, sy, sw, sh);
-    ctx.restore();
   }
 
   // ═══════════════════════════════════════════════════════

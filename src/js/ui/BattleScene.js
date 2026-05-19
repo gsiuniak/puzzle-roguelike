@@ -991,6 +991,36 @@ export default class BattleScene extends UIPanel {
 
   // ── Render (override) ───────────────────────────────
 
+  /**
+   * Paint full-canvas overlays that sit on top of the battle UI and must
+   * cover the letterbox/pillarbox bars. Called by SceneManager after the
+   * design-space viewport clip is closed.
+   *
+   * - Map overlay ('m' key): dark backdrop full-canvas + map panel in
+   *   design space (via MapView.renderOverlay).
+   * - Reward overlay (post-battle): rewards_background_splash full-canvas +
+   *   reward panel in design space (via RewardOverlay.render).
+   */
+  renderForeground(ctx) {
+    const sm = this._sceneManager;
+    if (!sm) return;
+    const w = sm._app.width;
+    const h = sm._app.height;
+
+    if (this._mapView && this._mapView.isOverlayActive()) {
+      this._mapView.renderOverlay(ctx, w, h, 16, sm._app);
+    }
+
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) {
+      const am = this._assetManager;
+      const splash = am ? am.get('rewards_background_splash') : null;
+      if (splash) {
+        sm._app.drawFullCanvasImage(splash, this._rewardOverlay.getEntranceAlpha());
+      }
+      this._rewardOverlay.render(ctx, w, h);
+    }
+  }
+
   render(ctx) {
     // Apply screen shake offset
     const shake = this._screenShake.getOffset();
@@ -1012,15 +1042,8 @@ export default class BattleScene extends UIPanel {
       ctx.restore();
     }
 
-    // ── Map overlay (animated, toggled with 'm' key) ──
-    if (this._mapView && this._mapView.isOverlayActive() && this._sceneManager) {
-      this._mapView.renderOverlay(ctx, this._sceneManager._app.width, this._sceneManager._app.height, 16);
-    }
-
-    // ── Reward overlay (post-battle, renders on top of everything) ──
-    if (this._rewardOverlay && this._rewardOverlay.isActive() && this._sceneManager) {
-      this._rewardOverlay.render(ctx, this._sceneManager._app.width, this._sceneManager._app.height);
-    }
+    // Map overlay and reward overlay are rendered by renderForeground()
+    // so their full-canvas backdrops/splashes cover the letterbox bars.
   }
 
 

@@ -499,6 +499,21 @@ export default class MapScene extends UIPanel {
   // ═══════════════════════════════════════════════════════
 
   /**
+   * Paint the battle_background_default + dark backdrop across the entire
+   * physical canvas (covers letterbox/pillarbox bars). The map container,
+   * parchment splash, and node graph stay inside the design viewport via
+   * render() → MapView.renderFullscreen().
+   */
+  renderBackground(_ctx) {
+    const sm = this._sceneManager;
+    const am = this._assetManager;
+    if (!sm || !am) return;
+    const bgImg = am.get('battle_background_default');
+    if (bgImg) sm._app.drawFullCanvasImage(bgImg, 1.0);
+    sm._app.fillFullCanvas('rgba(0, 0, 0, 0.75)');
+  }
+
+  /**
    * Override render to use MapView for all visual output.
    * MapView provides the identical map screen whether rendered
    * standalone (here) or as a battle overlay (BattleScene).
