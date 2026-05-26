@@ -249,9 +249,9 @@ export default class SkillButton extends UIPanel {
       ctx.save();
       ctx.fillStyle = 'rgba(255,240,180,0.10)';
       ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.fillStyle = 'rgba(255,240,160,0.32)';
+      ctx.fillStyle = 'rgba(237, 249, 142, 0.75)';
       ctx.fillRect(r.x, r.y, 3, r.h);
-      ctx.strokeStyle = 'rgba(255,240,180,0.20)';
+      ctx.strokeStyle = 'rgba(255, 240, 180, 0.95)';
       ctx.lineWidth = 1;
       ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
       ctx.restore();

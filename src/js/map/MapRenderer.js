@@ -29,7 +29,7 @@ import MapNode from './MapNode.js';
 import MapGraph from './MapGraph.js';
 
 /** Base node circle radius in CSS pixels (for non-boss nodes) */
-const NODE_RADIUS = 28;
+const NODE_RADIUS = 32;
 /** Boss node radius multiplier */
 const BOSS_RADIUS_MULT = 2;
 /** Icon size fraction of node radius (fills most of the node) */
@@ -39,7 +39,7 @@ const H_PAD = 130;
 /** Vertical padding on each side */
 const V_PAD = 70;
 /** Gap between connection dots (pixels) */
-const DOT_GAP = 7;
+const DOT_GAP = 14;
 /** Dot radius for connection lines */
 const DOT_RADIUS = 3.0;
 /** Maximum control-point offset for curve (fraction of horizontal distance) */
@@ -65,13 +65,13 @@ const EDGE_PATH_WIDTH = 1.5;
 const EDGE_BYPASSED_ALPHA = 0.00;
 
 /** Color for default/inactive edges (warm neutral — clearly visible) */
-const EDGE_DEFAULT_COLOR = '#8a8a70';
+const EDGE_DEFAULT_COLOR = '#1b1b1b';
 /** Color for available-next edges (bright gold highlight) */
 const EDGE_AVAILABLE_COLOR = '#c8b870';
 /** Color for traveled/breadcrumb edges (darkened warm brown, visible against parchment) */
 const EDGE_TRAVELED_COLOR = '#666655';
 /** Path line color (subtle continuous line behind dots) */
-const EDGE_PATH_COLOR = '#6a6a64';
+const EDGE_PATH_COLOR = '#313131';
 
 /** Pulse magnitude for available edges */
 const EDGE_AVAILABLE_PULSE = 0.5;
