@@ -82,6 +82,13 @@ export default class CharacterSelectScene extends UIPanel {
     /** @type {boolean} */
     this._buttonHovered = false;
 
+    // ── UI fill scale ──────────────────────────────────
+    // Multiplier applied to all UI sizes so the layout fills more of the
+    // physical screen on aspect ratios that pillarbox/letterbox the design
+    // viewport (e.g. mobile landscape). Recomputed each layout pass.
+    /** @type {number} */
+    this._uiScale = 1;
+
     // ── Input handler references (for cleanup) ─────────
     /** @type {Function|null} */
     this._onMouseDown = null;
@@ -106,14 +113,16 @@ export default class CharacterSelectScene extends UIPanel {
   // ═══════════════════════════════════════════════════════
 
   _buildScene() {
+    const S = this._uiScale;
+
     // ── Info panel (positioned manually in layoutChildren) ──
     // Narrower, card-like proportions with generous balanced padding
     // and clear section separation to match the mock's visual rhythm.
     this._infoPanel = new UIContainer();
     this._infoPanel.direction = 'column';
     this._infoPanel.alignItems = 'center';
-    this._infoPanel.gap = 10;
-    this._infoPanel.padding = { top: 32, right: 44, bottom: 48, left: 44 };
+    this._infoPanel.gap = 10 * S;
+    this._infoPanel.padding = { top: 32 * S, right: 44 * S, bottom: 48 * S, left: 44 * S };
     this._infoPanel.smoothing = true;
     this.addChild(this._infoPanel);
 
@@ -122,7 +131,7 @@ export default class CharacterSelectScene extends UIPanel {
     this._heroesRow.direction = 'row';
     this._heroesRow.justifyContent = 'center';
     this._heroesRow.alignItems = 'center';
-    this._heroesRow.gap = 24;
+    this._heroesRow.gap = 24 * S;
     this.addChild(this._heroesRow);
 
     // ── Build portrait images ──────────────────────────
@@ -131,8 +140,8 @@ export default class CharacterSelectScene extends UIPanel {
       const def = this._definitions[i];
       const portrait = new UIImage(`character_select_portrait_${def.id}`, null); // assetManager set in onEnter
       portrait.setStyle({
-        width: 150,
-        height: 150,
+        width: 150 * S,
+        height: 150 * S,
         fitMode: 'contain',
         imageAlignH: 'center',
         imageAlignV: 'center',
@@ -150,8 +159,8 @@ export default class CharacterSelectScene extends UIPanel {
 
     this._chooseButton = new UIImage('character_select_choose_hero_button', null);
     this._chooseButton.setStyle({
-      width: 320,
-      height: 80,
+      width: 320 * S,
+      height: 80 * S,
       fitMode: 'contain',
       imageAlignH: 'center',
       imageAlignV: 'center',
@@ -183,21 +192,27 @@ export default class CharacterSelectScene extends UIPanel {
 
     const cd = def.characterData;
     const am = this._assetManager;
+    const S = this._uiScale;
+
+    // Sync container's own padding/gap to the current scale so the panel
+    // body grows with the rest of the UI when scale changes.
+    panel.gap = 10 * S;
+    panel.padding = { top: 32 * S, right: 44 * S, bottom: 48 * S, left: 44 * S };
 
     // ── Character Name — large, dominant, the visual anchor ─
     const nameText = new UIText(cd.name || '');
     nameText.setStyle({
-      fontSize: 42,
+      fontSize: 42 * S,
       color: '#e8d8b0',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      height: 48,
+      height: 48 * S,
       shadowColor: 'rgba(0,0,0,0.7)',
       shadowBlur: 4,
       shadowOffsetX: 2,
       shadowOffsetY: 2,
-      margin: { top: 20 }
+      margin: { top: 20 * S }
     });
     panel.addChild(nameText);
 
@@ -206,46 +221,46 @@ export default class CharacterSelectScene extends UIPanel {
     classRow.direction = 'row';
     classRow.justifyContent = 'center';
     classRow.alignItems = 'center';
-    classRow.gap = 14;
-    classRow.height = 28;
+    classRow.gap = 14 * S;
+    classRow.height = 28 * S;
 
     const flairL = new UIImage('character_select_flair_left', am);
-    flairL.setStyle({ width: 100, height: 24, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    flairL.setStyle({ width: 100 * S, height: 24 * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
     classRow.addChild(flairL);
 
     const classText = new UIText(cd.className || '');
     classText.setStyle({
-      fontSize: 22,
+      fontSize: 22 * S,
       color: '#ccaa77',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      width: 120,
-      height: 26,
-      margin: { left: 65, right: 65 }
+      width: 120 * S,
+      height: 26 * S,
+      margin: { left: 65 * S, right: 65 * S }
     });
     classRow.addChild(classText);
 
     const flairR = new UIImage('character_select_flair_right', am);
-    flairR.setStyle({ width: 100, height: 24, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    flairR.setStyle({ width: 100 * S, height: 24 * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
     classRow.addChild(flairR);
     panel.addChild(classRow);
 
     // ── Character description — centered, readable ──────
     const descText = new UIText(cd.description || '');
     descText.setStyle({
-      fontSize: 15,
+      fontSize: 15 * S,
       color: '#b0a880',
       alignH: 'center',
       alignV: 'center',
-      height: 60,
-      maxWidth: 400,
+      height: 60 * S,
+      maxWidth: 400 * S,
     });
     panel.addChild(descText);
 
     // ── Divider ─────────────────────────────────────────
     const divider1 = new UIImage('character_select_divider', am);
-    divider1.setStyle({ widthPercent: 0.78, height: 15, fitMode: 'stretch' });
+    divider1.setStyle({ widthPercent: 0.78, height: 15 * S, fitMode: 'stretch' });
     panel.addChild(divider1);
 
     // ── Health + mana single centered row ───────────────
@@ -256,31 +271,31 @@ export default class CharacterSelectScene extends UIPanel {
     statManaRow.direction = 'row';
     statManaRow.justifyContent = 'center';
     statManaRow.alignItems = 'center';
-    statManaRow.gap = 12;
-    statManaRow.height = 25;
+    statManaRow.gap = 12 * S;
+    statManaRow.height = 25 * S;
 
     // Heart icon + health value group
     const heartIcon = new UIImage('character_select_heart', am);
-    heartIcon.setStyle({ width: 22, height: 22, fitMode: 'contain' });
+    heartIcon.setStyle({ width: 22 * S, height: 22 * S, fitMode: 'contain' });
     statManaRow.addChild(heartIcon);
 
     const baseStats = cd.baseStats || {};
     const healthText = new UIText(`${baseStats.maxHp ?? 0} / ${baseStats.maxHp ?? 0}`);
     healthText.setStyle({
-      fontSize: 18,
+      fontSize: 18 * S,
       color: '#ff6666',
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      width: 80,
-      height: 26,
-      margin: { right: 50 }
+      width: 80 * S,
+      height: 26 * S,
+      margin: { right: 50 * S }
     });
     statManaRow.addChild(healthText);
 
     // Spacer between health and mana groups
     const spacer = new UIContainer();
-    spacer.width = 14;
+    spacer.width = 14 * S;
     spacer.height = 1;
     statManaRow.addChild(spacer);
 
@@ -298,27 +313,27 @@ export default class CharacterSelectScene extends UIPanel {
       const manaGroup = new UIContainer();
       manaGroup.direction = 'row';
       manaGroup.alignItems = 'center';
-      manaGroup.gap = 4;
-      manaGroup.width = 50;
+      manaGroup.gap = 4 * S;
+      manaGroup.width = 50 * S;
 
       const symbol = new UIImage(`mana_${mc.key}`, am);
-      symbol.setStyle({ width: 22, height: 22, fitMode: 'contain', margin: { right: 3 } });
+      symbol.setStyle({ width: 22 * S, height: 22 * S, fitMode: 'contain', margin: { right: 3 * S } });
       manaGroup.addChild(symbol);
 
       const countText = new UIText(String(manaData[mc.key] ?? 0));
       countText.setStyle({
-        fontSize: 14,
+        fontSize: 14 * S,
         color: '#b0a880',
         bold: true,
         alignH: 'left',
         alignV: 'center',
-        width: 30,
-        height: 22,
+        width: 30 * S,
+        height: 22 * S,
         shadowColor: 'rgba(0,0,0,0.7)',
         shadowBlur: 2,
         shadowOffsetX: 1,
         shadowOffsetY: 1,
-        margin: { right: 10 }
+        margin: { right: 10 * S }
       });
       manaGroup.addChild(countText);
 
@@ -336,28 +351,28 @@ export default class CharacterSelectScene extends UIPanel {
     skillsTitleRow.direction = 'row';
     skillsTitleRow.justifyContent = 'center';
     skillsTitleRow.alignItems = 'center';
-    skillsTitleRow.gap = 12;
-    skillsTitleRow.height = 24;
+    skillsTitleRow.gap = 12 * S;
+    skillsTitleRow.height = 24 * S;
 
     const sFlairL = new UIImage('character_select_flair_left', am);
-    sFlairL.setStyle({ width: 200, height: 18, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    sFlairL.setStyle({ width: 200 * S, height: 18 * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
     skillsTitleRow.addChild(sFlairL);
 
     const skillsTitle = new UIText('Starting Skills');
     skillsTitle.setStyle({
-      fontSize: 16,
+      fontSize: 16 * S,
       color: '#ccaa77',
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      width: 150,
-      height: 22,
-      margin: { left: 60, right: 60 }
+      width: 150 * S,
+      height: 22 * S,
+      margin: { left: 60 * S, right: 60 * S }
     });
     skillsTitleRow.addChild(skillsTitle);
 
     const sFlairR = new UIImage('character_select_flair_right', am);
-    sFlairR.setStyle({ width: 200, height: 18, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    sFlairR.setStyle({ width: 200 * S, height: 18 * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
     skillsTitleRow.addChild(sFlairR);
     panel.addChild(skillsTitleRow);
 
@@ -367,9 +382,9 @@ export default class CharacterSelectScene extends UIPanel {
     skillsRow.direction = 'row';
     skillsRow.justifyContent = 'center';
     skillsRow.alignItems = 'center';
-    skillsRow.gap = 36;
-    skillsRow.height = 90;
-    skillsRow.margin = { top: -5 };
+    skillsRow.gap = 36 * S;
+    skillsRow.height = 90 * S;
+    skillsRow.margin = { top: -5 * S };
 
     for (const skillData of skills) {
       const skillBlock = this._buildSkillBlock(skillData, am);
@@ -386,17 +401,18 @@ export default class CharacterSelectScene extends UIPanel {
    * @returns {UIContainer}
    */
   _buildSkillBlock(skillData, am) {
+    const S = this._uiScale;
     const block = new UIContainer();
     block.direction = 'row';
     block.alignItems = 'center';
-    block.gap = 12;
-    block.width = 180;
-    block.height = 80;
+    block.gap = 12 * S;
+    block.width = 180 * S;
+    block.height = 80 * S;
 
     // Column 1: Skill icon
     const iconKey = skillData.icon || 'placeholder';
     const icon = new UIImage(iconKey, am);
-    icon.setStyle({ width: 80, height: 80, fitMode: 'contain' });
+    icon.setStyle({ width: 80 * S, height: 80 * S, fitMode: 'contain' });
     block.addChild(icon);
 
     // Column 2: Name + Description in their own rows
@@ -404,28 +420,28 @@ export default class CharacterSelectScene extends UIPanel {
     textCol.direction = 'column';
     textCol.justifyContent = 'center';
     textCol.alignItems = 'start';
-    textCol.gap = 4;
+    textCol.gap = 4 * S;
 
     const nameText = new UIText(skillData.name || '');
     nameText.setStyle({
-      fontSize: 16,
+      fontSize: 16 * S,
       color: '#e8d8b0',
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 8,
-      margin: { bottom: 5, top: 20 }
+      height: 8 * S,
+      margin: { bottom: 5 * S, top: 20 * S }
     });
     textCol.addChild(nameText);
 
     const descText = new UIText(skillData.description || '');
     descText.setStyle({
-      fontSize: 12,
+      fontSize: 12 * S,
       color: '#c0b890',
       alignH: 'left',
       alignV: 'top',
-      height: 50,
-      maxWidth: 100,
+      height: 50 * S,
+      maxWidth: 100 * S,
     });
     textCol.addChild(descText);
 
@@ -452,22 +468,34 @@ export default class CharacterSelectScene extends UIPanel {
     const H = this.rect.h;
     if (W <= 0 || H <= 0) return;
 
+    // ── 0. Sync UI scale to the current physical viewport ───
+    // On aspect ratios that pillarbox/letterbox the design viewport
+    // (e.g. mobile landscape, 21:9 ultrawide), scale UI elements up so
+    // they fill a similar share of the physical screen as on a 16:9 display.
+    const newScale = this._computeUIScale();
+    if (Math.abs(newScale - this._uiScale) > 0.005) {
+      this._uiScale = newScale;
+      this._applyUIScaleToFixedElements();
+      this._updateInfoPanel();
+    }
+
+    const S = this._uiScale;
     const panel = this._infoPanel;
     const heroes = this._heroesRow;
 
     // ── 1. Compute info panel dimensions ─────────────────
     // Narrow card proportions: 38–54% of canvas width, clamped to 420–540px
-    let panelW = 500;
-    let panelH = 200;
+    let panelW = 500 * S;
+    let panelH = 200 * S;
 
     if (panel) {
-      panelW = Math.min(540, Math.max(420, W * 0.42));
+      panelW = Math.min(540 * S, Math.max(420 * S, W * 0.42 * S));
 
       // Do a trial layout with generous height so child rects are computed
       panel.rect.x = 0;
       panel.rect.y = 0;
       panel.rect.w = panelW;
-      panel.rect.h = 600;
+      panel.rect.h = 600 * S;
       panel.layoutChildren();
 
       // Sum actual child heights
@@ -482,10 +510,10 @@ export default class CharacterSelectScene extends UIPanel {
     }
 
     // ── 2. Fixed heights for heroes row and button ──────
-    const heroesW = this._definitions.length * 124;
-    const heroesH = 130;
-    const btnW = 240;
-    const btnH = 70;
+    const heroesW = this._definitions.length * 124 * S;
+    const heroesH = 130 * S;
+    const btnW = 240 * S;
+    const btnH = 70 * S;
     const gapPanelHeroes = Math.floor(H * 0.025);
     const gapHeroesBtn = Math.floor(H * 0.02);
 
@@ -516,6 +544,57 @@ export default class CharacterSelectScene extends UIPanel {
       this._btnContainer.rect.w = btnW;
       this._btnContainer.rect.h = btnH;
       this._btnContainer.layoutChildren();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // UI scale (aspect-aware fill)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Compute a UI multiplier based on how much the physical canvas aspect
+   * differs from the design viewport aspect. When the physical viewport is
+   * pillarboxed (wider) or letterboxed (taller) than the design rect, UI
+   * elements get scaled up so they fill a similar share of the screen as
+   * they do on a 16:9 display.
+   *
+   * Capped at 1.5× to keep the layout from outgrowing the design viewport
+   * vertically on extreme aspect ratios.
+   *
+   * @returns {number}
+   */
+  _computeUIScale() {
+    const app = this._sceneManager ? this._sceneManager._app : null;
+    if (!app || !app.cssWidth || !app.cssHeight) return 1;
+
+    const designAspect = app.designWidth / app.designHeight;
+    const cssAspect = app.cssWidth / app.cssHeight;
+    const ratio = cssAspect > designAspect
+      ? cssAspect / designAspect
+      : designAspect / cssAspect;
+
+    return Math.min(1.5, Math.max(1, ratio));
+  }
+
+  /**
+   * Re-apply size styles to the long-lived UI elements created in
+   * _buildScene (portraits, choose-hero button, heroes row gap) so they
+   * track the current _uiScale. Inner info-panel elements are rebuilt
+   * separately via _updateInfoPanel().
+   */
+  _applyUIScaleToFixedElements() {
+    const S = this._uiScale;
+
+    if (this._heroesRow) {
+      this._heroesRow.gap = 24 * S;
+    }
+
+    for (const portrait of this._portraitImages) {
+      portrait.setStyle({ width: 150 * S, height: 150 * S });
+    }
+
+    if (this._chooseButton) {
+      this._chooseButton.setStyle({ width: 320 * S, height: 80 * S });
     }
   }
 
