@@ -34,7 +34,7 @@ const DEBUG_MODE = true;
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
   title_screen:               'assets/sprites/title/title_screen.png',
-  battle_background_default:  'assets/sprites/character_pane/background/battle_background_default.png',
+  battle_background_default:  'assets/sprites/battle/battle_background_default.png',
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
   character_pane_skill_row:  'assets/sprites/character_pane/background/character_pane_skill_row.png',
