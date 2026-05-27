@@ -14,6 +14,8 @@ import CombatLog from './CombatLog.js';
 import EnemyAI from './EnemyAI.js';
 import { chooseEnemyAction } from './customEnemyAi.js';
 import { TILE_TYPES } from './TileTypes.js';
+import PassiveSystem from '../systems/PassiveSystem.js';
+import TRIGGER_TYPES from '../systems/TriggerTypes.js';
 
 /** @enum {string} */
 export const BattleState = {
@@ -182,6 +184,28 @@ export default class BattleController {
     // ── Callbacks ──
     this.onStateChange = null;
 
+    // ── Passive system ──
+    // Dispatcher for relic-based passive abilities. Battle code emits
+    // TRIGGER events; PassiveSystem looks up the affected side's relics
+    // and resolves matching effects via EffectResolver.
+    this.passives = new PassiveSystem({
+      playerState: this.playerState,
+      enemyState: this.enemyState,
+      log: this.log,
+      resolver: this.resolver,
+      // Any damage dealt by a relic effect routes screen shake + SFX
+      // through the same hooks that normal damage uses.
+      onDamage: (info) => {
+        const target = info.side === 'target' ? this._currentRelicTarget : null;
+        if (target) {
+          this._setShakeFromDamage(info.actualDamage, target.maxHp);
+        }
+      },
+      onExtraTurn: () => { this._extraTurnEarned = true; },
+    });
+    /** Set during a relic dispatch so onDamage can reference the right side. */
+    this._currentRelicTarget = null;
+
     // ── Init ──
     this.board.initialize();
     this.log.add('Battle begins! Your turn.');
@@ -194,6 +218,13 @@ export default class BattleController {
       mana: d.mana ? { ...d.mana } : {},
       portrait: d.portrait || '',
       skills: (d.skills || []).map(s => ({ ...s })),
+      // Clone relics + their effect arrays so per-battle mutations
+      // (e.g. consumed/charged relics in the future) don't leak back
+      // into the catalog or the persistent run state.
+      relics: (d.relics || []).map(r => ({
+        ...r,
+        effects: (r.effects || []).map(e => ({ ...e })),
+      })),
       // Preserve custom AI behavior key from enemy definition (if any)
       aiBehavior: d.aiBehavior || null,
     };
@@ -547,6 +578,11 @@ export default class BattleController {
       this.log.add(`Destroyed skulls deal ${r.actualDamage} damage to ${targetState.name}.`);
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
+      this._dispatchDamageEvent(
+        this.activeSide,
+        this.activeSide === 'player' ? 'enemy' : 'player',
+        r
+      );
       // Check for immediate game over — don't enter cascade if target died
       if (this._checkGameOver()) return;
     }
@@ -678,6 +714,11 @@ export default class BattleController {
   _enterShowMatch(analysis) {
     this._analysis = analysis;
     this._allSteps.push(analysis);
+
+    // Dispatch match-related passive triggers BEFORE the visual phase
+    // so any state changes (e.g. mana grants) are applied alongside
+    // the cascade's own rewards.
+    this._dispatchMatchEvents(this.activeSide, analysis);
     if (analysis.extraTurnTrigger) {
       this._extraTurnEarned = true;
       // Compute the "cause" position for the 4+ match floating effect.
@@ -807,6 +848,11 @@ export default class BattleController {
       // Trigger screen shake scaled by damage % of target's max HP
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
+      this._dispatchDamageEvent(
+        this.activeSide,
+        this.activeSide === 'player' ? 'enemy' : 'player',
+        r
+      );
       // Check for immediate game over — stop cascade if target died
       if (this._checkGameOver()) return;
     }
@@ -905,6 +951,10 @@ export default class BattleController {
   }
 
   _endTurn(side) {
+    // Dispatch onTurnEnd BEFORE we mutate state for the next turn so
+    // relic effects see the correct active-side context.
+    this.passives.dispatch(TRIGGER_TYPES.ON_TURN_END, { side });
+
     this.pendingExtraTurn = false;
     this._swapTriggerPos = null;
     // Enter turn-intro animation before the actual turn begins.
@@ -941,6 +991,11 @@ export default class BattleController {
       this.activeSide = 'player';
       this.log.add('--- Your Turn ---');
     }
+
+    // Dispatch onTurnStart AFTER state is set so relic effects can
+    // observe the active side correctly.
+    this.passives.dispatch(TRIGGER_TYPES.ON_TURN_START, { side });
+
     if (this.onStateChange) this.onStateChange();
   }
 
@@ -1204,6 +1259,7 @@ export default class BattleController {
         const r = this.resolver.applyDamage(tgt, amount);
         this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
         this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
+        this._dispatchDamageEvent(side, side === 'player' ? 'enemy' : 'player', r);
         return false;
       }
 
@@ -1264,6 +1320,74 @@ export default class BattleController {
       return true;
     }
     return false;
+  }
+
+  // ── Passive Trigger Dispatch ─────────────────────────
+  //
+  // Helpers that fan out battle events to PassiveSystem so relic effects
+  // can react. All trigger dispatch should go through these helpers so
+  // future agents have one place to look when adding a new event source.
+
+  _getStateBySide(side) {
+    return side === 'player' ? this.playerState : this.enemyState;
+  }
+
+  /**
+   * Dispatch onTakeDamage / onDealDamage passive triggers if any damage
+   * landed (actualDamage > 0). Safe to call after every applyDamage call.
+   *
+   * @param {'player'|'enemy'} attackerSide
+   * @param {'player'|'enemy'} targetSide
+   * @param {{actualDamage:number, blocked:number, armorDamage:number}} result
+   */
+  _dispatchDamageEvent(attackerSide, targetSide, result) {
+    if (!result || result.actualDamage <= 0) return;
+    this._currentRelicTarget = this._getStateBySide(targetSide);
+    this.passives.dispatch(TRIGGER_TYPES.ON_TAKE_DAMAGE, {
+      side: targetSide,
+      amount: result.actualDamage,
+      blocked: result.blocked,
+      armorDamage: result.armorDamage,
+    });
+    this.passives.dispatch(TRIGGER_TYPES.ON_DEAL_DAMAGE, {
+      side: attackerSide,
+      amount: result.actualDamage,
+      target: targetSide,
+    });
+    this._currentRelicTarget = null;
+  }
+
+  /**
+   * Dispatch onTileMatch / onTileMatchType / onMatch4Plus for a cascade
+   * step. Fires once per analysis with one `onTileMatch`, then one
+   * `onTileMatchType` per individual match, plus `onMatch4Plus` for any
+   * match of 4+ tiles.
+   *
+   * @param {'player'|'enemy'} side — the active side that triggered the match
+   * @param {import('./MatchResolver.js').MatchAnalysis} analysis
+   */
+  _dispatchMatchEvents(side, analysis) {
+    if (!analysis) return;
+    this.passives.dispatch(TRIGGER_TYPES.ON_TILE_MATCH, {
+      side,
+      matches: analysis.matches,
+      tilesDestroyed: analysis.tilesDestroyed,
+    });
+    for (const m of analysis.matches) {
+      this.passives.dispatch(TRIGGER_TYPES.ON_TILE_MATCH_TYPE, {
+        side,
+        typeId: m.typeId,
+        count: m.count,
+        isShape: !!m.isShape,
+      });
+      if (m.count >= 4) {
+        this.passives.dispatch(TRIGGER_TYPES.ON_MATCH_4_PLUS, {
+          side,
+          typeId: m.typeId,
+          count: m.count,
+        });
+      }
+    }
   }
 
   // ── Screen Shake ──────────────────────────────────────

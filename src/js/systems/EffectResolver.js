@@ -1,0 +1,112 @@
+/**
+ * EffectResolver.js — shared resolver for atomic effects.
+ *
+ * Both skill effects and relic-passive effects share a common "effect"
+ * vocabulary. The simple, non-board-touching effects (damage, armor, heal,
+ * gain_mana, extra_turn) are resolved here so BattleController and
+ * PassiveSystem do not duplicate state-mutation logic.
+ *
+ * Board-touching effects (create_tiles, destroy_tiles, destroy_tiles_row)
+ * stay in BattleController because they need to drive the cascade phase
+ * machine — they should not be invoked from a relic effect.
+ *
+ * Context shape:
+ *   {
+ *     caster:     CombatantState   — the owner of the effect (relic owner or skill user)
+ *     target:     CombatantState   — opponent (for damage effects)
+ *     log?:       CombatLog        — optional log for adding text entries
+ *     resolver?:  MatchResolver    — used for applyDamage (armor → block → HP)
+ *     onDamage?:  (info) => void   — optional callback fired after damage lands
+ *                                    info: { side: 'caster'|'target', actualDamage, blocked, armorDamage }
+ *     onExtraTurn?: () => void     — optional callback fired when extra_turn effect resolves
+ *   }
+ */
+
+/** Effect type vocabulary supported by EffectResolver (atomic effects only). */
+export const EFFECT_TYPES = {
+  DAMAGE:     'damage',
+  ARMOR:      'armor',
+  HEAL:       'heal',
+  GAIN_MANA:  'gain_mana',
+  EXTRA_TURN: 'extra_turn',
+};
+
+/**
+ * Apply a single atomic effect to the given context.
+ *
+ * Returns true if the effect was recognized and applied, false otherwise.
+ * Unrecognized effects are returned as `false` so the caller (e.g. BattleController)
+ * can fall back to its own handler for board-touching effects.
+ *
+ * @param {object} effect — { effectType, damage?, armor?, heal?, gainMana? }
+ * @param {object} ctx    — see file header
+ * @returns {boolean} true if handled, false if not recognized
+ */
+export function applyEffect(effect, ctx) {
+  if (!effect || !effect.effectType) return false;
+  const { caster, target, log, resolver, onDamage, onExtraTurn } = ctx;
+
+  switch (effect.effectType) {
+    case EFFECT_TYPES.DAMAGE: {
+      if (!resolver || !target) {
+        console.warn('[EffectResolver] damage effect requires ctx.resolver and ctx.target.');
+        return true;
+      }
+      const amount = (effect.damage && typeof effect.damage.amount === 'number')
+        ? effect.damage.amount
+        : (caster && caster.attack) || 1;
+      const r = resolver.applyDamage(target, amount);
+      if (log && caster && target) {
+        log.add(`${caster.name} deals ${r.actualDamage} damage to ${target.name}.`);
+      }
+      if (onDamage && r.actualDamage > 0) {
+        onDamage({ side: 'target', ...r });
+      }
+      return true;
+    }
+
+    case EFFECT_TYPES.ARMOR: {
+      if (!caster) return true;
+      const amount = (effect.armor && typeof effect.armor.amount === 'number')
+        ? effect.armor.amount
+        : (caster.attack || 1);
+      caster.armor = (caster.armor || 0) + amount;
+      if (log) log.add(`${caster.name} gains ${amount} armor.`);
+      return true;
+    }
+
+    case EFFECT_TYPES.HEAL: {
+      if (!caster) return true;
+      const amount = (effect.heal && typeof effect.heal.amount === 'number')
+        ? effect.heal.amount
+        : 0;
+      if (amount <= 0) return true;
+      const before = caster.hp;
+      caster.hp = Math.min(caster.maxHp, caster.hp + amount);
+      const actual = caster.hp - before;
+      if (log && actual > 0) log.add(`${caster.name} heals for ${actual} HP.`);
+      return true;
+    }
+
+    case EFFECT_TYPES.GAIN_MANA: {
+      if (!caster) return true;
+      const gm = effect.gainMana || {};
+      const color = gm.color;
+      const amount = typeof gm.amount === 'number' ? gm.amount : 0;
+      if (!color || amount <= 0) return true;
+      if (!caster.mana) caster.mana = {};
+      caster.mana[color] = (caster.mana[color] || 0) + amount;
+      if (log) log.add(`${caster.name} gains ${amount} ${color} mana.`);
+      return true;
+    }
+
+    case EFFECT_TYPES.EXTRA_TURN: {
+      if (log && caster) log.add(`${caster.name} gains an extra turn!`);
+      if (onExtraTurn) onExtraTurn();
+      return true;
+    }
+
+    default:
+      return false;
+  }
+}

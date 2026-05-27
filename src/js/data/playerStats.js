@@ -12,6 +12,10 @@
  * This module is the SINGLE source of truth for resolving effective stats.
  * No other file should scatter "base + modifier" math throughout the codebase.
  *
+ * Skills and relics are also resolved here — characterDef.skills / .relics
+ * are string-id arrays that are expanded into full objects via the catalogs
+ * in data/skills and data/relics.
+ *
  * Exports:
  *   getEffectivePlayerStats(characterDef, runState) → effectiveStats object
  *   createPlayerBattleState(characterDef, runState) → fresh battle state object
@@ -19,6 +23,9 @@
  *   createDefaultStatModifiers() → zeroed statModifiers template
  *   applyRunModifier(runState, statPath, amount) → mutates runState.statModifiers
  */
+
+import { resolveSkillIds } from './skills/skillCatalog.js';
+import { resolveRelicIds } from './relics/relicCatalog.js';
 
 // ── Stat Modifier Templates ────────────────────────────────────────────────
 
@@ -97,6 +104,13 @@ export function getEffectivePlayerStats(characterDef, runState) {
 export function createPlayerBattleState(characterDef, runState) {
   const effective = getEffectivePlayerStats(characterDef, runState);
 
+  // Combine starting relic ids from the character def with any relics
+  // acquired during the run (stored on runState.relics as id strings).
+  const relicIds = [
+    ...(characterDef.relics || []),
+    ...(runState && Array.isArray(runState.relics) ? runState.relics : []),
+  ];
+
   return {
     name: characterDef.name,
     className: characterDef.className,
@@ -113,8 +127,11 @@ export function createPlayerBattleState(characterDef, runState) {
     attack: effective.startingAttack,
     block: 0,
 
-    // Skills are copied from the character definition (not mutated)
-    skills: (characterDef.skills || []).map(s => ({ ...s })),
+    // Resolved skill objects (cloned from skill catalog)
+    skills: resolveSkillIds(characterDef.skills || []),
+
+    // Resolved relic objects (cloned from relic catalog)
+    relics: resolveRelicIds(relicIds),
 
     // Temporary battle-only state
     temporaryEffects: [],

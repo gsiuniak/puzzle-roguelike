@@ -1,8 +1,13 @@
 /**
  * Mock character data — the single source of truth for gameplay definitions.
  *
- * Each character defines its immutable base stats, skills, mana, and portrait.
- * Character definitions are NEVER mutated during gameplay.
+ * Each character defines its immutable base stats, skill IDs, relic IDs,
+ * mana, and portrait. Character definitions are NEVER mutated during gameplay.
+ *
+ * Skills and relics are referenced by ID — the full definitions live in
+ * `data/skills/skillCatalog.js` and `data/relics/relicCatalog.js`. They are
+ * resolved into full objects at battle-state creation time
+ * (see playerStats.createPlayerBattleState).
  *
  * Architecture:
  *   characterDefinition.baseStats = immutable template
@@ -37,33 +42,11 @@ const warriorCharacter = {
     },
   },
 
-  skills: [
-    {
-      name: 'Bash',
-      description: 'Deal 5 damage\nGain a turn',
-      icon: 'skill_bash',
-      sound: 'skill_bash',
-      cost: { red: 7 },
-      effects: [
-        { effectType: 'damage', damage: { amount: 5 } },
-        { effectType: 'extra_turn' }
-      ],
-    },
-    {
-      name: 'Defend',
-      description: 'Gain 5 armor\nCreate 3 blue',
-      icon: 'skill_defend',
-      sound: 'skill_defend',
-      cost: { blue: 5 },
-      effects: [
-        { effectType: 'armor', armor: { amount: 5 } },
-        {
-          effectType: 'create_tiles',
-          createTiles: { amount: 3, type: 'blue' }
-        }
-      ],
-    }
-  ],
+  /** Skill IDs — resolved via skillCatalog at battle-state creation */
+  skills: ['bash', 'defend'],
+
+  /** Starting relic IDs — resolved via relicCatalog at battle-state creation */
+  relics: ['family_crest'],
 };
 
 const mageCharacter = {
@@ -88,36 +71,8 @@ const mageCharacter = {
     },
   },
 
-  skills: [
-    {
-      name: 'Fracture',
-      description: 'Destroy 1 row\nCreate 5 purple',
-      icon: 'skill_fracture',
-      sound: 'skill_fracture',
-      targeting: 'board_tile',
-      area: 1,
-      cost: { yellow: 5 },
-      effects: [
-        { effectType: 'destroy_tiles_row' },
-        {
-          effectType: 'create_tiles',
-          createTiles: { amount: 5, type: 'purple' }
-        }
-      ],
-    },
-    {
-      name: 'Explode',
-      description: 'Destroy tiles in a 3x3 area',
-      icon: 'skill_explode',
-      sound: 'skill_explode',
-      targeting: 'board_tile',
-      area: { radius: 1 },
-      cost: { purple: 8 },
-      effects: [
-        { effectType: 'destroy_tiles' }
-      ],
-    },
-  ],
+  skills: ['fracture', 'explode'],
+  relics: [],
 };
 
 const witchDoctorCharacter = {
@@ -142,38 +97,8 @@ const witchDoctorCharacter = {
     },
   },
 
-  skills: [
-    {
-      name: 'Summon Dead',
-      description: 'Create 10 skulls',
-      icon: 'skill_summon_dead',
-      sound: 'skill_create_skull',
-      cost: { purple: 4 },
-      effects: [
-        {
-          effectType: 'create_tiles',
-          createTiles: { amount: 10, type: 'skull' }
-        }
-      ],
-    },
-    {
-      name: 'Oungan',
-      description: 'Heal 5 HP\nCreate 5 green',
-      icon: 'skill_oungan',
-      sound: 'skill_oungan',
-      cost: { green: 6 },
-      effects: [
-        {
-          effectType: 'heal',
-          heal: { amount: 5 }
-        },
-        {
-          effectType: 'create_tiles',
-          createTiles: { amount: 3, type: 'green' }
-        }
-      ],
-    },
-  ],
+  skills: ['summon_dead', 'oungan'],
+  relics: [],
 };
 
 // Default export — Warrior for backward compatibility

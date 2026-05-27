@@ -4,6 +4,10 @@
  * Same structure as mockCharacter.js so the CharacterPane
  * can render it dynamically without any hardcoded logic.
  *
+ * Skills and relics are referenced by ID — the full definitions live in
+ * `data/skills/skillCatalog.js` and `data/relics/relicCatalog.js`. They are
+ * resolved at battle creation (see MapScene._transitionToBattle).
+ *
  * === aiBehavior ===
  * Optional key linking to a handler in enemyAiOverrides.js.
  *   - undefined / null / missing → uses standard EnemyAI
@@ -46,18 +50,12 @@ const mockEnemy = {
     persistAfterBattle: true,
     isSpecialTrack: false,
   },
-  skills: [
-    {
-      name: 'Slash',
-      description: 'Deal 5 damage.',
-      icon: 'skill_slash',
-      sound: 'skill_slash',
-      cost: { red: 5 },
-      effects: [
-        { effectType: 'damage', damage: { amount: 5 } }
-      ],
-    },
-  ],
+
+  /** Skill IDs — resolved via skillCatalog at battle creation */
+  skills: ['slash'],
+
+  /** Starting relic IDs — resolved via relicCatalog at battle creation */
+  relics: [],
 };
 
 export default mockEnemy;

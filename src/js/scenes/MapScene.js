@@ -32,6 +32,8 @@ import BattleScene from '../ui/BattleScene.js';
 import mockEnemy from '../data/mockEnemy.js';
 import { createPlayerBattleState, syncBattleResultsToRunState } from '../data/playerStats.js';
 import { createRunState } from '../data/runState.js';
+import { resolveSkillIds } from '../data/skills/skillCatalog.js';
+import { resolveRelicIds } from '../data/relics/relicCatalog.js';
 
 export default class MapScene extends UIPanel {
   constructor() {
@@ -368,6 +370,12 @@ export default class MapScene extends UIPanel {
 
     const enemyData = JSON.parse(JSON.stringify(mockEnemy));
 
+    // Resolve enemy skill/relic IDs into full objects via the catalogs.
+    // Characters/enemies store IDs; the BattleController operates on
+    // resolved objects.
+    enemyData.skills = resolveSkillIds(enemyData.skills || []);
+    enemyData.relics = resolveRelicIds(enemyData.relics || []);
+
     // Scale enemy difficulty based on depth and node type
     if (node.type === 'elite') {
       enemyData.hp = Math.floor(enemyData.hp * 1.5);
@@ -472,6 +480,7 @@ export default class MapScene extends UIPanel {
         startingMana: { red: 0, blue: 5, green: 0, yellow: 0, purple: 0 },
       },
       skills: [],
+      relics: [],
       description: 'A brave adventurer.',
     };
     this._characterDef = defaultDef;

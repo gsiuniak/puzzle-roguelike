@@ -40,6 +40,9 @@ src/
     ui/                   — custom UI framework + battle scene + visual effects + overlays
     audio/                — Howler-based audio manager + sound config
     data/                 — character, enemy, and selection definitions
+      skills/             — skill catalog (id-keyed)
+      relics/             — relic catalog (id-keyed, passive abilities)
+    systems/              — cross-cutting battle systems (passives, effect resolver)
     lib/                  — third-party libraries (Howler.js)
   assets/
     sprites/              — all image assets organized by context
@@ -80,6 +83,9 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 13. **Character definitions are immutable.** Never mutate `baseStats` during gameplay. Run modifiers go in `runState.statModifiers` via [`playerStats.applyRunModifier()`](src/js/data/playerStats.js).
 14. **All stat math goes through [`playerStats.js`](src/js/data/playerStats.js).** Use `getEffectivePlayerStats()` to resolve stats, `createPlayerBattleState()` for battle init, `syncBattleResultsToRunState()` for persistence. Never scatter `base + modifier` math outside this module.
 15. **Rewards modify runState.statModifiers, never baseStats.** Use `applyRunModifier(runState, 'startingMana.purple', 2)` pattern.
+16. **Skills and relics are referenced by ID, not embedded.** Character/enemy definitions list `skills: ['bash']` / `relics: ['family_crest']`. Full data lives in [`skillCatalog.js`](src/js/data/skills/skillCatalog.js) and [`relicCatalog.js`](src/js/data/relics/relicCatalog.js). IDs are resolved into objects at battle-state creation (`createPlayerBattleState` for players, `MapScene._transitionToBattle` for enemies).
+17. **Passive abilities are data-driven via PassiveSystem.** Never write `if (relic.id === 'X')` checks in battle logic. BattleController dispatches trigger events (see [`TriggerTypes.js`](src/js/systems/TriggerTypes.js)); [`PassiveSystem`](src/js/systems/PassiveSystem.js) routes them to matching relic effects through [`EffectResolver`](src/js/systems/EffectResolver.js).
+18. **Atomic effects (damage, armor, heal, gain_mana, extra_turn) live in [`EffectResolver`](src/js/systems/EffectResolver.js)** and are shared between skill resolution and passive resolution. Board-touching effects (create_tiles, destroy_tiles, destroy_tiles_row) stay in BattleController because they drive the cascade phase machine.
 
 ---
 
@@ -130,6 +136,9 @@ Use `renderBackground` for splashes that sit BEHIND the scene's UI but must cove
 | [`src/js/game/EnemyAI.js`](src/js/game/EnemyAI.js) | `EnemyAI` | Enemy decision: skill-first (damage preferred), then board evaluation with priority scoring (4+ match > skull damage > skill mana > contest player mana) |
 | [`src/js/game/customEnemyAi.js`](src/js/game/customEnemyAi.js) | (module) | **AI override dispatch.** Exports `chooseEnemyAction(enemyState, context)` and `getEnemyAiHandler(aiBehavior)`. Tries custom AI first; falls back to standard EnemyAI. Used by BattleController._doEnemyTurn(). |
 | [`src/js/game/enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) | (module) | **Custom AI registry.** Plain object keyed by `aiBehavior` string → handler function. Handlers receive `{ enemy, player, board, battleState, standardAI }` and return `{ action, skill?, swap? }` or `null`. Add new enemy behaviors here. |
+| [`src/js/systems/TriggerTypes.js`](src/js/systems/TriggerTypes.js) | (module) | **Passive trigger constants.** Canonical list of trigger event names (`onTileMatch`, `onTileMatchType`, `onMatch4Plus`, `onTurnStart`, `onTurnEnd`, `onTakeDamage`, `onDealDamage`) with documented payload conventions. |
+| [`src/js/systems/EffectResolver.js`](src/js/systems/EffectResolver.js) | (module) | **Shared atomic-effect resolver.** `applyEffect(effect, ctx)` handles `damage`, `armor`, `heal`, `gain_mana`, `extra_turn` for both skill and passive effects. Returns false on unrecognized effect types so callers can fall back. Board-touching effects stay in BattleController. |
+| [`src/js/systems/PassiveSystem.js`](src/js/systems/PassiveSystem.js) | `PassiveSystem` | **Passive ability dispatcher.** `dispatch(triggerName, payload)` looks up the relics on `payload.side`, finds effects whose `trigger` matches, and resolves them via EffectResolver. Owned by BattleController; instantiated once per battle. No per-relic code lives here — adding a new relic is purely data. |
 
 **Battle State Machine:**
 ```
@@ -198,8 +207,10 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 
 | File | Exports | Content |
 |------|---------|---------|
-| [`src/js/data/mockCharacter.js`](src/js/data/mockCharacter.js) | `warriorCharacter`, `mageCharacter`, `witchDoctorCharacter`, default: `mockCharacter` | **Immutable character definitions.** Each has `baseStats` (maxHp, startingMana, startingArmor, startingAttack) + skills[]. Never mutated during gameplay. |
-| [`src/js/data/mockEnemy.js`](src/js/data/mockEnemy.js) | `mockEnemy` (default) | Goblin enemy: same structure as character. HP scaled by MapScene for elite/boss. |
+| [`src/js/data/mockCharacter.js`](src/js/data/mockCharacter.js) | `warriorCharacter`, `mageCharacter`, `witchDoctorCharacter`, default: `mockCharacter` | **Immutable character definitions.** Each has `baseStats` (maxHp, startingMana, startingArmor, startingAttack), `skills: string[]` (skill IDs), `relics: string[]` (relic IDs). Never mutated during gameplay. |
+| [`src/js/data/mockEnemy.js`](src/js/data/mockEnemy.js) | `mockEnemy` (default) | Goblin enemy: same structure as character (`skills` / `relics` are ID arrays). HP scaled by MapScene for elite/boss. |
+| [`src/js/data/skills/skillCatalog.js`](src/js/data/skills/skillCatalog.js) | `SKILL_CATALOG` (default), `getSkillById`, `resolveSkillIds` | **Skill registry.** Plain object keyed by skill `id`. Each entry has `name`, `description`, `icon`, `sound`, `cost`, optional `targeting`/`area`, and `effects[]`. `resolveSkillIds(ids)` returns shallow-cloned full skill objects. |
+| [`src/js/data/relics/relicCatalog.js`](src/js/data/relics/relicCatalog.js) | `RELIC_CATALOG` (default), `getRelicById`, `resolveRelicIds` | **Relic registry.** Plain object keyed by relic `id`. Each entry has `name`, `description`, `icon`, optional `area`, and `effects[]`. Each effect carries its own `trigger` field (TRIGGER_TYPES value) plus `effectType` and payload. |
 | [`src/js/data/characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js) | `characterSelectDefinitions` (default) | UI metadata for CharacterSelectScene: portraitKey, splashKey, auraColor, order, enabled. References characterData from mockCharacter.js. |
 | [`src/js/data/playerStats.js`](src/js/data/playerStats.js) | `getEffectivePlayerStats`, `createPlayerBattleState`, `syncBattleResultsToRunState`, `createDefaultStatModifiers`, `applyRunModifier` | **Centralized stat resolution.** Resolves baseStats + statModifiers -> effectiveStats -> battle state. Single source of truth for all stat math. |
 | [`src/js/data/runState.js`](src/js/data/runState.js) | `createRunState`, `serializeRunState`, `deserializeRunState` | **Run state factory.** Tracks characterId, currentHp (persistent), statModifiers (persistent run progression), relics/upgrades/rewards placeholders. |
@@ -226,7 +237,11 @@ When given a task, locate the owning system using this table:
 | "Tile disappear/reappear bug" | [`BoardModel.removeTiles()`](src/js/game/BoardModel.js:355) / [`applyGravity()`](src/js/game/BoardModel.js:372) | [`BattleController` cascade phases](src/js/game/BattleController.js:28) |
 | "Health/damage calculation wrong" | [`MatchResolver.applyDamage()`](src/js/game/MatchResolver.js:163) | [`BattleController._setShakeFromDamage()`](src/js/game/BattleController.js:1193) |
 | "Add new character" | [`mockCharacter.js`](src/js/data/mockCharacter.js) | [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js), [`main.js` ASSET_MAP](src/js/main.js:35) |
-| "Add new skill effect type" | [`SKILL_EFFECT_TYPES`](src/js/game/MatchResolver.js:23) | [`BattleController._resolveEffect()`](src/js/game/BattleController.js:1110) |
+| "Add new skill" | [`skillCatalog.js`](src/js/data/skills/skillCatalog.js) | Reference its `id` from `skills: [...]` on the owner; register icon/sound in [`main.js` ASSET_MAP](src/js/main.js:35) and [`SoundConfig.js`](src/js/audio/SoundConfig.js) |
+| "Add new relic / passive" | [`relicCatalog.js`](src/js/data/relics/relicCatalog.js) | Pick a trigger from [`TriggerTypes.js`](src/js/systems/TriggerTypes.js), an effect type from [`EffectResolver.js`](src/js/systems/EffectResolver.js); reference id from `relics: [...]` on the owner |
+| "Add new passive trigger event" | [`TriggerTypes.js`](src/js/systems/TriggerTypes.js) | Dispatch from the relevant spot in [`BattleController`](src/js/game/BattleController.js) via `this.passives.dispatch(...)` |
+| "Add new effect type (atomic)" | [`EffectResolver.js`](src/js/systems/EffectResolver.js) | Add a case to the switch; if used by skills, also add to [`SKILL_EFFECT_TYPES`](src/js/game/MatchResolver.js:23) |
+| "Add new skill effect type (board-touching)" | [`SKILL_EFFECT_TYPES`](src/js/game/MatchResolver.js:23) | [`BattleController._resolveEffect()`](src/js/game/BattleController.js) — handles cascade-driving effects |
 | "Add new tile type" | [`TILE_TYPES`](src/js/game/TileTypes.js:11) | [`BoardModel` spawn weights](src/js/game/BoardModel.js:26), tile sprite in [`main.js` ASSET_MAP](src/js/main.js:35) |
 | "Board rendering wrong" | [`BoardPlaceholder`](src/js/ui/BoardPlaceholder.js) | [`BattleScene.updateFromController()`](src/js/ui/BattleScene.js:481) |
 | "Combat log issues" | [`CombatLog`](src/js/game/CombatLog.js) | [`BattleScene.updateFromController()`](src/js/ui/BattleScene.js:481) |
@@ -380,6 +395,13 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 18. **Canvas uses DPR-aware rendering** — all layout is in CSS pixels; context is pre-scaled.
 19. **Post-battle flow uses RewardOverlay** — GAME_OVER does NOT immediately return to MapScene. Instead, RewardOverlay appears over the (still-visible) BattleScene. ESC dismisses the overlay and triggers the MapScene transition.
 20. **Enemy AI overrides are dispatch-based, not conditional.** Custom AI is registered in [`enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) as handler functions keyed by `aiBehavior`. [`customEnemyAi.js`](src/js/game/customEnemyAi.js) orchestrates: try custom → fallback to standard `EnemyAI`. Enemy definitions link via optional `aiBehavior` field.
+21. **Skills and relics are id-referenced + catalog-resolved.** Character/enemy definitions store `skills: string[]` and `relics: string[]`. Resolution happens once at battle-state creation: [`createPlayerBattleState`](src/js/data/playerStats.js) for players, [`MapScene._transitionToBattle`](src/js/scenes/MapScene.js) for enemies (calls `resolveSkillIds` / `resolveRelicIds`). [`BattleController._cloneState`](src/js/game/BattleController.js) deep-clones the resolved relics + effect arrays so per-battle mutation cannot leak back to catalogs or runState.
+22. **Passive abilities are data-driven via PassiveSystem dispatch, not conditionals.** Battle code emits trigger events via `this.passives.dispatch(triggerName, payload)`. [`PassiveSystem`](src/js/systems/PassiveSystem.js) iterates the affected side's relics, matches by `effect.trigger`, and resolves via `applyEffect`. Adding a relic requires no code changes outside [`relicCatalog.js`](src/js/data/relics/relicCatalog.js). Recursion guard is intentionally absent (today's relics don't recurse — add depth limit when needed).
+23. **Trigger dispatch points in BattleController:**
+    - `onTileMatch` / `onTileMatchType` / `onMatch4Plus` — fired from `_enterShowMatch` (every cascade step)
+    - `onTurnStart` — fired from `_completeTurnIntro` (after state is set to PLAYER_TURN/ENEMY_TURN)
+    - `onTurnEnd` — fired from `_endTurn` (before transitioning to TURN_INTRO)
+    - `onTakeDamage` / `onDealDamage` — fired by `_dispatchDamageEvent` after every `applyDamage` call that lands `actualDamage > 0` (skill DAMAGE, skull damage in `_doRemove`, skull damage in `_executeDestroyTiles`).
 
 ---
 

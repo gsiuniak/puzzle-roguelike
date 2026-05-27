@@ -1,0 +1,157 @@
+/**
+ * skillCatalog.js — central registry of all skills in the game.
+ *
+ * Each skill is keyed by a unique `id`. Characters and enemies reference
+ * skills by ID rather than embedding full definitions, so:
+ *   - skill numbers can be tuned in one place
+ *   - skills can be shared between characters/enemies
+ *   - new skills don't require touching every character file
+ *
+ * Adding a new skill:
+ *   1. Add a new entry below with a unique `id`.
+ *   2. Reference the id from a character/enemy definition: `skills: ['bash']`.
+ *   3. Register the icon/sound asset keys in main.js ASSET_MAP / SoundConfig.
+ *
+ * Skill shape:
+ * {
+ *   id:          string            — unique identifier (kebab/snake_case)
+ *   name:        string            — display name
+ *   description: string            — UI description (newlines allowed)
+ *   icon:        string            — AssetManager key for the icon
+ *   sound:       string            — SoundConfig key for the resolve SFX
+ *   cost:        { color: amount } — mana cost per color
+ *   targeting?:  'board_tile'      — optional, enters TARGETING state
+ *   area?:       number|{radius}   — optional, targeting area shape
+ *   effects:     EffectDef[]       — list of effects (see MatchResolver.SKILL_EFFECT_TYPES)
+ * }
+ */
+
+const SKILL_CATALOG = {
+  // ── Warrior ──────────────────────────────────────────
+  bash: {
+    id: 'bash',
+    name: 'Bash',
+    description: 'Deal 5 damage\nGain a turn',
+    icon: 'skill_bash',
+    sound: 'skill_bash',
+    cost: { red: 7 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 5 } },
+      { effectType: 'extra_turn' },
+    ],
+  },
+  defend: {
+    id: 'defend',
+    name: 'Defend',
+    description: 'Gain 5 armor\nCreate 3 blue',
+    icon: 'skill_defend',
+    sound: 'skill_defend',
+    cost: { blue: 5 },
+    effects: [
+      { effectType: 'armor', armor: { amount: 5 } },
+      { effectType: 'create_tiles', createTiles: { amount: 3, type: 'blue' } },
+    ],
+  },
+
+  // ── Mage ─────────────────────────────────────────────
+  fracture: {
+    id: 'fracture',
+    name: 'Fracture',
+    description: 'Destroy 1 row\nCreate 5 purple',
+    icon: 'skill_fracture',
+    sound: 'skill_fracture',
+    targeting: 'board_tile',
+    area: 1,
+    cost: { yellow: 5 },
+    effects: [
+      { effectType: 'destroy_tiles_row' },
+      { effectType: 'create_tiles', createTiles: { amount: 5, type: 'purple' } },
+    ],
+  },
+  explode: {
+    id: 'explode',
+    name: 'Explode',
+    description: 'Destroy tiles in a 3x3 area',
+    icon: 'skill_explode',
+    sound: 'skill_explode',
+    targeting: 'board_tile',
+    area: { radius: 1 },
+    cost: { purple: 8 },
+    effects: [
+      { effectType: 'destroy_tiles' },
+    ],
+  },
+
+  // ── Witch Doctor ─────────────────────────────────────
+  summon_dead: {
+    id: 'summon_dead',
+    name: 'Summon Dead',
+    description: 'Create 10 skulls',
+    icon: 'skill_summon_dead',
+    sound: 'skill_create_skull',
+    cost: { purple: 4 },
+    effects: [
+      { effectType: 'create_tiles', createTiles: { amount: 10, type: 'skull' } },
+    ],
+  },
+  oungan: {
+    id: 'oungan',
+    name: 'Oungan',
+    description: 'Heal 5 HP\nCreate 5 green',
+    icon: 'skill_oungan',
+    sound: 'skill_oungan',
+    cost: { green: 6 },
+    effects: [
+      { effectType: 'heal', heal: { amount: 5 } },
+      { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
+    ],
+  },
+
+  // ── Enemies ──────────────────────────────────────────
+  slash: {
+    id: 'slash',
+    name: 'Slash',
+    description: 'Deal 5 damage.',
+    icon: 'skill_slash',
+    sound: 'skill_slash',
+    cost: { red: 5 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 5 } },
+    ],
+  },
+};
+
+/**
+ * Look up a skill by ID.
+ * Returns null and warns if not found.
+ * @param {string} id
+ * @returns {object|null}
+ */
+export function getSkillById(id) {
+  const skill = SKILL_CATALOG[id];
+  if (!skill) {
+    console.warn(`[skillCatalog] Unknown skill id: "${id}".`);
+    return null;
+  }
+  return skill;
+}
+
+/**
+ * Resolve an array of skill IDs into full skill objects (shallow-cloned
+ * so callers cannot accidentally mutate the catalog).
+ *
+ * Unknown IDs are skipped with a console warning.
+ * @param {string[]} ids
+ * @returns {object[]}
+ */
+export function resolveSkillIds(ids) {
+  if (!Array.isArray(ids)) return [];
+  const out = [];
+  for (const id of ids) {
+    const skill = getSkillById(id);
+    if (skill) out.push({ ...skill });
+  }
+  return out;
+}
+
+export default SKILL_CATALOG;
