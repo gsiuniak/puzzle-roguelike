@@ -1,5 +1,65 @@
 import UIElement from './UIElement.js';
 
+// ── Custom-font readiness ───────────────────────────────────
+// Canvas `ctx.measureText` returns fallback-font widths until the custom
+// "Marcellus SC" font finishes loading. If a UIText element wraps its text
+// during that window, the cached line breaks are wrong (visible as clipped
+// or mis-broken text on first load). We explicitly load the font via the
+// FontFace API at module load (which forces the browser to fetch the @font-face
+// declared in index.html) and, once it's available, invalidate the wrap cache
+// on every UIText instance constructed in the meantime so the next render
+// re-measures with the correct font metrics.
+//
+// `document.fonts.ready` alone isn't quite enough: it can resolve before
+// the font is "primed" for canvas measurement. `document.fonts.load(...)`
+// guarantees the font is registered for the given spec before resolving.
+const _CUSTOM_FONT_SPECS = [
+  '12px "Marcellus SC"',
+  'bold 12px "Marcellus SC"',
+];
+
+// Generation counter — bumped every time the set of available fonts changes
+// (specifically, once when the custom font finishes loading). Each UIText
+// stamps its wrap cache with the generation it measured against; if the
+// stamp is stale on the next _getWrappedLines call, the cache is rebuilt.
+// This guarantees that the first render after fonts load always re-measures
+// the text, without relying on the waiter callbacks alone (which could be
+// missed if a UIText is constructed in the same microtask window the
+// promise resolves in, or if a frame is scheduled before the waiter fires).
+let _fontGeneration = 0;
+let _fontsReady = false;
+
+function _notifyFontsReady() {
+  if (_fontsReady) return;
+  _fontsReady = true;
+  _fontGeneration++;
+}
+
+if (typeof document !== 'undefined' && document.fonts && document.fonts.load) {
+  const loaders = _CUSTOM_FONT_SPECS.map(spec => document.fonts.load(spec).catch(() => null));
+  Promise.all(loaders)
+    .then(() => {
+      // Prime the canvas font system with a dummy measurement so any
+      // subsequent ctx.measureText in this module uses real metrics
+      // rather than a stale fallback choice.
+      try {
+        const c = document.createElement('canvas');
+        const cx = c.getContext('2d');
+        if (cx) {
+          for (const spec of _CUSTOM_FONT_SPECS) {
+            cx.font = spec;
+            cx.measureText('M');
+          }
+        }
+      } catch (_) { /* ignore */ }
+      _notifyFontsReady();
+    })
+    .catch(_notifyFontsReady);
+} else {
+  // No font-loading API available — assume fonts are ready.
+  _fontsReady = true;
+}
+
 /**
  * UIText — renders a string from dynamic data.
  *
@@ -41,6 +101,8 @@ export default class UIText extends UIElement {
     // Internal cache for wrapped lines
     this._wrappedLines = null;
     this._wrapCacheKey = null;
+    // Generation the wrap cache was measured against — see _fontGeneration.
+    this._wrapGeneration = _fontGeneration;
   }
 
   /** Effective line height */
@@ -133,11 +195,16 @@ export default class UIText extends UIElement {
    */
   _getWrappedLines(ctx) {
     const key = this._getWrapCacheKey(ctx);
-    if (this._wrappedLines && this._wrapCacheKey === key) {
+    if (
+      this._wrappedLines &&
+      this._wrapCacheKey === key &&
+      this._wrapGeneration === _fontGeneration
+    ) {
       return this._wrappedLines;
     }
     this._wrappedLines = this._wrapText(ctx);
     this._wrapCacheKey = key;
+    this._wrapGeneration = _fontGeneration;
     return this._wrappedLines;
   }
 
