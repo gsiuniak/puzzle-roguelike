@@ -35,14 +35,19 @@ export default class PassiveSystem {
    * @param {object} [ctx.resolver]  — MatchResolver instance (for damage routing)
    * @param {Function} [ctx.onDamage] — fired when an effect deals damage (for shake/SFX)
    * @param {Function} [ctx.onExtraTurn] — fired when an effect grants extra turn
+   * @param {Function} [ctx.onBoardEffect] — handler for board-touching effects that
+   *     EffectResolver does not recognize (create/destroy tiles etc.).
+   *     Signature: (effect, triggerName, payload, ctx) => boolean (true if handled).
+   *     Owned by BattleController since these effects drive the cascade machine.
    */
   constructor(ctx) {
-    this.playerState = ctx.playerState;
-    this.enemyState  = ctx.enemyState;
-    this.log         = ctx.log || null;
-    this.resolver    = ctx.resolver || null;
-    this.onDamage    = ctx.onDamage || null;
-    this.onExtraTurn = ctx.onExtraTurn || null;
+    this.playerState   = ctx.playerState;
+    this.enemyState    = ctx.enemyState;
+    this.log           = ctx.log || null;
+    this.resolver      = ctx.resolver || null;
+    this.onDamage      = ctx.onDamage || null;
+    this.onExtraTurn   = ctx.onExtraTurn || null;
+    this.onBoardEffect = ctx.onBoardEffect || null;
   }
 
   /**
@@ -75,11 +80,18 @@ export default class PassiveSystem {
       const effects = relic.effects || [];
       for (const effect of effects) {
         if (effect.trigger !== triggerName) continue;
-        const handled = applyEffect(effect, ctx);
+        let handled = applyEffect(effect, ctx);
+        // Board-touching effects (destroy/create tiles, radius blasts, ...)
+        // are routed to the host (BattleController) via onBoardEffect so the
+        // cascade phase machine stays the single source of truth for board
+        // mutations during a step.
+        if (!handled && this.onBoardEffect) {
+          handled = !!this.onBoardEffect(effect, triggerName, payload, ctx);
+        }
         if (!handled) {
           console.warn(
             `[PassiveSystem] Relic "${relic.id}" used effectType "${effect.effectType}" ` +
-            `which is not supported by EffectResolver. Skipping.`
+            `which is not supported by EffectResolver or onBoardEffect. Skipping.`
           );
         }
       }

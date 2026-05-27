@@ -28,7 +28,7 @@ const mage = {
   },
 
   skills: ['fracture', 'explode'],
-  relics: [],
+  relics: ['unstable_catalyst'],
 };
 
 export default mage;

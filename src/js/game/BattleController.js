@@ -202,6 +202,11 @@ export default class BattleController {
         }
       },
       onExtraTurn: () => { this._extraTurnEarned = true; },
+      // Board-touching passive effects (e.g. destroy_tiles_radius from
+      // Unstable Catalyst) are routed here so the cascade phase machine
+      // stays in charge of board mutations.
+      onBoardEffect: (effect, triggerName, payload, ctx) =>
+        this._handlePassiveBoardEffect(effect, triggerName, payload, ctx),
     });
     /** Set during a relic dispatch so onDamage can reference the right side. */
     this._currentRelicTarget = null;
@@ -715,21 +720,19 @@ export default class BattleController {
     this._analysis = analysis;
     this._allSteps.push(analysis);
 
-    // Dispatch match-related passive triggers BEFORE the visual phase
-    // so any state changes (e.g. mana grants) are applied alongside
-    // the cascade's own rewards.
-    this._dispatchMatchEvents(this.activeSide, analysis);
+    // Compute the "cause" position FIRST (before dispatching passive
+    // triggers) so passive effects (e.g. radius destruction relics) can
+    // use it as their focal point via the onMatch4Plus payload.
+    //
+    // For the initial swap step: _swapTriggerPos was computed by
+    // _computeSwapCausePos which finds which swapped tile landed in the
+    // 4+ group (handles both click-order scenarios correctly).
+    // For cascade steps: find which match position overlaps with the
+    // previously-empty cells (the tile that fell into place).
+    let causePos = null;
     if (analysis.extraTurnTrigger) {
       this._extraTurnEarned = true;
-      // Compute the "cause" position for the 4+ match floating effect.
-      // For the initial swap step: _swapTriggerPos was computed by
-      // _computeSwapCausePos which finds which swapped tile landed in
-      // the 4+ group (handles both click-order scenarios correctly).
-      // For cascade steps: find which match position overlaps with
-      // the previously-empty cells (the tile that fell into place).
-      let causePos = null;
       if (this._previousEmptyCells && this._previousEmptyCells.length > 0) {
-        // Cascade step — find overlap between new match and old empty cells
         causePos = this._findCascadeCausePos(analysis, this._previousEmptyCells);
       }
       if (!causePos && this._swapTriggerPos) {
@@ -741,6 +744,12 @@ export default class BattleController {
       }
       this.extraTurnTriggerPos = causePos;
     }
+
+    // Dispatch match-related passive triggers AFTER causePos is known
+    // (so onMatch4Plus payload can carry it) but BEFORE the visual phase
+    // so any analysis mutations (extra cells from radius destruction,
+    // mana grants, etc.) feed into the same SHOW_MATCH/REMOVE cycle.
+    this._dispatchMatchEvents(this.activeSide, analysis, causePos);
 
     // Generate floating text triggers for every match (3+ tiles).
     // Each match gets a "+N" text effect at its first position.
@@ -1365,8 +1374,11 @@ export default class BattleController {
    *
    * @param {'player'|'enemy'} side — the active side that triggered the match
    * @param {import('./MatchResolver.js').MatchAnalysis} analysis
+   * @param {{col:number,row:number}|null} [causePos] — focal point of the 4+
+   *     match (swap origin or cascade-overlap tile); forwarded to passives
+   *     via the onMatch4Plus payload's `centerPos` field.
    */
-  _dispatchMatchEvents(side, analysis) {
+  _dispatchMatchEvents(side, analysis, causePos = null) {
     if (!analysis) return;
     this.passives.dispatch(TRIGGER_TYPES.ON_TILE_MATCH, {
       side,
@@ -1385,9 +1397,94 @@ export default class BattleController {
           side,
           typeId: m.typeId,
           count: m.count,
+          centerPos: causePos,
         });
       }
     }
+  }
+
+  // ── Passive board effects ─────────────────────────────
+
+  /**
+   * Handle a board-touching passive effect that EffectResolver doesn't
+   * cover. Dispatched from PassiveSystem via the onBoardEffect callback.
+   * Returning true means "I handled this"; false lets PassiveSystem warn.
+   *
+   * Effect types handled here:
+   *   destroy_tiles_radius — augments the in-flight cascade step's
+   *     analysis with tiles in a square radius around payload.centerPos,
+   *     so they get highlighted, destroyed, and award mana/skull-damage
+   *     through the normal SHOW_MATCH → REMOVE flow.
+   *
+   * @param {object} effect      — relic effect definition
+   * @param {string} triggerName — trigger event name (e.g. 'onMatch4Plus')
+   * @param {object} payload     — trigger payload (carries `centerPos` for 4+)
+   * @returns {boolean} true if the effect was recognized and applied
+   */
+  _handlePassiveBoardEffect(effect, triggerName, payload /*, ctx */) {
+    if (!effect || !effect.effectType) return false;
+
+    switch (effect.effectType) {
+      case 'destroy_tiles_radius':
+        return this._applyPassiveDestroyRadius(effect, payload);
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Augment the current cascade step's analysis with the cells in a
+   * square radius around `payload.centerPos`. Skips cells already in
+   * the match (so we don't double-count rewards) and clamps to the
+   * board. Returns true even when no extra cells were added — we still
+   * "handled" the effect; there just wasn't anything to add.
+   *
+   * @param {object} effect — { area: { radius } }
+   * @param {object} payload — { side, centerPos: {col,row}, ... }
+   * @returns {boolean}
+   */
+  _applyPassiveDestroyRadius(effect, payload) {
+    if (!this._analysis) return true;
+    const center = payload && payload.centerPos;
+    if (!center) return true;
+    const radius = (effect.area && typeof effect.area.radius === 'number')
+      ? effect.area.radius
+      : 1;
+
+    const existing = new Set(
+      this._analysis.positions.map(p => `${p.col},${p.row}`)
+    );
+    const extras = [];
+    for (let dc = -radius; dc <= radius; dc++) {
+      for (let dr = -radius; dr <= radius; dr++) {
+        const c = center.col + dc;
+        const r = center.row + dr;
+        if (c < 0 || c >= this.board.cols || r < 0 || r >= this.board.rows) continue;
+        const key = `${c},${r}`;
+        if (existing.has(key)) continue;
+        if (!this.board.get(c, r)) continue;
+        extras.push({ col: c, row: r });
+        existing.add(key);
+      }
+    }
+    if (extras.length === 0) return true;
+
+    // Compute rewards from the extra cells via the shared path so mana
+    // and skull damage match what destroy_tiles skills would award.
+    const attacker = this._activeState();
+    const extraRewards = this.resolver.resolveDestroyedTileRewards(
+      this.board, extras, attacker
+    );
+
+    this._analysis.positions.push(...extras);
+    this._analysis.tilesDestroyed = (this._analysis.tilesDestroyed || 0) + extras.length;
+    this._analysis.skullDamage = (this._analysis.skullDamage || 0) + extraRewards.skullDamage;
+    if (!this._analysis.mana) this._analysis.mana = {};
+    for (const [color, count] of Object.entries(extraRewards.mana)) {
+      this._analysis.mana[color] = (this._analysis.mana[color] || 0) + count;
+    }
+
+    return true;
   }
 
   // ── Screen Shake ──────────────────────────────────────

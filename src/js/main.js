@@ -119,6 +119,7 @@ const ASSET_MAP = {
   // asset keys via their `icon` field. New relics should add their
   // icon key here (pointing at placeholder.png is fine until art exists).
   relic_family_crest:        'assets/sprites/relics/relic_family_crest.png',
+  relic_unstable_catalyst:   'assets/sprites/relics/relic_unstable_catalyst.png',
 };
 
 // ── Game viewport configuration ─────────────────────────

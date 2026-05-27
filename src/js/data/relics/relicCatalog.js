@@ -50,6 +50,24 @@ const RELIC_CATALOG = {
       },
     ],
   },
+
+  unstable_catalyst: {
+    id: 'unstable_catalyst',
+    name: 'Unstable Catalyst',
+    description: 'Explode tiles in radius 1 when matching 4+ tiles.',
+    icon: 'relic_unstable_catalyst',
+    effects: [
+      // Board-touching effect — handled by BattleController via the
+      // PassiveSystem.onBoardEffect callback (EffectResolver ignores it).
+      // The center of the explosion is the same position used to spawn
+      // the "Extra Turn" animation (payload.centerPos on onMatch4Plus).
+      {
+        trigger: 'onMatch4Plus',
+        effectType: 'destroy_tiles_radius',
+        area: { radius: 1 },
+      },
+    ],
+  },
 };
 
 /**

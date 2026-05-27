@@ -23,10 +23,14 @@
  *                        Fires once per individual match. Includes skull
  *                        matches.
  *
- *   onMatch4Plus         payload: { side, typeId, count }
+ *   onMatch4Plus         payload: { side, typeId, count, centerPos }
  *                        Fires when a single match of 4+ tiles resolves
  *                        (a "big match" — same condition that grants
- *                        the extra turn).
+ *                        the extra turn). `centerPos` is the same
+ *                        {col,row} used to anchor the Extra Turn animation
+ *                        (swap origin on the initial step, cascade-overlap
+ *                        on cascade steps); use it as the focal point for
+ *                        radius-based passive effects.
  *
  *   onTurnStart          payload: { side }
  *                        Fires at the start of a turn (after TURN_INTRO).
