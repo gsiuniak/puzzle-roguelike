@@ -39,16 +39,15 @@ const SIDE_COL_GAP = 8;
 
 // Fixed width for the center (board + combat log) column. Should be
 // roughly equal to the available vertical space for the board frame
-// (canvas height minus padding minus combat log height) so the
-// `BattleBoardPanel` square fills the column with minimal slack on
-// either side. If this is larger than the available height, you get
-// empty space inside the center column between the board frame and
-// the side columns.
+// (canvas height minus padding minus relic bar consumption minus
+// center column gap) so the `BattleBoardPanel` square fills the column
+// with minimal slack on either side. If this is larger than the
+// available height, you get empty space inside the center column
+// between the board frame and the side columns — which appears as
+// a visible gap between the character panes and the board.
 //
-// Design height 1080 - main row top/bottom padding (40) - combat log
-// (80) - center column gap (8) ≈ 952 → 940 leaves a small breathing
-// margin. Reduce to pull side panels even closer.
-const CENTER_COL_WIDTH = 1080;
+// Tied to the relic bar height so adjusting RELIC_BAR_HEIGHT keeps the
+// board square correctly proportioned automatically.
 const CENTER_COL_GAP = 8;
 // Height of the combat log strip below the board. Bump this to make
 // the log strip taller; reduce to give the board more vertical room.
@@ -60,10 +59,17 @@ const COMBAT_LOG_HEIGHT = 80;
 // columns overflow MainRow's maxWidth, so we derive the bar's width from
 // the actual column extent rather than MAIN_ROW_MAX_WIDTH.
 // Its total vertical footprint = RELIC_BAR_TOP_MARGIN + RELIC_BAR_HEIGHT.
-const RELIC_BAR_HEIGHT = 42;
+const RELIC_BAR_HEIGHT = 30;
 const RELIC_BAR_TOP_MARGIN = 5;
+const RELIC_BAR_VERTICAL_FOOTPRINT = RELIC_BAR_HEIGHT + RELIC_BAR_TOP_MARGIN;
+
+// 1080 was the original (no relic bar) value. Subtract the bar's vertical
+// footprint so the board panel rect keeps the same width/height shape as
+// before, which preserves the tight overlap between the side panels and
+// the board square via the negative MAIN_ROW_GAP.
+const CENTER_COL_WIDTH = 1080 - RELIC_BAR_VERTICAL_FOOTPRINT;
 const RELIC_BAR_WIDTH =
-  SIDE_COL_WIDTH + MAIN_ROW_GAP + CENTER_COL_WIDTH + MAIN_ROW_GAP + SIDE_COL_WIDTH;
+  SIDE_COL_MIN_WIDTH + MAIN_ROW_GAP + CENTER_COL_WIDTH + MAIN_ROW_GAP + SIDE_COL_MIN_WIDTH;
 
 /**
  * BattleScene — battle layout with three compact columns.
@@ -221,21 +227,15 @@ export default class BattleScene extends UIPanel {
     // ── Top: thin passive relic bar (player relics, Slay-the-Spire style) ──
     // Width matches the full side-panel-to-side-panel extent so the bar
     // sits flush against the player panel's left edge and the enemy
-    // panel's right edge.
-    //
-    // The negative bottom margin cancels the bar's height in the vertical
-    // flex calculation so MainRow keeps the full canvas height. That matters
-    // because BattleBoardPanel renders as a centered Math.min(w,h) square —
-    // any vertical space the bar steals from MainRow would shrink the board
-    // square and push the side panels away from it horizontally.
+    // panel's right edge. CENTER_COL_WIDTH is reduced by this bar's
+    // vertical footprint so the BattleBoardPanel square stays the right
+    // shape (otherwise it would shrink and expose a gap between the
+    // side panels and the board).
     this._relicBar = new RelicBar(this._assetManager);
     this._relicBar.setStyle({
       height: RELIC_BAR_HEIGHT,
       width: RELIC_BAR_WIDTH,
-      margin: {
-        top: RELIC_BAR_TOP_MARGIN,
-        bottom: -(RELIC_BAR_HEIGHT + RELIC_BAR_TOP_MARGIN),
-      },
+      margin: { top: RELIC_BAR_TOP_MARGIN },
     });
     this.addChild(this._relicBar);
 
@@ -321,7 +321,7 @@ export default class BattleScene extends UIPanel {
     col.width = SIDE_COL_WIDTH;
     col.minWidth = SIDE_COL_MIN_WIDTH;
     col.maxWidth = SIDE_COL_MAX_WIDTH;
-    col.margin = { top: 30 };
+    col.margin = { top: 20 };
 
     const isPlayer = side === 'player';
     const data    = isPlayer ? this._playerData : this._enemyData;
