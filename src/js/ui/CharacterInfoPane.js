@@ -21,7 +21,7 @@ const STAT_ICON_SIZE = 28;
 const STAT_VALUE_FONT_SIZE = 22;
 
 const MANA_ROW_HEIGHT = 150;
-const MANA_GAP = 5;
+const MANA_GAP = 0;
 const MANA_ORB_WIDTH = 75;
 const MANA_ORB_HEIGHT = 85;
 const MANA_FONT_SIZE = 20;

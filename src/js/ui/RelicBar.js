@@ -3,23 +3,27 @@ import UIImage from './UIImage.js';
 
 // ── Tunable layout constants ─────────────────────────────
 // These are the per-bar internals; the BattleScene owns the bar's
-// outer height/margins so the layout offset stays in one place.
+// outer width/height/margins so the layout offset stays in one place.
 // No background or border — relics float over the battle background.
-const BAR_PADDING = { top: 30, right: 0, bottom: 0, left: 0 };
+const BAR_PADDING = { top: 30, right: 50, bottom: 0, left: 0 };
 const ICON_SIZE = 50;
-const ICON_GAP = 8;
+const ICON_GAP = 10;
 
 /**
- * RelicBar — thin, passive horizontal strip that displays collected relics
+ * RelicBar — thin, passive vertical column that displays collected relics
  * as small icons (Slay-the-Spire style).
  *
- * Not interactive: relic icons just "sit" in the bar. Hover/click tooltips
- * can be wired up later without changing the bar's layout or BattleScene
- * call sites.
+ * Sits to the left of the player character panel. Icons stack from the top
+ * downward; the column has no background or border so the icons appear to
+ * "float" against the battle background.
+ *
+ * Not interactive: relic icons just "sit" in the column. Hover/click
+ * tooltips can be wired up later without changing the column's layout or
+ * BattleScene call sites.
  *
  * Usage:
- *   const bar = new RelicBar(assetManager);
- *   bar.setRelics(playerState.relics);   // safe to call every frame
+ *   const col = new RelicBar(assetManager);
+ *   col.setRelics(playerState.relics);   // safe to call every frame
  */
 export default class RelicBar extends UIContainer {
   constructor(assetManager = null) {
@@ -28,7 +32,7 @@ export default class RelicBar extends UIContainer {
     this._assetManager = assetManager;
     this.smoothing = true;
 
-    this.direction = 'row';
+    this.direction = 'column';
     this.alignItems = 'center';
     this.justifyContent = 'start';
     this.gap = ICON_GAP;
@@ -67,7 +71,7 @@ export default class RelicBar extends UIContainer {
         width: ICON_SIZE,
         height: ICON_SIZE,
         fitMode: 'contain',
-        alignSelfV: 'center',
+        alignSelfH: 'center',
       });
       this._iconImages.push(img);
       this.addChild(img);

@@ -33,51 +33,40 @@ const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 // images include some transparent inner margin so the column rect
 // is typically larger than the visible art.
 const SIDE_COL_WIDTH = 420;
-const SIDE_COL_MIN_WIDTH = 440;
-const SIDE_COL_MAX_WIDTH = 440;
+const SIDE_COL_MIN_WIDTH = 420;
+const SIDE_COL_MAX_WIDTH = 420;
 const SIDE_COL_GAP = 8;
 
 // Fixed width for the center (board + combat log) column. Should be
 // roughly equal to the available vertical space for the board frame
-// (canvas height minus padding minus relic bar consumption minus
-// center column gap) so the `BattleBoardPanel` square fills the column
-// with minimal slack on either side. If this is larger than the
-// available height, you get empty space inside the center column
-// between the board frame and the side columns — which appears as
-// a visible gap between the character panes and the board.
-//
-// Tied to the relic bar height so adjusting RELIC_BAR_HEIGHT keeps the
-// board square correctly proportioned automatically.
+// (canvas height minus padding minus combat log height) so the
+// `BattleBoardPanel` square fills the column with minimal slack on
+// either side. If this is larger than the available height, you get
+// empty space inside the center column between the board frame and
+// the side columns.
+const CENTER_COL_WIDTH = 1080;
 const CENTER_COL_GAP = 8;
 // Height of the combat log strip below the board. Bump this to make
 // the log strip taller; reduce to give the board more vertical room.
 const COMBAT_LOG_HEIGHT = 80;
 
-// ── Relic bar (thin passive strip at the very top) ────────
-// The bar must span from the LEFT edge of the player panel to the RIGHT
-// edge of the enemy panel. Because MAIN_ROW_GAP is negative the side
-// columns overflow MainRow's maxWidth, so we derive the bar's width from
-// the actual column extent rather than MAIN_ROW_MAX_WIDTH.
-// Its total vertical footprint = RELIC_BAR_TOP_MARGIN + RELIC_BAR_HEIGHT.
-const RELIC_BAR_HEIGHT = 30;
-const RELIC_BAR_TOP_MARGIN = 5;
-const RELIC_BAR_VERTICAL_FOOTPRINT = RELIC_BAR_HEIGHT + RELIC_BAR_TOP_MARGIN;
-
-// 1080 was the original (no relic bar) value. Subtract the bar's vertical
-// footprint so the board panel rect keeps the same width/height shape as
-// before, which preserves the tight overlap between the side panels and
-// the board square via the negative MAIN_ROW_GAP.
-const CENTER_COL_WIDTH = 1080 - RELIC_BAR_VERTICAL_FOOTPRINT;
-const RELIC_BAR_WIDTH =
-  SIDE_COL_MIN_WIDTH + MAIN_ROW_GAP + CENTER_COL_WIDTH + MAIN_ROW_GAP + SIDE_COL_MIN_WIDTH;
+// ── Relic column (thin passive vertical column on the left) ──
+// Mounted as the first child of MainRow, *before* the player column, so
+// it floats to the immediate left of the character panel. Icons stack
+// vertically from the top. The column overlaps the player column rect
+// by |MAIN_ROW_GAP| pixels (same trick the side panels use against the
+// board) so the icons tuck just outside the player panel's visible art.
+// Layout-wise this slightly shifts the player/board/enemy block right
+// to keep the entire row (relic + 3 panels) centered.
+const RELIC_COL_WIDTH = 64;
 
 /**
  * BattleScene — battle layout with three compact columns.
  *
  * Structure:
  *   BattleScene (column, UIPanel with battle_background_default)
- *     RelicBar (thin passive strip at the very top, player relics only)
  *     MainRow (row, flexGrow=1, maxWidth=MAIN_ROW_MAX_WIDTH)
+ *       RelicBar      (thin vertical column of player relic icons, no bg)
  *       PlayerColumn  (column, fixed-narrow)
  *         CharacterInfoPane (compact portrait + stats + mana)
  *         SkillsPane        (2x3 grid; locked fillers)
@@ -224,22 +213,7 @@ export default class BattleScene extends UIPanel {
   }
 
   buildHierarchy() {
-    // ── Top: thin passive relic bar (player relics, Slay-the-Spire style) ──
-    // Width matches the full side-panel-to-side-panel extent so the bar
-    // sits flush against the player panel's left edge and the enemy
-    // panel's right edge. CENTER_COL_WIDTH is reduced by this bar's
-    // vertical footprint so the BattleBoardPanel square stays the right
-    // shape (otherwise it would shrink and expose a gap between the
-    // side panels and the board).
-    this._relicBar = new RelicBar(this._assetManager);
-    this._relicBar.setStyle({
-      height: RELIC_BAR_HEIGHT,
-      width: RELIC_BAR_WIDTH,
-      margin: { top: RELIC_BAR_TOP_MARGIN },
-    });
-    this.addChild(this._relicBar);
-
-    // ── Main row: three columns, centered ──
+    // ── Main row: relic column + three centered character columns ──
     const mainRow = new UIContainer();
     mainRow.direction = 'row';
     mainRow.gap = MAIN_ROW_GAP;
@@ -248,6 +222,14 @@ export default class BattleScene extends UIPanel {
     mainRow.flexGrow = 1;
     mainRow.maxWidth = MAIN_ROW_MAX_WIDTH;
     mainRow.padding = MAIN_ROW_PADDING;
+
+    // ── LEFT-MOST: passive relic column (floats next to player panel) ──
+    // No background or border; icons just float over the battle background.
+    // The MainRow's negative gap pulls this rect ~30px into the player col,
+    // which keeps the icons hugging the player panel's transparent margin.
+    this._relicBar = new RelicBar(this._assetManager);
+    this._relicBar.setStyle({ width: RELIC_COL_WIDTH });
+    mainRow.addChild(this._relicBar);
 
     // ── LEFT: compact stacked player column ───────────
     const playerCol = this._buildSideColumn('player');
