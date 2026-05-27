@@ -4,7 +4,7 @@
  * Responsibilities:
  *   - Load available characters from characterSelectDefinitions
  *   - Render selected character splash background (cover, cross-fade on change)
- *   - Render character info panel (name, class, health, mana orbs, starting skills)
+ *   - Render character info panel (name, class, health, mana orbs, starting skills, starting relic)
  *   - Render heroes portrait row (click to select)
  *   - Render Choose Hero button (hover/normal states)
  *   - Handle mouse click / keyboard input
@@ -179,7 +179,8 @@ export default class CharacterSelectScene extends UIPanel {
    * Structure mirrors the mock's intentional top-to-bottom scan:
    *   Name → Class (with flairs) → Description →
    *   Divider → Health & Mana (single row) → Divider →
-   *   "Starting Skills" (with flairs) → Skill blocks
+   *   "Starting Skills" (with flairs) → Skill blocks →
+   *   "Starting Relic" (with flairs) → centered relic block [if any]
    *
    * Every child has an explicit height so flexbox produces a deterministic
    * total panel height for vertical centering in layoutChildren().
@@ -396,6 +397,54 @@ export default class CharacterSelectScene extends UIPanel {
       skillsRow.addChild(skillBlock);
     }
     panel.addChild(skillsRow);
+
+    // ── "Starting Relic" section (only if the character has relics) ──
+    const relics = resolveRelicIds(cd.relics || []);
+    if (relics.length > 0) {
+      // Title row with flairs — mirrors the Starting Skills header style.
+      const relicsTitleRow = new UIContainer();
+      relicsTitleRow.direction = 'row';
+      relicsTitleRow.justifyContent = 'center';
+      relicsTitleRow.alignItems = 'center';
+      relicsTitleRow.gap = 12 * S;
+      relicsTitleRow.height = 24 * S;
+
+      const rFlairL = new UIImage('character_select_flair_left', am);
+      rFlairL.setStyle({ width: 200 * S, height: 18 * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+      relicsTitleRow.addChild(rFlairL);
+
+      const relicsTitle = new UIText('Starting Relic');
+      relicsTitle.setStyle({
+        fontSize: 20 * S,
+        color: '#ccaa77',
+        bold: true,
+        alignH: 'center',
+        alignV: 'center',
+        width: 150 * S,
+        height: 22 * S,
+        margin: { left: 60 * S, right: 60 * S }
+      });
+      relicsTitleRow.addChild(relicsTitle);
+
+      const rFlairR = new UIImage('character_select_flair_right', am);
+      rFlairR.setStyle({ width: 200 * S, height: 18 * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+      relicsTitleRow.addChild(rFlairR);
+      panel.addChild(relicsTitleRow);
+
+      // Single centered relic block — wider than a skill block since
+      // only ever one relic occupies the row, so it can spread out and
+      // let the description breathe on a single line.
+      const relicsRow = new UIContainer();
+      relicsRow.direction = 'row';
+      relicsRow.justifyContent = 'center';
+      relicsRow.alignItems = 'center';
+      relicsRow.height = 90 * S;
+      relicsRow.margin = { top: -5 * S };
+
+      const relicBlock = this._buildRelicBlock(relics[0], am);
+      relicsRow.addChild(relicBlock);
+      panel.addChild(relicsRow);
+    }
   }
 
   /**
@@ -455,6 +504,64 @@ export default class CharacterSelectScene extends UIPanel {
     return block;
   }
 
+  /**
+   * Build the single relic block (icon + name + description) for the
+   * Starting Relic row. Wider than a skill block so the description has
+   * room to breathe on one line — there's only ever one relic, so the
+   * block can spread across most of the panel's content width.
+   * @param {object} relicData - { name, description, icon }
+   * @param {import('../engine/AssetManager.js').default} am
+   * @returns {UIContainer}
+   */
+  _buildRelicBlock(relicData, am) {
+    const S = this._uiScale;
+    const block = new UIContainer();
+    block.direction = 'row';
+    block.alignItems = 'center';
+    block.gap = 16 * S;
+    block.width = 380 * S;
+    block.height = 80 * S;
+
+    const iconKey = relicData.icon || 'placeholder';
+    const icon = new UIImage(iconKey, am);
+    icon.setStyle({ width: 80 * S, height: 80 * S, fitMode: 'contain' });
+    block.addChild(icon);
+
+    const textCol = new UIContainer();
+    textCol.direction = 'column';
+    textCol.justifyContent = 'center';
+    textCol.alignItems = 'start';
+    textCol.gap = 4 * S;
+    textCol.flexGrow = 1;
+
+    const nameText = new UIText(relicData.name || '');
+    nameText.setStyle({
+      fontSize: 18 * S,
+      color: '#e8d8b0',
+      bold: true,
+      alignH: 'left',
+      alignV: 'center',
+      height: 8 * S,
+      margin: { bottom: 5 * S, top: 20 * S }
+    });
+    textCol.addChild(nameText);
+
+    const descText = new UIText(relicData.description || '');
+    descText.setStyle({
+      fontSize: 14 * S,
+      color: '#c0b890',
+      alignH: 'left',
+      alignV: 'top',
+      height: 50 * S,
+      maxWidth: 280 * S,
+    });
+    textCol.addChild(descText);
+
+    block.addChild(textCol);
+
+    return block;
+  }
+
   // ═══════════════════════════════════════════════════════
   // Layout (override — manual positioning)
   // ═══════════════════════════════════════════════════════
@@ -494,7 +601,7 @@ export default class CharacterSelectScene extends UIPanel {
     let panelH = 200 * S;
 
     if (panel) {
-      panelW = Math.min(540 * S, Math.max(420 * S, W * 0.42 * S));
+      panelW = Math.min(540 * S, Math.max(460 * S, W * 0.42 * S));
 
       // Do a trial layout with generous height so child rects are computed
       panel.rect.x = 0;
@@ -578,9 +685,7 @@ export default class CharacterSelectScene extends UIPanel {
       ? cssAspect / designAspect
       : designAspect / cssAspect;
 
-    const test = Math.min(1.5, Math.max(1.4, ratio));
-    console.log(test)
-    return test
+    return Math.min(1.5, Math.max(1.3, ratio));
   }
 
   /**
