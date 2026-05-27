@@ -19,16 +19,20 @@
  *     onDamage?:  (info) => void   — optional callback fired after damage lands
  *                                    info: { side: 'caster'|'target', actualDamage, blocked, armorDamage }
  *     onExtraTurn?: () => void     — optional callback fired when extra_turn effect resolves
+ *     payload?:   object           — the original trigger payload, exposed so
+ *                                    mutating effects (reduce_damage) can edit it
+ *     triggerName?: string         — the trigger event name for debug context
  *   }
  */
 
 /** Effect type vocabulary supported by EffectResolver (atomic effects only). */
 export const EFFECT_TYPES = {
-  DAMAGE:     'damage',
-  ARMOR:      'armor',
-  HEAL:       'heal',
-  GAIN_MANA:  'gain_mana',
-  EXTRA_TURN: 'extra_turn',
+  DAMAGE:        'damage',
+  ARMOR:         'armor',
+  HEAL:          'heal',
+  GAIN_MANA:     'gain_mana',
+  EXTRA_TURN:    'extra_turn',
+  REDUCE_DAMAGE: 'reduce_damage',
 };
 
 /**
@@ -103,6 +107,26 @@ export function applyEffect(effect, ctx) {
     case EFFECT_TYPES.EXTRA_TURN: {
       if (log && caster) log.add(`${caster.name} gains an extra turn!`);
       if (onExtraTurn) onExtraTurn();
+      return true;
+    }
+
+    case EFFECT_TYPES.REDUCE_DAMAGE: {
+      // Mutates the trigger payload's `amount` in place so the caller
+      // (typically BattleController._applyDamage) reads the reduced value
+      // before passing it to applyDamage. Only meaningful when invoked
+      // from a trigger that exposes a mutable `amount` field — namely
+      // `onIncomingDamage`.
+      const payload = ctx.payload;
+      if (!payload || typeof payload.amount !== 'number') return true;
+      const reduction = (effect.reduceDamage && typeof effect.reduceDamage.amount === 'number')
+        ? effect.reduceDamage.amount
+        : 1;
+      const before = payload.amount;
+      payload.amount = Math.max(0, before - reduction);
+      const actual = before - payload.amount;
+      if (log && actual > 0 && caster) {
+        log.add(`${caster.name} reduces incoming damage by ${actual}.`);
+      }
       return true;
     }
 

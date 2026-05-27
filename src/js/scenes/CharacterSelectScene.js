@@ -623,7 +623,7 @@ export default class CharacterSelectScene extends UIPanel {
 
     // ── 2. Fixed heights for heroes row and button ──────
     const heroesW = this._definitions.length * 124 * S;
-    const heroesH = 130 * S;
+    const heroesH = 110 * S;
     const btnW = 240 * S;
     const btnH = 70 * S;
     const gapPanelHeroes = Math.floor(H * 0.025);
@@ -702,7 +702,7 @@ export default class CharacterSelectScene extends UIPanel {
     }
 
     for (const portrait of this._portraitImages) {
-      portrait.setStyle({ width: 150 * S, height: 150 * S });
+      portrait.setStyle({ width: 130 * S, height: 130 * S });
     }
 
     if (this._chooseButton) {

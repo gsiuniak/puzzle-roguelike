@@ -68,6 +68,22 @@ const RELIC_CATALOG = {
       },
     ],
   },
+
+  evil_eye: {
+    id: 'evil_eye',
+    name: 'Evil Eye',
+    description: 'Reduce all damage taken by 1.',
+    icon: 'relic_evil_eye',
+    effects: [
+      // Fires before damage is applied; mutates the mutable `amount`
+      // field of the trigger payload via EffectResolver's reduce_damage.
+      {
+        trigger: 'onIncomingDamage',
+        effectType: 'reduce_damage',
+        reduceDamage: { amount: 1 },
+      },
+    ],
+  },
 };
 
 /**

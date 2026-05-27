@@ -39,6 +39,14 @@
  *                        Fires when a side's turn ends (before TURN_INTRO
  *                        for the next side).
  *
+ *   onIncomingDamage     payload: { side, amount }
+ *                        Fires BEFORE damage is applied to a combatant.
+ *                        `side` is the SIDE ABOUT TO TAKE damage; effects
+ *                        may MUTATE `payload.amount` to reduce or amplify
+ *                        the incoming damage (e.g. Evil Eye reduces by 1).
+ *                        The final amount is clamped to >= 0 before being
+ *                        passed to MatchResolver.applyDamage.
+ *
  *   onTakeDamage         payload: { side, amount, blocked, armorDamage }
  *                        Fires when a combatant takes damage that lands
  *                        on HP (i.e., actualDamage > 0). `side` is the
@@ -56,6 +64,7 @@ const TRIGGER_TYPES = {
   ON_MATCH_4_PLUS:     'onMatch4Plus',
   ON_TURN_START:       'onTurnStart',
   ON_TURN_END:         'onTurnEnd',
+  ON_INCOMING_DAMAGE:  'onIncomingDamage',
   ON_TAKE_DAMAGE:      'onTakeDamage',
   ON_DEAL_DAMAGE:      'onDealDamage',
 };

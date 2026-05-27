@@ -74,6 +74,10 @@ export default class PassiveSystem {
       resolver: this.resolver,
       onDamage: this.onDamage,
       onExtraTurn: this.onExtraTurn,
+      // Pass the trigger payload through so mutating effects (e.g.
+      // reduce_damage on onIncomingDamage) can modify it in place.
+      payload,
+      triggerName,
     };
 
     for (const relic of relics) {

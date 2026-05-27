@@ -188,11 +188,21 @@ export default class BattleController {
     // Dispatcher for relic-based passive abilities. Battle code emits
     // TRIGGER events; PassiveSystem looks up the affected side's relics
     // and resolves matching effects via EffectResolver.
+    //
+    // The resolver passed to PassiveSystem is a *wrapper* that routes
+    // applyDamage through `_applyDamage` so passive-applied damage (e.g.
+    // a future "deal X damage on trigger" relic) gets the same
+    // onIncomingDamage pre-mitigation pass that regular damage receives.
+    // Only methods that EffectResolver actually calls on the resolver
+    // need to be re-exported here — currently just applyDamage.
+    const passiveResolver = {
+      applyDamage: (target, amount) => this._applyDamage(target, amount),
+    };
     this.passives = new PassiveSystem({
       playerState: this.playerState,
       enemyState: this.enemyState,
       log: this.log,
-      resolver: this.resolver,
+      resolver: passiveResolver,
       // Any damage dealt by a relic effect routes screen shake + SFX
       // through the same hooks that normal damage uses.
       onDamage: (info) => {
@@ -579,7 +589,7 @@ export default class BattleController {
 
     // 3. Deal skull damage
     if (rewards.skullDamage > 0) {
-      const r = this.resolver.applyDamage(targetState, rewards.skullDamage);
+      const r = this._applyDamage(targetState, rewards.skullDamage);
       this.log.add(`Destroyed skulls deal ${r.actualDamage} damage to ${targetState.name}.`);
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
@@ -852,7 +862,7 @@ export default class BattleController {
     const targetState = this._opponentState();
 
     if (a.skullDamage > 0) {
-      const r = this.resolver.applyDamage(targetState, a.skullDamage);
+      const r = this._applyDamage(targetState, a.skullDamage);
       this.log.add(`Skull damage: ${r.actualDamage} dealt.`);
       // Trigger screen shake scaled by damage % of target's max HP
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
@@ -1265,7 +1275,7 @@ export default class BattleController {
         const amount = (effect.damage && typeof effect.damage.amount === 'number')
           ? effect.damage.amount
           : (src.attack || 1);
-        const r = this.resolver.applyDamage(tgt, amount);
+        const r = this._applyDamage(tgt, amount);
         this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
         this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
         this._dispatchDamageEvent(side, side === 'player' ? 'enemy' : 'player', r);
@@ -1339,6 +1349,33 @@ export default class BattleController {
 
   _getStateBySide(side) {
     return side === 'player' ? this.playerState : this.enemyState;
+  }
+
+  /**
+   * Apply damage to `target` with a pre-mitigation pass for defensive
+   * passives. Dispatches `onIncomingDamage` so relics like Evil Eye can
+   * mutate the mutable `amount` field before MatchResolver.applyDamage
+   * runs its armor → block → HP math.
+   *
+   * Every damage call site (skill DAMAGE effects, skull cascade damage,
+   * destroyed-tile skull damage, passive damage relics via the wrapped
+   * resolver) goes through this method so the mitigation applies uniformly.
+   *
+   * @param {object} target — battle state of the side being damaged
+   * @param {number} amount — raw damage before mitigation
+   * @returns {{actualDamage:number, blocked:number, armorDamage:number}}
+   */
+  _applyDamage(target, amount) {
+    const side = target === this.playerState ? 'player' : 'enemy';
+    const payload = { side, amount };
+    // Set _currentRelicTarget so any onDamage-style hooks fired during
+    // dispatch can reference the side being damaged. Cleared after.
+    const prevRelicTarget = this._currentRelicTarget;
+    this._currentRelicTarget = target;
+    this.passives.dispatch(TRIGGER_TYPES.ON_INCOMING_DAMAGE, payload);
+    this._currentRelicTarget = prevRelicTarget;
+    const finalAmount = Math.max(0, payload.amount | 0);
+    return this.resolver.applyDamage(target, finalAmount);
   }
 
   /**
