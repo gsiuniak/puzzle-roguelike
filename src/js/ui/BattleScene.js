@@ -222,11 +222,20 @@ export default class BattleScene extends UIPanel {
     // Width matches the full side-panel-to-side-panel extent so the bar
     // sits flush against the player panel's left edge and the enemy
     // panel's right edge.
+    //
+    // The negative bottom margin cancels the bar's height in the vertical
+    // flex calculation so MainRow keeps the full canvas height. That matters
+    // because BattleBoardPanel renders as a centered Math.min(w,h) square —
+    // any vertical space the bar steals from MainRow would shrink the board
+    // square and push the side panels away from it horizontally.
     this._relicBar = new RelicBar(this._assetManager);
     this._relicBar.setStyle({
       height: RELIC_BAR_HEIGHT,
       width: RELIC_BAR_WIDTH,
-      margin: { top: RELIC_BAR_TOP_MARGIN },
+      margin: {
+        top: RELIC_BAR_TOP_MARGIN,
+        bottom: -(RELIC_BAR_HEIGHT + RELIC_BAR_TOP_MARGIN),
+      },
     });
     this.addChild(this._relicBar);
 
