@@ -9,6 +9,7 @@ const BTN_PADDING = { top: 8, right: 20, bottom: 8, left: 20 };
 // Horizontal gap between the three main columns: icon | info | cost.
 const BTN_GAP = 10;
 const ICON_SIZE = 90;
+const LOCKED_ICON_SIZE = 40;
 const NAME_FONT_SIZE = 24;
 const DESC_FONT_SIZE = 18;
 const DESC_LINE_HEIGHT = 20;
@@ -38,7 +39,7 @@ const MANA_COLORS = {
  *   [icon] [name + description (stacked)] [mana cost (number + orb)]
  *
  * Two rendered modes:
- *   - locked  — empty placeholder slot (background = `skills_locked_button`, no interactivity)
+ *   - locked  — empty placeholder slot (background = `skills_button` with a centered `skills_locked_icon`, no interactivity)
  *   - active  — skill rendered, clickable when affordable
  *
  * Click callback: set `onClick` to a function invoked with skillData.
@@ -64,9 +65,10 @@ export default class SkillButton extends UIPanel {
     this.gap = BTN_GAP;
     this.alignItems = 'center';
     this.padding = BTN_PADDING;
-    // Locked uses the locked placeholder; active uses the unlocked
-    // skill button background art so each slot has the same frame.
-    this.backgroundAssetKey = this._locked ? 'skills_locked_button' : 'skills_button';
+    // Both locked and active slots share the same `skills_button` frame so
+    // empty slots are visually consistent with filled ones. Locked slots
+    // render a single centered `skills_locked_icon` instead of skill content.
+    this.backgroundAssetKey = 'skills_button';
 
     /** @type {Function|null} */
     this.onClick = null;
@@ -82,13 +84,30 @@ export default class SkillButton extends UIPanel {
     this._descText = null;
     this._costCol = null;
 
-    if (!this._locked) this.buildHierarchy();
+    if (this._locked) this._buildLockedHierarchy();
+    else this.buildHierarchy();
   }
 
   setAssetManager(am) {
     this._assetManager = am;
     this.assetManager = am;
     if (this._iconImage) this._iconImage.assetManager = am;
+  }
+
+  _buildLockedHierarchy() {
+    // Override row-flex defaults so the single icon centers in the button.
+    this.justifyContent = 'center';
+    this.alignItems = 'center';
+
+    const lockIcon = new UIImage('skills_locked_icon', this._assetManager);
+    lockIcon.setStyle({
+      width: LOCKED_ICON_SIZE,
+      height: LOCKED_ICON_SIZE,
+      fitMode: 'contain',
+      alignSelfV: 'center',
+    });
+    this._iconImage = lockIcon;
+    this.addChild(lockIcon);
   }
 
   buildHierarchy() {

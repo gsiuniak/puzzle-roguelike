@@ -113,6 +113,7 @@ const ASSET_MAP = {
   skill_pane_panel:          'assets/sprites/battle/skills_pane/skill_pane_panel.png',
   skills_button:             'assets/sprites/battle/skills_pane/skills_button.png',
   skills_locked_button:      'assets/sprites/battle/skills_pane/skills_locked_button.png',
+  skills_locked_icon:        'assets/sprites/battle/skills_pane/skills_locked_icon.png',
   relics_pane_panel:         'assets/sprites/battle/relics_pane/relics_pane_panel.png',
   relics_locked_button:      'assets/sprites/battle/relics_pane/relics_locked_button.png',
   // ── Relic icons (placeholder until per-relic art is added) ──
