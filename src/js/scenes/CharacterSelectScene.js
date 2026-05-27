@@ -252,7 +252,7 @@ export default class CharacterSelectScene extends UIPanel {
     // ── Character description — centered, readable ──────
     const descText = new UIText(cd.description || '');
     descText.setStyle({
-      fontSize: 15 * S,
+      fontSize: 18 * S,
       color: '#b0a880',
       alignH: 'center',
       alignV: 'center',
@@ -363,7 +363,7 @@ export default class CharacterSelectScene extends UIPanel {
 
     const skillsTitle = new UIText('Starting Skills');
     skillsTitle.setStyle({
-      fontSize: 16 * S,
+      fontSize: 20 * S,
       color: '#ccaa77',
       bold: true,
       alignH: 'center',
@@ -429,7 +429,7 @@ export default class CharacterSelectScene extends UIPanel {
 
     const nameText = new UIText(skillData.name || '');
     nameText.setStyle({
-      fontSize: 16 * S,
+      fontSize: 18 * S,
       color: '#e8d8b0',
       bold: true,
       alignH: 'left',
@@ -441,7 +441,7 @@ export default class CharacterSelectScene extends UIPanel {
 
     const descText = new UIText(skillData.description || '');
     descText.setStyle({
-      fontSize: 12 * S,
+      fontSize: 14 * S,
       color: '#c0b890',
       alignH: 'left',
       alignV: 'top',
@@ -578,7 +578,9 @@ export default class CharacterSelectScene extends UIPanel {
       ? cssAspect / designAspect
       : designAspect / cssAspect;
 
-    return Math.min(1.5, Math.max(1, ratio)) * 1.1;
+    const test = Math.min(1.5, Math.max(1.4, ratio));
+    console.log(test)
+    return test
   }
 
   /**
