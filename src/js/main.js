@@ -114,8 +114,6 @@ const ASSET_MAP = {
   skills_button:             'assets/sprites/battle/skills_pane/skills_button.png',
   skills_locked_button:      'assets/sprites/battle/skills_pane/skills_locked_button.png',
   skills_locked_icon:        'assets/sprites/battle/skills_pane/skills_locked_icon.png',
-  relics_pane_panel:         'assets/sprites/battle/relics_pane/relics_pane_panel.png',
-  relics_locked_button:      'assets/sprites/battle/relics_pane/relics_locked_button.png',
   // ── Relic icons (placeholder until per-relic art is added) ──
   // Relic definitions in data/relics/relicCatalog.js reference these
   // asset keys via their `icon` field. New relics should add their

@@ -2,7 +2,7 @@ import UIContainer from './UIContainer.js';
 import UIPanel from './UIPanel.js';
 import CharacterInfoPane from './CharacterInfoPane.js';
 import SkillsPane from './SkillsPane.js';
-import RelicsPane from './RelicsPane.js';
+import RelicBar from './RelicBar.js';
 import BattleBoardPanel from './BattleBoardPanel.js';
 import CombatLogPanel from './CombatLogPanel.js';
 import BoardPlaceholder from './BoardPlaceholder.js';
@@ -54,16 +54,27 @@ const CENTER_COL_GAP = 8;
 // the log strip taller; reduce to give the board more vertical room.
 const COMBAT_LOG_HEIGHT = 80;
 
+// ── Relic bar (thin passive strip at the very top) ────────
+// The bar must span from the LEFT edge of the player panel to the RIGHT
+// edge of the enemy panel. Because MAIN_ROW_GAP is negative the side
+// columns overflow MainRow's maxWidth, so we derive the bar's width from
+// the actual column extent rather than MAIN_ROW_MAX_WIDTH.
+// Its total vertical footprint = RELIC_BAR_TOP_MARGIN + RELIC_BAR_HEIGHT.
+const RELIC_BAR_HEIGHT = 42;
+const RELIC_BAR_TOP_MARGIN = 5;
+const RELIC_BAR_WIDTH =
+  SIDE_COL_WIDTH + MAIN_ROW_GAP + CENTER_COL_WIDTH + MAIN_ROW_GAP + SIDE_COL_WIDTH;
+
 /**
  * BattleScene — battle layout with three compact columns.
  *
  * Structure:
  *   BattleScene (column, UIPanel with battle_background_default)
+ *     RelicBar (thin passive strip at the very top, player relics only)
  *     MainRow (row, flexGrow=1, maxWidth=MAIN_ROW_MAX_WIDTH)
  *       PlayerColumn  (column, fixed-narrow)
  *         CharacterInfoPane (compact portrait + stats + mana)
  *         SkillsPane        (2x3 grid; locked fillers)
- *         RelicsPane        (6x2 grid; all locked)
  *       CenterColumn  (column, flexGrow=1)
  *         TurnLabel (hidden — preserved for state/data binding only)
  *         BattleBoardPanel  (background asset + BoardPlaceholder child)
@@ -131,8 +142,8 @@ export default class BattleScene extends UIPanel {
     this._enemyPane = null;
     this._playerSkillsPane = null;
     this._enemySkillsPane = null;
-    this._playerRelicsPane = null;
-    this._enemyRelicsPane = null;
+    /** @type {RelicBar|null} */
+    this._relicBar = null;
     this._board = null;
     this._boardPanel = null;
     /** Retained for backwards-compat: the old visible turn label is hidden
@@ -207,6 +218,18 @@ export default class BattleScene extends UIPanel {
   }
 
   buildHierarchy() {
+    // ── Top: thin passive relic bar (player relics, Slay-the-Spire style) ──
+    // Width matches the full side-panel-to-side-panel extent so the bar
+    // sits flush against the player panel's left edge and the enemy
+    // panel's right edge.
+    this._relicBar = new RelicBar(this._assetManager);
+    this._relicBar.setStyle({
+      height: RELIC_BAR_HEIGHT,
+      width: RELIC_BAR_WIDTH,
+      margin: { top: RELIC_BAR_TOP_MARGIN },
+    });
+    this.addChild(this._relicBar);
+
     // ── Main row: three columns, centered ──
     const mainRow = new UIContainer();
     mainRow.direction = 'row';
@@ -276,7 +299,8 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * Build a compact stacked side column (character info + skills + relics).
+   * Build a compact stacked side column (character info + skills).
+   * Relics are no longer rendered per-side — see the top-of-screen RelicBar.
    * @param {'player'|'enemy'} side
    * @returns {UIContainer}
    */
@@ -288,7 +312,7 @@ export default class BattleScene extends UIPanel {
     col.width = SIDE_COL_WIDTH;
     col.minWidth = SIDE_COL_MIN_WIDTH;
     col.maxWidth = SIDE_COL_MAX_WIDTH;
-    col.margin = { top: 40 };
+    col.margin = { top: 30 };
 
     const isPlayer = side === 'player';
     const data    = isPlayer ? this._playerData : this._enemyData;
@@ -305,13 +329,6 @@ export default class BattleScene extends UIPanel {
     else          this._enemySkillsPane  = skillsPane;
     skillsPane.flexGrow = 0;
     col.addChild(skillsPane);
-
-    // 3) Relics pane (6x2 grid; all locked for now)
-    const relicsPane = new RelicsPane([], this._assetManager);
-    if (isPlayer) this._playerRelicsPane = relicsPane;
-    else          this._enemyRelicsPane  = relicsPane;
-    relicsPane.flexGrow = 0;
-    // col.addChild(relicsPane);
 
     return col;
   }
@@ -717,6 +734,10 @@ export default class BattleScene extends UIPanel {
     if (this._playerSkillsPane && state.playerState && state.playerState.mana) {
       this._playerSkillsPane.setManaState(state.playerState.mana);
     }
+    // Update top relic bar from player relics (no-op when unchanged)
+    if (this._relicBar && state.playerState) {
+      this._relicBar.setRelics(state.playerState.relics || []);
+    }
 
     // Update enemy pane from real state
     if (this._enemyPane && state.enemyState) {
@@ -1098,8 +1119,7 @@ export default class BattleScene extends UIPanel {
     if (this._enemyPane) this._enemyPane.setAssetManager(am);
     if (this._playerSkillsPane) this._playerSkillsPane.setAssetManager(am);
     if (this._enemySkillsPane)  this._enemySkillsPane.setAssetManager(am);
-    if (this._playerRelicsPane) this._playerRelicsPane.setAssetManager(am);
-    if (this._enemyRelicsPane)  this._enemyRelicsPane.setAssetManager(am);
+    if (this._relicBar) this._relicBar.setAssetManager(am);
     if (this._boardPanel) this._boardPanel.setAssetManager(am);
     if (this._combatLogPanel) this._combatLogPanel.assetManager = am;
     if (this._board) this._board.setAssetManager(am);
