@@ -61,7 +61,7 @@ export function createDefaultStatModifiers() {
  * actual stats are given their immutable template and run progression.
  * All UI, battle creation, and stat previews should use this.
  *
- * @param {object} characterDef — immutable character definition (from mockCharacter.js)
+ * @param {object} characterDef — immutable character definition (from data/characters/)
  * @param {object} runState     — player run state (from runState.js)
  * @returns {object} effective stats ready for use
  */

@@ -10,7 +10,7 @@
  *   - Handle mouse click / keyboard input
  *   - Transition to BattleScene with selected character
  *
- * All rendering is data-driven from characterSelectDefinitions and mockCharacter data.
+ * All rendering is data-driven from characterSelectDefinitions and data/characters.
  * Layout uses manual positioning for the top-level areas (info panel, heroes, button)
  * and flexbox for internal content within each area. This avoids the auto-height
  * limitation of the custom flexbox system.
@@ -22,11 +22,14 @@ import UIImage from '../ui/UIImage.js';
 import UIText from '../ui/UIText.js';
 import AudioManager from '../audio/AudioManager.js';
 import characterSelectDefinitions from '../data/characterSelectDefinitions.js';
-import mockEnemy from '../data/mockEnemy.js';
+import { goblin } from '../data/enemies/index.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
 import AuraStrandsEffect from '../ui/AuraStrandsEffect.js';
 import { createRunState } from '../data/runState.js';
+import { createPlayerBattleState } from '../data/playerStats.js';
+import { resolveSkillIds } from '../data/skills/skillCatalog.js';
+import { resolveRelicIds } from '../data/relics/relicCatalog.js';
 
 /** Duration of the cross-fade transition between splash backgrounds (ms) */
 const CROSS_FADE_DURATION = 400;
@@ -377,7 +380,9 @@ export default class CharacterSelectScene extends UIPanel {
     panel.addChild(skillsTitleRow);
 
     // ── Skills blocks row ──────────────────────────────
-    const skills = cd.skills || [];
+    // characterData.skills are skill ID strings — resolve via the
+    // catalog so the blocks see full objects (name, description, icon).
+    const skills = resolveSkillIds(cd.skills || []);
     const skillsRow = new UIContainer();
     skillsRow.direction = 'row';
     skillsRow.justifyContent = 'center';
@@ -573,7 +578,7 @@ export default class CharacterSelectScene extends UIPanel {
       ? cssAspect / designAspect
       : designAspect / cssAspect;
 
-    return Math.min(1.5, Math.max(1, ratio));
+    return Math.min(1.5, Math.max(1, ratio)) * 1.1;
   }
 
   /**
@@ -822,11 +827,13 @@ export default class CharacterSelectScene extends UIPanel {
     } else {
       // Fallback: direct to battle (shouldn't happen if MapScene is registered)
       console.warn('MapScene not found, falling back to direct BattleScene');
-      const enemyClone = JSON.parse(JSON.stringify(mockEnemy));
-      const playerClone = JSON.parse(JSON.stringify(def.characterData));
-      const battleController = new BattleController(playerClone, enemyClone);
+      const enemyClone = JSON.parse(JSON.stringify(goblin));
+      enemyClone.skills = resolveSkillIds(enemyClone.skills || []);
+      enemyClone.relics = resolveRelicIds(enemyClone.relics || []);
+      const playerBattleState = createPlayerBattleState(def.characterData, runState);
+      const battleController = new BattleController(playerBattleState, enemyClone);
       const battleScene = new BattleScene(
-        playerClone,
+        playerBattleState,
         enemyClone,
         this._assetManager,
         battleController

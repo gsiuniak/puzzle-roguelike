@@ -21,11 +21,11 @@
 
 // ── Container layout constants (identical to MapScene) ──
 /** Fraction of canvas width the container occupies */
-const CONTAINER_WIDTH_FRAC = 0.85;
+const CONTAINER_WIDTH_FRAC = 0.95;
 /** Fraction of canvas height the container occupies */
-const CONTAINER_HEIGHT_FRAC = 0.82;
+const CONTAINER_HEIGHT_FRAC = 0.95;
 /** Minimum horizontal padding from edges */
-const CONTAINER_MIN_H_PAD = 150;
+const CONTAINER_MIN_H_PAD = 50;
 /** Minimum vertical padding from edges */
 const CONTAINER_MIN_V_PAD = 24;
 /** Container corner radius */

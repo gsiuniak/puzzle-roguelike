@@ -50,7 +50,7 @@
  * === ADDING NEW BEHAVIORS ===
  *
  * 1. Add a handler to this registry with a unique key.
- * 2. Set `aiBehavior: "your_key"` on the enemy definition in mockEnemy.js
+ * 2. Set `aiBehavior: "your_key"` on the enemy definition in data/enemies/
  *    (or wherever enemy data is defined).
  * 3. That's it — the system handles dispatch and fallback automatically.
  */

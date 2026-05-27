@@ -39,7 +39,9 @@ src/
     map/                  — roguelike map generation and traversal
     ui/                   — custom UI framework + battle scene + visual effects + overlays
     audio/                — Howler-based audio manager + sound config
-    data/                 — character, enemy, and selection definitions
+    data/                 — gameplay data definitions
+      characters/         — playable character defs (per file + index)
+      enemies/            — enemy defs (per file + index)
       skills/             — skill catalog (id-keyed)
       relics/             — relic catalog (id-keyed, passive abilities)
     systems/              — cross-cutting battle systems (passives, effect resolver)
@@ -79,7 +81,7 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 9. **Old/reference directories are read-only** unless explicitly instructed. See §8.
 10. **Enemy data uses the same structure as character data** (hp, mana, skills, portrait).
 11. **All asset keys are registered in [`main.js` ASSET_MAP](src/js/main.js:35).** Adding a new sprite requires adding it there.
-12. **New characters require:** (a) definition in [`mockCharacter.js`](src/js/data/mockCharacter.js) with `baseStats` structure, (b) entry in [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js), (c) asset registration in [`main.js` ASSET_MAP](src/js/main.js:35).
+12. **New characters require:** (a) per-character file in [`src/js/data/characters/`](src/js/data/characters/) with `baseStats` structure, registered in [`characters/index.js`](src/js/data/characters/index.js), (b) entry in [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js), (c) asset registration in [`main.js` ASSET_MAP](src/js/main.js:35).
 13. **Character definitions are immutable.** Never mutate `baseStats` during gameplay. Run modifiers go in `runState.statModifiers` via [`playerStats.applyRunModifier()`](src/js/data/playerStats.js).
 14. **All stat math goes through [`playerStats.js`](src/js/data/playerStats.js).** Use `getEffectivePlayerStats()` to resolve stats, `createPlayerBattleState()` for battle init, `syncBattleResultsToRunState()` for persistence. Never scatter `base + modifier` math outside this module.
 15. **Rewards modify runState.statModifiers, never baseStats.** Use `applyRunModifier(runState, 'startingMana.purple', 2)` pattern.
@@ -207,11 +209,15 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 
 | File | Exports | Content |
 |------|---------|---------|
-| [`src/js/data/mockCharacter.js`](src/js/data/mockCharacter.js) | `warriorCharacter`, `mageCharacter`, `witchDoctorCharacter`, default: `mockCharacter` | **Immutable character definitions.** Each has `baseStats` (maxHp, startingMana, startingArmor, startingAttack), `skills: string[]` (skill IDs), `relics: string[]` (relic IDs). Never mutated during gameplay. |
-| [`src/js/data/mockEnemy.js`](src/js/data/mockEnemy.js) | `mockEnemy` (default) | Goblin enemy: same structure as character (`skills` / `relics` are ID arrays). HP scaled by MapScene for elite/boss. |
+| [`src/js/data/characters/warrior.js`](src/js/data/characters/warrior.js) | default: `warrior` | Warrior character definition (Thorgrim). `baseStats`, skills by ID, relics by ID. |
+| [`src/js/data/characters/mage.js`](src/js/data/characters/mage.js) | default: `mage` | Mage character definition (Shylana). |
+| [`src/js/data/characters/witchDoctor.js`](src/js/data/characters/witchDoctor.js) | default: `witchDoctor` | Witch Doctor character definition (Kalfou). |
+| [`src/js/data/characters/index.js`](src/js/data/characters/index.js) | `warrior`, `mage`, `witchDoctor`, `getCharacterById`, default: `CHARACTERS_BY_ID` | **Character registry.** Re-exports each per-character file. `getCharacterById(id)` resolves by string id. Add new characters by importing + adding to `CHARACTERS_BY_ID`. |
+| [`src/js/data/enemies/goblin.js`](src/js/data/enemies/goblin.js) | default: `goblin` | Goblin enemy definition. `hp`/`maxHp`/`attack`/`armor`, skills by ID, relics by ID, optional `aiBehavior` + `music`. |
+| [`src/js/data/enemies/index.js`](src/js/data/enemies/index.js) | `goblin`, `getEnemyById`, default: `ENEMIES_BY_ID` | **Enemy registry.** Same pattern as characters/index.js. HP is scaled by MapScene for elite/boss nodes. |
 | [`src/js/data/skills/skillCatalog.js`](src/js/data/skills/skillCatalog.js) | `SKILL_CATALOG` (default), `getSkillById`, `resolveSkillIds` | **Skill registry.** Plain object keyed by skill `id`. Each entry has `name`, `description`, `icon`, `sound`, `cost`, optional `targeting`/`area`, and `effects[]`. `resolveSkillIds(ids)` returns shallow-cloned full skill objects. |
 | [`src/js/data/relics/relicCatalog.js`](src/js/data/relics/relicCatalog.js) | `RELIC_CATALOG` (default), `getRelicById`, `resolveRelicIds` | **Relic registry.** Plain object keyed by relic `id`. Each entry has `name`, `description`, `icon`, optional `area`, and `effects[]`. Each effect carries its own `trigger` field (TRIGGER_TYPES value) plus `effectType` and payload. |
-| [`src/js/data/characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js) | `characterSelectDefinitions` (default) | UI metadata for CharacterSelectScene: portraitKey, splashKey, auraColor, order, enabled. References characterData from mockCharacter.js. |
+| [`src/js/data/characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js) | `characterSelectDefinitions` (default) | UI metadata for CharacterSelectScene: portraitKey, splashKey, auraColor, order, enabled. References characterData from data/characters/. |
 | [`src/js/data/playerStats.js`](src/js/data/playerStats.js) | `getEffectivePlayerStats`, `createPlayerBattleState`, `syncBattleResultsToRunState`, `createDefaultStatModifiers`, `applyRunModifier` | **Centralized stat resolution.** Resolves baseStats + statModifiers -> effectiveStats -> battle state. Single source of truth for all stat math. |
 | [`src/js/data/runState.js`](src/js/data/runState.js) | `createRunState`, `serializeRunState`, `deserializeRunState` | **Run state factory.** Tracks characterId, currentHp (persistent), statModifiers (persistent run progression), relics/upgrades/rewards placeholders. |
 | [`src/js/game/TileTypes.js`](src/js/game/TileTypes.js) | `TILE_TYPES`, `MANA_COLORS`, constants, helpers | Tile type definitions with spawn weights, particle colors, board dimensions. |
@@ -224,19 +230,20 @@ When given a task, locate the owning system using this table:
 
 | Symptom / Task | Look Here First | Secondary Files |
 |----------------|-----------------|-----------------|
-| "Skill doesn't work" | [`BattleController._resolveEffect()`](src/js/game/BattleController.js:1110) | [`MatchResolver.js` SKILL_EFFECT_TYPES](src/js/game/MatchResolver.js:23), skill definition in [`mockCharacter.js`](src/js/data/mockCharacter.js) |
+| "Skill doesn't work" | [`BattleController._resolveEffect()`](src/js/game/BattleController.js:1110) | [`MatchResolver.js` SKILL_EFFECT_TYPES](src/js/game/MatchResolver.js:23), skill definition in [`skillCatalog.js`](src/js/data/skills/skillCatalog.js) |
 | "Tile matching wrong" | [`MatchResolver.analyzeMatches()`](src/js/game/MatchResolver.js:109) | [`BoardModel.findAllConnectedMatches()`](src/js/game/BoardModel.js:239) |
 | "Scene transition wrong" | [`SceneManager.switchTo()`](src/js/scenes/SceneManager.js:105) | Scene `onEnter`/`onExit` methods |
 | "Map node highlight wrong" | [`MapRenderer`](src/js/map/MapRenderer.js) | [`MapTraversalController`](src/js/map/MapTraversalController.js) state queries |
-| "Character select data wrong" | [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js) | [`mockCharacter.js` baseStats](src/js/data/mockCharacter.js) |
+| "Character select data wrong" | [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js) | per-character file in [`data/characters/`](src/js/data/characters/) |
 | "Audio not playing" | [`AudioManager._play()`](src/js/audio/AudioManager.js:300) | [`SoundConfig.js`](src/js/audio/SoundConfig.js), skill `.sound` field |
 | "UI overlaps / layout broken" | [`UIElement` sizing model](src/js/ui/UIElement.js) | The specific view/scene's `buildHierarchy()` / `layoutChildren()` |
 | "Enemy AI behavior" | [`EnemyAI.findBestSkill()` / `findBestSwap()`](src/js/game/EnemyAI.js) | [`EnemyAI._scoreBoard()`](src/js/game/EnemyAI.js:142) |
-| "Add custom enemy AI" | [`enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) | [`customEnemyAi.js`](src/js/game/customEnemyAi.js), set `aiBehavior` on enemy definition in [`mockEnemy.js`](src/js/data/mockEnemy.js) |
+| "Add custom enemy AI" | [`enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) | [`customEnemyAi.js`](src/js/game/customEnemyAi.js), set `aiBehavior` on enemy definition in [`data/enemies/`](src/js/data/enemies/) |
 | "Map generation wrong" | [`MapGenerator.generate()`](src/js/map/MapGenerator.js:119) | [`SeededRNG`](src/js/map/MapGenerator.js:8), [`_wireConnections`](src/js/map/MapGenerator.js:315) |
 | "Tile disappear/reappear bug" | [`BoardModel.removeTiles()`](src/js/game/BoardModel.js:355) / [`applyGravity()`](src/js/game/BoardModel.js:372) | [`BattleController` cascade phases](src/js/game/BattleController.js:28) |
 | "Health/damage calculation wrong" | [`MatchResolver.applyDamage()`](src/js/game/MatchResolver.js:163) | [`BattleController._setShakeFromDamage()`](src/js/game/BattleController.js:1193) |
-| "Add new character" | [`mockCharacter.js`](src/js/data/mockCharacter.js) | [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js), [`main.js` ASSET_MAP](src/js/main.js:35) |
+| "Add new character" | new file in [`data/characters/`](src/js/data/characters/) + register in [`characters/index.js`](src/js/data/characters/index.js) | [`characterSelectDefinitions.js`](src/js/data/characterSelectDefinitions.js), [`main.js` ASSET_MAP](src/js/main.js:35) |
+| "Add new enemy" | new file in [`data/enemies/`](src/js/data/enemies/) + register in [`enemies/index.js`](src/js/data/enemies/index.js) | Reference from [`MapScene._transitionToBattle`](src/js/scenes/MapScene.js) to spawn it |
 | "Add new skill" | [`skillCatalog.js`](src/js/data/skills/skillCatalog.js) | Reference its `id` from `skills: [...]` on the owner; register icon/sound in [`main.js` ASSET_MAP](src/js/main.js:35) and [`SoundConfig.js`](src/js/audio/SoundConfig.js) |
 | "Add new relic / passive" | [`relicCatalog.js`](src/js/data/relics/relicCatalog.js) | Pick a trigger from [`TriggerTypes.js`](src/js/systems/TriggerTypes.js), an effect type from [`EffectResolver.js`](src/js/systems/EffectResolver.js); reference id from `relics: [...]` on the owner |
 | "Add new passive trigger event" | [`TriggerTypes.js`](src/js/systems/TriggerTypes.js) | Dispatch from the relevant spot in [`BattleController`](src/js/game/BattleController.js) via `this.passives.dispatch(...)` |
@@ -246,7 +253,7 @@ When given a task, locate the owning system using this table:
 | "Board rendering wrong" | [`BoardPlaceholder`](src/js/ui/BoardPlaceholder.js) | [`BattleScene.updateFromController()`](src/js/ui/BattleScene.js:481) |
 | "Combat log issues" | [`CombatLog`](src/js/game/CombatLog.js) | [`BattleScene.updateFromController()`](src/js/ui/BattleScene.js:481) |
 | "Post-battle reward/overlay issues" | [`RewardOverlay`](src/js/ui/RewardOverlay.js) | [`BattleScene._handleKeyDown()`](src/js/ui/BattleScene.js:448) (ESC dismiss), BattleScene `update()` (GAME_OVER → show) |
-| "Stat calculation wrong" | [`playerStats.getEffectivePlayerStats()`](src/js/data/playerStats.js) | [`runState.js`](src/js/data/runState.js), [`mockCharacter.js` baseStats](src/js/data/mockCharacter.js) |
+| "Stat calculation wrong" | [`playerStats.getEffectivePlayerStats()`](src/js/data/playerStats.js) | [`runState.js`](src/js/data/runState.js), per-character file `baseStats` in [`data/characters/`](src/js/data/characters/) |
 | "Run modifier not persisting" | [`playerStats.applyRunModifier()`](src/js/data/playerStats.js) | [`runState.js` statModifiers](src/js/data/runState.js) |
 | "Battle starts with wrong HP/mana" | [`playerStats.createPlayerBattleState()`](src/js/data/playerStats.js) | [`syncBattleResultsToRunState()`](src/js/data/playerStats.js), MapScene `_transitionToBattle()` |
 | "Performance issues" | [`GameLoop` delta time](src/js/engine/GameLoop.js) | [`CanvasApp` DPR handling](src/js/engine/CanvasApp.js), AssetManager pre-scaling |
@@ -325,7 +332,7 @@ Per-frame: BattleScene.update(dt)
 ### Stat Architecture Flow (NEW)
 ```
 Character Definition (immutable template)
-  mockCharacter.js: { id, baseStats: { maxHp, startingMana, startingArmor, startingAttack }, skills, ... }
+  data/characters/<name>.js: { id, baseStats: { maxHp, startingMana, startingArmor, startingAttack }, skills, relics, ... }
         +
 Run State (persistent progression)
   runState.js: { characterId, currentHp, statModifiers: { maxHp, startingMana: {...}, ... }, relics, ... }
@@ -386,7 +393,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 12. **Music transitions are state-driven** in BattleScene: battle_theme on PLAYER/ENEMY_TURN, stopped on GAME_OVER.
 13. **All one-shot visual/SFX flags** are read-and-cleared in `BattleController.getState()` to prevent double-firing.
 14. **Player stat architecture uses three-layer separation** (NEW):
-    - **Layer 1 — Character definitions** ([`mockCharacter.js`](src/js/data/mockCharacter.js)): Immutable `baseStats` templates. Never mutated.
+    - **Layer 1 — Character definitions** (per-file in [`data/characters/`](src/js/data/characters/)): Immutable `baseStats` templates. Never mutated.
     - **Layer 2 — Run state** ([`runState.js`](src/js/data/runState.js)): Persistent `statModifiers` that accumulate from rewards/relics/upgrades. `currentHp` persists between battles.
     - **Layer 3 — Battle state**: Fresh instance created each battle via [`createPlayerBattleState()`](src/js/data/playerStats.js). Mana/armor/attack reset from effective stats each battle.
 15. **Stat resolution is centralized** in [`playerStats.js`](src/js/data/playerStats.js). `getEffectivePlayerStats()` is the single source for computing baseStats + statModifiers. No scattered math elsewhere.

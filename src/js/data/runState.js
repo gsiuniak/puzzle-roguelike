@@ -27,7 +27,7 @@ export { createDefaultStatModifiers };
  * currentHp is initialized from the effective maxHp (base + zero modifiers),
  * which equals the character's base maxHp at the start of a run.
  *
- * @param {object} characterDef — immutable character definition (from mockCharacter.js)
+ * @param {object} characterDef — immutable character definition (from data/characters/)
  * @returns {object} fresh run state
  */
 export function createRunState(characterDef) {

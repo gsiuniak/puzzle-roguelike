@@ -29,7 +29,7 @@ import MapNode from './MapNode.js';
 import MapGraph from './MapGraph.js';
 
 /** Base node circle radius in CSS pixels (for non-boss nodes) */
-const NODE_RADIUS = 32;
+const NODE_RADIUS = 40;
 /** Boss node radius multiplier */
 const BOSS_RADIUS_MULT = 2;
 /** Icon size fraction of node radius (fills most of the node) */
