@@ -121,6 +121,8 @@ const ASSET_MAP = {
   relic_family_crest:        'assets/sprites/relics/relic_family_crest.png',
   relic_unstable_catalyst:   'assets/sprites/relics/relic_unstable_catalyst.png',
   relic_evil_eye:            'assets/sprites/relics/relic_evil_eye.png',
+  // ── General UI ──────────────────────────────────────
+  tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };
 
 // ── Game viewport configuration ─────────────────────────

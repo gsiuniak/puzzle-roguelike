@@ -12,6 +12,7 @@ import FloatingTextEffect from './FloatingTextEffect.js';
 import TileParticleEffect from './TileParticleEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
+import TooltipManager from '../systems/TooltipManager.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
 import { syncBattleResultsToRunState } from '../data/playerStats.js';
@@ -183,6 +184,10 @@ export default class BattleScene extends UIPanel {
     // ── Reward overlay (post-battle reward screen) ──
     /** @type {RewardOverlay|null} */
     this._rewardOverlay = null;
+
+    // ── Tooltip manager (hover / touch-hold tooltips on UI elements) ──
+    /** @type {TooltipManager|null} */
+    this._tooltipManager = null;
 
     // ── Board drag/swap input state ──
     /** @type {{col:number, row:number}|null} */
@@ -369,6 +374,20 @@ export default class BattleScene extends UIPanel {
     this._rewardOverlay.reset();
     this._rewardOverlayShown = false;
 
+    // ── Tooltip manager (created on first entry; cleared on each entry) ──
+    if (!this._tooltipManager) {
+      this._tooltipManager = new TooltipManager({
+        input,
+        app: this._sceneManager._app,
+        assetManager: this._assetManager,
+      });
+    }
+    this._tooltipManager.clear();
+    this._tooltipManager.setEnabled(true);
+    if (this._relicBar) {
+      this._relicBar.setTooltipManager(this._tooltipManager);
+    }
+
     // Create bound handlers (stored for cleanup in onExit)
     this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
     this._onMouseMove = (x, y) => this._handleMouseMove(x, y);
@@ -413,6 +432,12 @@ export default class BattleScene extends UIPanel {
     // Reset reward overlay (ensure clean state on next entry)
     if (this._rewardOverlay) {
       this._rewardOverlay.reset();
+    }
+
+    // Clear any tooltip attachments so they don't carry over to the next
+    // battle (icons get re-created and old references would be stale).
+    if (this._tooltipManager) {
+      this._tooltipManager.clear();
     }
 
     const input = this._sceneManager._input;
@@ -463,6 +488,7 @@ export default class BattleScene extends UIPanel {
       return;
     }
     if (this._mapView && this._mapView.isOverlayActive()) return;
+    if (this._tooltipManager) this._tooltipManager.onMouseDown(x, y);
     const board = this._board;
     if (!board) return;
 
@@ -497,6 +523,7 @@ export default class BattleScene extends UIPanel {
       return;
     }
     if (this._mapView && this._mapView.isOverlayActive()) return;
+    if (this._tooltipManager) this._tooltipManager.onMouseMove(x, y);
     const board = this._board;
     if (!board) return;
 
@@ -533,6 +560,7 @@ export default class BattleScene extends UIPanel {
   _handleMouseUp(x, y) {
     if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
+    if (this._tooltipManager) this._tooltipManager.onMouseUp(x, y);
     const board = this._board;
     if (!board || !this._dragStartCell || !this._canAct() || this._isTargeting()) {
       this._selectedCell = null;
@@ -960,6 +988,15 @@ export default class BattleScene extends UIPanel {
       this._rewardOverlay.update(dt);
     }
 
+    // ── Tooltip manager: gate by modal overlays + advance hold timer ──
+    if (this._tooltipManager) {
+      const overlayActive =
+        (this._rewardOverlay && this._rewardOverlay.isActive()) ||
+        (this._mapView && this._mapView.isOverlayActive());
+      this._tooltipManager.setEnabled(!overlayActive);
+      this._tooltipManager.update(dt);
+    }
+
     // Update game logic first (battle state machine, AI, etc.)
     if (this._battleController) {
       this._battleController.update(dt);
@@ -1053,6 +1090,13 @@ export default class BattleScene extends UIPanel {
     // Restore context after shake offset
     if (shake.x !== 0 || shake.y !== 0) {
       ctx.restore();
+    }
+
+    // Tooltips render last so they sit above all battle UI (but still
+    // inside the design-space viewport clip). The manager self-gates when
+    // a modal overlay is active.
+    if (this._tooltipManager) {
+      this._tooltipManager.render(ctx);
     }
 
     // Map overlay and reward overlay are rendered by renderForeground()

@@ -9,6 +9,11 @@ const BAR_PADDING = { top: 40, right: 40, bottom: 0, left: 0 };
 const ICON_SIZE = 50;
 const ICON_GAP = 10;
 
+// Tooltip layout for relic icons. Tweak here, not at call sites.
+const TOOLTIP_SCALE   = 1.0;
+const TOOLTIP_OFFSET  = 16;
+const TOOLTIP_PADDING = 22;
+
 /**
  * RelicBar — thin, passive vertical column that displays collected relics
  * as small icons (Slay-the-Spire style).
@@ -17,19 +22,22 @@ const ICON_GAP = 10;
  * downward; the column has no background or border so the icons appear to
  * "float" against the battle background.
  *
- * Not interactive: relic icons just "sit" in the column. Hover/click
- * tooltips can be wired up later without changing the column's layout or
- * BattleScene call sites.
+ * Not interactive for clicks (hitTest returns null), but each icon registers
+ * a tooltip with the supplied TooltipManager showing the relic's name and
+ * description. The manager owns hover/touch-hold input handling — RelicBar
+ * just keeps attachments in sync with the current relic list.
  *
  * Usage:
  *   const col = new RelicBar(assetManager);
- *   col.setRelics(playerState.relics);   // safe to call every frame
+ *   col.setTooltipManager(tooltipManager); // optional
+ *   col.setRelics(playerState.relics);     // safe to call every frame
  */
 export default class RelicBar extends UIContainer {
-  constructor(assetManager = null) {
+  constructor(assetManager = null, tooltipManager = null) {
     super();
 
     this._assetManager = assetManager;
+    this._tooltipManager = tooltipManager;
     this.smoothing = true;
 
     this.direction = 'column';
@@ -40,6 +48,8 @@ export default class RelicBar extends UIContainer {
 
     /** Last set of relic ids — used to skip rebuilds when unchanged. */
     this._lastRelicSignature = '';
+    /** Cached last relic list — used to re-build when the tooltip manager changes. */
+    this._lastRelics = [];
     /** @type {UIImage[]} */
     this._iconImages = [];
   }
@@ -50,20 +60,49 @@ export default class RelicBar extends UIContainer {
   }
 
   /**
+   * Set the TooltipManager used to register per-icon tooltips. Always
+   * triggers a rebuild so attachments are re-registered even when the same
+   * manager reference is passed in — BattleScene reuses one manager across
+   * battles and calls `clear()` between them, so a no-op short-circuit
+   * would leave the icons without tooltips on subsequent entries.
+   * @param {import('../systems/TooltipManager.js').default|null} tm
+   */
+  setTooltipManager(tm) {
+    if (this._tooltipManager && this._tooltipManager !== tm) {
+      for (const img of this._iconImages) this._tooltipManager.detach(img);
+    }
+    this._tooltipManager = tm;
+    this._rebuild();
+  }
+
+  /**
    * Replace the displayed relics. Idempotent: rebuilds children only when
    * the relic id list actually changes, so it's safe to call every frame.
-   * @param {Array<{id:string, icon?:string}>} relics
+   * @param {Array<{id:string, name?:string, description?:string, icon?:string}>} relics
    */
   setRelics(relics) {
     const list = Array.isArray(relics) ? relics : [];
     const signature = list.map(r => (r && r.id) || '').join('|');
     if (signature === this._lastRelicSignature) return;
     this._lastRelicSignature = signature;
+    this._lastRelics = list;
+    this._rebuild();
+  }
+
+  /**
+   * Rebuild the icon list (and tooltip attachments) from the cached
+   * `_lastRelics`. Called both when relics change and when the
+   * TooltipManager reference changes.
+   */
+  _rebuild() {
+    if (this._tooltipManager) {
+      for (const img of this._iconImages) this._tooltipManager.detach(img);
+    }
 
     this.clearChildren();
     this._iconImages = [];
 
-    for (const relic of list) {
+    for (const relic of this._lastRelics) {
       if (!relic) continue;
       const iconKey = relic.icon || 'placeholder';
       const img = new UIImage(iconKey, this._assetManager);
@@ -75,6 +114,20 @@ export default class RelicBar extends UIContainer {
       });
       this._iconImages.push(img);
       this.addChild(img);
+
+      if (this._tooltipManager) {
+        const lines = [];
+        if (relic.name) lines.push(relic.name);
+        if (relic.description) lines.push(relic.description);
+        if (lines.length > 0) {
+          this._tooltipManager.attach(img, {
+            text: lines.join('\n'),
+            scale: TOOLTIP_SCALE,
+            offset: TOOLTIP_OFFSET,
+            padding: TOOLTIP_PADDING,
+          });
+        }
+      }
     }
   }
 
