@@ -26,6 +26,7 @@ export const SKILL_EFFECT_TYPES = {
   DESTROY_TILES: 'destroy_tiles',
   DESTROY_TILES_ROW: 'destroy_tiles_row',
   CREATE_TILES: 'create_tiles',
+  CONVERT_TILE: 'convert_tile',
   HEAL: 'heal',
   EXTRA_TURN: 'extra_turn',
 };

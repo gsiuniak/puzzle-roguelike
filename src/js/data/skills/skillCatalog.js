@@ -68,17 +68,33 @@ const SKILL_CATALOG = {
       { effectType: 'create_tiles', createTiles: { amount: 5, type: 'purple' } },
     ],
   },
-  explode: {
-    id: 'explode',
-    name: 'Explode',
-    description: 'Destroy tiles in a 3x3 area',
+  // Old Explode skill — kept commented out for easy revert.
+  // explode: {
+  //   id: 'explode',
+  //   name: 'Explode',
+  //   description: 'Destroy tiles in a 3x3 area',
+  //   icon: 'skill_explode',
+  //   sound: 'skill_explode',
+  //   targeting: 'board_tile',
+  //   area: { radius: 1 },
+  //   cost: { purple: 8 },
+  //   effects: [
+  //     { effectType: 'destroy_tiles' },
+  //   ],
+  // },
+  arcane_inscription: {
+    id: 'arcane_inscription',
+    name: 'Arcane Inscription',
+    description: 'Change 1 tile into Yellow',
+    // Re-uses the explode icon/sound for now — swap to a dedicated
+    // skill_arcane_inscription asset whenever new art is added.
     icon: 'skill_explode',
     sound: 'skill_explode',
     targeting: 'board_tile',
-    area: { radius: 1 },
-    cost: { purple: 8 },
+    area: { radius: 0 },
+    cost: { purple: 3 },
     effects: [
-      { effectType: 'destroy_tiles' },
+      { effectType: 'convert_tile', convertTile: { type: 'yellow' } },
     ],
   },
 

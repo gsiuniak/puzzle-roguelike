@@ -241,7 +241,7 @@ export default class CharacterSelectScene extends UIPanel {
       alignV: 'center',
       width: 120 * S,
       height: 26 * S,
-      margin: { left: 65 * S, right: 65 * S }
+      margin: { left: 95 * S, right: 95 * S }
     });
     classRow.addChild(classText);
 
@@ -258,7 +258,7 @@ export default class CharacterSelectScene extends UIPanel {
       alignH: 'center',
       alignV: 'center',
       height: 60 * S,
-      maxWidth: 400 * S,
+      maxWidth: 560 * S,
     });
     panel.addChild(descText);
 
@@ -371,7 +371,7 @@ export default class CharacterSelectScene extends UIPanel {
       alignV: 'center',
       width: 150 * S,
       height: 22 * S,
-      margin: { left: 60 * S, right: 60 * S }
+      margin: { left: 90 * S, right: 90 * S }
     });
     skillsTitleRow.addChild(skillsTitle);
 
@@ -388,7 +388,7 @@ export default class CharacterSelectScene extends UIPanel {
     skillsRow.direction = 'row';
     skillsRow.justifyContent = 'center';
     skillsRow.alignItems = 'center';
-    skillsRow.gap = 36 * S;
+    skillsRow.gap = 30 * S;
     skillsRow.height = 90 * S;
     skillsRow.margin = { top: -5 * S };
 
@@ -422,7 +422,7 @@ export default class CharacterSelectScene extends UIPanel {
         alignV: 'center',
         width: 150 * S,
         height: 22 * S,
-        margin: { left: 60 * S, right: 60 * S }
+        margin: { left: 90 * S, right: 90 * S }
       });
       relicsTitleRow.addChild(relicsTitle);
 
@@ -460,7 +460,7 @@ export default class CharacterSelectScene extends UIPanel {
     block.direction = 'row';
     block.alignItems = 'center';
     block.gap = 12 * S;
-    block.width = 180 * S;
+    block.width = 240 * S;
     block.height = 80 * S;
 
     // Column 1: Skill icon
@@ -495,7 +495,7 @@ export default class CharacterSelectScene extends UIPanel {
       alignH: 'left',
       alignV: 'top',
       height: 50 * S,
-      maxWidth: 100 * S,
+      maxWidth: 150 * S,
     });
     textCol.addChild(descText);
 
@@ -515,11 +515,20 @@ export default class CharacterSelectScene extends UIPanel {
    */
   _buildRelicBlock(relicData, am) {
     const S = this._uiScale;
+    // Center the icon+text pair WITHIN the block (block.justifyContent =
+    // 'center'). Without this, textCol's implicit flexGrow:1 stretches it to
+    // fill the block, leaving the icon anchored to the left edge — which
+    // made the relic look left-aligned even though the block itself was
+    // centered in the row. textCol now has a fixed width and explicit
+    // flexGrow:0 so the icon+textCol stays compact and slack distributes
+    // evenly on both sides.
+    const TEXT_COL_WIDTH = 300 * S;
     const block = new UIContainer();
     block.direction = 'row';
+    block.justifyContent = 'center';
     block.alignItems = 'center';
     block.gap = 16 * S;
-    block.width = 380 * S;
+    block.width = 460 * S;
     block.height = 80 * S;
 
     const iconKey = relicData.icon || 'placeholder';
@@ -532,7 +541,8 @@ export default class CharacterSelectScene extends UIPanel {
     textCol.justifyContent = 'center';
     textCol.alignItems = 'start';
     textCol.gap = 4 * S;
-    textCol.flexGrow = 1;
+    textCol.width = TEXT_COL_WIDTH;
+    textCol.flexGrow = 0;
 
     const nameText = new UIText(relicData.name || '');
     nameText.setStyle({
@@ -553,7 +563,7 @@ export default class CharacterSelectScene extends UIPanel {
       alignH: 'left',
       alignV: 'top',
       height: 50 * S,
-      maxWidth: 280 * S,
+      maxWidth: TEXT_COL_WIDTH,
     });
     textCol.addChild(descText);
 
@@ -596,12 +606,13 @@ export default class CharacterSelectScene extends UIPanel {
     const heroes = this._heroesRow;
 
     // ── 1. Compute info panel dimensions ─────────────────
-    // Narrow card proportions: 38–54% of canvas width, clamped to 420–540px
-    let panelW = 500 * S;
+    // Wider card proportions to match the updated character_select_info_panel
+    // asset's aspect ratio. ~50–60% of canvas width, clamped to 640–780px.
+    let panelW = 700 * S;
     let panelH = 200 * S;
 
     if (panel) {
-      panelW = Math.min(540 * S, Math.max(460 * S, W * 0.42 * S));
+      panelW = Math.min(780 * S, Math.max(640 * S, W * 0.55 * S));
 
       // Do a trial layout with generous height so child rects are computed
       panel.rect.x = 0;

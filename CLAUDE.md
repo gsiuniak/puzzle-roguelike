@@ -377,6 +377,13 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
    → CREATE_TILES: convert random tiles → check matches → beginResolving
    → EXTRA_TURN: set _extraTurnEarned flag (non-cumulative)
    → DESTROY_TILES: _executeDestroyTiles → resolveDestroyedTileRewards → beginResolving
+
+3. For targeted skills (tryTargetTile after tile click):
+   _spendCost → _setSkillSound → compute area, then dispatch per effect:
+   → DESTROY_TILES / DESTROY_TILES_ROW: _executeDestroyTiles(area)
+   → CONVERT_TILE: _executeConvertTile(area, type) → match check → beginResolving
+   → other effects: standard _resolveEffect (damage/armor/etc.)
+   If no effect entered RESOLVING, the turn ends inline (mirrors tryPlayerSkill).
 ```
 
 ---
@@ -461,7 +468,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 | Name | Location | Values |
 |------|----------|--------|
 | `BattleState` | [`BattleController.js:18`](src/js/game/BattleController.js:18) | PLAYER_TURN, ENEMY_TURN, RESOLVING, SWAPPING, TURN_INTRO, TARGETING, GAME_OVER |
-| `SKILL_EFFECT_TYPES` | [`MatchResolver.js:23`](src/js/game/MatchResolver.js:23) | damage, armor, destroy_tiles, destroy_tiles_row, create_tiles, heal, extra_turn |
+| `SKILL_EFFECT_TYPES` | [`MatchResolver.js:23`](src/js/game/MatchResolver.js:23) | damage, armor, destroy_tiles, destroy_tiles_row, create_tiles, convert_tile, heal, extra_turn |
 | `TILE_TYPES` | [`TileTypes.js:11`](src/js/game/TileTypes.js:11) | RED, BLUE, GREEN, YELLOW, PURPLE, SKULL — each with id, isSkull, color, particleColor, spawnWeight |
 | `BOARD_COLS / BOARD_ROWS` | [`TileTypes.js:33`](src/js/game/TileTypes.js:33) | 8 / 8 |
 | `AudioCategory` | [`SoundConfig.js:15`](src/js/audio/SoundConfig.js:15) | MASTER, MUSIC, SFX, UI, AMBIENT |

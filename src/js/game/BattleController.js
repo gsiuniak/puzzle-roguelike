@@ -477,17 +477,41 @@ export default class BattleController {
     this._targetHoverCell = null;
     this._targetingOverlayCells = [];
 
-    // All targeting skills destroy tiles in the selected area
-    this._executeDestroyTiles(area, col, row, skill.name);
-
-    // Resolve any additional non-destroy effects from the effects array
+    // Dispatch each effect by type. Targeting-aware effects (destroy / convert)
+    // get the area; everything else routes through the standard _resolveEffect.
+    // Track whether any effect entered RESOLVING — if so, the cascade machine
+    // ends the turn; otherwise we end it inline here, mirroring tryPlayerSkill.
+    let enteredCascade = false;
     for (const effect of (skill.effects || [])) {
-      if (effect.effectType !== SKILL_EFFECT_TYPES.DESTROY_TILES
-          && effect.effectType !== SKILL_EFFECT_TYPES.DESTROY_TILES_ROW) {
-        this._resolveEffect(effect, skill, 'player');
+      switch (effect.effectType) {
+        case SKILL_EFFECT_TYPES.DESTROY_TILES:
+        case SKILL_EFFECT_TYPES.DESTROY_TILES_ROW:
+          this._executeDestroyTiles(area, col, row, skill.name);
+          enteredCascade = true;
+          break;
+        case SKILL_EFFECT_TYPES.CONVERT_TILE:
+          if (this._executeConvertTile(area, effect, skill.name)) {
+            enteredCascade = true;
+          }
+          break;
+        default:
+          if (this._resolveEffect(effect, skill, 'player')) {
+            enteredCascade = true;
+          }
+          break;
       }
     }
 
+    if (enteredCascade) return true;
+    if (this._checkGameOver()) return true;
+    if (this._extraTurnEarned) {
+      this._extraTurnEarned = false;
+      this.pendingExtraTurn = true;
+      this.log.add('--- Extra Turn (Player) ---');
+      if (this.onStateChange) this.onStateChange();
+      return true;
+    }
+    this._endTurn('player');
     return true;
   }
 
@@ -645,6 +669,59 @@ export default class BattleController {
     this.fallCells = [];
     this._cascadePhase = CascadePhase.REMOVE;
     this._phaseTimer = 0;
+  }
+
+  /**
+   * Execute a CONVERT_TILE effect on the given targeted positions.
+   * Converts each board cell to the configured tile type, captures the
+   * positions for the conversion shimmer effect, and enters RESOLVING if
+   * the conversion produced any matches.
+   *
+   * Does NOT award mana or deal damage on its own — when the converted
+   * tiles match, the normal cascade flow handles rewards.
+   *
+   * @param {Array<{col:number,row:number}>} positions targeted cells
+   * @param {object} effect - { convertTile: { type } }
+   * @param {string} skillName - for log messages
+   * @returns {boolean} true if a cascade was entered
+   */
+  _executeConvertTile(positions, effect, skillName) {
+    const cfg = effect && effect.convertTile;
+    if (!cfg || !cfg.type) {
+      console.warn('[CONVERT_TILE] Missing convertTile.type on effect:', effect);
+      return false;
+    }
+    const targetType = cfg.type;
+    if (!TILE_TYPES[targetType.toUpperCase()]) {
+      console.warn(`[CONVERT_TILE] Unknown tile type: "${targetType}". Skipping.`);
+      return false;
+    }
+    if (!positions || positions.length === 0) {
+      this.log.add(`${skillName}: no tile selected.`);
+      return false;
+    }
+
+    const convertedCount = this.board.convertTilesToType(positions, targetType);
+    if (convertedCount === 0) {
+      this.log.add(`${skillName}: nothing to convert.`);
+      return false;
+    }
+    this.log.add(`${skillName} converts ${convertedCount} tile(s) to ${targetType}.`);
+
+    // Capture for visual feedback (shimmer / particle burst handled by
+    // BattleScene's _spawnTileConvertParticles, same as CREATE_TILES).
+    this._convertedTilePositions = positions.map(p => ({
+      col: p.col, row: p.row, typeId: targetType,
+    }));
+
+    // If the conversion created matches, run the standard cascade.
+    const analysis = this.resolver.analyzeMatches(this.board, this.playerState);
+    if (analysis) {
+      this._swapTriggerPos = null;
+      this._beginResolving('player', analysis);
+      return true;
+    }
+    return false;
   }
 
   /**

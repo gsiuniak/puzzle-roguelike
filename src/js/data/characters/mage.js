@@ -27,7 +27,7 @@ const mage = {
     },
   },
 
-  skills: ['fracture', 'explode'],
+  skills: ['fracture', 'arcane_inscription'],
   relics: ['unstable_catalyst'],
 };
 
