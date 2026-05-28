@@ -118,9 +118,10 @@ export default class RelicBar extends UIContainer {
       this._iconImages.push(img);
       this.addChild(img);
 
-      if (this._tooltipManager && relic.description) {
+      if (this._tooltipManager && (relic.description || relic.name)) {
         this._tooltipManager.attach(img, {
-          text: relic.description,
+          title: relic.name || '',
+          text: relic.description || '',
           scale: TOOLTIP_SCALE,
           offset: TOOLTIP_OFFSET,
           padding: TOOLTIP_PADDING,

@@ -2,7 +2,7 @@ import UIText from './UIText.js';
 
 /**
  * Tooltip — visual component that draws a single floating tooltip panel
- * (background image + centered, word-wrapped text).
+ * (background image + optional bold title + centered, word-wrapped body text).
  *
  * Owned and driven by TooltipManager; not added to the UI tree as a child.
  * The manager calls setOptions() / setPosition() / render(ctx) directly.
@@ -12,22 +12,36 @@ import UIText from './UIText.js';
  *   Only the `width` (or `scale` multiplier) is configurable; the height
  *   is derived as width / aspect, so the art never stretches.
  *
+ * Layout:
+ *   - If `title` is set, it's rendered top-aligned inside the padded inner
+ *     area. The body text fills the remaining space below (centered).
+ *   - If `title` is empty, the body text fills the entire inner area
+ *     (centered, as before).
+ *
  * Options (passed via setOptions):
- *   text       — string content (may contain '\n' for hard line breaks)
- *   scale      — multiplier applied to TOOLTIP_DEFAULT_WIDTH (default 1)
- *   width      — explicit pixel width; overrides scale when set
- *   padding    — internal padding between panel edge and text (default 24)
- *   fontSize   — text size in px (default 18)
- *   lineHeight — explicit line height in px (default fontSize * 1.25)
- *   color      — text color (default '#f5e7c8')
+ *   text           — body string (may contain '\n' for hard line breaks)
+ *   title          — optional title string drawn at the top, bold by default
+ *   scale          — multiplier applied to TOOLTIP_DEFAULT_WIDTH (default 1)
+ *   width          — explicit pixel width; overrides scale when set
+ *   padding        — internal padding between panel edge and text (default 24)
+ *   fontSize       — body text size in px (default 18)
+ *   lineHeight     — explicit body line height in px (default fontSize * 1.25)
+ *   color          — body text color (default '#f5e7c8')
+ *   titleFontSize  — title text size in px (default 24)
+ *   titleColor     — title text color (default '#f5e7c8')
+ *   titleBold      — render title bold (default true)
+ *   titleGap       — gap between title and body in px (default 8)
  */
 
 const DEFAULT_BG_KEY    = 'tooltip_panel';
-const TOOLTIP_DEFAULT_WIDTH     = 320;
-const TOOLTIP_DEFAULT_PADDING   = 24;
-const TOOLTIP_DEFAULT_FONT_SIZE = 18;
-const TOOLTIP_DEFAULT_COLOR     = '#f5e7c8';
-const FALLBACK_ASPECT_RATIO     = 2.5;
+const TOOLTIP_DEFAULT_WIDTH           = 320;
+const TOOLTIP_DEFAULT_PADDING         = 24;
+const TOOLTIP_DEFAULT_FONT_SIZE       = 18;
+const TOOLTIP_DEFAULT_COLOR           = '#f5e7c8';
+const TOOLTIP_DEFAULT_TITLE_FONT_SIZE = 24;
+const TOOLTIP_DEFAULT_TITLE_COLOR     = '#ccaa77';
+const TOOLTIP_DEFAULT_TITLE_GAP       = 8;
+const FALLBACK_ASPECT_RATIO           = 2.5;
 
 export default class Tooltip {
   /**
@@ -40,11 +54,13 @@ export default class Tooltip {
     this._bgAssetKey = bgAssetKey;
 
     this._text = '';
+    this._title = '';
     this._scale = 1;
     this._explicitWidth = null;
     this._padding = TOOLTIP_DEFAULT_PADDING;
     this._fontSize = TOOLTIP_DEFAULT_FONT_SIZE;
     this._lineHeight = null;
+    this._titleGap = TOOLTIP_DEFAULT_TITLE_GAP;
 
     this._textElement = new UIText('');
     this._textElement.setStyle({
@@ -52,6 +68,15 @@ export default class Tooltip {
       color: TOOLTIP_DEFAULT_COLOR,
       alignH: 'center',
       alignV: 'center',
+    });
+
+    this._titleElement = new UIText('');
+    this._titleElement.setStyle({
+      fontSize: TOOLTIP_DEFAULT_TITLE_FONT_SIZE,
+      color: TOOLTIP_DEFAULT_TITLE_COLOR,
+      alignH: 'center',
+      alignV: 'top',
+      bold: true,
     });
 
     this._x = 0;
@@ -73,6 +98,11 @@ export default class Tooltip {
     if (opts.text !== undefined) {
       this._text = opts.text == null ? '' : String(opts.text);
       this._textElement.setStyle({ text: this._text });
+      this._cachedSize = null;
+    }
+    if (opts.title !== undefined) {
+      this._title = opts.title == null ? '' : String(opts.title);
+      this._titleElement.setStyle({ text: this._title });
       this._cachedSize = null;
     }
     if (opts.scale !== undefined) {
@@ -99,6 +129,21 @@ export default class Tooltip {
     }
     if (opts.color !== undefined) {
       this._textElement.setStyle({ color: opts.color });
+    }
+    if (opts.titleFontSize !== undefined) {
+      this._titleElement.setStyle({ fontSize: opts.titleFontSize });
+      this._cachedSize = null;
+    }
+    if (opts.titleColor !== undefined) {
+      this._titleElement.setStyle({ color: opts.titleColor });
+    }
+    if (opts.titleBold !== undefined) {
+      this._titleElement.setStyle({ bold: !!opts.titleBold });
+      this._cachedSize = null;
+    }
+    if (opts.titleGap !== undefined) {
+      this._titleGap = opts.titleGap;
+      this._cachedSize = null;
     }
   }
 
@@ -129,7 +174,7 @@ export default class Tooltip {
 
   /** Render at the configured position. */
   render(ctx) {
-    if (!this._text) return;
+    if (!this._text && !this._title) return;
 
     const { width, height } = this.getSize();
     const x = Math.round(this._x);
@@ -156,15 +201,35 @@ export default class Tooltip {
       ctx.restore();
     }
 
-    // Center the wrapped text inside the panel minus padding.
     const padding = this._padding;
     const innerW = Math.max(1, width - padding * 2);
     const innerH = Math.max(1, height - padding * 2);
-    this._textElement.setStyle({ maxWidth: innerW });
-    this._textElement.rect.x = x + padding;
-    this._textElement.rect.y = y + padding;
-    this._textElement.rect.w = innerW;
-    this._textElement.rect.h = innerH;
-    this._textElement.renderSelf(ctx);
+
+    let bodyY = y + padding;
+    let bodyH = innerH;
+
+    if (this._title) {
+      this._titleElement.setStyle({ maxWidth: innerW });
+      const titleMeasure = this._titleElement.measureText(ctx);
+      const titleH = Math.min(titleMeasure.height, innerH);
+      this._titleElement.rect.x = x + padding;
+      this._titleElement.rect.y = y + padding;
+      this._titleElement.rect.w = innerW;
+      this._titleElement.rect.h = titleH;
+      this._titleElement.renderSelf(ctx);
+
+      const consumed = titleH + this._titleGap;
+      bodyY = y + padding + consumed;
+      bodyH = Math.max(1, innerH - consumed);
+    }
+
+    if (this._text) {
+      this._textElement.setStyle({ maxWidth: innerW });
+      this._textElement.rect.x = x + padding;
+      this._textElement.rect.y = bodyY;
+      this._textElement.rect.w = innerW;
+      this._textElement.rect.h = bodyH;
+      this._textElement.renderSelf(ctx);
+    }
   }
 }
