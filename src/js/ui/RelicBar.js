@@ -115,18 +115,13 @@ export default class RelicBar extends UIContainer {
       this._iconImages.push(img);
       this.addChild(img);
 
-      if (this._tooltipManager) {
-        const lines = [];
-        if (relic.name) lines.push(relic.name);
-        if (relic.description) lines.push(relic.description);
-        if (lines.length > 0) {
-          this._tooltipManager.attach(img, {
-            text: lines.join('\n'),
-            scale: TOOLTIP_SCALE,
-            offset: TOOLTIP_OFFSET,
-            padding: TOOLTIP_PADDING,
-          });
-        }
+      if (this._tooltipManager && relic.description) {
+        this._tooltipManager.attach(img, {
+          text: relic.description,
+          scale: TOOLTIP_SCALE,
+          offset: TOOLTIP_OFFSET,
+          padding: TOOLTIP_PADDING,
+        });
       }
     }
   }
