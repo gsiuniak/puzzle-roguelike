@@ -42,9 +42,9 @@ import Tooltip from '../ui/Tooltip.js';
  *   active and tooltips would render on top of it inappropriately.
  */
 
-export const TOOLTIP_TOUCH_HOLD_MS = 350;
+export const TOOLTIP_TOUCH_HOLD_MS = 200;
 const TOOLTIP_EDGE_MARGIN          = 12;
-const TOOLTIP_DEFAULT_OFFSET       = 20;
+const TOOLTIP_DEFAULT_OFFSET       = 30;
 // Movement (in design-space px) that cancels a pending touch-hold.
 // Real touchscreens emit jitter even on a "stationary" finger: at a typical
 // phone landscape scale (~0.4×), 10 design-px is only ~4 CSS px, which the
@@ -54,7 +54,7 @@ const TOOLTIP_DEFAULT_OFFSET       = 20;
 // work in DevTools). 30 design-px ≈ 12 CSS px on a phone, well clear of
 // jitter but still tighter than the board-swap threshold (~36 design-px)
 // so an intentional swipe still beats it.
-const TOOLTIP_TOUCH_MOVE_CANCEL_PX = 30;
+const TOOLTIP_TOUCH_MOVE_CANCEL_PX = 50;
 
 export default class TooltipManager {
   /**
@@ -252,7 +252,10 @@ export default class TooltipManager {
 
   /**
    * Iterate attachments in reverse (latest-attached wins) and return the
-   * one whose element rect contains (x, y).
+   * one whose element rect (optionally inflated by `options.hitPadding`)
+   * contains (x, y). `hitPadding` is in design-space px and applied to all
+   * four sides; useful for making small icons easier to hit on touch
+   * without changing their visual size.
    * @returns {{element, options}|null}
    */
   _findAttachmentAt(x, y) {
@@ -262,7 +265,9 @@ export default class TooltipManager {
       if (!el || !el.visible) continue;
       const r = el.rect;
       if (!r) continue;
-      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+      const pad = (att.options && att.options.hitPadding) || 0;
+      if (x >= r.x - pad && x <= r.x + r.w + pad &&
+          y >= r.y - pad && y <= r.y + r.h + pad) {
         return att;
       }
     }
