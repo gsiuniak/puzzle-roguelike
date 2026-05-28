@@ -44,7 +44,7 @@ import Tooltip from '../ui/Tooltip.js';
 
 export const TOOLTIP_TOUCH_HOLD_MS = 100;
 const TOOLTIP_EDGE_MARGIN          = 12;
-const TOOLTIP_DEFAULT_OFFSET       = 70;
+const TOOLTIP_DEFAULT_OFFSET       = 100;
 // Movement (in design-space px) that cancels a pending touch-hold.
 // Real touchscreens emit jitter even on a "stationary" finger: at a typical
 // phone landscape scale (~0.4×), 10 design-px is only ~4 CSS px, which the
