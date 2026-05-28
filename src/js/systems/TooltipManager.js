@@ -45,7 +45,16 @@ import Tooltip from '../ui/Tooltip.js';
 export const TOOLTIP_TOUCH_HOLD_MS = 350;
 const TOOLTIP_EDGE_MARGIN          = 12;
 const TOOLTIP_DEFAULT_OFFSET       = 20;
-const TOOLTIP_TOUCH_MOVE_CANCEL_PX = 10;
+// Movement (in design-space px) that cancels a pending touch-hold.
+// Real touchscreens emit jitter even on a "stationary" finger: at a typical
+// phone landscape scale (~0.4×), 10 design-px is only ~4 CSS px, which the
+// finger can wobble through from capacitive noise alone — so the old 10
+// cancelled holds before the 350ms timer fired on actual devices (browser
+// touch emulators don't reproduce the jitter, which is why it appeared to
+// work in DevTools). 30 design-px ≈ 12 CSS px on a phone, well clear of
+// jitter but still tighter than the board-swap threshold (~36 design-px)
+// so an intentional swipe still beats it.
+const TOOLTIP_TOUCH_MOVE_CANCEL_PX = 30;
 
 export default class TooltipManager {
   /**
