@@ -40,13 +40,13 @@ const RELIC_CATALOG = {
   family_crest: {
     id: 'family_crest',
     name: 'Family Crest',
-    description: 'When you take damage, gain 1 red mana.',
+    description: 'When you take damage, gain 2 red mana.',
     icon: 'relic_family_crest',
     effects: [
       {
         trigger: 'onTakeDamage',
         effectType: 'gain_mana',
-        gainMana: { color: 'red', amount: 1 },
+        gainMana: { color: 'red', amount: 2 },
       },
     ],
   },

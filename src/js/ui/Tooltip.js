@@ -13,8 +13,9 @@ import UIText from './UIText.js';
  *   is derived as width / aspect, so the art never stretches.
  *
  * Layout:
- *   - If `title` is set, it's rendered top-aligned inside the padded inner
- *     area. The body text fills the remaining space below (centered).
+ *   - If `title` is set, it's rendered immediately above the body text and
+ *     the combined (title + gap + body) stack is vertically centered inside
+ *     the padded inner area.
  *   - If `title` is empty, the body text fills the entire inner area
  *     (centered, as before).
  *
@@ -209,22 +210,37 @@ export default class Tooltip {
     let bodyH = innerH;
 
     if (this._title) {
+      // Stack title + gap + body and vertically center the whole block
+      // inside the padded inner area. Body is measured at its natural
+      // wrapped height; if the combined stack exceeds innerH, the body
+      // is clamped (UIText clips overflow inside its rect).
       this._titleElement.setStyle({ maxWidth: innerW });
+      this._textElement.setStyle({ maxWidth: innerW });
+
       const titleMeasure = this._titleElement.measureText(ctx);
       const titleH = Math.min(titleMeasure.height, innerH);
+
+      const bodyMeasure = this._text ? this._textElement.measureText(ctx) : { height: 0 };
+      const gap = this._text ? this._titleGap : 0;
+      const naturalBodyH = bodyMeasure.height;
+
+      const remaining = Math.max(0, innerH - titleH - gap);
+      const measuredBodyH = Math.min(naturalBodyH, remaining);
+      const stackH = titleH + gap + measuredBodyH;
+      const stackTop = y + padding + Math.max(0, (innerH - stackH) / 2);
+
       this._titleElement.rect.x = x + padding;
-      this._titleElement.rect.y = y + padding;
+      this._titleElement.rect.y = stackTop;
       this._titleElement.rect.w = innerW;
       this._titleElement.rect.h = titleH;
       this._titleElement.renderSelf(ctx);
 
-      const consumed = titleH + this._titleGap;
-      bodyY = y + padding + consumed;
-      bodyH = Math.max(1, innerH - consumed);
+      bodyY = stackTop + titleH + gap;
+      bodyH = Math.max(1, measuredBodyH);
     }
 
     if (this._text) {
-      this._textElement.setStyle({ maxWidth: innerW });
+      this._textElement.setStyle({ maxWidth: innerW, alignV: this._title ? 'top' : 'center' });
       this._textElement.rect.x = x + padding;
       this._textElement.rect.y = bodyY;
       this._textElement.rect.w = innerW;
