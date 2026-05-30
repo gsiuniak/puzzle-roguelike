@@ -30,7 +30,6 @@
  */
 
 import UIPanel from './UIPanel.js';
-import UIContainer from './UIContainer.js';
 import UIImage from './UIImage.js';
 import UIText from './UIText.js';
 
@@ -66,10 +65,13 @@ const RARITY_COLORS = {
   legendary: '#ffb454',
 };
 
-// ── Divider (same color/thickness as before; horizontally inset for the card) ──
-const DIVIDER_THICKNESS = 1;
-const DIVIDER_COLOR = 'rgba(255, 255, 255, 0.22)';
+// ── Divider (rarity-specific ornate image: reward_divider_<rarity>.png) ──
+/** Margin around the divider image (horizontally inset from the card edges) */
 const DIVIDER_MARGIN = { top: 8, bottom: 10, left: 14, right: 14 };
+/** Rarities that have a dedicated divider asset; others fall back to common */
+const DIVIDER_RARITIES = new Set(['common', 'uncommon', 'rare', 'legendary']);
+/** Fallback width/height ratio if the divider image isn't loaded yet at layout time */
+const DIVIDER_FALLBACK_ASPECT = 12;
 
 /**
  * Shared offscreen 2D context for measuring the wrapped description height
@@ -138,11 +140,12 @@ export default class RewardOptionPanel extends UIPanel {
     });
     this.addChild(this._rarityText);
 
-    // ── Divider ──
-    this._divider = new UIContainer();
+    // ── Divider (rarity-specific ornate image; height set in layoutChildren) ──
+    this._divider = new UIImage('reward_divider_common', this._assetManager);
     this._divider.setStyle({
-      background: DIVIDER_COLOR,
-      height: DIVIDER_THICKNESS,
+      fitMode: 'contain',
+      imageAlignH: 'center',
+      imageAlignV: 'center',
       margin: DIVIDER_MARGIN,
     });
     this.addChild(this._divider);
@@ -191,6 +194,11 @@ export default class RewardOptionPanel extends UIPanel {
       color: RARITY_COLORS[rarity] || RARITY_COLORS.common,
     });
 
+    // Divider image matches the relic's rarity (fallback to common).
+    this._divider.assetKey = DIVIDER_RARITIES.has(rarity)
+      ? `reward_divider_${rarity}`
+      : 'reward_divider_common';
+
     this._descText.setStyle({ text: relicDef.description || '' });
   }
 
@@ -222,6 +230,17 @@ export default class RewardOptionPanel extends UIPanel {
     // Name & rarity span the full content width (centered, single-line).
     this._nameText.setStyle({ maxWidth: Math.floor(contentW) });
     this._rarityText.setStyle({ maxWidth: Math.floor(contentW) });
+
+    // Divider: span the inset width at the image's natural aspect, so its
+    // height (a fixed row in the column layout) matches the scaled art and
+    // leaves no extra vertical gap. 'contain' then fills the width exactly.
+    const dMargin = this._divider._resolveMargin();
+    const dividerW = Math.max(2, contentW - dMargin.left - dMargin.right);
+    const dividerImg = this._assetManager ? this._assetManager.get(this._divider.assetKey) : null;
+    const dividerAspect = (dividerImg && dividerImg.width && dividerImg.height)
+      ? dividerImg.width / dividerImg.height
+      : DIVIDER_FALLBACK_ASPECT;
+    this._divider.height = Math.max(2, Math.round(dividerW / dividerAspect));
 
     // Description is inset from both card edges, wraps to the narrower width.
     const descWrapW = Math.max(10, contentW - DESC_SIDE_PADDING * 2);
