@@ -212,15 +212,24 @@ export default class RewardOptionPanel extends UIPanel {
     this._icon.width = iconSize;
     this._icon.height = iconSize;
 
-    // Pre-compute the text column width (the column flexes to fill the space
-    // left of the icon) so the description can wrap + be measured up front.
+    // Pre-compute the description's actual wrap width so it can be measured
+    // up front. The column flexes to fill the space left of the icon, then
+    // the text column's own padding and the description's own padding further
+    // narrow the usable text width — all must be subtracted or the text wraps
+    // too late and overflows the card on the right.
     const pad = this._resolvePadding();
     const contentW = this.rect.w - pad.left - pad.right;
     const textColW = Math.max(10, contentW - iconSize - COLUMN_GAP);
+    const textColPad = this._textCol._resolvePadding();
+    const descPad = this._descText._resolvePadding();
+    const descWrapW = Math.max(
+      10,
+      textColW - textColPad.left - textColPad.right - descPad.left - descPad.right,
+    );
 
     const ctx = getMeasureCtx();
     if (ctx) {
-      this._descText.setStyle({ maxWidth: Math.floor(textColW) });
+      this._descText.setStyle({ maxWidth: Math.floor(descWrapW) });
       const measured = this._descText.measureText(ctx);
       this._descText.height = Math.max(DESC_FONT_SIZE, Math.ceil(measured.height));
     } else {

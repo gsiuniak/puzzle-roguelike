@@ -257,7 +257,7 @@ const RELIC_CATALOG = {
     name: 'Prism',
     description: 'Gain 1 of each mana when matching 4+ tiles.',
     icon: 'relic_prism',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.RARE,
     effects: [
       { trigger: 'onMatch4Plus', effectType: 'gain_mana', gainMana: { color: 'red', amount: 1 } },
       { trigger: 'onMatch4Plus', effectType: 'gain_mana', gainMana: { color: 'blue', amount: 1 } },
@@ -272,7 +272,7 @@ const RELIC_CATALOG = {
     name: 'Blighted Hook',
     description: 'Drain 1 of each mana from the opponent when matching 4+ tiles.',
     icon: 'relic_blighted_hook',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       // Removes mana from the opponent — the player does not gain it.
       { trigger: 'onMatch4Plus', effectType: 'drain_mana', drainMana: { amount: 1 } },
@@ -284,7 +284,7 @@ const RELIC_CATALOG = {
     name: 'Trebuchet',
     description: 'Deal 1 damage to the opponent when matching 4+ tiles.',
     icon: 'relic_trebuchet',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onMatch4Plus', effectType: 'damage', damage: { amount: 1 } },
     ],
