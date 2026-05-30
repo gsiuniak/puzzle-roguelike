@@ -581,6 +581,23 @@ export default class BoardModel {
   }
 
   /**
+   * Get all board positions whose tile IS of the given type.
+   * @param {string} typeId - the tile type to match
+   * @returns {Array<{col:number, row:number}>}
+   */
+  getTilesOfType(typeId) {
+    const positions = [];
+    for (let x = 0; x < this.cols; x++) {
+      for (let y = 0; y < this.rows; y++) {
+        if (this.grid[x][y] === typeId) {
+          positions.push({ col: x, row: y });
+        }
+      }
+    }
+    return positions;
+  }
+
+  /**
    * Randomly select up to `amount` tiles from an array using Fisher-Yates sampling.
    * Returns a new array; does not mutate the input.
    * @param {Array<{col:number, row:number}>} tiles

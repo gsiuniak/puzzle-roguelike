@@ -102,12 +102,12 @@ const SKILL_CATALOG = {
   summon_dead: {
     id: 'summon_dead',
     name: 'Summon Dead',
-    description: 'Create 10 skulls',
+    description: 'Change all Yellow into Skulls',
     icon: 'skill_summon_dead',
     sound: 'skill_create_skull',
     cost: { purple: 4 },
     effects: [
-      { effectType: 'create_tiles', createTiles: { amount: 10, type: 'skull' } },
+      { effectType: 'convert_tiles_by_type', convertByType: { from: 'yellow', to: 'skull' } },
     ],
   },
   oungan: {

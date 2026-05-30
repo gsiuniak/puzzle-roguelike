@@ -884,6 +884,53 @@ export default class BattleController {
     }
   }
 
+  /**
+   * Execute a CONVERT_TILES_BY_TYPE effect: convert EVERY tile of one type
+   * (`convertByType.from`) into another type (`convertByType.to`) across the
+   * whole board. Does NOT award mana or deal damage directly. After conversion,
+   * checks for matches and enters RESOLVING if any are found (so converting to
+   * skulls can immediately cascade and deal skull damage).
+   * @param {object} effect - effect with convertByType: { from, to }
+   * @param {string} side - 'player' or 'enemy'
+   * @param {string} skillName - skill name for log messages
+   */
+  _executeConvertTilesByType(effect, side, skillName) {
+    const cfg = effect.convertByType;
+    if (!cfg || !cfg.from || !cfg.to) {
+      console.warn('[CONVERT_TILES_BY_TYPE] Missing convertByType.from/to on effect:', effect);
+      return;
+    }
+    const fromType = cfg.from;
+    const toType = cfg.to;
+    if (!TILE_TYPES[String(fromType).toUpperCase()] || !TILE_TYPES[String(toType).toUpperCase()]) {
+      console.warn(`[CONVERT_TILES_BY_TYPE] Unknown tile type from="${fromType}" to="${toType}". Skipping.`);
+      return;
+    }
+
+    const positions = this.board.getTilesOfType(fromType);
+    if (positions.length === 0) {
+      this.log.add(`${skillName}: no ${fromType} tiles to convert.`);
+      return;
+    }
+
+    const convertedCount = this.board.convertTilesToType(positions, toType);
+    this.log.add(`${skillName} converts ${convertedCount} ${fromType} tile(s) to ${toType}.`);
+
+    // Capture converted positions for visual feedback (BEFORE _beginResolving
+    // clears highlightCells), same as CREATE_TILES / CONVERT_TILE.
+    this._convertedTilePositions = positions.slice(0, convertedCount).map(p => ({
+      col: p.col, row: p.row, typeId: toType,
+    }));
+
+    // If the conversion created matches, run the standard cascade.
+    const activeState = side === 'player' ? this.playerState : this.enemyState;
+    const analysis = this.resolver.analyzeMatches(this.board, activeState);
+    if (analysis) {
+      this._swapTriggerPos = null;
+      this._beginResolving(side, analysis);
+    }
+  }
+
   // ── Resolution ────────────────────────────────────────
 
   _beginResolving(side, firstAnalysis) {
@@ -1496,6 +1543,11 @@ export default class BattleController {
 
       case SKILL_EFFECT_TYPES.CREATE_TILES: {
         this._executeCreateTiles(effect, side, skill.name);
+        return this.state === BattleState.RESOLVING;
+      }
+
+      case SKILL_EFFECT_TYPES.CONVERT_TILES_BY_TYPE: {
+        this._executeConvertTilesByType(effect, side, skill.name);
         return this.state === BattleState.RESOLVING;
       }
 
