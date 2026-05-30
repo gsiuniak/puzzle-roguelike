@@ -7,10 +7,12 @@
  * map overlay — so the battle stays visible but darkened underneath.
  *
  * Visual layering (this overlay, drawn after the backdrop):
- *   1. Primary rewards panel (reward_screen_panel art), centered
- *   2. "Choose a Relic" header text near the top of the panel
- *   3. Three vertically-stacked RewardOptionPanel cards inside the panel
- *   4. A small, centered "Skip Rewards" button BELOW the panel
+ *   1. "Choose a Relic" title banner (rewards_title_panel art) centered at top
+ *   2. Three side-by-side vertical RewardOptionPanel cards below the title
+ *   3. A small, centered "Skip Rewards" button BELOW the cards row
+ *
+ * The whole group (title + cards + skip) floats over the darkened battle scene
+ * — there is no large background panel framing it.
  *
  * Data flow:
  *   prepareRewards(relicDefs) — assign relic defs to the option cards (called
@@ -23,7 +25,6 @@
  * Lifecycle / states unchanged from before (INACTIVE/ENTERING/ACTIVE/EXITING).
  */
 
-import UIContainer from './UIContainer.js';
 import UIImage from './UIImage.js';
 import RewardOptionPanel from './RewardOptionPanel.js';
 import AudioManager from '../audio/AudioManager.js';
@@ -35,43 +36,36 @@ import AudioManager from '../audio/AudioManager.js';
 /** Alpha of the full-canvas dark backdrop (matches the map overlay feel) */
 export const OVERLAY_BACKDROP_ALPHA = 0.78;
 
-/** Maximum fraction of canvas width the reward panel occupies */
-const PANEL_MAX_WIDTH_FRAC = 0.5;
-/** Maximum fraction of canvas height the reward panel occupies */
-const PANEL_MAX_HEIGHT_FRAC = 0.82;
+// ── Reward cards (three vertical panels in a row) ──────────
+/** Card height as a fraction of canvas height (width derives from art aspect) */
+const CARD_HEIGHT_FRAC = 0.60;
+/** Horizontal spacing between the three vertical cards (px) */
+const CARD_SPACING = 26;
 
 /**
- * Vertical offset for the main panel from the canvas center.
- * Negative shifts the panel UP to leave room for the skip button below.
+ * Vertical offset of the whole reward group (title + cards + skip) from the
+ * canvas center. Negative nudges everything UP. Easy to tweak.
  */
-const MAIN_PANEL_Y_OFFSET = -24;
+const GROUP_Y_OFFSET = -8;
 
-/**
- * Inner padding of the primary panel as FRACTIONS of its rendered size.
- * Top padding clears the ornate header banner; sides/bottom inset the option
- * cards inside the frame art.
- */
-const PANEL_PADDING_FRAC = { top: 0.165, right: 0.085, bottom: 0.075, left: 0.085 };
+// ── Title panel ("Choose a Relic") ─────────────────────────
+/** Title banner width as a fraction of canvas width (height derives from aspect) */
+const TITLE_PANEL_WIDTH_FRAC = 0.30;
+/** Gap between the title panel bottom and the top of the cards row (px) */
+const TITLE_GAP_BELOW = 20;
+/** Header text fine-tune offset within the title panel (px, +down) */
+const TITLE_TEXT_Y_OFFSET = -2;
 
-/** Gap between stacked reward option cards (px) */
-const REWARD_OPTION_SPACING = 12;
-
-// ── Header ("Choose a Relic") ──────────────────────────────
 const HEADER_TEXT = 'Choose a Relic';
-/** Header baseline Y as a fraction of panel height from the panel top */
-const HEADER_Y_FRAC = 0.092;
 const HEADER_FONT_SIZE = 30;
 const HEADER_COLOR = '#ccaa77';
 const HEADER_FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
-// ── Skip Rewards button (below the panel) ──────────────────
-/**
- * Vertical offset of the skip button below the bottom edge of the panel (px).
- * Easy to tweak to nudge the button up/down.
- */
-const SKIP_REWARDS_BUTTON_Y_OFFSET = 12;
-/** Skip button width as a fraction of the panel width */
-const SKIP_BUTTON_WIDTH_FRAC = 0.34;
+// ── Skip Rewards button (below the cards row) ──────────────
+/** Vertical gap between the cards row bottom and the skip button (px) */
+const SKIP_REWARDS_BUTTON_Y_OFFSET = 18;
+/** Skip button width as a fraction of canvas width */
+const SKIP_BUTTON_WIDTH_FRAC = 0.16;
 /** Fallback skip button height if the asset has no intrinsic size */
 const SKIP_BUTTON_FALLBACK_HEIGHT = 46;
 
@@ -137,12 +131,10 @@ export default class RewardOverlay {
     /** Guard: prevents double-select / double-transition. */
     this._isResolvingReward = false;
 
-    // ── UI tree references (built once) ──
-    /** @type {UIContainer} primary panel container — parent of the option cards */
-    this._primaryPanel = null;
-    /** @type {RewardOptionPanel[]} reward option cards */
+    // ── UI tree references (built once; positioned manually each render) ──
+    /** @type {RewardOptionPanel[]} reward option cards (laid out in a row) */
     this._rewardOptions = [];
-    /** @type {UIImage} skip rewards button (positioned manually below the panel) */
+    /** @type {UIImage} skip rewards button (positioned manually below the row) */
     this._skipButton = null;
 
     this._buildHierarchy();
@@ -359,8 +351,11 @@ export default class RewardOverlay {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Draw the reward overlay (panel + options + header + skip button) on top
-   * of the battle scene. The dark backdrop is painted by BattleScene.
+   * Draw the reward overlay (title banner + three vertical cards + skip button)
+   * on top of the battle scene. The dark backdrop is painted by BattleScene.
+   *
+   * Layout: the whole group (title → cards row → skip) is measured, then
+   * vertically centered (with GROUP_Y_OFFSET) and each piece positioned within.
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} canvasW
@@ -379,43 +374,61 @@ export default class RewardOverlay {
       containerSlideY = (1 - easedT) * canvasH * OVERLAY_SLIDE_FRACTION;
     }
 
-    const panelImg = this._assetManager ? this._assetManager.get('reward_screen_panel') : null;
-    if (!panelImg || !panelImg.width || !panelImg.height) return;
+    const cardImg = this._assetManager
+      ? this._assetManager.get('rewards_option_panel_vertical')
+      : null;
+    if (!cardImg || !cardImg.width || !cardImg.height) return;
 
     ctx.save();
     ctx.globalAlpha = overlayAlpha;
 
-    // ── Panel dimensions from image aspect, clamped to max fractions ──
-    const maxW = canvasW * PANEL_MAX_WIDTH_FRAC;
-    const maxH = canvasH * PANEL_MAX_HEIGHT_FRAC;
-    const imgAspect = panelImg.width / panelImg.height;
+    // ── Card dimensions from the vertical card art aspect ──
+    const cardH = canvasH * CARD_HEIGHT_FRAC;
+    const cardW = cardH * (cardImg.width / cardImg.height);
+    const rowW = cardW * 3 + CARD_SPACING * 2;
 
-    let panelW, panelH;
-    if (maxW / maxH > imgAspect) {
-      panelH = maxH;
-      panelW = panelH * imgAspect;
-    } else {
-      panelW = maxW;
-      panelH = panelW / imgAspect;
+    // ── Title banner dimensions from the title art aspect ──
+    const titleImg = this._assetManager ? this._assetManager.get('rewards_title_panel') : null;
+    let titleW = 0;
+    let titleH = 0;
+    if (titleImg && titleImg.width && titleImg.height) {
+      titleW = canvasW * TITLE_PANEL_WIDTH_FRAC;
+      titleH = titleW * (titleImg.height / titleImg.width);
     }
 
-    const panelX = Math.floor((canvasW - panelW) / 2);
-    const panelY = Math.floor((canvasH - panelH) / 2) + MAIN_PANEL_Y_OFFSET + containerSlideY;
+    // ── Skip button dimensions ──
+    const skipImg = this._skipButton && this._assetManager
+      ? this._assetManager.get(this._skipButton.assetKey)
+      : null;
+    const skipW = canvasW * SKIP_BUTTON_WIDTH_FRAC;
+    const skipH = (skipImg && skipImg.width && skipImg.height)
+      ? skipW * (skipImg.height / skipImg.width)
+      : SKIP_BUTTON_FALLBACK_HEIGHT;
 
-    // ── Panel background art ──
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(panelImg, panelX, panelY, Math.ceil(panelW), Math.ceil(panelH));
-    ctx.restore();
+    // ── Vertically center the whole group ──
+    const groupH = titleH + TITLE_GAP_BELOW + cardH + SKIP_REWARDS_BUTTON_Y_OFFSET + skipH;
+    const groupTop = (canvasH - groupH) / 2 + GROUP_Y_OFFSET + containerSlideY;
 
-    // ── Header text ──
-    this._renderHeader(ctx, panelX, panelY, panelW, panelH);
+    const titleX = (canvasW - titleW) / 2;
+    const titleY = groupTop;
+    const cardsTop = titleY + titleH + TITLE_GAP_BELOW;
+    const rowX = (canvasW - rowW) / 2;
+    const skipY = cardsTop + cardH + SKIP_REWARDS_BUTTON_Y_OFFSET;
 
-    // ── Option cards inside the panel ──
-    this._renderPanelChildren(ctx, panelX, panelY, panelW, panelH);
+    // ── Title banner + header text ──
+    if (titleImg && titleW > 0) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(titleImg, Math.floor(titleX), Math.floor(titleY), Math.ceil(titleW), Math.ceil(titleH));
+      ctx.restore();
+    }
+    this._renderHeader(ctx, canvasW, titleY, titleH);
 
-    // ── Skip button below the panel ──
-    this._renderSkipButton(ctx, panelX, panelY, panelW, panelH);
+    // ── Three vertical reward cards in a row ──
+    this._renderCards(ctx, rowX, cardsTop, cardW, cardH);
+
+    // ── Skip button below the cards row ──
+    this._renderSkipButton(ctx, canvasW, skipY, skipW, skipH);
 
     ctx.restore(); // globalAlpha
   }
@@ -425,26 +438,16 @@ export default class RewardOverlay {
   // ═══════════════════════════════════════════════════════════
 
   /**
-   * Build the UI tree:
-   *   primaryPanel (column) → RewardOptionPanel × 3
-   *   skipButton (standalone, positioned below the panel)
+   * Build the UI tree (all elements positioned manually each render):
+   *   RewardOptionPanel × 3 (laid out side-by-side in a row)
+   *   skipButton (standalone, positioned below the row)
    */
   _buildHierarchy() {
-    this._primaryPanel = new UIContainer();
-    this._primaryPanel.setStyle({
-      direction: 'column',
-      alignItems: 'stretch',
-      justifyContent: 'center',
-      gap: REWARD_OPTION_SPACING,
-      // padding set dynamically (fractions of panel size) in _renderPanelChildren
-    });
-
     this._rewardOptions = [];
     for (let i = 0; i < 3; i++) {
       const option = new RewardOptionPanel(this._assetManager);
       option.userData.rewardIndex = i;
       this._rewardOptions.push(option);
-      this._primaryPanel.addChild(option);
     }
 
     this._skipButton = new UIImage('rewards_button_skip', this._assetManager);
@@ -460,8 +463,11 @@ export default class RewardOverlay {
   // Private: render helpers
   // ═══════════════════════════════════════════════════════════
 
-  /** Draw the "Choose a Relic" header centered near the panel top. */
-  _renderHeader(ctx, panelX, panelY, panelW, panelH) {
+  /** Draw the "Choose a Relic" header centered inside the title banner. */
+  _renderHeader(ctx, canvasW, titleY, titleH) {
+    const cy = titleH > 0
+      ? titleY + titleH / 2 + TITLE_TEXT_Y_OFFSET
+      : titleY + HEADER_FONT_SIZE / 2 + TITLE_TEXT_Y_OFFSET;
     ctx.save();
     ctx.font = `${HEADER_FONT_SIZE}px ${HEADER_FONT_FAMILY}`;
     ctx.fillStyle = HEADER_COLOR;
@@ -470,27 +476,27 @@ export default class RewardOverlay {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetY = 1;
-    ctx.fillText(HEADER_TEXT, panelX + panelW / 2, panelY + panelH * HEADER_Y_FRAC);
+    ctx.fillText(HEADER_TEXT, canvasW / 2, cy);
     ctx.restore();
   }
 
   /**
-   * Lay out and render the stacked reward option cards inside the panel,
-   * applying a subtle scale + border highlight to the hovered card.
+   * Lay out the three vertical reward cards side-by-side starting at (rowX,
+   * cardsTop), then render them — applying a subtle scale + border highlight
+   * to the hovered card (drawn last so it sits on top of its neighbours).
    */
-  _renderPanelChildren(ctx, panelX, panelY, panelW, panelH) {
-    // Position + size the primary panel to the panel art's inner content area.
-    this._primaryPanel.padding = {
-      top: panelH * PANEL_PADDING_FRAC.top,
-      right: panelW * PANEL_PADDING_FRAC.right,
-      bottom: panelH * PANEL_PADDING_FRAC.bottom,
-      left: panelW * PANEL_PADDING_FRAC.left,
-    };
-    this._primaryPanel.rect.x = panelX;
-    this._primaryPanel.rect.y = panelY;
-    this._primaryPanel.rect.w = panelW;
-    this._primaryPanel.rect.h = panelH;
-    this._primaryPanel.layoutChildren();
+  _renderCards(ctx, rowX, cardsTop, cardW, cardH) {
+    // Position + size each card, then lay out its children.
+    let x = rowX;
+    for (let i = 0; i < this._rewardOptions.length; i++) {
+      const opt = this._rewardOptions[i];
+      opt.rect.x = Math.floor(x);
+      opt.rect.y = Math.floor(cardsTop);
+      opt.rect.w = cardW;
+      opt.rect.h = cardH;
+      opt.layoutChildren();
+      x += cardW + CARD_SPACING;
+    }
 
     const hoverIndex = this._hoveredRewardIndex;
     const currentScale = 1 + (HOVER_SCALE - 1) * this._hoverAnimT;
@@ -551,21 +557,14 @@ export default class RewardOverlay {
     ctx.restore();
   }
 
-  /** Position + render the Skip Rewards button centered below the panel. */
-  _renderSkipButton(ctx, panelX, panelY, panelW, panelH) {
+  /** Position + render the Skip Rewards button centered below the cards row. */
+  _renderSkipButton(ctx, canvasW, skipY, skipW, skipH) {
     if (!this._skipButton) return;
 
-    const btnW = panelW * SKIP_BUTTON_WIDTH_FRAC;
-    let btnH = SKIP_BUTTON_FALLBACK_HEIGHT;
-    const img = this._assetManager ? this._assetManager.get(this._skipButton.assetKey) : null;
-    if (img && img.width && img.height) {
-      btnH = btnW * (img.height / img.width);
-    }
-
-    this._skipButton.rect.x = Math.floor(panelX + (panelW - btnW) / 2);
-    this._skipButton.rect.y = Math.floor(panelY + panelH + SKIP_REWARDS_BUTTON_Y_OFFSET);
-    this._skipButton.rect.w = btnW;
-    this._skipButton.rect.h = btnH;
+    this._skipButton.rect.x = Math.floor((canvasW - skipW) / 2);
+    this._skipButton.rect.y = Math.floor(skipY);
+    this._skipButton.rect.w = skipW;
+    this._skipButton.rect.h = skipH;
     this._skipButton.render(ctx);
   }
 }

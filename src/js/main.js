@@ -101,6 +101,8 @@ const ASSET_MAP = {
   reward_screen_panel: 'assets/sprites/reward_screen/rewards_panel.png',
   reward_victory_text:      'assets/sprites/reward_screen/rewards_victory_text.png',
   rewards_option_panel:     'assets/sprites/reward_screen/rewards_option_panel.png',
+  rewards_option_panel_vertical: 'assets/sprites/reward_screen/rewards_option_panel_vertical.png',
+  rewards_title_panel:      'assets/sprites/reward_screen/rewards_title_panel.png',
   rewards_button_confirm:        'assets/sprites/reward_screen/rewards_button_confirm.png',
   rewards_button_confirm_hover:  'assets/sprites/reward_screen/rewards_button_confirm_hover.png',
   rewards_button_skip:           'assets/sprites/reward_screen/rewards_button_skip.png',

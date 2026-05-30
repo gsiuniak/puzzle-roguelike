@@ -1,25 +1,29 @@
 /**
  * RewardOptionPanel — a single, reusable post-battle relic reward option.
  *
- * A horizontal two-column card backed by the `rewards_option_panel` art:
+ * A TALL VERTICAL card backed by the `rewards_option_panel_vertical` art.
+ * Content flows top-to-bottom, all centered:
  *
- *   [ relic icon ] | Relic Name
- *                  | Rarity
- *                  | ────────────────  (divider)
- *                  | Multiline description...
+ *   ┌──────────────┐
+ *   │              │
+ *   │   [ icon ]   │   large, prominent, upper portion
+ *   │              │
+ *   │  Relic Name  │   centered
+ *   │    Rarity    │   centered, rarity-colored
+ *   │  ──────────  │   divider
+ *   │ Multiline    │   centered, wrapped description
+ *   │ description  │
+ *   └──────────────┘
  *
  * It is a real container (UIPanel) — not a flat image — so it owns its icon
  * and text children and can carry hover/selection state. Data-driven via
  * setRelic(relicDef); every visible value comes from the relic definition.
  *
  * Layout notes:
- *   - The icon is sized from the card's height each layout pass so all rows
+ *   - The icon is sized from the card's WIDTH each layout pass so all cards
  *     stay visually consistent regardless of how the parent distributes space.
  *   - The description's wrapped height is measured each layout pass and used
- *     as a fixed height, so the name/rarity/divider/description block is a
- *     compact unit that the text column vertically centers (justifyContent
- *     'center') rather than being pinned to the top by a flex-grow row.
- *   - The divider is a thin full-width container between rarity and desc.
+ *     as a fixed height so text doesn't overflow the card.
  *
  * Hit-testing returns the panel itself (children don't intercept) so the
  * RewardOverlay can map a hit straight to the option index.
@@ -31,21 +35,25 @@ import UIImage from './UIImage.js';
 import UIText from './UIText.js';
 
 // ── Tunable layout constants ───────────────────────────────
-/** Icon size as a fraction of the option card's height */
-const ICON_HEIGHT_FRAC = 0.8;
-/** Hard cap on icon width as a fraction of the card's width */
-const ICON_MAX_WIDTH_FRAC = 0.24;
-/** Inner padding of the option card */
-const OPTION_PADDING = { top: 10, right: 18, bottom: 10, left: 16 };
-/** Gap between the icon column and the text column */
-const COLUMN_GAP = 14;
-/** Vertical gap between stacked text rows */
+/** Icon size as a fraction of the card's WIDTH (square, contain-fit) */
+const ICON_WIDTH_FRAC = 0.62;
+/** Hard cap on icon size as a fraction of the card's height */
+const ICON_MAX_HEIGHT_FRAC = 0.34;
+/** Inner padding of the option card (clears the ornate frame art) */
+const OPTION_PADDING = { top: 26, right: 22, bottom: 28, left: 22 };
+/** Top margin above the icon, as a fraction of card height (pushes icon down from the frame) */
+const ICON_TOP_MARGIN_FRAC = 0.04;
+/** Gap between the icon and the name row (px) */
+const ICON_TO_NAME_GAP = 18;
+/** Vertical gap between stacked text rows (px) */
 const TEXT_ROW_GAP = 2;
+/** Horizontal inset of the description text from the card's content edges (px) */
+const DESC_SIDE_PADDING = 18;
 
-// ── Text styling ───────────────────────────────────────────
-const NAME_FONT_SIZE = 28;
-const RARITY_FONT_SIZE = 20;
-const DESC_FONT_SIZE = 18;
+// ── Text styling (unchanged colors/typography from prior implementation) ──
+const NAME_FONT_SIZE = 38;
+const RARITY_FONT_SIZE = 24;
+const DESC_FONT_SIZE = 22;
 const NAME_COLOR = '#e8d8b0';
 const DESC_COLOR = '#c0b890';
 
@@ -58,10 +66,10 @@ const RARITY_COLORS = {
   legendary: '#ffb454',
 };
 
-// ── Divider ────────────────────────────────────────────────
+// ── Divider (same color/thickness as before; horizontally inset for the card) ──
 const DIVIDER_THICKNESS = 1;
 const DIVIDER_COLOR = 'rgba(255, 255, 255, 0.22)';
-const DIVIDER_MARGIN = { top: 5, bottom: 6 };
+const DIVIDER_MARGIN = { top: 8, bottom: 10, left: 14, right: 14 };
 
 /**
  * Shared offscreen 2D context for measuring the wrapped description height
@@ -87,81 +95,69 @@ export default class RewardOptionPanel extends UIPanel {
     this._relic = null;
 
     this.setStyle({
-      backgroundAssetKey: 'rewards_option_panel',
+      backgroundAssetKey: 'rewards_option_panel_vertical',
       assetManager: this._assetManager,
-      direction: 'row',
-      alignItems: 'center',
-      gap: COLUMN_GAP,
+      direction: 'column',
+      alignItems: 'stretch',
+      justifyContent: 'start',
+      gap: TEXT_ROW_GAP,
       padding: OPTION_PADDING,
     });
 
-    // ── Left column: relic icon ──
+    // ── Icon (top, large, centered) ──
     this._icon = new UIImage('', this._assetManager);
     this._icon.setStyle({
       fitMode: 'contain',
       imageAlignH: 'center',
       imageAlignV: 'center',
-      alignSelfV: 'center',
-      padding: { left: 10 }
+      alignSelfH: 'center',
     });
     this.addChild(this._icon);
 
-    // ── Right column: stacked text content (vertically centered) ──
-    this._textCol = new UIContainer();
-    this._textCol.setStyle({
-      direction: 'column',
-      alignItems: 'stretch',
-      justifyContent: 'center',
-      flexGrow: 1,
-      gap: TEXT_ROW_GAP,
-      padding: { left: 20, right: 20 }
-    });
-    this.addChild(this._textCol);
-
+    // ── Name (centered) ──
     this._nameText = new UIText('');
     this._nameText.setStyle({
       fontSize: NAME_FONT_SIZE,
       bold: true,
       color: NAME_COLOR,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'center',
       height: Math.round(NAME_FONT_SIZE * 1.3),
+      margin: { top: ICON_TO_NAME_GAP },
     });
-    this._textCol.addChild(this._nameText);
+    this.addChild(this._nameText);
 
+    // ── Rarity (centered, beneath name) ──
     this._rarityText = new UIText('');
     this._rarityText.setStyle({
       fontSize: RARITY_FONT_SIZE,
       color: RARITY_COLORS.common,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'center',
       height: Math.round(RARITY_FONT_SIZE * 1.35),
     });
-    this._textCol.addChild(this._rarityText);
+    this.addChild(this._rarityText);
 
+    // ── Divider ──
     this._divider = new UIContainer();
     this._divider.setStyle({
       background: DIVIDER_COLOR,
       height: DIVIDER_THICKNESS,
       margin: DIVIDER_MARGIN,
     });
-    this._textCol.addChild(this._divider);
+    this.addChild(this._divider);
 
-    // Description uses a FIXED (measured) height — not flexGrow — so the
-    // whole text block stays a compact unit that justifyContent 'center'
-    // can vertically center within the card. Height is measured each layout.
+    // ── Description (centered, wrapped). Height measured each layout pass. ──
     this._descText = new UIText('');
     this._descText.setStyle({
       fontSize: DESC_FONT_SIZE,
       color: DESC_COLOR,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'top',
       height: Math.round(DESC_FONT_SIZE * 1.3),
-      lineHeight: Math.round(DESC_FONT_SIZE * 1.3),
-      margin: { top: 5 },
-      padding: { right: 10 }
+      lineHeight: Math.round(DESC_FONT_SIZE * 1.4),
     });
-    this._textCol.addChild(this._descText);
+    this.addChild(this._descText);
 
     this.userData = { relic: null };
   }
@@ -199,37 +195,41 @@ export default class RewardOptionPanel extends UIPanel {
   }
 
   /**
-   * Size the icon from the card's current dimensions, then measure the
-   * wrapped description height and give it a fixed height — BEFORE running
-   * the row/column layout — so the text column (justifyContent 'center')
-   * vertically centers the whole name/rarity/divider/description block.
+   * Size the icon from the card's current width, give it a top margin to sit
+   * in the upper portion, then measure the wrapped description height — BEFORE
+   * running the column layout — so the stacked rows lay out without overflow.
+   *
+   * IMPORTANT: every text row must be given an explicit `maxWidth` here. The
+   * column layout clamps each child's width to `Math.min(child.maxWidth, …)`,
+   * and `UIText` defaults `maxWidth` to 0 ("single line, no wrap") — which the
+   * layout would read as a 0-px width cap, collapsing the row and making
+   * `alignH:'center'` center the text on the card's left edge. Setting maxWidth
+   * to the available width both gives the row full width (so centering works)
+   * and acts as the wrap width (short names/rarity never wrap).
    */
   layoutChildren() {
     const iconSize = Math.max(
       8,
-      Math.min(this.rect.h * ICON_HEIGHT_FRAC, this.rect.w * ICON_MAX_WIDTH_FRAC),
+      Math.min(this.rect.w * ICON_WIDTH_FRAC, this.rect.h * ICON_MAX_HEIGHT_FRAC),
     );
     this._icon.width = iconSize;
     this._icon.height = iconSize;
+    this._icon.margin = { top: this.rect.h * ICON_TOP_MARGIN_FRAC };
 
-    // Pre-compute the description's actual wrap width so it can be measured
-    // up front. The column flexes to fill the space left of the icon, then
-    // the text column's own padding and the description's own padding further
-    // narrow the usable text width — all must be subtracted or the text wraps
-    // too late and overflows the card on the right.
     const pad = this._resolvePadding();
-    const contentW = this.rect.w - pad.left - pad.right;
-    const textColW = Math.max(10, contentW - iconSize - COLUMN_GAP);
-    const textColPad = this._textCol._resolvePadding();
-    const descPad = this._descText._resolvePadding();
-    const descWrapW = Math.max(
-      10,
-      textColW - textColPad.left - textColPad.right - descPad.left - descPad.right,
-    );
+    const contentW = Math.max(10, this.rect.w - pad.left - pad.right);
+
+    // Name & rarity span the full content width (centered, single-line).
+    this._nameText.setStyle({ maxWidth: Math.floor(contentW) });
+    this._rarityText.setStyle({ maxWidth: Math.floor(contentW) });
+
+    // Description is inset from both card edges, wraps to the narrower width.
+    const descWrapW = Math.max(10, contentW - DESC_SIDE_PADDING * 2);
+    this._descText.margin = { left: DESC_SIDE_PADDING, right: DESC_SIDE_PADDING };
+    this._descText.setStyle({ maxWidth: Math.floor(descWrapW) });
 
     const ctx = getMeasureCtx();
     if (ctx) {
-      this._descText.setStyle({ maxWidth: Math.floor(descWrapW) });
       const measured = this._descText.measureText(ctx);
       this._descText.height = Math.max(DESC_FONT_SIZE, Math.ceil(measured.height));
     } else {
