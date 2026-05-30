@@ -53,11 +53,17 @@ const GROUP_Y_OFFSET = -8;
 const TITLE_PANEL_WIDTH_FRAC = 0.30;
 /** Gap between the title panel bottom and the top of the cards row (px) */
 const TITLE_GAP_BELOW = 20;
-/** Header text fine-tune offset within the title panel (px, +down) */
-const TITLE_TEXT_Y_OFFSET = -2;
+/**
+ * Vertical center of the header text as a FRACTION of the banner height.
+ * The banner art's diamond ornament pokes above the frame, so the dark text
+ * band sits BELOW the image's geometric center (0.5) — hence > 0.5 here.
+ */
+const TITLE_TEXT_CENTER_FRAC = 0.56;
+/** Additional header text fine-tune offset within the title panel (px, +down) */
+const TITLE_TEXT_Y_OFFSET = 5;
 
 const HEADER_TEXT = 'Choose a Relic';
-const HEADER_FONT_SIZE = 30;
+const HEADER_FONT_SIZE = 40;
 const HEADER_COLOR = '#ccaa77';
 const HEADER_FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
@@ -466,7 +472,7 @@ export default class RewardOverlay {
   /** Draw the "Choose a Relic" header centered inside the title banner. */
   _renderHeader(ctx, canvasW, titleY, titleH) {
     const cy = titleH > 0
-      ? titleY + titleH / 2 + TITLE_TEXT_Y_OFFSET
+      ? titleY + titleH * TITLE_TEXT_CENTER_FRAC + TITLE_TEXT_Y_OFFSET
       : titleY + HEADER_FONT_SIZE / 2 + TITLE_TEXT_Y_OFFSET;
     ctx.save();
     ctx.font = `${HEADER_FONT_SIZE}px ${HEADER_FONT_FAMILY}`;
