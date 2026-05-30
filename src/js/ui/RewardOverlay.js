@@ -241,6 +241,10 @@ export default class RewardOverlay {
     if (this._isResolvingReward) return;
     if (!relicDefinition) return;
 
+    // Relic-pick confirmation sound (only on choosing a relic, not skip/ESC).
+    // Reuses the map node-selection sound for a consistent "commit" cue.
+    AudioManager.playSfx('sfx_map_click_node');
+
     // ── Future reward-granting logic belongs here (see doc above). ──
     if (typeof this.onRelicSelected === 'function') {
       this.onRelicSelected(relicDefinition, rewardIndex);
