@@ -43,8 +43,8 @@ const TEXT_ROW_GAP = 2;
 const NAME_FONT_SIZE = 22;
 const RARITY_FONT_SIZE = 15;
 const DESC_FONT_SIZE = 16;
-const NAME_COLOR = '#f1e6cb';
-const DESC_COLOR = '#cdcdcd';
+const NAME_COLOR = '#e8d8b0';
+const DESC_COLOR = '#c0b890';
 
 /** Rarity → label color. Future: may also drive borders/glow. */
 const RARITY_COLORS = {

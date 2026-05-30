@@ -1013,10 +1013,16 @@ export default class BattleScene extends UIPanel {
       if (this._gameOverTimer >= this._gameOverDelay && !this._rewardOverlayShown) {
         this._rewardOverlayShown = true;
         if (this._rewardOverlay) {
-          // Populate the reward options from the relic pool (excludes starter
-          // relics + relics already owned in the run), then show the overlay.
+          // Relic rewards are only offered on victory. On defeat the overlay
+          // still appears (it drives the return-to-map transition) but with
+          // no reward options — just the Skip button.
+          const isVictory = this._battleController
+            ? this._battleController._winner() === 'player'
+            : false;
           const runState = this.userData ? this.userData.runState : null;
-          const rewardRelics = generateRelicRewardOptions({ count: 3, playerRunState: runState });
+          const rewardRelics = isVictory
+            ? generateRelicRewardOptions({ count: 3, playerRunState: runState })
+            : [];
           this._rewardOverlay.prepareRewards(rewardRelics);
           this._rewardOverlay.show();
         }

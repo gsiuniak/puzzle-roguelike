@@ -61,7 +61,7 @@ const HEADER_TEXT = 'Choose a Relic';
 /** Header baseline Y as a fraction of panel height from the panel top */
 const HEADER_Y_FRAC = 0.092;
 const HEADER_FONT_SIZE = 30;
-const HEADER_COLOR = '#f3e7c8';
+const HEADER_COLOR = '#ccaa77';
 const HEADER_FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
 // ── Skip Rewards button (below the panel) ──────────────────
