@@ -25,12 +25,15 @@
  *   }
  */
 
+import { MANA_COLORS } from '../game/TileTypes.js';
+
 /** Effect type vocabulary supported by EffectResolver (atomic effects only). */
 export const EFFECT_TYPES = {
   DAMAGE:        'damage',
   ARMOR:         'armor',
   HEAL:          'heal',
   GAIN_MANA:     'gain_mana',
+  DRAIN_MANA:    'drain_mana',
   EXTRA_TURN:    'extra_turn',
   REDUCE_DAMAGE: 'reduce_damage',
 };
@@ -101,6 +104,28 @@ export function applyEffect(effect, ctx) {
       if (!caster.mana) caster.mana = {};
       caster.mana[color] = (caster.mana[color] || 0) + amount;
       if (log) log.add(`${caster.name} gains ${amount} ${color} mana.`);
+      return true;
+    }
+
+    case EFFECT_TYPES.DRAIN_MANA: {
+      // Removes mana from the OPPONENT (ctx.target). The caster does NOT
+      // gain it — the opponent simply loses it. `color` is optional; when
+      // omitted, drains `amount` of EVERY mana color (e.g. Blighted Hook).
+      if (!target) return true;
+      const dm = effect.drainMana || {};
+      const amount = typeof dm.amount === 'number' ? dm.amount : 1;
+      if (amount <= 0) return true;
+      if (!target.mana) target.mana = {};
+      const colors = dm.color ? [dm.color] : MANA_COLORS;
+      let totalDrained = 0;
+      for (const color of colors) {
+        const before = target.mana[color] || 0;
+        target.mana[color] = Math.max(0, before - amount);
+        totalDrained += before - target.mana[color];
+      }
+      if (log && totalDrained > 0) {
+        log.add(`${target.name} is drained of ${totalDrained} mana.`);
+      }
       return true;
     }
 

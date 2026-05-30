@@ -267,6 +267,18 @@ const RELIC_CATALOG = {
     ],
   },
 
+  blighted_hook: {
+    id: 'blighted_hook',
+    name: 'Blighted Hook',
+    description: 'Drain 1 of each mana from the opponent when matching 4+ tiles.',
+    icon: 'relic_blighted_hook',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      // Removes mana from the opponent — the player does not gain it.
+      { trigger: 'onMatch4Plus', effectType: 'drain_mana', drainMana: { amount: 1 } },
+    ],
+  },
+
   claymore: {
     id: 'claymore',
     name: 'Claymore',

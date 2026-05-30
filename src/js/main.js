@@ -137,6 +137,7 @@ const ASSET_MAP = {
   relic_funerary_bell:       'assets/sprites/relics/relic_funerary_bell.png',
   // Individual relics
   relic_prism:               'assets/sprites/relics/relic_prism.png',
+  relic_blighted_hook:       'assets/sprites/relics/relic_blighted_hook.png',
   relic_claymore:            'assets/sprites/relics/relic_claymore.png',
   relic_aegis:               'assets/sprites/relics/relic_aegis.png',
   relic_thorned_rose:        'assets/sprites/relics/relic_thorned_rose.png',
