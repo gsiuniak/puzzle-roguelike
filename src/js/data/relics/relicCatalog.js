@@ -279,6 +279,17 @@ const RELIC_CATALOG = {
     ],
   },
 
+  trebuchet: {
+    id: 'trebuchet',
+    name: 'Trebuchet',
+    description: 'Deal 1 damage to the opponent when matching 4+ tiles.',
+    icon: 'relic_trebuchet',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onMatch4Plus', effectType: 'damage', damage: { amount: 1 } },
+    ],
+  },
+
   claymore: {
     id: 'claymore',
     name: 'Claymore',
