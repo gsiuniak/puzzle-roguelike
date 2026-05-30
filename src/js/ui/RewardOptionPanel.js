@@ -15,7 +15,10 @@
  * Layout notes:
  *   - The icon is sized from the card's height each layout pass so all rows
  *     stay visually consistent regardless of how the parent distributes space.
- *   - The description wraps to its column width (set after layout each frame).
+ *   - The description's wrapped height is measured each layout pass and used
+ *     as a fixed height, so the name/rarity/divider/description block is a
+ *     compact unit that the text column vertically centers (justifyContent
+ *     'center') rather than being pinned to the top by a flex-grow row.
  *   - The divider is a thin full-width container between rarity and desc.
  *
  * Hit-testing returns the panel itself (children don't intercept) so the
@@ -29,7 +32,7 @@ import UIText from './UIText.js';
 
 // ── Tunable layout constants ───────────────────────────────
 /** Icon size as a fraction of the option card's height */
-const ICON_HEIGHT_FRAC = 0.6;
+const ICON_HEIGHT_FRAC = 0.8;
 /** Hard cap on icon width as a fraction of the card's width */
 const ICON_MAX_WIDTH_FRAC = 0.24;
 /** Inner padding of the option card */
@@ -40,9 +43,9 @@ const COLUMN_GAP = 14;
 const TEXT_ROW_GAP = 2;
 
 // ── Text styling ───────────────────────────────────────────
-const NAME_FONT_SIZE = 22;
-const RARITY_FONT_SIZE = 15;
-const DESC_FONT_SIZE = 16;
+const NAME_FONT_SIZE = 28;
+const RARITY_FONT_SIZE = 20;
+const DESC_FONT_SIZE = 18;
 const NAME_COLOR = '#e8d8b0';
 const DESC_COLOR = '#c0b890';
 
@@ -59,6 +62,19 @@ const RARITY_COLORS = {
 const DIVIDER_THICKNESS = 1;
 const DIVIDER_COLOR = 'rgba(255, 255, 255, 0.22)';
 const DIVIDER_MARGIN = { top: 5, bottom: 6 };
+
+/**
+ * Shared offscreen 2D context for measuring the wrapped description height
+ * during layout (UIText.measureText needs a ctx). Lazily created; null in
+ * non-DOM environments (tests) where layout falls back to a single-line height.
+ */
+let _measureCtx = null;
+function getMeasureCtx() {
+  if (_measureCtx) return _measureCtx;
+  if (typeof document === 'undefined') return null;
+  _measureCtx = document.createElement('canvas').getContext('2d');
+  return _measureCtx;
+}
 
 export default class RewardOptionPanel extends UIPanel {
   /**
@@ -86,17 +102,19 @@ export default class RewardOptionPanel extends UIPanel {
       imageAlignH: 'center',
       imageAlignV: 'center',
       alignSelfV: 'center',
+      padding: { left: 10 }
     });
     this.addChild(this._icon);
 
-    // ── Right column: stacked text content ──
+    // ── Right column: stacked text content (vertically centered) ──
     this._textCol = new UIContainer();
     this._textCol.setStyle({
       direction: 'column',
       alignItems: 'stretch',
-      justifyContent: 'start',
+      justifyContent: 'center',
       flexGrow: 1,
       gap: TEXT_ROW_GAP,
+      padding: { left: 20, right: 20 }
     });
     this.addChild(this._textCol);
 
@@ -129,14 +147,19 @@ export default class RewardOptionPanel extends UIPanel {
     });
     this._textCol.addChild(this._divider);
 
+    // Description uses a FIXED (measured) height — not flexGrow — so the
+    // whole text block stays a compact unit that justifyContent 'center'
+    // can vertically center within the card. Height is measured each layout.
     this._descText = new UIText('');
     this._descText.setStyle({
       fontSize: DESC_FONT_SIZE,
       color: DESC_COLOR,
       alignH: 'left',
       alignV: 'top',
-      flexGrow: 1,
+      height: Math.round(DESC_FONT_SIZE * 1.3),
       lineHeight: Math.round(DESC_FONT_SIZE * 1.3),
+      margin: { top: 5 },
+      padding: { right: 10 }
     });
     this._textCol.addChild(this._descText);
 
@@ -176,8 +199,10 @@ export default class RewardOptionPanel extends UIPanel {
   }
 
   /**
-   * Size the icon from the card's current dimensions, run the standard
-   * row layout, then constrain the description's wrap width to its column.
+   * Size the icon from the card's current dimensions, then measure the
+   * wrapped description height and give it a fixed height — BEFORE running
+   * the row/column layout — so the text column (justifyContent 'center')
+   * vertically centers the whole name/rarity/divider/description block.
    */
   layoutChildren() {
     const iconSize = Math.max(
@@ -187,15 +212,22 @@ export default class RewardOptionPanel extends UIPanel {
     this._icon.width = iconSize;
     this._icon.height = iconSize;
 
-    super.layoutChildren();
+    // Pre-compute the text column width (the column flexes to fill the space
+    // left of the icon) so the description can wrap + be measured up front.
+    const pad = this._resolvePadding();
+    const contentW = this.rect.w - pad.left - pad.right;
+    const textColW = Math.max(10, contentW - iconSize - COLUMN_GAP);
 
-    // Wrap the description to whatever width its column ended up with.
-    if (this._descText) {
-      const w = Math.floor(this._descText.rect.w);
-      if (w > 0 && this._descText.maxWidth !== w) {
-        this._descText.setStyle({ maxWidth: w });
-      }
+    const ctx = getMeasureCtx();
+    if (ctx) {
+      this._descText.setStyle({ maxWidth: Math.floor(textColW) });
+      const measured = this._descText.measureText(ctx);
+      this._descText.height = Math.max(DESC_FONT_SIZE, Math.ceil(measured.height));
+    } else {
+      this._descText.height = Math.ceil(DESC_FONT_SIZE * 1.3);
     }
+
+    super.layoutChildren();
   }
 
   /** Children never intercept hits — the card is the click target. */

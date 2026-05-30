@@ -69,7 +69,7 @@ const HEADER_FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
  * Vertical offset of the skip button below the bottom edge of the panel (px).
  * Easy to tweak to nudge the button up/down.
  */
-const SKIP_REWARDS_BUTTON_Y_OFFSET = 18;
+const SKIP_REWARDS_BUTTON_Y_OFFSET = 12;
 /** Skip button width as a fraction of the panel width */
 const SKIP_BUTTON_WIDTH_FRAC = 0.34;
 /** Fallback skip button height if the asset has no intrinsic size */

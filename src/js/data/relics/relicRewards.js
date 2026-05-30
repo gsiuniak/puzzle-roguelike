@@ -63,13 +63,21 @@ export function pickRandomRelics(relics, count) {
  * `count` at random. Swap the pickRandomRelics call for
  * selectRelicRewardsByRarity() to move to rarity-weighted odds later.
  *
+ * Ownership: pass `ownedRelicIds` for the authoritative set the player holds
+ * (character starting relics + run-acquired relics — e.g. the resolved ids on
+ * the battle player's state). If omitted, falls back to `playerRunState.relics`
+ * (run-acquired only — does NOT include character starting relics).
+ *
  * @param {object} [opts]
  * @param {number} [opts.count=3]
- * @param {object|null} [opts.playerRunState] — run state (reads .relics for ownership)
+ * @param {object|null} [opts.playerRunState] — run state (fallback ownership source)
+ * @param {string[]|null} [opts.ownedRelicIds] — explicit owned relic ids (preferred)
  * @returns {object[]} relic definitions to display as reward options
  */
-export function generateRelicRewardOptions({ count = 3, playerRunState = null } = {}) {
-  const ownedIds = collectOwnedRelicIds(playerRunState);
+export function generateRelicRewardOptions({ count = 3, playerRunState = null, ownedRelicIds = null } = {}) {
+  const ownedIds = Array.isArray(ownedRelicIds)
+    ? ownedRelicIds
+    : collectOwnedRelicIds(playerRunState);
   const eligible = getEligibleRelicRewards({
     excludeStarterRelics: true,
     excludeOwnedIds: ownedIds,

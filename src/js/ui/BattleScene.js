@@ -1020,8 +1020,15 @@ export default class BattleScene extends UIPanel {
             ? this._battleController._winner() === 'player'
             : false;
           const runState = this.userData ? this.userData.runState : null;
+          // Authoritative "already owned" set = the relics resolved onto the
+          // battle player (character starting relics + run-acquired relics),
+          // so neither can be offered again as a reward.
+          const playerRelics = (this._battleController && this._battleController.playerState)
+            ? this._battleController.playerState.relics || []
+            : [];
+          const ownedRelicIds = playerRelics.map((r) => r && r.id).filter(Boolean);
           const rewardRelics = isVictory
-            ? generateRelicRewardOptions({ count: 3, playerRunState: runState })
+            ? generateRelicRewardOptions({ count: 3, playerRunState: runState, ownedRelicIds })
             : [];
           this._rewardOverlay.prepareRewards(rewardRelics);
           this._rewardOverlay.show();
