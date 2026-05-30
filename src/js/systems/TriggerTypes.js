@@ -15,6 +15,16 @@
  * Payload conventions (all triggers receive a `side` field — 'player'
  * or 'enemy' — indicating which combatant's relics should be considered):
  *
+ *   onBattleStart        payload: { side }
+ *                        Conceptually fires once when the battle is set up.
+ *                        Used by STATIC-MODIFIER relics (spawn rate, attack,
+ *                        mana gain, skull damage). These effect types do NOT
+ *                        flow through EffectResolver/PassiveSystem dispatch —
+ *                        they are aggregated directly at battle setup by
+ *                        BattleController._initStaticModifiers() because they
+ *                        need board / reward access. The trigger string is
+ *                        kept for shape consistency and discoverability.
+ *
  *   onTileMatch          payload: { side, matches: MatchInfo[], tilesDestroyed }
  *                        Fires once per cascade STEP, not per match. Use
  *                        onTileMatchType for per-color reactions.
@@ -59,6 +69,7 @@
  */
 
 const TRIGGER_TYPES = {
+  ON_BATTLE_START:     'onBattleStart',
   ON_TILE_MATCH:       'onTileMatch',
   ON_TILE_MATCH_TYPE:  'onTileMatchType',
   ON_MATCH_4_PLUS:     'onMatch4Plus',

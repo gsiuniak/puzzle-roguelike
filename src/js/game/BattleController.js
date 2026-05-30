@@ -13,7 +13,7 @@ import MatchResolver, { SKILL_EFFECT_TYPES } from './MatchResolver.js';
 import CombatLog from './CombatLog.js';
 import EnemyAI from './EnemyAI.js';
 import { chooseEnemyAction } from './customEnemyAi.js';
-import { TILE_TYPES } from './TileTypes.js';
+import { TILE_TYPES, isSkull } from './TileTypes.js';
 import PassiveSystem from '../systems/PassiveSystem.js';
 import TRIGGER_TYPES from '../systems/TriggerTypes.js';
 
@@ -221,9 +221,114 @@ export default class BattleController {
     /** Set during a relic dispatch so onDamage can reference the right side. */
     this._currentRelicTarget = null;
 
+    // ── Static passive modifiers (onBattleStart) ──
+    // Aggregate persistent relic modifiers (attack, spawn rate, mana gain,
+    // skull damage) from both sides BEFORE the board is built so spawn-rate
+    // boosts shape the starting board.
+    this._initStaticModifiers();
+
     // ── Init ──
     this.board.initialize();
     this.log.add('Battle begins! Your turn.');
+  }
+
+  /**
+   * Aggregate static-modifier relic effects (trigger `onBattleStart`) from
+   * both sides and apply them once at battle setup. These are persistent
+   * passives that don't fit the event-dispatch model:
+   *   modify_stat        — add to a combatant stat (e.g. attack +3)
+   *   modify_spawn_rate  — boost a tile's board spawn % (board-global)
+   *   modify_mana_gain   — bonus mana per match of a color (per side)
+   *   modify_skull_damage— bonus matched-skull damage (per side)
+   *
+   * Data-driven: dispatched by `effectType`, never by relic id. Spawn-rate
+   * boosts are board-global (the board is shared) so they aggregate across
+   * both sides; the other modifiers are stored per-combatant.
+   */
+  _initStaticModifiers() {
+    const boardBoosts = {};
+
+    for (const side of [this.playerState, this.enemyState]) {
+      // Per-side bonus tables read during reward granting (_applyMatchBonuses).
+      side._manaGainBonus = {};
+      side._skullDamageBonus = 0;
+
+      for (const relic of side.relics || []) {
+        for (const effect of relic.effects || []) {
+          if (effect.trigger !== TRIGGER_TYPES.ON_BATTLE_START) continue;
+          switch (effect.effectType) {
+            case 'modify_stat': {
+              const m = effect.modifyStat || {};
+              if (m.stat && typeof m.amount === 'number') {
+                side[m.stat] = (side[m.stat] || 0) + m.amount;
+              }
+              break;
+            }
+            case 'modify_spawn_rate': {
+              const m = effect.spawnRate || {};
+              if (m.tile && typeof m.amount === 'number') {
+                boardBoosts[m.tile] = (boardBoosts[m.tile] || 0) + m.amount;
+              }
+              break;
+            }
+            case 'modify_mana_gain': {
+              const m = effect.manaGain || {};
+              if (m.color && typeof m.amount === 'number') {
+                side._manaGainBonus[m.color] = (side._manaGainBonus[m.color] || 0) + m.amount;
+              }
+              break;
+            }
+            case 'modify_skull_damage': {
+              const m = effect.skullDamage || {};
+              if (typeof m.amount === 'number') {
+                side._skullDamageBonus += m.amount;
+              }
+              break;
+            }
+            default:
+              break;
+          }
+        }
+      }
+    }
+
+    if (Object.keys(boardBoosts).length > 0) {
+      this.board.setSpawnRateBoosts(boardBoosts);
+    }
+  }
+
+  /**
+   * Apply the active side's static match bonuses (mana gain per matched
+   * color, bonus matched-skull damage) to a cascade-step analysis IN PLACE,
+   * before its rewards are granted in _doRemove. Bonuses come from
+   * _initStaticModifiers (Group B mana relics, Funerary Bell).
+   *
+   * Mana bonus is added once per matched color that the side has a bonus
+   * for; skull bonus is added per skull match in the step.
+   * @param {import('./MatchResolver.js').MatchAnalysis} analysis
+   * @param {object} state — the active combatant whose relics apply
+   */
+  _applyMatchBonuses(analysis, state) {
+    if (!analysis || !state) return;
+
+    const manaBonus = state._manaGainBonus || {};
+    if (analysis.mana) {
+      for (const color of Object.keys(analysis.mana)) {
+        const b = manaBonus[color] || 0;
+        if (b > 0 && analysis.mana[color] > 0) {
+          analysis.mana[color] += b;
+        }
+      }
+    }
+
+    const skullBonus = state._skullDamageBonus || 0;
+    if (skullBonus > 0 && analysis.skullDamage > 0) {
+      let skullMatches = 0;
+      for (const m of analysis.matches || []) {
+        if (isSkull(m.typeId)) skullMatches++;
+      }
+      if (skullMatches > 0) analysis.skullDamage += skullBonus * skullMatches;
+    }
   }
 
   _cloneState(d) {
@@ -806,6 +911,12 @@ export default class BattleController {
   _enterShowMatch(analysis) {
     this._analysis = analysis;
     this._allSteps.push(analysis);
+
+    // Apply the active side's static match bonuses (Group B mana relics,
+    // Funerary Bell) BEFORE dispatching passive triggers so the granted
+    // rewards in _doRemove include them and downstream additions (e.g.
+    // radius destruction) aren't double-counted.
+    this._applyMatchBonuses(analysis, this._activeState());
 
     // Compute the "cause" position FIRST (before dispatching passive
     // triggers) so passive effects (e.g. radius destruction relics) can

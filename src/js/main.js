@@ -121,6 +121,26 @@ const ASSET_MAP = {
   relic_family_crest:        'assets/sprites/relics/relic_family_crest.png',
   relic_unstable_catalyst:   'assets/sprites/relics/relic_unstable_catalyst.png',
   relic_evil_eye:            'assets/sprites/relics/relic_evil_eye.png',
+  // Group A — spawn-rate relics
+  relic_flint:               'assets/sprites/relics/relic_flint.png',
+  relic_dewstone:            'assets/sprites/relics/relic_dewstone.png',
+  relic_fossilized_fern:     'assets/sprites/relics/relic_fossilized_fern.png',
+  relic_copper_coil:         'assets/sprites/relics/relic_copper_coil.png',
+  relic_obsidian_shard:      'assets/sprites/relics/relic_obsidian_shard.png',
+  relic_catacomb_key:        'assets/sprites/relics/relic_catacomb_key.png',
+  // Group B — mana-gain relics (+ skull-damage Funerary Bell)
+  relic_bellows:             'assets/sprites/relics/relic_bellows.png',
+  relic_gourd_flask:         'assets/sprites/relics/relic_gourd_flask.png',
+  relic_pestle:              'assets/sprites/relics/relic_pestle.png',
+  relic_thimble:             'assets/sprites/relics/relic_thimble.png',
+  relic_astrolabe:           'assets/sprites/relics/relic_astrolabe.png',
+  relic_funerary_bell:       'assets/sprites/relics/relic_funerary_bell.png',
+  // Individual relics
+  relic_prism:               'assets/sprites/relics/relic_prism.png',
+  relic_claymore:            'assets/sprites/relics/relic_claymore.png',
+  relic_aegis:               'assets/sprites/relics/relic_aegis.png',
+  relic_thorned_rose:        'assets/sprites/relics/relic_thorned_rose.png',
+  relic_alabaster_flask:     'assets/sprites/relics/relic_alabaster_flask.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };

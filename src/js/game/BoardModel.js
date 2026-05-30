@@ -28,6 +28,13 @@ export default class BoardModel {
     /** @type {Object<string, number>} additive weight modifiers */
     this.weightModifiers = {};
 
+    /**
+     * @type {Object<string, number>} per-tile spawn-rate boosts in
+     * PERCENTAGE POINTS (e.g. { red: 10 } → +10% red spawn chance).
+     * Sourced from spawn-rate relics (Group A). See getEffectiveWeights().
+     */
+    this.spawnRateBoosts = {};
+
     /** @type {Array<Array<string|null>>} grid[col][row] = typeId or null */
     this.grid = [];
     for (let x = 0; x < this.cols; x++) {
@@ -41,12 +48,61 @@ export default class BoardModel {
     this.weightModifiers = { ...modifiers };
   }
 
+  /**
+   * Set per-tile spawn-rate boosts (in percentage points). Each boosted
+   * tile's final spawn chance becomes its base chance + the boost; the
+   * remaining probability is redistributed across the non-boosted tiles in
+   * proportion to their base rates, so non-boosted tiles keep their relative
+   * ratios. Skull effectively absorbs any leftover via the proportional
+   * redistribution so the distribution always sums to ~100%.
+   *
+   * @param {Object<string, number>} boosts - e.g. { red: 10, skull: 10 }
+   */
+  setSpawnRateBoosts(boosts) {
+    this.spawnRateBoosts = { ...(boosts || {}) };
+  }
+
   getEffectiveWeights() {
     const weights = { ...this.spawnWeights };
     for (const [color, mod] of Object.entries(this.weightModifiers)) {
       weights[color] = Math.max(0, (weights[color] || 0) + mod);
     }
-    return weights;
+
+    const boosts = this.spawnRateBoosts;
+    if (!boosts || Object.keys(boosts).length === 0) {
+      return weights;
+    }
+
+    // Convert base weights to percentages (the defaults already sum to 100,
+    // but weightModifiers may have changed the total — normalize to be safe).
+    const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
+    if (total <= 0) return weights;
+    const pct = {};
+    for (const [id, w] of Object.entries(weights)) pct[id] = (w / total) * 100;
+
+    // Boosted tiles: base% + boost (points). Track their combined share so
+    // the rest can split whatever budget remains up to 100%.
+    const result = {};
+    const boostedIds = new Set();
+    let boostedSum = 0;
+    for (const [id, amt] of Object.entries(boosts)) {
+      if (pct[id] === undefined || !(amt > 0)) continue;
+      result[id] = pct[id] + amt;
+      boostedSum += result[id];
+      boostedIds.add(id);
+    }
+
+    // Non-boosted tiles share the remaining budget proportional to base %.
+    const restBaseSum = Object.entries(pct)
+      .filter(([id]) => !boostedIds.has(id))
+      .reduce((sum, [, p]) => sum + p, 0);
+    const remaining = Math.max(0, 100 - boostedSum);
+    for (const [id, p] of Object.entries(pct)) {
+      if (boostedIds.has(id)) continue;
+      result[id] = restBaseSum > 0 ? (p / restBaseSum) * remaining : 0;
+    }
+
+    return result;
   }
 
   // ── Grid Access ──────────────────────────────────────
@@ -455,6 +511,7 @@ export default class BoardModel {
     const clone = new BoardModel(this.cols, this.rows);
     clone.spawnWeights = { ...this.spawnWeights };
     clone.weightModifiers = { ...this.weightModifiers };
+    clone.spawnRateBoosts = { ...this.spawnRateBoosts };
     for (let x = 0; x < this.cols; x++) {
       for (let y = 0; y < this.rows; y++) {
         clone.grid[x][y] = this.grid[x][y];
