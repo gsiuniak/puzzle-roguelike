@@ -16,6 +16,7 @@ import TooltipManager from '../systems/TooltipManager.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
 import { syncBattleResultsToRunState } from '../data/playerStats.js';
+import { generateRelicRewardOptions } from '../data/relics/relicRewards.js';
 import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
 
 // ── Tunable layout constants ─────────────────────────────
@@ -369,6 +370,7 @@ export default class BattleScene extends UIPanel {
       this._rewardOverlay = new RewardOverlay({
         assetManager,
         onDismiss: () => this._returnToMap(),
+        onRelicSelected: (relicDef, index) => this._grantRelicReward(relicDef, index),
       });
     }
     this._rewardOverlay.reset();
@@ -1011,6 +1013,11 @@ export default class BattleScene extends UIPanel {
       if (this._gameOverTimer >= this._gameOverDelay && !this._rewardOverlayShown) {
         this._rewardOverlayShown = true;
         if (this._rewardOverlay) {
+          // Populate the reward options from the relic pool (excludes starter
+          // relics + relics already owned in the run), then show the overlay.
+          const runState = this.userData ? this.userData.runState : null;
+          const rewardRelics = generateRelicRewardOptions({ count: 3, playerRunState: runState });
+          this._rewardOverlay.prepareRewards(rewardRelics);
           this._rewardOverlay.show();
         }
       }
@@ -1048,7 +1055,7 @@ export default class BattleScene extends UIPanel {
    *
    * - Map overlay ('m' key): dark backdrop full-canvas + map panel in
    *   design space (via MapView.renderOverlay).
-   * - Reward overlay (post-battle): rewards_background_splash full-canvas +
+   * - Reward overlay (post-battle): dark transparent backdrop full-canvas +
    *   reward panel in design space (via RewardOverlay.render).
    */
   renderForeground(ctx) {
@@ -1062,11 +1069,10 @@ export default class BattleScene extends UIPanel {
     }
 
     if (this._rewardOverlay && this._rewardOverlay.isActive()) {
-      const am = this._assetManager;
-      const splash = am ? am.get('rewards_background_splash') : null;
-      if (splash) {
-        sm._app.drawFullCanvasImage(splash, this._rewardOverlay.getEntranceAlpha());
-      }
+      // Full-canvas dark transparent backdrop (covers the letterbox bars),
+      // matching the map overlay treatment — the battle scene stays visible
+      // behind it but darkened. Alpha ramps with the overlay's entrance.
+      sm._app.fillFullCanvas(`rgba(0, 0, 0, ${this._rewardOverlay.getBackdropAlpha()})`);
       this._rewardOverlay.render(ctx, w, h);
     }
   }
@@ -1260,6 +1266,33 @@ export default class BattleScene extends UIPanel {
       trackKey: music.trackKey || DEFAULT_BATTLE_MUSIC_KEY,
       isSpecialTrack: music.isSpecialTrack || false,
     };
+  }
+
+  /**
+   * Grant a chosen relic reward to the player's run state.
+   *
+   * Called by the RewardOverlay via its onRelicSelected callback when the
+   * player clicks a reward option. The relic id is appended to
+   * runState.relics (the same run-state object MapScene holds), so it is
+   * resolved into the player's relics on the next battle via
+   * createPlayerBattleState. The scene transition itself is handled
+   * separately by the overlay's proceedToNextScene → onDismiss → _returnToMap.
+   *
+   * @param {object} relicDef — chosen relic definition (from the reward pool)
+   * @param {number} rewardIndex — index of the chosen option (for logging/future use)
+   */
+  _grantRelicReward(relicDef, rewardIndex) {
+    if (!relicDef || !relicDef.id) return;
+    const runState = this.userData ? this.userData.runState : null;
+    if (!runState) return;
+    if (!Array.isArray(runState.relics)) runState.relics = [];
+
+    // Guard against duplicates (reward pool already excludes owned relics,
+    // but stay defensive in case of repeated grants).
+    if (!runState.relics.includes(relicDef.id)) {
+      runState.relics.push(relicDef.id);
+    }
+    console.log(`[BattleScene] Granted relic reward "${relicDef.id}" (option ${rewardIndex}).`);
   }
 
   /**
