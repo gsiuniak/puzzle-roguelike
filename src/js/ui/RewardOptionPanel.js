@@ -50,9 +50,9 @@ const TEXT_ROW_GAP = 2;
 const DESC_SIDE_PADDING = 18;
 
 // ── Text styling (unchanged colors/typography from prior implementation) ──
-const NAME_FONT_SIZE = 38;
-const RARITY_FONT_SIZE = 24;
-const DESC_FONT_SIZE = 22;
+const NAME_FONT_SIZE = 43;
+const RARITY_FONT_SIZE = 27;
+const DESC_FONT_SIZE = 26;
 const NAME_COLOR = '#e8d8b0';
 const DESC_COLOR = '#c0b890';
 

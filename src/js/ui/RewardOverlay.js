@@ -38,7 +38,7 @@ export const OVERLAY_BACKDROP_ALPHA = 0.78;
 
 // ── Reward cards (three vertical panels in a row) ──────────
 /** Card height as a fraction of canvas height (width derives from art aspect) */
-const CARD_HEIGHT_FRAC = 0.60;
+const CARD_HEIGHT_FRAC = 0.75;
 /** Horizontal spacing between the three vertical cards (px) */
 const CARD_SPACING = 26;
 
@@ -50,7 +50,7 @@ const GROUP_Y_OFFSET = -8;
 
 // ── Title panel ("Choose a Relic") ─────────────────────────
 /** Title banner width as a fraction of canvas width (height derives from aspect) */
-const TITLE_PANEL_WIDTH_FRAC = 0.30;
+const TITLE_PANEL_WIDTH_FRAC = 0.20;
 /** Gap between the title panel bottom and the top of the cards row (px) */
 const TITLE_GAP_BELOW = 20;
 /**
@@ -63,7 +63,7 @@ const TITLE_TEXT_CENTER_FRAC = 0.56;
 const TITLE_TEXT_Y_OFFSET = 5;
 
 const HEADER_TEXT = 'Choose a Relic';
-const HEADER_FONT_SIZE = 40;
+const HEADER_FONT_SIZE = 34;
 const HEADER_COLOR = '#ccaa77';
 const HEADER_FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
@@ -71,7 +71,7 @@ const HEADER_FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 /** Vertical gap between the cards row bottom and the skip button (px) */
 const SKIP_REWARDS_BUTTON_Y_OFFSET = 18;
 /** Skip button width as a fraction of canvas width */
-const SKIP_BUTTON_WIDTH_FRAC = 0.16;
+const SKIP_BUTTON_WIDTH_FRAC = 0.2;
 /** Fallback skip button height if the asset has no intrinsic size */
 const SKIP_BUTTON_FALLBACK_HEIGHT = 46;
 
