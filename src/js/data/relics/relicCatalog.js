@@ -333,6 +333,143 @@ const RELIC_CATALOG = {
       { trigger: 'onTurnStart', effectType: 'heal', heal: { amount: 1 } },
     ],
   },
+
+  // ── Group C: "+attack per unspent mana" relics (one per color) ───────────
+  // Dynamic attack bonus: +1 Attack per 3 unspent mana of the color. The
+  // bonus rises/falls as mana is gained/spent, reconciled each frame by
+  // BattleController._recomputeDynamicAttack (effectType attack_per_unspent_mana).
+  cestus: {
+    id: 'cestus',
+    name: 'Cestus',
+    description: 'Gain +1 Attack for every 3 unspent Red.',
+    icon: 'relic_cestus',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'red', per: 3, amount: 1 } },
+    ],
+  },
+
+  harpoon: {
+    id: 'harpoon',
+    name: 'Harpoon',
+    description: 'Gain +1 Attack for every 3 unspent Blue.',
+    icon: 'relic_harpoon',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'blue', per: 3, amount: 1 } },
+    ],
+  },
+
+  club: {
+    id: 'club',
+    name: 'Club',
+    description: 'Gain +1 Attack for every 3 unspent Green.',
+    icon: 'relic_club',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'green', per: 3, amount: 1 } },
+    ],
+  },
+
+  stiletto: {
+    id: 'stiletto',
+    name: 'Stiletto',
+    description: 'Gain +1 Attack for every 3 unspent Yellow.',
+    icon: 'relic_stiletto',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'yellow', per: 3, amount: 1 } },
+    ],
+  },
+
+  wand: {
+    id: 'wand',
+    name: 'Wand',
+    description: 'Gain +1 Attack for every 3 unspent Purple.',
+    icon: 'relic_wand',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'purple', per: 3, amount: 1 } },
+    ],
+  },
+
+  // ── More individual relics ───────────────────────────────────────────────
+  scythe: {
+    id: 'scythe',
+    name: 'Scythe',
+    description: 'Gain +1 Attack whenever you match 3+ skulls.',
+    icon: 'relic_scythe',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      // Fires per skull match of 3+ (the condition gates on the match payload).
+      {
+        trigger: 'onTileMatchType',
+        condition: { typeId: 'skull', minCount: 3 },
+        effectType: 'gain_attack',
+        gainAttack: { amount: 1 },
+      },
+    ],
+  },
+
+  tsunami: {
+    id: 'tsunami',
+    name: 'Tsunami',
+    description: 'Gain +2 Attack at the start of each turn.',
+    icon: 'relic_tsunami',
+    rarity: RELIC_RARITY.LEGENDARY,
+    effects: [
+      { trigger: 'onTurnStart', effectType: 'gain_attack', gainAttack: { amount: 2 } },
+    ],
+  },
+
+  soul_eater: {
+    id: 'soul_eater',
+    name: 'Soul Eater',
+    description: 'Gain +3 life whenever you deal damage.',
+    icon: 'relic_soul_eater',
+    rarity: RELIC_RARITY.LEGENDARY,
+    effects: [
+      // onDealDamage fires with side = the attacker, so heal restores the owner.
+      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 3 } },
+    ],
+  },
+
+  reckoning: {
+    id: 'reckoning',
+    name: 'Reckoning',
+    description: 'Gain +1 Attack whenever you take damage.',
+    icon: 'relic_reckoning',
+    rarity: RELIC_RARITY.LEGENDARY,
+    effects: [
+      { trigger: 'onTakeDamage', effectType: 'gain_attack', gainAttack: { amount: 1 } },
+    ],
+  },
+
+  gorepike: {
+    id: 'gorepike',
+    name: 'Gorepike',
+    description: 'Destroy a random row whenever you match 4+.',
+    icon: 'relic_gorepike',
+    rarity: RELIC_RARITY.LEGENDARY,
+    effects: [
+      // Board-touching — augments the in-flight cascade step's analysis with
+      // a full random row (handled by BattleController._handlePassiveBoardEffect).
+      { trigger: 'onMatch4Plus', effectType: 'destroy_random_row' },
+    ],
+  },
+
+  deathbringer: {
+    id: 'deathbringer',
+    name: 'Deathbringer',
+    description: 'Destroy up to 2 random skulls whenever you deal damage.',
+    icon: 'relic_deathbringer',
+    rarity: RELIC_RARITY.LEGENDARY,
+    effects: [
+      // Board-touching — queues a deferred skull destruction drained after the
+      // current resolution settles (BattleController._maybeStartPendingSkullDestroy).
+      { trigger: 'onDealDamage', effectType: 'destroy_random_skulls', destroySkulls: { amount: 2 } },
+    ],
+  },
 };
 
 /**

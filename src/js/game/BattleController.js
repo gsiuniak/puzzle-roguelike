@@ -181,6 +181,12 @@ export default class BattleController {
     this._enemyTimer = 0;
     this._enemyFired = false;
 
+    // Deferred skull destructions requested by passive relics (Deathbringer).
+    // Accumulated when the owner deals damage (onDealDamage) and drained at a
+    // safe boundary (end of resolution / end of an instant skill) so the board
+    // mutation doesn't happen mid-cascade. See _maybeStartPendingSkullDestroy.
+    this._pendingSkullDestroy = 0;
+
     // ── Callbacks ──
     this.onStateChange = null;
 
@@ -252,6 +258,12 @@ export default class BattleController {
       // Per-side bonus tables read during reward granting (_applyMatchBonuses).
       side._manaGainBonus = {};
       side._skullDamageBonus = 0;
+      // Dynamic-attack-from-unspent-mana rules (Group A: Cestus/Harpoon/...).
+      // Each rule grants `amount` attack per `per` unspent mana of `color`.
+      // The bonus is recomputed live (it changes as mana is spent/gained);
+      // _lastDynamicAttack tracks the amount currently folded into `attack`.
+      side._attackPerManaRules = [];
+      side._lastDynamicAttack = 0;
 
       for (const relic of side.relics || []) {
         for (const effect of relic.effects || []) {
@@ -261,6 +273,13 @@ export default class BattleController {
               const m = effect.modifyStat || {};
               if (m.stat && typeof m.amount === 'number') {
                 side[m.stat] = (side[m.stat] || 0) + m.amount;
+              }
+              break;
+            }
+            case 'attack_per_unspent_mana': {
+              const m = effect.attackPerMana || {};
+              if (m.color && typeof m.amount === 'number' && typeof m.per === 'number' && m.per > 0) {
+                side._attackPerManaRules.push({ color: m.color, per: m.per, amount: m.amount });
               }
               break;
             }
@@ -294,6 +313,34 @@ export default class BattleController {
 
     if (Object.keys(boardBoosts).length > 0) {
       this.board.setSpawnRateBoosts(boardBoosts);
+    }
+
+    // Fold in the initial dynamic-attack bonus from starting mana.
+    this._recomputeDynamicAttack(this.playerState);
+    this._recomputeDynamicAttack(this.enemyState);
+  }
+
+  /**
+   * Reconcile a side's attack with its dynamic "+attack per N unspent mana"
+   * rules (Group A relics). Idempotent and delta-based: it adds only the
+   * CHANGE since the last call, so it composes with permanent attack gains
+   * (gain_attack from Tsunami/Reckoning/Scythe) without clobbering them.
+   * Safe to call every frame and after any mana mutation.
+   * @param {object} side — combatant battle state
+   */
+  _recomputeDynamicAttack(side) {
+    if (!side) return;
+    const rules = side._attackPerManaRules;
+    if (!rules || rules.length === 0) return;
+    let bonus = 0;
+    for (const rule of rules) {
+      const mana = (side.mana && side.mana[rule.color]) || 0;
+      bonus += rule.amount * Math.floor(mana / rule.per);
+    }
+    const delta = bonus - (side._lastDynamicAttack || 0);
+    if (delta !== 0) {
+      side.attack = (side.attack || 0) + delta;
+      side._lastDynamicAttack = bonus;
     }
   }
 
@@ -520,6 +567,9 @@ export default class BattleController {
     // Check for game over before proceeding to next turn
     if (this._checkGameOver()) return true;
 
+    // Deathbringer: skill damage may have queued skull destructions.
+    if (this._pendingSkullDestroy > 0 && this._maybeStartPendingSkullDestroy()) return true;
+
     // If an EXTRA_TURN effect was resolved, stay on the same side
     if (this._extraTurnEarned) {
       this._extraTurnEarned = false;
@@ -609,6 +659,8 @@ export default class BattleController {
 
     if (enteredCascade) return true;
     if (this._checkGameOver()) return true;
+    // Deathbringer: skill damage may have queued skull destructions.
+    if (this._pendingSkullDestroy > 0 && this._maybeStartPendingSkullDestroy()) return true;
     if (this._extraTurnEarned) {
       this._extraTurnEarned = false;
       this.pendingExtraTurn = true;
@@ -1165,6 +1217,14 @@ export default class BattleController {
   }
 
   _finishResolving() {
+    // Deathbringer: if damage dealt during this resolution queued skull
+    // destructions, run them as a follow-up resolution before ending the
+    // turn (skip if the battle already ended).
+    if (this.playerState.hp > 0 && this.enemyState.hp > 0 &&
+        this._pendingSkullDestroy > 0 && this._maybeStartPendingSkullDestroy()) {
+      return;
+    }
+
     const totalDestroyed = this._allSteps.reduce((s, a) => s + a.tilesDestroyed, 0);
     if (this._allSteps.length > 0) {
       this.log.add(`${totalDestroyed} tiles destroyed across ${this._allSteps.length} cascade(s).`);
@@ -1263,6 +1323,11 @@ export default class BattleController {
   // ── Update ────────────────────────────────────────────
 
   update(dt) {
+    // Keep dynamic attack (Group A: +attack per unspent mana) in sync with
+    // the current mana pools each frame. Idempotent (delta-based).
+    this._recomputeDynamicAttack(this.playerState);
+    this._recomputeDynamicAttack(this.enemyState);
+
     // ── Swap animation ──
     if (this.state === BattleState.SWAPPING && this.swapAnim) {
       this.swapAnim.progress += dt / this.swapAnim.duration;
@@ -1490,6 +1555,8 @@ export default class BattleController {
     for (const [c, a] of Object.entries(skill.cost)) {
       state.mana[c] = Math.max(0, (state.mana[c] || 0) - a);
     }
+    // Spending mana lowers any "+attack per unspent mana" bonus immediately.
+    this._recomputeDynamicAttack(state);
   }
   /**
    * Resolve a single effect from a skill's effects[] array.
@@ -1689,9 +1756,14 @@ export default class BattleController {
    *
    * Effect types handled here:
    *   destroy_tiles_radius — augments the in-flight cascade step's
-   *     analysis with tiles in a square radius around payload.centerPos,
-   *     so they get highlighted, destroyed, and award mana/skull-damage
-   *     through the normal SHOW_MATCH → REMOVE flow.
+   *     analysis with tiles in a square radius around payload.centerPos.
+   *   destroy_random_row — augments the in-flight cascade step's analysis
+   *     with every tile in a randomly chosen row (Gorepike, onMatch4Plus).
+   *   Both flow through the normal SHOW_MATCH → REMOVE cycle, awarding
+   *     mana / skull-damage like a destroy_tiles skill.
+   *   destroy_random_skulls — queues a deferred skull destruction
+   *     (Deathbringer, onDealDamage); drained after the current resolution
+   *     settles so it doesn't mutate the board mid-cascade.
    *
    * @param {object} effect      — relic effect definition
    * @param {string} triggerName — trigger event name (e.g. 'onMatch4Plus')
@@ -1704,6 +1776,15 @@ export default class BattleController {
     switch (effect.effectType) {
       case 'destroy_tiles_radius':
         return this._applyPassiveDestroyRadius(effect, payload);
+      case 'destroy_random_row':
+        return this._applyPassiveDestroyRandomRow(effect, payload);
+      case 'destroy_random_skulls': {
+        const amount = (effect.destroySkulls && typeof effect.destroySkulls.amount === 'number')
+          ? effect.destroySkulls.amount
+          : 1;
+        this._pendingSkullDestroy += Math.max(0, amount);
+        return true;
+      }
       default:
         return false;
     }
@@ -1711,10 +1792,8 @@ export default class BattleController {
 
   /**
    * Augment the current cascade step's analysis with the cells in a
-   * square radius around `payload.centerPos`. Skips cells already in
-   * the match (so we don't double-count rewards) and clamps to the
-   * board. Returns true even when no extra cells were added — we still
-   * "handled" the effect; there just wasn't anything to add.
+   * square radius around `payload.centerPos`. Returns true even when no
+   * extra cells were added — we still "handled" the effect.
    *
    * @param {object} effect — { area: { radius } }
    * @param {object} payload — { side, centerPos: {col,row}, ... }
@@ -1728,30 +1807,60 @@ export default class BattleController {
       ? effect.area.radius
       : 1;
 
-    const existing = new Set(
-      this._analysis.positions.map(p => `${p.col},${p.row}`)
-    );
-    const extras = [];
+    const cells = [];
     for (let dc = -radius; dc <= radius; dc++) {
       for (let dr = -radius; dr <= radius; dr++) {
-        const c = center.col + dc;
-        const r = center.row + dr;
-        if (c < 0 || c >= this.board.cols || r < 0 || r >= this.board.rows) continue;
-        const key = `${c},${r}`;
-        if (existing.has(key)) continue;
-        if (!this.board.get(c, r)) continue;
-        extras.push({ col: c, row: r });
-        existing.add(key);
+        cells.push({ col: center.col + dc, row: center.row + dr });
       }
     }
-    if (extras.length === 0) return true;
+    this._addCellsToAnalysis(cells);
+    return true;
+  }
+
+  /**
+   * Augment the current cascade step's analysis with every tile in a
+   * randomly chosen row (Gorepike). Returns true even if nothing was added.
+   * @param {object} effect — unused (kept for signature consistency)
+   * @param {object} payload — { side, ... }
+   * @returns {boolean}
+   */
+  _applyPassiveDestroyRandomRow(effect, payload) {
+    if (!this._analysis) return true;
+    const row = Math.floor(Math.random() * this.board.rows);
+    const cells = [];
+    for (let c = 0; c < this.board.cols; c++) {
+      cells.push({ col: c, row });
+    }
+    this._addCellsToAnalysis(cells);
+    this.log.add(`A row is destroyed!`);
+    return true;
+  }
+
+  /**
+   * Merge a set of cells into the in-flight cascade step's analysis so they
+   * are highlighted, removed, and award mana / skull-damage via the normal
+   * SHOW_MATCH → REMOVE flow. Skips cells already in the analysis and empty
+   * cells; clamps to the board. Shared by radius / row passive board effects.
+   * @param {Array<{col:number,row:number}>} cells
+   */
+  _addCellsToAnalysis(cells) {
+    if (!this._analysis || !cells || cells.length === 0) return;
+    const existing = new Set(this._analysis.positions.map(p => `${p.col},${p.row}`));
+    const extras = [];
+    for (const c of cells) {
+      if (c.col < 0 || c.col >= this.board.cols || c.row < 0 || c.row >= this.board.rows) continue;
+      const key = `${c.col},${c.row}`;
+      if (existing.has(key)) continue;
+      if (!this.board.get(c.col, c.row)) continue;
+      extras.push({ col: c.col, row: c.row });
+      existing.add(key);
+    }
+    if (extras.length === 0) return;
 
     // Compute rewards from the extra cells via the shared path so mana
     // and skull damage match what destroy_tiles skills would award.
     const attacker = this._activeState();
-    const extraRewards = this.resolver.resolveDestroyedTileRewards(
-      this.board, extras, attacker
-    );
+    const extraRewards = this.resolver.resolveDestroyedTileRewards(this.board, extras, attacker);
 
     this._analysis.positions.push(...extras);
     this._analysis.tilesDestroyed = (this._analysis.tilesDestroyed || 0) + extras.length;
@@ -1760,7 +1869,49 @@ export default class BattleController {
     for (const [color, count] of Object.entries(extraRewards.mana)) {
       this._analysis.mana[color] = (this._analysis.mana[color] || 0) + count;
     }
+  }
 
+  /**
+   * Drain any pending Deathbringer skull destructions by starting a
+   * follow-up resolution: remove up to N random skull tiles, then let the
+   * board collapse + cascade through the normal phase machine. Destroyed
+   * skulls deal NO direct damage here (pure board control) — this both
+   * matches the relic's intent and prevents a destroy→damage→destroy loop.
+   *
+   * @returns {boolean} true if a follow-up resolution was started (caller
+   *   should treat the action as still resolving and not end the turn)
+   */
+  _maybeStartPendingSkullDestroy() {
+    const n = this._pendingSkullDestroy;
+    this._pendingSkullDestroy = 0;
+    if (n <= 0) return false;
+
+    const skulls = this.board.getTilesOfType('skull');
+    if (skulls.length === 0) return false;
+
+    const chosen = BoardModel.pickRandomTiles(skulls, n);
+    if (chosen.length === 0) return false;
+
+    this.log.add(`Deathbringer destroys ${chosen.length} skull(s).`);
+    this._destroyedTilesThisStep = chosen.map(p => ({ col: p.col, row: p.row, typeId: 'skull' }));
+
+    // Synthetic single-step analysis: no mana, no skull damage — just remove.
+    this._analysis = {
+      matches: [],
+      positions: [...chosen],
+      mana: {},
+      skullDamage: 0,
+      extraTurnTrigger: false,
+      tilesDestroyed: chosen.length,
+    };
+    this.state = BattleState.RESOLVING;
+    this.board.removeTiles(chosen);
+    this.highlightCells = [];
+    this.emptyCells = [...chosen];
+    this.fallCells = [];
+    this._cascadePhase = CascadePhase.REMOVE;
+    this._phaseTimer = 0;
+    if (this.onStateChange) this.onStateChange();
     return true;
   }
 

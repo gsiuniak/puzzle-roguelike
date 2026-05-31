@@ -149,6 +149,19 @@ const ASSET_MAP = {
   relic_aegis:               'assets/sprites/relics/relic_aegis.png',
   relic_thorned_rose:        'assets/sprites/relics/relic_thorned_rose.png',
   relic_alabaster_flask:     'assets/sprites/relics/relic_alabaster_flask.png',
+  // "+attack per unspent mana" relics (one per color)
+  relic_cestus:              'assets/sprites/relics/relic_cestus.png',
+  relic_harpoon:             'assets/sprites/relics/relic_harpoon.png',
+  relic_club:                'assets/sprites/relics/relic_club.png',
+  relic_stiletto:            'assets/sprites/relics/relic_stiletto.png',
+  relic_wand:                'assets/sprites/relics/relic_wand.png',
+  // Attack / sustain / board-control legendaries
+  relic_scythe:              'assets/sprites/relics/relic_scythe.png',
+  relic_tsunami:             'assets/sprites/relics/relic_tsunami.png',
+  relic_soul_eater:          'assets/sprites/relics/relic_soul_eater.png',
+  relic_reckoning:           'assets/sprites/relics/relic_reckoning.png',
+  relic_gorepike:            'assets/sprites/relics/relic_gorepike.png',
+  relic_deathbringer:        'assets/sprites/relics/relic_deathbringer.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };

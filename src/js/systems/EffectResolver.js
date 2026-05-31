@@ -34,6 +34,7 @@ export const EFFECT_TYPES = {
   HEAL:          'heal',
   GAIN_MANA:     'gain_mana',
   DRAIN_MANA:    'drain_mana',
+  GAIN_ATTACK:   'gain_attack',
   EXTRA_TURN:    'extra_turn',
   REDUCE_DAMAGE: 'reduce_damage',
 };
@@ -126,6 +127,20 @@ export function applyEffect(effect, ctx) {
       if (log && totalDrained > 0) {
         log.add(`${target.name} is drained of ${totalDrained} mana.`);
       }
+      return true;
+    }
+
+    case EFFECT_TYPES.GAIN_ATTACK: {
+      // Permanently increases the caster's attack for the rest of the battle.
+      // Safe to combine with dynamic attack bonuses (e.g. Group A relics)
+      // because those are reconciled via a separate delta in BattleController.
+      if (!caster) return true;
+      const amount = (effect.gainAttack && typeof effect.gainAttack.amount === 'number')
+        ? effect.gainAttack.amount
+        : 0;
+      if (amount === 0) return true;
+      caster.attack = (caster.attack || 0) + amount;
+      if (log) log.add(`${caster.name} gains ${amount} attack.`);
       return true;
     }
 

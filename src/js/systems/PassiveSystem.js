@@ -84,6 +84,9 @@ export default class PassiveSystem {
       const effects = relic.effects || [];
       for (const effect of effects) {
         if (effect.trigger !== triggerName) continue;
+        // Optional payload gate — lets a relic react only to specific match
+        // types / sizes (e.g. Scythe: only skull matches of 3+).
+        if (effect.condition && !this._passesCondition(effect.condition, payload)) continue;
         let handled = applyEffect(effect, ctx);
         // Board-touching effects (destroy/create tiles, radius blasts, ...)
         // are routed to the host (BattleController) via onBoardEffect so the
@@ -106,5 +109,24 @@ export default class PassiveSystem {
     if (side === 'player') return this.playerState;
     if (side === 'enemy')  return this.enemyState;
     return null;
+  }
+
+  /**
+   * Check an effect's optional `condition` against the trigger payload.
+   * Supported fields (all optional, ANDed together):
+   *   typeId   — payload.typeId must equal this (e.g. 'skull')
+   *   minCount — payload.count must be >= this (e.g. 3)
+   * @param {object} condition
+   * @param {object} payload
+   * @returns {boolean}
+   */
+  _passesCondition(condition, payload) {
+    if (!condition) return true;
+    if (condition.typeId != null && payload.typeId !== condition.typeId) return false;
+    if (condition.minCount != null &&
+        !(typeof payload.count === 'number' && payload.count >= condition.minCount)) {
+      return false;
+    }
+    return true;
   }
 }
