@@ -186,6 +186,10 @@ export default class BattleController {
     // safe boundary (end of resolution / end of an instant skill) so the board
     // mutation doesn't happen mid-cascade. See _maybeStartPendingSkullDestroy.
     this._pendingSkullDestroy = 0;
+    // Recursion guard: Deathbringer may fire at most ONCE per action (turn).
+    // The skull damage its destruction deals would otherwise re-trigger it via
+    // onDealDamage. Set when it queues; reset at each (extra-)turn start.
+    this._deathbringerFiredThisAction = false;
 
     // ── Callbacks ──
     this.onStateChange = null;
@@ -1250,6 +1254,9 @@ export default class BattleController {
     if (this.pendingExtraTurn) {
       this._phaseTimer = 0;
       this._enemyFired = false;
+      // Extra turn = new action: re-arm Deathbringer's once-per-action guard
+      // (extra turns bypass _completeTurnIntro).
+      this._deathbringerFiredThisAction = false;
       if (this.activeSide === 'player') {
         this.state = BattleState.PLAYER_TURN;
         this.log.add('--- Extra Turn (Player) ---');
@@ -1290,6 +1297,9 @@ export default class BattleController {
     // Use _nextTurnSide which persists through getState() clearing
     const side = (this._nextTurnSide === 'player' || this._nextTurnSide === 'enemy')
       ? this._nextTurnSide : 'player';
+
+    // New turn = new action: re-arm Deathbringer's once-per-action guard.
+    this._deathbringerFiredThisAction = false;
 
     this.log.nextTurn();
     if (side === 'enemy') {
@@ -1779,9 +1789,14 @@ export default class BattleController {
       case 'destroy_random_row':
         return this._applyPassiveDestroyRandomRow(effect, payload);
       case 'destroy_random_skulls': {
+        // Recursion guard: fire at most once per action. The skull damage
+        // this destruction deals fires onDealDamage again — without this
+        // guard it would re-queue itself and loop.
+        if (this._deathbringerFiredThisAction) return true;
         const amount = (effect.destroySkulls && typeof effect.destroySkulls.amount === 'number')
           ? effect.destroySkulls.amount
           : 1;
+        this._deathbringerFiredThisAction = true;
         this._pendingSkullDestroy += Math.max(0, amount);
         return true;
       }
@@ -1873,10 +1888,11 @@ export default class BattleController {
 
   /**
    * Drain any pending Deathbringer skull destructions by starting a
-   * follow-up resolution: remove up to N random skull tiles, then let the
-   * board collapse + cascade through the normal phase machine. Destroyed
-   * skulls deal NO direct damage here (pure board control) — this both
-   * matches the relic's intent and prevents a destroy→damage→destroy loop.
+   * follow-up resolution: remove up to N random skull tiles (which deal
+   * destroyed-skull damage to the opponent), then let the board collapse +
+   * cascade through the normal phase machine. The destruction's damage fires
+   * onDealDamage, but the once-per-action guard (_deathbringerFiredThisAction)
+   * stops it from re-triggering Deathbringer and looping.
    *
    * @returns {boolean} true if a follow-up resolution was started (caller
    *   should treat the action as still resolving and not end the turn)
@@ -1893,24 +1909,23 @@ export default class BattleController {
     if (chosen.length === 0) return false;
 
     this.log.add(`Deathbringer destroys ${chosen.length} skull(s).`);
-    this._destroyedTilesThisStep = chosen.map(p => ({ col: p.col, row: p.row, typeId: 'skull' }));
 
-    // Synthetic single-step analysis: no mana, no skull damage — just remove.
+    // Compute destroyed-skull damage via the shared reward path (same formula
+    // as destroy_tiles skills). Skulls award no mana. _doRemove applies the
+    // skullDamage + dispatches onDealDamage/onTakeDamage when this step runs.
+    const rewards = this.resolver.resolveDestroyedTileRewards(this.board, chosen, this._activeState());
+
+    // Synthetic single-step analysis: skull damage only, no mana.
     this._analysis = {
       matches: [],
       positions: [...chosen],
       mana: {},
-      skullDamage: 0,
+      skullDamage: rewards.skullDamage,
       extraTurnTrigger: false,
       tilesDestroyed: chosen.length,
     };
     this.state = BattleState.RESOLVING;
-    this.board.removeTiles(chosen);
-    this.highlightCells = [];
-    this.emptyCells = [...chosen];
-    this.fallCells = [];
-    this._cascadePhase = CascadePhase.REMOVE;
-    this._phaseTimer = 0;
+    this._doRemove();
     if (this.onStateChange) this.onStateChange();
     return true;
   }
