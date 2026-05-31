@@ -491,6 +491,10 @@ export default class BattleScene extends UIPanel {
     }
     if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._tooltipManager) this._tooltipManager.onMouseDown(x, y);
+
+    // Relic bar page arrows are clickable regardless of turn state.
+    if (this._relicBar && this._relicBar.handlePageClick(x, y)) return;
+
     const board = this._board;
     if (!board) return;
 
