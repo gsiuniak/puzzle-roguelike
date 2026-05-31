@@ -7,7 +7,7 @@ import UIImage from './UIImage.js';
 // No background or border — relics float over the battle background.
 const BAR_PADDING = { top: 40, right: 55, bottom: 0, left: 0 };
 const ICON_SIZE = 70;
-const ICON_GAP = 10;
+const ICON_GAP = 13;
 
 // ── Pagination (page-flip arrows when relics overflow the column) ─────────
 // When more relics are collected than fit in the column height, the list is
@@ -156,8 +156,9 @@ export default class RelicBar extends UIContainer {
       pageSize = Math.max(1, total);
     } else {
       paginate = true;
-      // Reserve a top + bottom arrow band so icons never collide with arrows.
-      const reserved = 2 * (ARROW_HEIGHT + ARROW_GAP);
+      // Reserve only a BOTTOM arrow band — the up-arrow floats above the icons
+      // in the column's top padding, so it never pushes the relics down.
+      const reserved = ARROW_HEIGHT + ARROW_GAP;
       pageSize = Math.max(1, Math.floor((contentH - reserved + ICON_GAP) / rowH));
     }
 
@@ -225,9 +226,9 @@ export default class RelicBar extends UIContainer {
     const centerX = content.x + content.w / 2;
     const rowH = ICON_SIZE + ICON_GAP;
 
-    // Icons start below the reserved top-arrow band when paginating.
-    const topReserve = this._paginate ? (ARROW_HEIGHT + ARROW_GAP) : 0;
-    let y = content.y + topReserve;
+    // Icons always start at the top of the content area — the up-arrow floats
+    // above them (in the top padding) rather than reserving a row.
+    let y = content.y;
     for (const img of this._iconImages) {
       img.rect.x = centerX - ICON_SIZE / 2;
       img.rect.y = y;
@@ -238,9 +239,11 @@ export default class RelicBar extends UIContainer {
     }
 
     // Arrow rects: up shown when a previous page exists, down when a next one does.
+    // The up-arrow sits ABOVE the first icon (overlapping the top padding band),
+    // so showing/hiding it never shifts the relic icons.
     const ax = centerX - ARROW_WIDTH / 2;
     this._upArrowRect = (this._paginate && this._page > 0)
-      ? { x: ax, y: content.y, w: ARROW_WIDTH, h: ARROW_HEIGHT }
+      ? { x: ax, y: content.y - ARROW_GAP - ARROW_HEIGHT, w: ARROW_WIDTH, h: ARROW_HEIGHT }
       : null;
     this._downArrowRect = (this._paginate && this._page < this._pageCount - 1)
       ? { x: ax, y: content.y + content.h - ARROW_HEIGHT, w: ARROW_WIDTH, h: ARROW_HEIGHT }

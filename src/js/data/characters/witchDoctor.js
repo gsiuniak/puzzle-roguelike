@@ -28,7 +28,7 @@ const witchDoctor = {
   },
 
   skills: ['summon_dead', 'oungan'],
-  relics: ['evil_eye'],
+  relics: ['evil_eye', 'soul_eater', 'scythe'],
 };
 
 export default witchDoctor;
