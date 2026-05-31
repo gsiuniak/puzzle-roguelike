@@ -25,7 +25,7 @@ const MAIN_ROW_MAX_WIDTH = 1820;
 // Negative = the column rects overlap, which pulls the visible side
 // panels tighter against the board frame (since each side panel image
 // has its own transparent inner margin).
-const MAIN_ROW_GAP = -30;
+const MAIN_ROW_GAP = -40;
 // Vertical padding around the main row. Smaller top/bottom = the board
 // frame can stretch to a taller square.
 const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
@@ -34,10 +34,10 @@ const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 // visible panel art closer to the board frame; the side panel
 // images include some transparent inner margin so the column rect
 // is typically larger than the visible art.
-const SIDE_COL_WIDTH = 420;
-const SIDE_COL_MIN_WIDTH = 420;
-const SIDE_COL_MAX_WIDTH = 420;
-const SIDE_COL_GAP = 8;
+const SIDE_COL_WIDTH = 410;
+const SIDE_COL_MIN_WIDTH = 410;
+const SIDE_COL_MAX_WIDTH = 410;
+const SIDE_COL_GAP = 5;
 
 // Fixed width for the center (board + combat log) column. Should be
 // roughly equal to the available vertical space for the board frame
@@ -60,7 +60,7 @@ const COMBAT_LOG_HEIGHT = 80;
 // board) so the icons tuck just outside the player panel's visible art.
 // Layout-wise this slightly shifts the player/board/enemy block right
 // to keep the entire row (relic + 3 panels) centered.
-const RELIC_COL_WIDTH = 75;
+const RELIC_COL_WIDTH = 90;
 
 /**
  * BattleScene — battle layout with three compact columns.

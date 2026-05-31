@@ -5,7 +5,7 @@ import UIText from './UIText.js';
 import UIOrb from './UIOrb.js';
 
 // ── Tunable layout constants ─────────────────────────────
-const BTN_PADDING = { top: 8, right: 20, bottom: 8, left: 20 };
+const BTN_PADDING = { top: 8, right: 10, bottom: 8, left: 5 };
 // Horizontal gap between the three main columns: icon | info | cost.
 const BTN_GAP = 10;
 const ICON_SIZE = 90;

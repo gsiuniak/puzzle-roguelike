@@ -34,7 +34,7 @@ const SKILL_CATALOG = {
     description: 'Deal 5 damage\nGain a turn',
     icon: 'skill_bash',
     sound: 'skill_bash',
-    cost: { red: 7 },
+    cost: { red: 5 },
     effects: [
       { effectType: 'damage', damage: { amount: 5 } },
       { effectType: 'extra_turn' },

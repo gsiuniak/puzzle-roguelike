@@ -5,8 +5,8 @@ import UIImage from './UIImage.js';
 // These are the per-bar internals; the BattleScene owns the bar's
 // outer width/height/margins so the layout offset stays in one place.
 // No background or border — relics float over the battle background.
-const BAR_PADDING = { top: 40, right: 42, bottom: 0, left: 0 };
-const ICON_SIZE = 60;
+const BAR_PADDING = { top: 40, right: 55, bottom: 0, left: 0 };
+const ICON_SIZE = 70;
 const ICON_GAP = 10;
 
 // Tooltip layout for relic icons. Tweak here, not at call sites.
