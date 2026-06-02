@@ -351,15 +351,15 @@ Run State (persistent progression)
         =
 Effective Stats (computed each battle via playerStats.js)
   getEffectivePlayerStats(characterDef, runState)
-        +
-  runState.currentHp
         =
 Battle State (fresh each battle via playerStats.js)
   createPlayerBattleState(characterDef, runState)
+  ↳ HP starts at full effective maxHp — current HP does NOT persist between fights
         |
   [Battle plays out, playerState mutated by BattleController]
         |
-  syncBattleResultsToRunState(runState, playerState) — only currentHp persists back
+  syncBattleResultsToRunState(runState, playerState) — writes runState.currentHp,
+  but it is no longer used to seed battle HP (kept for save/UI bookkeeping)
 ```
 
 **Key rules:**
@@ -367,7 +367,7 @@ Battle State (fresh each battle via playerStats.js)
 - Run modifiers (`statModifiers`) are **additive** — rewards/relics/upgrades modify these, not base stats
 - Effective stats are resolved through **centralized helpers** only — no scattered `base + modifier` math
 - Battle state is **temporary** — created fresh each battle; mana/armor/attack reset from effective stats
-- Only `currentHp` syncs back to run state after battle; mana/armor/attack are reset each battle
+- HP does **not** persist between fights — every battle starts at full effective `maxHp`. `currentHp` is still written back by `syncBattleResultsToRunState` but is not read to seed battle HP. Mana/armor/attack also reset each battle.
 - Rewards use `applyRunModifier(runState, statPath, amount)` to modify run statModifiers
 
 ### Skill Resolution Flow
@@ -413,11 +413,11 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 13. **All one-shot visual/SFX flags** are read-and-cleared in `BattleController.getState()` to prevent double-firing.
 14. **Player stat architecture uses three-layer separation** (NEW):
     - **Layer 1 — Character definitions** (per-file in [`data/characters/`](src/js/data/characters/)): Immutable `baseStats` templates. Never mutated.
-    - **Layer 2 — Run state** ([`runState.js`](src/js/data/runState.js)): Persistent `statModifiers` that accumulate from rewards/relics/upgrades. `currentHp` persists between battles.
+    - **Layer 2 — Run state** ([`runState.js`](src/js/data/runState.js)): Persistent `statModifiers` that accumulate from rewards/relics/upgrades. `currentHp` is tracked but does NOT seed battle HP — each fight starts at full `maxHp`.
     - **Layer 3 — Battle state**: Fresh instance created each battle via [`createPlayerBattleState()`](src/js/data/playerStats.js). Mana/armor/attack reset from effective stats each battle.
 15. **Stat resolution is centralized** in [`playerStats.js`](src/js/data/playerStats.js). `getEffectivePlayerStats()` is the single source for computing baseStats + statModifiers. No scattered math elsewhere.
 16. **Rewards modify run modifiers, not base stats.** Use `applyRunModifier(runState, statPath, amount)`. Example: `applyRunModifier(runState, 'startingMana.purple', 2)`.
-17. **Only currentHp syncs back** from battle state to run state via `syncBattleResultsToRunState()`. Battle mana/armor/attack/temporary effects do NOT persist.
+17. **HP resets to full each battle.** `createPlayerBattleState` seeds `hp` from effective `maxHp`, so current HP does NOT carry between fights. `syncBattleResultsToRunState()` still writes `currentHp` to run state (bookkeeping) but it isn't used to seed battle HP. Battle mana/armor/attack/temporary effects also do NOT persist.
 18. **Canvas uses DPR-aware rendering** — all layout is in CSS pixels; context is pre-scaled.
 19. **Post-battle flow uses RewardOverlay** — GAME_OVER does NOT immediately return to MapScene. Instead, RewardOverlay appears over the (still-visible) BattleScene. ESC dismisses the overlay and triggers the MapScene transition.
 20. **Enemy AI overrides are dispatch-based, not conditional.** Custom AI is registered in [`enemyAiOverrides.js`](src/js/game/enemyAiOverrides.js) as handler functions keyed by `aiBehavior`. [`customEnemyAi.js`](src/js/game/customEnemyAi.js) orchestrates: try custom → fallback to standard `EnemyAI`. Enemy definitions link via optional `aiBehavior` field.

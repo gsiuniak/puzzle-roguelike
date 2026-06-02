@@ -7,7 +7,8 @@
  *   = effectiveStats               (computed, used to seed battle state)
  *
  * Then:
- *   effectiveStats + playerRunState.currentHp = playerBattleState (fresh each battle)
+ *   effectiveStats = playerBattleState (fresh each battle; HP starts at full maxHp —
+ *   current HP does NOT persist between fights)
  *
  * This module is the SINGLE source of truth for resolving effective stats.
  * No other file should scatter "base + modifier" math throughout the codebase.
@@ -117,8 +118,10 @@ export function createPlayerBattleState(characterDef, runState) {
     level: characterDef.level,
     portrait: characterDef.portrait || '',
 
-    // Persistent HP carried over from run state
-    hp: runState.currentHp,
+    // HP does NOT persist between battles — every fight starts at full life.
+    // (runState.currentHp is still tracked by syncBattleResultsToRunState but
+    // is intentionally not used to seed battle HP.)
+    hp: effective.maxHp,
     maxHp: effective.maxHp,
 
     // Reset each battle to resolved starting values
