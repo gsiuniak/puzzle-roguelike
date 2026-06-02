@@ -34,9 +34,9 @@ const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 // visible panel art closer to the board frame; the side panel
 // images include some transparent inner margin so the column rect
 // is typically larger than the visible art.
-const SIDE_COL_WIDTH = 410;
-const SIDE_COL_MIN_WIDTH = 410;
-const SIDE_COL_MAX_WIDTH = 410;
+const SIDE_COL_WIDTH = 390;
+const SIDE_COL_MIN_WIDTH = 390;
+const SIDE_COL_MAX_WIDTH = 390;
 const SIDE_COL_GAP = 5;
 
 // Fixed width for the center (board + combat log) column. Should be
@@ -61,6 +61,18 @@ const COMBAT_LOG_HEIGHT = 80;
 // Layout-wise this slightly shifts the player/board/enemy block right
 // to keep the entire row (relic + 3 panels) centered.
 const RELIC_COL_WIDTH = 90;
+
+// ── Enemy relic column (mirror of the player bar, on the RIGHT) ──
+// Mounted as the LAST child of MainRow, *after* the enemy column, so it
+// floats to the immediate right of the enemy panel. Same float trick as the
+// player bar but mirrored: the MainRow negative gap pulls this rect left into
+// the enemy column, and the bar's padding hugs the icons toward the panel.
+// The player bar (RelicBar's internal BAR_PADDING) uses right padding so its
+// centered icons sit toward the player panel on its right; the enemy bar
+// mirrors that with LEFT padding so its icons sit toward the enemy panel on
+// its left. Tweak these to fit; left padding ≈ the player bar's right padding.
+const ENEMY_RELIC_COL_WIDTH = 90;
+const ENEMY_RELIC_BAR_PADDING = { top: 40, right: 0, bottom: 0, left: 55 };
 
 /**
  * BattleScene — battle layout with three compact columns.
@@ -141,6 +153,8 @@ export default class BattleScene extends UIPanel {
     this._enemySkillsPane = null;
     /** @type {RelicBar|null} */
     this._relicBar = null;
+    /** @type {RelicBar|null} enemy relic bar (mirror, on the right) */
+    this._enemyRelicBar = null;
     this._board = null;
     this._boardPanel = null;
     /** Retained for backwards-compat: the old visible turn label is hidden
@@ -292,6 +306,16 @@ export default class BattleScene extends UIPanel {
     const enemyCol = this._buildSideColumn('enemy');
     mainRow.addChild(enemyCol);
 
+    // ── RIGHT-MOST: passive enemy relic column (mirror of player bar) ──
+    // Floats to the immediate right of the enemy panel; icons hug leftward
+    // toward the panel via the mirrored LEFT padding.
+    this._enemyRelicBar = new RelicBar(this._assetManager);
+    this._enemyRelicBar.setStyle({
+      width: ENEMY_RELIC_COL_WIDTH,
+      padding: ENEMY_RELIC_BAR_PADDING,
+    });
+    mainRow.addChild(this._enemyRelicBar);
+
     this.addChild(mainRow);
   }
 
@@ -388,6 +412,9 @@ export default class BattleScene extends UIPanel {
     this._tooltipManager.setEnabled(true);
     if (this._relicBar) {
       this._relicBar.setTooltipManager(this._tooltipManager);
+    }
+    if (this._enemyRelicBar) {
+      this._enemyRelicBar.setTooltipManager(this._tooltipManager);
     }
 
     // Create bound handlers (stored for cleanup in onExit)
@@ -494,6 +521,7 @@ export default class BattleScene extends UIPanel {
 
     // Relic bar page arrows are clickable regardless of turn state.
     if (this._relicBar && this._relicBar.handlePageClick(x, y)) return;
+    if (this._enemyRelicBar && this._enemyRelicBar.handlePageClick(x, y)) return;
 
     const board = this._board;
     if (!board) return;
@@ -762,6 +790,10 @@ export default class BattleScene extends UIPanel {
     // Update top relic bar from player relics (no-op when unchanged)
     if (this._relicBar && state.playerState) {
       this._relicBar.setRelics(state.playerState.relics || []);
+    }
+    // Update enemy relic bar from enemy relics (no-op when unchanged)
+    if (this._enemyRelicBar && state.enemyState) {
+      this._enemyRelicBar.setRelics(state.enemyState.relics || []);
     }
 
     // Update enemy pane from real state
@@ -1178,6 +1210,7 @@ export default class BattleScene extends UIPanel {
     if (this._playerSkillsPane) this._playerSkillsPane.setAssetManager(am);
     if (this._enemySkillsPane)  this._enemySkillsPane.setAssetManager(am);
     if (this._relicBar) this._relicBar.setAssetManager(am);
+    if (this._enemyRelicBar) this._enemyRelicBar.setAssetManager(am);
     if (this._boardPanel) this._boardPanel.setAssetManager(am);
     if (this._combatLogPanel) this._combatLogPanel.assetManager = am;
     if (this._board) this._board.setAssetManager(am);

@@ -140,6 +140,7 @@ export default class SkillButton extends UIPanel {
       alignH: 'left',
       alignV: 'center',
       height: NAME_FONT_SIZE + 4,
+      margin: { bottom: 2 }
     });
     info.addChild(this._nameText);
 

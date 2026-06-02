@@ -6,7 +6,7 @@ import SkillButton from './SkillButton.js';
 // Top padding is intentionally larger to clear the decorative
 // `skill_pane_panel` top frame art (a "Skills" label / arc area
 // is reserved in the panel image).
-const PANE_PADDING = { top: 48, right: 24, bottom: 24, left: 24 };
+const PANE_PADDING = { top: 48, right: 20, bottom: 24, left: 20 };
 const GRID_GAP = 6;
 const SLOT_HEIGHT = 96;
 
