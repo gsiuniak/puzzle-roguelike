@@ -21,6 +21,17 @@ const NAME_FONT_SIZE = 36;
 const NAME_MAX_WIDTH = 190;
 const NAME_LINE_HEIGHT = 36;
 const NAME_BLOCK_HEIGHT = 72;
+
+// ── Name flair ──────────────────────────────────────────
+// When the name fits on ONE line, the second-line space below it is filled
+// with a decorative flourish (player pane → skill_flair_right, enemy →
+// skill_flair_left). When the name wraps to two lines there's no room, so the
+// flair is suppressed. The flair is drawn manually in render() (not a layout
+// child) so it occupies the freed band without affecting layout. Tune freely.
+const FLAIR_HEIGHT = 26;            // drawn height of the flourish
+const FLAIR_TOP_OFFSET = NAME_LINE_HEIGHT + 4; // band start, below the 1st name line
+const FLAIR_SIDE_INSET = 2;         // horizontal inset from the name block edge
+
 const HEALTH_BAR_HEIGHT = 36;
 const HEALTH_LABEL_FONT_SIZE = 20;
 const STATS_HEIGHT = 22;
@@ -63,13 +74,30 @@ const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
  * skills live in the separate SkillsPane.
  */
 export default class CharacterInfoPane extends UIPanel {
-  constructor(characterData = null, assetManager = null) {
+  constructor(characterData = null, assetManager = null, side = 'player') {
     super();
 
     this._characterData = characterData;
     this._assetManager = assetManager;
     this.assetManager = assetManager;
     this.smoothing = true;
+
+    /** 'player' | 'enemy' — selects the flair side. */
+    this._side = side;
+    // Decorative flourish shown in the freed band under a single-line name.
+    // Player pane flares right; enemy pane flares left (mirror). Drawn
+    // manually in render(), not added as a layout child.
+    this._flair = new UIImage(
+      side === 'enemy' ? 'skill_flair_left' : 'skill_flair_right',
+      assetManager
+    );
+    // Stretch to fill the full band width (FLAIR_HEIGHT tall) rather than
+    // scaling to native aspect and parking against one edge.
+    this._flair.setStyle({
+      fitMode: 'stretch',
+      imageAlignV: 'center',
+    });
+    this._flair.smoothing = true;
 
     this.direction = 'column';
     this.gap = 6;
@@ -102,6 +130,7 @@ export default class CharacterInfoPane extends UIPanel {
     this._assetManager = am;
     this.assetManager = am;
     if (this._portrait) this._portrait.assetManager = am;
+    if (this._flair) this._flair.assetManager = am;
     for (const orb of Object.values(this._manaOrbs)) {
       if (orb) orb.assetManager = am;
     }
@@ -221,6 +250,32 @@ export default class CharacterInfoPane extends UIPanel {
     }
 
     this.addChild(manaRow);
+  }
+
+  /**
+   * Draw the name flair after the normal children. The flourish fills the
+   * freed second-line band ONLY when the name fits on a single line; when the
+   * name wraps to two lines the band is occupied, so the flair is suppressed.
+   * Drawn manually (not a layout child) so it never affects layout, and the
+   * line-count check uses the render-time ctx (correct loaded-font metrics).
+   */
+  render(ctx) {
+    super.render(ctx);
+    if (!this.visible || !this._nameText || !this._flair) return;
+    if (!this._nameText.text) return;
+
+    // super.render already measured + cached the name's wrap this frame.
+    const lines = this._nameText._getWrappedLines(ctx);
+    if (lines.length !== 1) return; // two-line name → no flair
+
+    const r = this._nameText.rect;
+    if (!r || r.w <= 0) return;
+
+    this._flair.rect.x = r.x + FLAIR_SIDE_INSET;
+    this._flair.rect.y = r.y + FLAIR_TOP_OFFSET;
+    this._flair.rect.w = Math.max(0, r.w - FLAIR_SIDE_INSET * 2);
+    this._flair.rect.h = FLAIR_HEIGHT;
+    this._flair.renderSelf(ctx);
   }
 
   _buildStatGroup(iconKey, getValueRef, setValueRef, initialValue) {

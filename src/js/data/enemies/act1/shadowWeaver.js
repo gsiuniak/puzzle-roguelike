@@ -12,12 +12,13 @@ const shadowWeaver = {
   act: 1,
   rarity: 'rare',
   type: 'minion',
-  floors: [5, 6, 7, 8, 9],
+  type: 'elite',
+  floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
 
-  hp: 22,
-  maxHp: 22,
-  attack: 2,
-  armor: 1,
+  hp: 60,
+  maxHp: 60,
+  attack: 5,
+  armor: 10,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'shadow_weaver', // maps to 'portrait_shadow_weaver' asset key
   music: {

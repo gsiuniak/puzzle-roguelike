@@ -340,7 +340,7 @@ export default class BattleScene extends UIPanel {
     const skills  = (data && data.skills) || [];
 
     // 1) Compact character info pane (portrait + stats + mana)
-    const infoPane = new CharacterInfoPane(data, this._assetManager);
+    const infoPane = new CharacterInfoPane(data, this._assetManager, side);
     if (isPlayer) this._playerPane = infoPane; else this._enemyPane = infoPane;
     col.addChild(infoPane);
 

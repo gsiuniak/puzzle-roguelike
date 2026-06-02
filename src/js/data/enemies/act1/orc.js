@@ -12,7 +12,7 @@ const orc = {
   act: 1,
   rarity: 'common',
   type: 'minion',
-  floors: [1, 2, 3, 4, 5],
+  floors: [1, 2, 3],
 
   hp: 24,
   maxHp: 24,
@@ -26,8 +26,8 @@ const orc = {
     isSpecialTrack: false,
   },
 
-  skills: ['slash'],
-  relics: ['cracked_fang'],
+  skills: [],
+  relics: [],
 };
 
 export default orc;

@@ -14,10 +14,10 @@ const stoneGargoyle = {
   type: 'elite',
   floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
 
-  hp: 40,
+  hp: 60,
   maxHp: 40,
-  attack: 2,
-  armor: 3,
+  attack: 3,
+  armor: 10,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'stone_gargoyle', // maps to 'portrait_stone_gargoyle' asset key
   music: {

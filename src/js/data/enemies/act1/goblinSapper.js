@@ -10,9 +10,9 @@ const goblinSapper = {
   level: 1,
 
   act: 1,
-  rarity: 'common',
+  rarity: 'uncommon',
   type: 'minion',
-  floors: [1, 2, 3, 4, 5, 6],
+  floors: [2, 3, 4, 5, 6],
 
   hp: 16,
   maxHp: 16,

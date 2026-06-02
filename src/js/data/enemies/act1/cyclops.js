@@ -10,9 +10,9 @@ const cyclops = {
   level: 3,
 
   act: 1,
-  rarity: 'rare',
-  type: 'elite',
-  floors: [6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
+  rarity: 'uncommon',
+  type: 'minion',
+  floors: [2, 3, 4],
 
   hp: 45,
   maxHp: 45,

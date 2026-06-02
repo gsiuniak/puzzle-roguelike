@@ -10,9 +10,9 @@ const acolyte = {
   level: 1,
 
   act: 1,
-  rarity: 'uncommon',
+  rarity: 'common',
   type: 'minion',
-  floors: [3, 4, 5, 6, 7, 8, 9],
+  floors: [1, 2],
 
   hp: 20,
   maxHp: 20,
