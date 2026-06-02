@@ -57,7 +57,7 @@ const goblin = {
   // ── Spawn placement ──
   // Sole Act 1 minion for now, so it covers every battle floor. When more
   // Act 1 minions are added, split these floors between them.
-  floors: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  floors: [1, 2],
 
   hp: 18,
   maxHp: 18,

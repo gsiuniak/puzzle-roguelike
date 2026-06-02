@@ -144,7 +144,7 @@ const SKILL_CATALOG = {
   boom_baby: {
     id: 'boom_baby',
     name: 'Boom Baby!',
-    description: 'Deal 20 damage. Die',
+    description: 'Deal 20 damage.\nDie',
     icon: 'skill_slash',
     sound: 'skill_slash',
     cost: { red: 20 },

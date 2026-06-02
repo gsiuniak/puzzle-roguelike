@@ -50,6 +50,32 @@ const CURVE_FACTOR = 0.04;
  *  Higher values create more dramatic diagonal slant. */
 const DIAGONAL_SPREAD = 0.22;
 
+// ── Per-node organic jitter ────────────────────
+// Deterministic offset (hashed from node id) applied to each multi-node
+// depth's positions so nodes don't sit on a rigid evenly-spaced grid. Keeps
+// the map feeling organic without changing the graph. Fractions of column
+// width (X) and row spacing (Y); kept small so nodes never overlap. Start /
+// boss (single-node depths) are left centered.
+const NODE_JITTER_X = 0.12;
+const NODE_JITTER_Y = 0.15;
+
+/**
+ * Deterministic [-1,1) jitter pair from a node id (FNV-1a hash). Stable across
+ * frames/relayouts so positions don't shimmer and hit-testing stays aligned.
+ * @param {string} id
+ * @returns {{jx:number, jy:number}}
+ */
+function _idJitter(id) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  const jx = ((h % 1000) / 1000) * 2 - 1;
+  const jy = ((Math.floor(h / 1000) % 1000) / 1000) * 2 - 1;
+  return { jx, jy };
+}
+
 // ── Edge colors (available=bright gold, default=visible dotted, traveled=breadcrumb dotted, bypassed=near-hidden) ──
 /** Alpha for neutral/default edges (clearly visible dotted) */
 const EDGE_DEFAULT_ALPHA = 0.55;
@@ -225,8 +251,13 @@ export default class MapRenderer {
           // Top lanes shift one way, bottom lanes the opposite
           const offset = (t - 0.5) * maxSpread * direction;
 
-          const x = baseX + offset;
-          const y = startY + spacing * i;
+          // Deterministic organic jitter so nodes aren't on a rigid grid.
+          const { jx, jy } = _idJitter(nodes[i].id);
+
+          const x = baseX + offset + jx * colW * NODE_JITTER_X;
+          let y = startY + spacing * i + jy * spacing * NODE_JITTER_Y;
+          // Keep within the vertical map area.
+          y = Math.max(V_PAD, Math.min(canvasH - V_PAD, y));
 
           nodes[i].x = x;
           nodes[i].y = y;

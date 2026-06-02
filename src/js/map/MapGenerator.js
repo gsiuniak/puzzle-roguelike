@@ -76,10 +76,12 @@ export class SeededRNG {
  *
  * Generation rules:
  *   - 10 depths (0–9), left → right
- *   - Depth 0 = starting battle (exactly 1 node)
+ *   - Depth 0 = starting battle (exactly 1 node, placed at a CENTER lane)
+ *   - Depth 1 = exactly 3 nodes (the start fans out to lanes 0,1,2) so the
+ *     opening offers 3 route choices instead of 2
  *   - Depth 9 = boss (exactly 1 node)
- *   - Depths 1–8: 2–4 nodes per depth, smoothed (±1 node change
- *     between consecutive depths to support local-lane routing)
+ *   - Depths 2–8: 2–4 nodes per depth, smoothed (±1 node change between
+ *     consecutive depths), picked uniformly so widths genuinely vary
  *   - Every node on depth N connects to ≥1 node on depth N+1
  *   - Every node on depth N+1 has ≥1 incoming from depth N
  *   - No dead ends: every route reaches the boss
@@ -87,7 +89,11 @@ export class SeededRNG {
  *     depths may only move vertically by at most 1 lane
  *     (|source.lane − target.lane| ≤ 1), preventing chaotic
  *     crisscrossing paths
- *   - Elite: not before depth 4; not consecutive on same path
+ *   - Elite: not before depth 4; not consecutive on same path. Two elites are
+ *     placed at randomized depths/lanes (one early, one late) with the late
+ *     one chosen from the early one's reachable descendants, so a correctly
+ *     pathed run can always reach ≥2 elites without them sitting at a fixed,
+ *     predictable spot (random elites may appear elsewhere on top of these)
  *   - Rest:  not before depth 3; not consecutive on same path
  *   - Chest: usually on optional branches
  *   - Boss: exactly 1 at final depth
@@ -101,6 +107,24 @@ import MapGraph from './MapGraph.js';
 /** @type {{min:number,max:number}} */
 const NODES_PER_DEPTH = { min: 2, max: 4 };
 const DEPTH_COUNT = 10;
+
+// ── Width tuning ─────────────────────────────────────────
+// The start node sits at a CENTER lane so the ±1-lane fan-out can reach
+// lanes 0,1,2 at depth 1 — giving 3 opening routes instead of 2 (fixes the
+// "too narrow at the beginning" problem). Middle-depth counts are left to vary
+// freely across [min,max] (no upward bias) so the map's width changes from
+// depth to depth instead of sitting at a uniform slab.
+const START_LANE = 1;
+const DEPTH_1_NODE_COUNT = 3;
+
+// ── Elite placement ──────────────────────────────────────
+// Two elites are placed at RANDOMIZED depths/lanes (not a fixed spot) by
+// _placeReachableElites: one early, one late, with the late one chosen from
+// the early one's reachable descendants so a single route can hit both
+// ("≥2 reachable per path if pathed correctly"). Pools keep them ≥4 (elite
+// eligibility), off the all-chest depth (6), and ≥2 apart (never consecutive).
+const ELITE_EARLY_DEPTHS = [4, 5];
+const ELITE_LATE_DEPTHS = [7, 8];
 
 const NODE_TYPES = {
   BATTLE:   'battle',
@@ -142,12 +166,13 @@ export default class MapGenerator {
     for (let d = 0; d < depthCount; d++) {
       const nodes = [];
       if (d === 0) {
-        // Exactly one starting battle
+        // Exactly one starting battle, placed at a center lane so it can
+        // fan out to 3 nodes at depth 1 within the ±1-lane constraint.
         const node = new MapNode({
           id: `node_${allNodes.length}`,
           type: NODE_TYPES.BATTLE,
           depth: d,
-          lane: 0,
+          lane: START_LANE,
         });
         node.state.discovered = true;
         node.state.reachable = true;
@@ -163,10 +188,10 @@ export default class MapGenerator {
         });
         nodes.push(node);
       } else if (d === 1) {
-        // Depth 1: fan-out from the single start node (depth 0, lane 0).
-        // With ±1 lane constraint, start can only reach lanes 0 and 1,
-        // so depth 1 is capped at 2 nodes.
-        const count = 2; // min=2 from config, max=2 for valid fan-out
+        // Depth 1: fan-out from the center start node (depth 0, lane START_LANE).
+        // With the ±1 lane constraint the start reaches lanes 0,1,2, so depth 1
+        // opens with 3 route choices.
+        const count = DEPTH_1_NODE_COUNT;
         for (let i = 0; i < count; i++) {
           const node = new MapNode({
             id: `node_${allNodes.length + i}`,
@@ -212,7 +237,9 @@ export default class MapGenerator {
         }
         prevCount = count;
       } else {
-        // Normal depth: smoothed node count (diff ≤ 1 from previous)
+        // Normal depth: smoothed node count (diff ≤ 1 from previous), picked
+        // uniformly across the allowed range so widths genuinely vary depth to
+        // depth (no upward bias — that made every depth a uniform 4-wide slab).
         const minC = Math.max(nRange.min, prevCount - 1);
         const maxC = Math.min(nRange.max, prevCount + 1);
         const count = rng.intRange(minC, maxC);
@@ -243,6 +270,10 @@ export default class MapGenerator {
 
     // ── 4b. Validate edge lane constraints ───────────
     MapGenerator._validateEdgeConstraints(depthNodes, depthCount);
+
+    // ── 4c. Place two reachable elites at randomized depths/lanes ──
+    // (Runs after the graph is final so descendant reachability is accurate.)
+    MapGenerator._placeReachableElites(depthNodes, depthCount, rng);
 
     // ── 5. Ensure chest at depth 6 is on at least one start→boss route ─
     MapGenerator._ensureChestRoute(depthNodes, depthCount, rng);
@@ -301,6 +332,97 @@ export default class MapGenerator {
         // If depth has only 1 node, force it to be battle or rest
         if (count === 1 && (node.type === NODE_TYPES.TRAINING)) {
           node.type = NODE_TYPES.BATTLE;
+        }
+      }
+    }
+  }
+
+  /**
+   * Place two elites at randomized depths/lanes such that a single start→boss
+   * route can pass through BOTH (so "≥2 reachable elites per path if pathed
+   * correctly" holds) — without pinning them to a fixed, predictable spot.
+   *
+   * Method: pick an early elite at a random node of a random early depth, then
+   * pick the late elite from that early node's reachable forward descendants
+   * at a random late depth. Since the early node reaches the boss, it has a
+   * descendant at every intervening depth, so the late candidate set is
+   * non-empty and the two elites are guaranteed to share a route. A final
+   * dedupe pass demotes any non-forced elite left adjacent to a forced one.
+   *
+   * Runs AFTER wiring + connectivity validation so descendant reachability
+   * reflects the final edge set.
+   */
+  static _placeReachableElites(depthNodes, depthCount, rng) {
+    const nodeMap = new Map();
+    for (const nodes of depthNodes.values()) {
+      for (const n of nodes) nodeMap.set(n.id, n);
+    }
+
+    const earlyPool = ELITE_EARLY_DEPTHS.filter(d => d > 0 && d < depthCount - 1 && d !== 6);
+    const latePool = ELITE_LATE_DEPTHS.filter(d => d > 0 && d < depthCount - 1 && d !== 6);
+    if (earlyPool.length === 0 || latePool.length === 0) return;
+
+    const depthA = rng.pick(earlyPool);
+    const aNodes = depthNodes.get(depthA) || [];
+    if (aNodes.length === 0) return;
+
+    const elite1 = rng.pick(aNodes);
+    elite1.type = NODE_TYPES.ELITE;
+    elite1.meta.forcedElite = true;
+
+    // Forward-reachable descendants of elite1.
+    const reachable = new Set();
+    const stack = [elite1.id];
+    while (stack.length > 0) {
+      const id = stack.pop();
+      if (reachable.has(id)) continue;
+      reachable.add(id);
+      const n = nodeMap.get(id);
+      if (n) {
+        for (const outId of n.outgoing) {
+          if (!reachable.has(outId)) stack.push(outId);
+        }
+      }
+    }
+
+    // Late depth must be ≥2 beyond depthA (never consecutive). Prefer a random
+    // valid late depth that has a reachable candidate.
+    const lateChoices = rng.shuffle(latePool.filter(d => d >= depthA + 2));
+    let elite2 = null;
+    for (const depthB of lateChoices) {
+      const candidates = (depthNodes.get(depthB) || []).filter(n => reachable.has(n.id));
+      if (candidates.length > 0) {
+        elite2 = rng.pick(candidates);
+        break;
+      }
+    }
+    if (elite2) {
+      elite2.type = NODE_TYPES.ELITE;
+      elite2.meta.forcedElite = true;
+    }
+
+    // Demote any elite adjacent to a forced elite (keep elites non-consecutive).
+    MapGenerator._dedupeConsecutiveElites(nodeMap);
+  }
+
+  /**
+   * Demote elites that are directly connected to another elite, so no path has
+   * two elites back-to-back. When both ends of an edge are elite, the
+   * non-forced one is demoted (prefer the child); forced elites are never
+   * adjacent to each other (placed ≥2 depths apart), so they survive.
+   */
+  static _dedupeConsecutiveElites(nodeMap) {
+    for (const [, parent] of nodeMap) {
+      if (parent.type !== NODE_TYPES.ELITE) continue;
+      for (const childId of parent.outgoing) {
+        const child = nodeMap.get(childId);
+        if (!child || child.type !== NODE_TYPES.ELITE) continue;
+        if (!child.meta.forcedElite) {
+          child.type = NODE_TYPES.BATTLE;
+          child.meta.wasElite = true;
+        } else if (!parent.meta.forcedElite) {
+          parent.type = NODE_TYPES.BATTLE;
+          parent.meta.wasElite = true;
         }
       }
     }
