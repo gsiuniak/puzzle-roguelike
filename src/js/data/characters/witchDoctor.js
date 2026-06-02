@@ -23,7 +23,7 @@ const witchDoctor = {
       blue: 0,
       green: 3,
       yellow: 0,
-      purple: 4,
+      purple: 1,
     },
   },
 
