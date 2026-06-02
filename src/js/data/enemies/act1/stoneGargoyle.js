@@ -1,0 +1,33 @@
+/**
+ * Stone Gargoyle — Act 1 elite (defensive). See act1/goblin.js for field docs.
+ * Placeholder stats — tune freely.
+ */
+const stoneGargoyle = {
+  id: 'stone_gargoyle',
+  name: 'Stone Gargoyle',
+  aiBehavior: null,
+  className: 'Elite',
+  level: 3,
+
+  act: 1,
+  rarity: 'uncommon',
+  type: 'elite',
+  floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
+
+  hp: 40,
+  maxHp: 40,
+  attack: 2,
+  armor: 3,
+  mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
+  portrait: 'stone_gargoyle', // maps to 'portrait_stone_gargoyle' asset key
+  music: {
+    trackKey: 'battle_theme',
+    persistAfterBattle: true,
+    isSpecialTrack: false,
+  },
+
+  skills: ['slash'],
+  relics: ['goblin_totem'],
+};
+
+export default stoneGargoyle;
