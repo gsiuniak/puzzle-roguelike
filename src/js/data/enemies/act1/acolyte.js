@@ -26,7 +26,7 @@ const acolyte = {
     isSpecialTrack: false,
   },
 
-  skills: ['slash'],
+  skills: ['doomsong'],
   relics: ['goblin_totem'],
 };
 

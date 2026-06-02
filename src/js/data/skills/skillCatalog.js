@@ -124,6 +124,10 @@ const SKILL_CATALOG = {
   },
 
   // ── Enemies ──────────────────────────────────────────
+  // NOTE: skills that combine create_tiles with extra_turn must list the
+  // extra_turn effect AFTER create_tiles — create_tiles' _beginResolving resets
+  // the extra-turn flag, so it has to be (re)set afterward to survive the
+  // cascade. Icons/sounds reuse existing keys until dedicated art exists.
   slash: {
     id: 'slash',
     name: 'Slash',
@@ -133,6 +137,98 @@ const SKILL_CATALOG = {
     cost: { red: 5 },
     effects: [
       { effectType: 'damage', damage: { amount: 5 } },
+    ],
+  },
+
+  // Goblin Sapper
+  boom_baby: {
+    id: 'boom_baby',
+    name: 'Boom Baby!',
+    description: 'Deal 20 damage. Die',
+    icon: 'skill_slash',
+    sound: 'skill_slash',
+    cost: { red: 20 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 20 } },
+      { effectType: 'self_destruct' },
+    ],
+  },
+  ignition: {
+    id: 'ignition',
+    name: 'Ignition',
+    description: 'Create 10 Red',
+    icon: 'skill_slash',
+    sound: 'skill_slash',
+    cost: { yellow: 5 },
+    effects: [
+      { effectType: 'create_tiles', createTiles: { amount: 10, type: 'red' } },
+    ],
+  },
+
+  // Cyclops
+  boulder_throw: {
+    id: 'boulder_throw',
+    name: 'Boulder Throw',
+    description: 'Deal 10 damage.\nCreate 6 Green',
+    icon: 'skill_slash',
+    sound: 'skill_slash',
+    cost: { green: 6 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 10 } },
+      { effectType: 'create_tiles', createTiles: { amount: 6, type: 'green' } },
+    ],
+  },
+  smash: {
+    id: 'smash',
+    name: 'Smash',
+    description: 'Deal 10 damage.\nGain a turn',
+    icon: 'skill_bash',
+    sound: 'skill_bash',
+    cost: { red: 6 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 10 } },
+      { effectType: 'extra_turn' },
+    ],
+  },
+
+  // Acolyte
+  doomsong: {
+    id: 'doomsong',
+    name: 'Doomsong',
+    description: 'Create 10 skulls',
+    icon: 'skill_summon_dead',
+    sound: 'skill_create_skull',
+    cost: { purple: 7 },
+    effects: [
+      { effectType: 'create_tiles', createTiles: { amount: 10, type: 'skull' } },
+    ],
+  },
+
+  // Orc Taskmaster
+  charge: {
+    id: 'charge',
+    name: 'Charge!',
+    description: 'Deal 10 damage.\nCreate 5 Red.\nGain a turn',
+    icon: 'skill_bash',
+    sound: 'skill_bash',
+    cost: { red: 7 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 10 } },
+      { effectType: 'create_tiles', createTiles: { amount: 5, type: 'red' } },
+      { effectType: 'extra_turn' },
+    ],
+  },
+  frenzy: {
+    id: 'frenzy',
+    name: 'Frenzy',
+    description: 'Gain 10 armor.\nCreate 5 Blue.\nGain a turn',
+    icon: 'skill_defend',
+    sound: 'skill_defend',
+    cost: { blue: 7 },
+    effects: [
+      { effectType: 'armor', armor: { amount: 10 } },
+      { effectType: 'create_tiles', createTiles: { amount: 5, type: 'blue' } },
+      { effectType: 'extra_turn' },
     ],
   },
 };

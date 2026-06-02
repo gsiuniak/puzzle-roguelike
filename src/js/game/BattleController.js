@@ -1647,6 +1647,15 @@ export default class BattleController {
         return false;
       }
 
+      case SKILL_EFFECT_TYPES.SELF_DESTRUCT: {
+        // Caster dies. The post-effect _checkGameOver detects hp <= 0 and ends
+        // the battle (if the same skill also killed the opponent, the player's
+        // death is checked first, so a mutual-kill still resolves as a loss).
+        src.hp = 0;
+        this.log.add(`${src.name} self-destructs!`);
+        return false;
+      }
+
       default:
         console.warn(`[BattleController] Unknown effect type: "${effect.effectType}". Skipping.`);
         return false;

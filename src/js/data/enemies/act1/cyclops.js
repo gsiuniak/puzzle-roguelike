@@ -26,7 +26,7 @@ const cyclops = {
     isSpecialTrack: false,
   },
 
-  skills: ['slash'],
+  skills: ['boulder_throw', 'smash'],
   relics: ['cracked_fang'],
 };
 

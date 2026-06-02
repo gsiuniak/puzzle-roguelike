@@ -26,7 +26,7 @@ const orcTaskmaster = {
     isSpecialTrack: false,
   },
 
-  skills: ['slash'],
+  skills: ['charge', 'frenzy'],
   relics: ['cracked_fang'],
 };
 

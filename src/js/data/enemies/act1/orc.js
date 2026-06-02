@@ -16,7 +16,7 @@ const orc = {
 
   hp: 24,
   maxHp: 24,
-  attack: 2,
+  attack: 3,
   armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'orc', // maps to 'portrait_orc' asset key

@@ -30,6 +30,10 @@ export const SKILL_EFFECT_TYPES = {
   CONVERT_TILES_BY_TYPE: 'convert_tiles_by_type',
   HEAL: 'heal',
   EXTRA_TURN: 'extra_turn',
+  // Caster sets its own HP to 0 (e.g. Goblin Sapper's "Boom Baby!"). Resolved
+  // in BattleController._resolveEffect; the subsequent _checkGameOver ends the
+  // battle. Pair after a DAMAGE effect for a "deal damage then die" skill.
+  SELF_DESTRUCT: 'self_destruct',
 };
 
 /**

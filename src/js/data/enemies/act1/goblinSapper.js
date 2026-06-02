@@ -5,7 +5,7 @@
 const goblinSapper = {
   id: 'goblin_sapper',
   name: 'Goblin Sapper',
-  aiBehavior: null,
+  aiBehavior: 'goblin_sapper', // custom AI — see enemyAiOverrides.js
   className: 'Minion',
   level: 1,
 
@@ -26,7 +26,7 @@ const goblinSapper = {
     isSpecialTrack: false,
   },
 
-  skills: ['slash'],
+  skills: ['boom_baby', 'ignition'],
   relics: ['cursed_idol'],
 };
 
