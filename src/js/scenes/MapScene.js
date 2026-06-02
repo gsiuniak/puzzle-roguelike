@@ -29,11 +29,11 @@ import MapView from '../map/MapView.js';
 import AudioManager from '../audio/AudioManager.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
-import { goblin } from '../data/enemies/index.js';
+import { selectEnemyForNode } from '../data/enemies/index.js';
 import { createPlayerBattleState, syncBattleResultsToRunState } from '../data/playerStats.js';
 import { createRunState } from '../data/runState.js';
 import { resolveSkillIds } from '../data/skills/skillCatalog.js';
-import { resolveRelicIds } from '../data/relics/relicCatalog.js';
+import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
 
 export default class MapScene extends UIPanel {
   constructor() {
@@ -368,24 +368,17 @@ export default class MapScene extends UIPanel {
     // Create a fresh player battle state from effective stats + persistent HP
     const playerBattleState = createPlayerBattleState(this._characterDef, this._runState);
 
-    const enemyData = JSON.parse(JSON.stringify(goblin));
+    // Select the enemy for this node based on its act (depth) and the enemy
+    // type the node calls for (battle→minion, elite→elite, boss→boss). The
+    // selector returns a shared catalog reference, so deep-clone before use.
+    const enemyDef = selectEnemyForNode({ depth: node.depth, nodeType: node.type });
+    const enemyData = JSON.parse(JSON.stringify(enemyDef));
 
     // Resolve enemy skill/relic IDs into full objects via the catalogs.
-    // Characters/enemies store IDs; the BattleController operates on
-    // resolved objects.
+    // Characters/enemies store IDs; the BattleController operates on resolved
+    // objects. Enemy relics resolve against the ENEMY-ONLY relic pool.
     enemyData.skills = resolveSkillIds(enemyData.skills || []);
-    enemyData.relics = resolveRelicIds(enemyData.relics || []);
-
-    // Scale enemy difficulty based on depth and node type
-    // if (node.type === 'elite') {
-    //   enemyData.hp = Math.floor(enemyData.hp * 1.5);
-    //   enemyData.maxHp = enemyData.hp;
-    //   enemyData.name = 'Elite ' + enemyData.name;
-    // } else if (node.type === 'boss') {
-    //   enemyData.hp = Math.floor(enemyData.hp * 2.5);
-    //   enemyData.maxHp = enemyData.hp;
-    //   enemyData.name = 'Boss ' + enemyData.name;
-    // }
+    enemyData.relics = resolveEnemyRelicIds(enemyData.relics || []);
 
     // Create battle controller and scene
     const battleController = new BattleController(

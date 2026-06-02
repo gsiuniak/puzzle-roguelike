@@ -30,6 +30,7 @@ import { createRunState } from '../data/runState.js';
 import { createPlayerBattleState } from '../data/playerStats.js';
 import { resolveSkillIds } from '../data/skills/skillCatalog.js';
 import { resolveRelicIds } from '../data/relics/relicCatalog.js';
+import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
 
 /** Duration of the cross-fade transition between splash backgrounds (ms) */
 const CROSS_FADE_DURATION = 400;
@@ -947,7 +948,7 @@ export default class CharacterSelectScene extends UIPanel {
       console.warn('MapScene not found, falling back to direct BattleScene');
       const enemyClone = JSON.parse(JSON.stringify(goblin));
       enemyClone.skills = resolveSkillIds(enemyClone.skills || []);
-      enemyClone.relics = resolveRelicIds(enemyClone.relics || []);
+      enemyClone.relics = resolveEnemyRelicIds(enemyClone.relics || []);
       const playerBattleState = createPlayerBattleState(def.characterData, runState);
       const battleController = new BattleController(playerBattleState, enemyClone);
       const battleScene = new BattleScene(
