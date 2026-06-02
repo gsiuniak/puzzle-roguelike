@@ -1454,10 +1454,7 @@ export default class BattleController {
 
       // If an EXTRA_TURN effect was resolved, stay on the same side
       if (this._extraTurnEarned) {
-        this._extraTurnEarned = false;
-        this.pendingExtraTurn = true;
-        this.log.add('--- Extra Turn (Enemy) ---');
-        if (this.onStateChange) this.onStateChange();
+        this._beginEnemyExtraTurn();
         return;
       }
 
@@ -1492,6 +1489,30 @@ export default class BattleController {
   }
 
   /**
+   * Grant the enemy an extra turn after an INSTANT skill (no cascade) whose
+   * effects included extra_turn (e.g. Cyclops' Smash).
+   *
+   * The enemy turn is TIMER-driven, so — unlike the player's input-driven
+   * extra-turn path — we must re-arm the enemy fire gate (`_enemyFired` /
+   * `_enemyTimer`) and stay in ENEMY_TURN. Otherwise the update loop's
+   * `state === ENEMY_TURN && !_enemyFired` guard never lets the enemy act
+   * again and the battle freezes. Mirrors the enemy branch of
+   * `_finishResolving`'s extra-turn handling.
+   * @private
+   */
+  _beginEnemyExtraTurn() {
+    this._extraTurnEarned = false;
+    this.pendingExtraTurn = true;
+    this.state = BattleState.ENEMY_TURN;
+    this._enemyFired = false;
+    this._enemyTimer = 0;
+    // Extra turn = new action: re-arm Deathbringer's once-per-action guard.
+    this._deathbringerFiredThisAction = false;
+    this.log.add('--- Extra Turn (Enemy) ---');
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  /**
    * Dispatch a custom AI action returned by an enemyAiOverrides handler.
    * Supports three action types: 'skill', 'swap', and 'pass'.
    * @param {object} action — { action: 'skill'|'swap'|'pass', skill?, swap? }
@@ -1514,10 +1535,7 @@ export default class BattleController {
       if (this._checkGameOver()) return;
 
       if (this._extraTurnEarned) {
-        this._extraTurnEarned = false;
-        this.pendingExtraTurn = true;
-        this.log.add('--- Extra Turn (Enemy) ---');
-        if (this.onStateChange) this.onStateChange();
+        this._beginEnemyExtraTurn();
         return;
       }
 

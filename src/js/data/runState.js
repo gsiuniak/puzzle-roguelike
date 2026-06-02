@@ -70,6 +70,16 @@ export function createRunState(characterDef) {
      * @type {Array<object>}
      */
     rewards: [],
+
+    /**
+     * Enemy ids already encountered this run, bucketed by act number, so the
+     * spawn selector can avoid repeating an enemy within the same act (an
+     * enemy ideally appears at most once per act). Shape: { [act]: string[] }.
+     * Keyed by act (not run) so future multi-act runs track each act
+     * independently without needing an explicit reset at act boundaries.
+     * @type {Object<number, string[]>}
+     */
+    seenEnemiesByAct: {},
   };
 }
 
@@ -89,6 +99,7 @@ export function serializeRunState(runState) {
     relics: JSON.parse(JSON.stringify(runState.relics)),
     upgrades: JSON.parse(JSON.stringify(runState.upgrades)),
     rewards: JSON.parse(JSON.stringify(runState.rewards)),
+    seenEnemiesByAct: JSON.parse(JSON.stringify(runState.seenEnemiesByAct || {})),
   };
 }
 
@@ -106,5 +117,6 @@ export function deserializeRunState(data) {
     relics: data.relics || [],
     upgrades: data.upgrades || [],
     rewards: data.rewards || [],
+    seenEnemiesByAct: data.seenEnemiesByAct || {},
   };
 }

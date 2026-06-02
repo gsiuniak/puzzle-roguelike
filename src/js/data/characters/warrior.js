@@ -33,7 +33,7 @@ const warrior = {
   skills: ['bash', 'defend'],
 
   /** Starting relic IDs — resolved via relicCatalog at battle-state creation */
-  relics: ['family_crest', 'deathbringer'],
+  relics: ['family_crest'],
 };
 
 export default warrior;

@@ -29,7 +29,7 @@ import MapView from '../map/MapView.js';
 import AudioManager from '../audio/AudioManager.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
-import { selectEnemyForNode } from '../data/enemies/index.js';
+import { selectEnemyForNode, markEnemySeen } from '../data/enemies/index.js';
 import { createPlayerBattleState, syncBattleResultsToRunState } from '../data/playerStats.js';
 import { createRunState } from '../data/runState.js';
 import { resolveSkillIds } from '../data/skills/skillCatalog.js';
@@ -369,9 +369,17 @@ export default class MapScene extends UIPanel {
     const playerBattleState = createPlayerBattleState(this._characterDef, this._runState);
 
     // Select the enemy for this node based on its act (depth) and the enemy
-    // type the node calls for (battle→minion, elite→elite, boss→boss). The
-    // selector returns a shared catalog reference, so deep-clone before use.
-    const enemyDef = selectEnemyForNode({ depth: node.depth, nodeType: node.type });
+    // type the node calls for (battle→minion, elite→elite, boss→boss).
+    // `seenEnemiesByAct` steers the selector away from enemies already fought
+    // this act (ideally each is seen at most once per act). The selector
+    // returns a shared catalog reference, so deep-clone before use.
+    const enemyDef = selectEnemyForNode({
+      depth: node.depth,
+      nodeType: node.type,
+      seenByAct: this._runState.seenEnemiesByAct,
+    });
+    // Record the pick so later nodes this act avoid repeating it.
+    markEnemySeen(this._runState, enemyDef);
     const enemyData = JSON.parse(JSON.stringify(enemyDef));
 
     // Resolve enemy skill/relic IDs into full objects via the catalogs.

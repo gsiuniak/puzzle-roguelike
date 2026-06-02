@@ -12,7 +12,7 @@ const cyclops = {
   act: 1,
   rarity: 'uncommon',
   type: 'minion',
-  floors: [2, 3, 4],
+  floors: [3, 4, 5, 6, 7, 8, 9],
 
   hp: 45,
   maxHp: 45,
@@ -27,7 +27,7 @@ const cyclops = {
   },
 
   skills: ['boulder_throw', 'smash'],
-  relics: ['cracked_fang'],
+  relics: [],
 };
 
 export default cyclops;

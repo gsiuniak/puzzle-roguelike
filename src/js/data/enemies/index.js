@@ -181,6 +181,13 @@ function weightedPick(pool, rng) {
  * Pass either `depth` (0-indexed, as MapScene has it) or `floor` (1-indexed);
  * `floor` wins if both are given.
  *
+ * `seenByAct` lets the caller avoid repeating an enemy within an act: it maps
+ * act number → array of enemy ids already encountered this run. Candidates
+ * whose id is recorded under their own `act` are filtered out; if that would
+ * leave NO candidates (every eligible enemy has been seen), the unfiltered
+ * pool is used so an encounter still spawns (a repeat only happens once the
+ * act's pool is exhausted).
+ *
  * The returned object is a shared catalog reference — callers should clone it
  * (MapScene deep-clones before resolving skills/relics).
  *
@@ -188,10 +195,11 @@ function weightedPick(pool, rng) {
  * @param {number} [opts.depth] — map node depth (0-indexed)
  * @param {number} [opts.floor] — map floor (1-indexed); overrides depth
  * @param {string} opts.nodeType — map node type ('battle'|'elite'|'boss'|…)
+ * @param {Object<number, string[]>} [opts.seenByAct] — act → seen enemy ids
  * @param {() => number} [opts.rng=Math.random] — injectable RNG for testing
  * @returns {object} enemy definition
  */
-export function selectEnemyForNode({ depth = 0, floor = null, nodeType = 'battle', rng = Math.random } = {}) {
+export function selectEnemyForNode({ depth = 0, floor = null, nodeType = 'battle', seenByAct = {}, rng = Math.random } = {}) {
   const targetFloor = floor != null ? floor : floorForDepth(depth);
   const wantType = enemyTypeForNodeType(nodeType);
 
@@ -201,7 +209,36 @@ export function selectEnemyForNode({ depth = 0, floor = null, nodeType = 'battle
     pool = getEnemiesForFloor(targetFloor, 'minion');
   }
 
-  return weightedPick(pool, rng) || goblin;
+  // Prefer enemies not yet seen in their own act. Fall back to the full pool
+  // only when everything eligible has already appeared, so repeats happen
+  // strictly after the act's pool is exhausted.
+  const isSeen = (e) => {
+    // Mirror markEnemySeen's `act || 1` bucketing so a def missing `act` still
+    // dedupes consistently rather than landing in a different bucket.
+    const seen = seenByAct[e.act || 1];
+    return Array.isArray(seen) && seen.includes(e.id);
+  };
+  const unseen = pool.filter((e) => !isSeen(e));
+  const finalPool = unseen.length ? unseen : pool;
+
+  return weightedPick(finalPool, rng) || goblin;
+}
+
+/**
+ * Record that an enemy has been encountered this run, bucketed by its act, so
+ * subsequent selectEnemyForNode() calls avoid repeating it within that act.
+ * Idempotent — a given id is stored at most once per act. Safe to call with a
+ * run state whose `seenEnemiesByAct` is missing (it is created on demand).
+ *
+ * @param {object} runState — player run state (mutated in place)
+ * @param {object} enemyDef — the selected enemy definition (needs id + act)
+ */
+export function markEnemySeen(runState, enemyDef) {
+  if (!runState || !enemyDef || !enemyDef.id) return;
+  if (!runState.seenEnemiesByAct) runState.seenEnemiesByAct = {};
+  const act = enemyDef.act || 1;
+  const bucket = runState.seenEnemiesByAct[act] || (runState.seenEnemiesByAct[act] = []);
+  if (!bucket.includes(enemyDef.id)) bucket.push(enemyDef.id);
 }
 
 export { goblin, FLOOR_COUNT };
