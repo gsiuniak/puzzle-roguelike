@@ -162,6 +162,27 @@ const ASSET_MAP = {
   relic_reckoning:           'assets/sprites/relics/relic_reckoning.png',
   relic_gorepike:            'assets/sprites/relics/relic_gorepike.png',
   relic_deathbringer:        'assets/sprites/relics/relic_deathbringer.png',
+  // Potions — grant starting mana (one per color)
+  relic_potion_red:          'assets/sprites/relics/relic_potion_red.png',
+  relic_potion_blue:         'assets/sprites/relics/relic_potion_blue.png',
+  relic_potion_green:        'assets/sprites/relics/relic_potion_green.png',
+  relic_potion_yellow:       'assets/sprites/relics/relic_potion_yellow.png',
+  relic_potion_purple:       'assets/sprites/relics/relic_potion_purple.png',
+  // Mana-gain reactors — deal 1 damage when gaining a color (one per color)
+  relic_flaming_arrow:       'assets/sprites/relics/relic_flaming_arrow.png',
+  relic_water_balloon:       'assets/sprites/relics/relic_water_balloon.png',
+  relic_thorned_branch:      'assets/sprites/relics/relic_thorned_branch.png',
+  relic_static_comb:         'assets/sprites/relics/relic_static_comb.png',
+  relic_tuning_fork:         'assets/sprites/relics/relic_tuning_fork.png',
+  // Familiars — gain +1 mana of a color on any 3+ match (one per color)
+  relic_familiar_red:        'assets/sprites/relics/relic_familiar_red.png',
+  relic_familiar_blue:       'assets/sprites/relics/relic_familiar_blue.png',
+  relic_familiar_green:      'assets/sprites/relics/relic_familiar_green.png',
+  relic_familiar_yellow:     'assets/sprites/relics/relic_familiar_yellow.png',
+  relic_familiar_purple:     'assets/sprites/relics/relic_familiar_purple.png',
+  // Individual relics
+  relic_slingshot:           'assets/sprites/relics/relic_slingshot.png',
+  relic_familiar_skull:      'assets/sprites/relics/relic_familiar_skull.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };

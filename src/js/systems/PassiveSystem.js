@@ -116,6 +116,7 @@ export default class PassiveSystem {
    * Supported fields (all optional, ANDed together):
    *   typeId   — payload.typeId must equal this (e.g. 'skull')
    *   minCount — payload.count must be >= this (e.g. 3)
+   *   color    — payload.color must equal this (e.g. 'red' for onGainMana)
    * @param {object} condition
    * @param {object} payload
    * @returns {boolean}
@@ -123,6 +124,7 @@ export default class PassiveSystem {
   _passesCondition(condition, payload) {
     if (!condition) return true;
     if (condition.typeId != null && payload.typeId !== condition.typeId) return false;
+    if (condition.color != null && payload.color !== condition.color) return false;
     if (condition.minCount != null &&
         !(typeof payload.count === 'number' && payload.count >= condition.minCount)) {
       return false;

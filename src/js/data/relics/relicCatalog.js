@@ -42,10 +42,11 @@
  * use the `onBattleStart` trigger and one of the static-modifier effect
  * types, aggregated once at battle setup by
  * BattleController._initStaticModifiers():
- *   modify_stat        — { modifyStat: { stat, amount } }   (e.g. attack +3)
- *   modify_spawn_rate  — { spawnRate: { tile, amount } }    (percentage points)
- *   modify_mana_gain   — { manaGain: { color, amount } }    (bonus mana per match)
- *   modify_skull_damage— { skullDamage: { amount } }        (bonus matched-skull dmg)
+ *   modify_stat         — { modifyStat: { stat, amount } }   (e.g. attack +3)
+ *   modify_spawn_rate   — { spawnRate: { tile, amount } }    (percentage points)
+ *   modify_mana_gain    — { manaGain: { color, amount } }    (bonus mana per match)
+ *   modify_skull_damage — { skullDamage: { amount } }        (bonus matched-skull dmg)
+ *   grant_starting_mana — { startingMana: { color, amount } }(one-time mana at setup)
  * These do NOT flow through EffectResolver (they need board / reward access).
  */
 
@@ -468,6 +469,209 @@ const RELIC_CATALOG = {
       // Board-touching — queues a deferred skull destruction drained after the
       // current resolution settles (BattleController._maybeStartPendingSkullDestroy).
       { trigger: 'onDealDamage', effectType: 'destroy_random_skulls', destroySkulls: { amount: 2 } },
+    ],
+  },
+
+  // ── Potions: grant starting mana of a color (one per color) ──────────────
+  // One-time mana grant at battle setup via the grant_starting_mana static
+  // modifier (aggregated in BattleController._initStaticModifiers, applied
+  // before the board is built). Does not fire onGainMana.
+  red_potion: {
+    id: 'red_potion',
+    name: 'Red Potion',
+    description: 'Gain 3 red mana at the start of battle.',
+    icon: 'relic_potion_red',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'red', amount: 3 } },
+    ],
+  },
+
+  blue_potion: {
+    id: 'blue_potion',
+    name: 'Blue Potion',
+    description: 'Gain 3 blue mana at the start of battle.',
+    icon: 'relic_potion_blue',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'blue', amount: 3 } },
+    ],
+  },
+
+  green_potion: {
+    id: 'green_potion',
+    name: 'Green Potion',
+    description: 'Gain 3 green mana at the start of battle.',
+    icon: 'relic_potion_green',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'green', amount: 3 } },
+    ],
+  },
+
+  yellow_potion: {
+    id: 'yellow_potion',
+    name: 'Yellow Potion',
+    description: 'Gain 3 yellow mana at the start of battle.',
+    icon: 'relic_potion_yellow',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'yellow', amount: 3 } },
+    ],
+  },
+
+  purple_potion: {
+    id: 'purple_potion',
+    name: 'Purple Potion',
+    description: 'Gain 3 purple mana at the start of battle.',
+    icon: 'relic_potion_purple',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'purple', amount: 3 } },
+    ],
+  },
+
+  // ── Mana-gain reactors: deal 1 damage when you gain a color (one per color) ─
+  // Each reacts to the onGainMana trigger gated by color (PassiveSystem's
+  // condition.color). Fires once per color per gain event from cascade/skill
+  // mana (not from starting mana or relic-granted bonus mana).
+  flaming_arrow: {
+    id: 'flaming_arrow',
+    name: 'Flaming Arrow',
+    description: 'Deal 1 damage whenever you gain red mana.',
+    icon: 'relic_flaming_arrow',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1 } },
+    ],
+  },
+
+  water_balloon: {
+    id: 'water_balloon',
+    name: 'Water Balloon',
+    description: 'Deal 1 damage whenever you gain blue mana.',
+    icon: 'relic_water_balloon',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1 } },
+    ],
+  },
+
+  thorned_branch: {
+    id: 'thorned_branch',
+    name: 'Thorned Branch',
+    description: 'Deal 1 damage whenever you gain green mana.',
+    icon: 'relic_thorned_branch',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1 } },
+    ],
+  },
+
+  static_comb: {
+    id: 'static_comb',
+    name: 'Static Comb',
+    description: 'Deal 1 damage whenever you gain yellow mana.',
+    icon: 'relic_static_comb',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1 } },
+    ],
+  },
+
+  tuning_rod: {
+    id: 'tuning_rod',
+    name: 'Tuning Rod',
+    description: 'Deal 1 damage whenever you gain purple mana.',
+    icon: 'relic_tuning_fork',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1 } },
+    ],
+  },
+
+  // ── Familiars: gain +1 mana of a color on any 3+ match (one per color) ────
+  // React to onTileMatchType (fires per individual match, all of which are
+  // 3+ tiles) and grant +1 mana of the relic's color via EffectResolver's
+  // gain_mana. The granted color is fixed regardless of the matched color.
+  familiar_red: {
+    id: 'familiar_red',
+    name: 'Fire Familiar',
+    description: 'Gain 1 red mana whenever you match 3 or more tiles.',
+    icon: 'relic_familiar_red',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'red', amount: 1 } },
+    ],
+  },
+
+  familiar_blue: {
+    id: 'familiar_blue',
+    name: 'Water Familiar',
+    description: 'Gain 1 blue mana whenever you match 3 or more tiles.',
+    icon: 'relic_familiar_blue',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'blue', amount: 1 } },
+    ],
+  },
+
+  familiar_green: {
+    id: 'familiar_green',
+    name: 'Earth Familiar',
+    description: 'Gain 1 green mana whenever you match 3 or more tiles.',
+    icon: 'relic_familiar_green',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'green', amount: 1 } },
+    ],
+  },
+
+  familiar_yellow: {
+    id: 'familiar_yellow',
+    name: 'Energy Familiar',
+    description: 'Gain 1 yellow mana whenever you match 3 or more tiles.',
+    icon: 'relic_familiar_yellow',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'yellow', amount: 1 } },
+    ],
+  },
+
+  familiar_purple: {
+    id: 'familiar_purple',
+    name: 'Arcane Familiar',
+    description: 'Gain 1 purple mana whenever you match 3 or more tiles.',
+    icon: 'relic_familiar_purple',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'purple', amount: 1 } },
+    ],
+  },
+
+  // ── Standalone relics (turn-start damage / skull destruction) ────────────
+  slingshot: {
+    id: 'slingshot',
+    name: 'Slingshot',
+    description: 'Deal 1 damage at the start of your turn.',
+    icon: 'relic_slingshot',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 1 } },
+    ],
+  },
+
+  death_familiar: {
+    id: 'death_familiar',
+    name: 'Death Familiar',
+    description: 'Destroy a random skull whenever you match 3 or more tiles.',
+    icon: 'relic_familiar_skull',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      // Board-touching — queues a deferred skull destruction (same path as
+      // Deathbringer) but on a match trigger; bypasses the once-per-action
+      // recursion guard so it can fire per qualifying match.
+      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'destroy_random_skulls', destroySkulls: { amount: 1 } },
     ],
   },
 };

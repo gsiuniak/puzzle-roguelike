@@ -287,6 +287,17 @@ export default class BattleController {
               }
               break;
             }
+            case 'grant_starting_mana': {
+              // One-time mana grant at battle setup (Group: Red/Blue/.../Purple
+              // Potion). Intentionally does NOT fire onGainMana — it's setup,
+              // not a gameplay gain.
+              const m = effect.startingMana || {};
+              if (m.color && typeof m.amount === 'number') {
+                if (!side.mana) side.mana = {};
+                side.mana[m.color] = (side.mana[m.color] || 0) + m.amount;
+              }
+              break;
+            }
             case 'modify_spawn_rate': {
               const m = effect.spawnRate || {};
               if (m.tile && typeof m.amount === 'number') {
@@ -769,6 +780,7 @@ export default class BattleController {
       if (count > 0) {
         activeState.mana[color] = (activeState.mana[color] || 0) + count;
         this.log.add(`${activeState.name} gains ${count} ${color} mana from destroyed gems.`);
+        this._dispatchManaGain(this.activeSide, color, count);
       }
     }
 
@@ -1171,6 +1183,7 @@ export default class BattleController {
       if (count > 0) {
         activeState.mana[color] = (activeState.mana[color] || 0) + count;
         this.log.add(`${activeState.name} gains ${count} ${color} mana.`);
+        this._dispatchManaGain(this.activeSide, color, count);
       }
     }
 
@@ -1721,6 +1734,31 @@ export default class BattleController {
   }
 
   /**
+   * Dispatch onGainMana for a single color the active side just gained.
+   * Lets relics react to mana gain (e.g. Flaming Arrow deals 1 damage when
+   * its owner gains red mana). Sets _currentRelicTarget to the opponent so
+   * any damage dealt by the reacting relic routes screen shake to the right
+   * side.
+   *
+   * Only the primary gameplay mana-gain sites (cascade match rewards in
+   * _doRemove and skill tile-destruction rewards in _executeDestroyTiles)
+   * call this — starting mana (Potions) and relic-granted bonus mana
+   * (Familiars, Prism) intentionally do not, to avoid passive chaining.
+   *
+   * @param {'player'|'enemy'} side — the side that gained mana
+   * @param {string} color — mana color gained
+   * @param {number} amount — amount gained (must be > 0)
+   */
+  _dispatchManaGain(side, color, amount) {
+    if (!color || amount <= 0) return;
+    const targetSide = side === 'player' ? 'enemy' : 'player';
+    const prev = this._currentRelicTarget;
+    this._currentRelicTarget = this._getStateBySide(targetSide);
+    this.passives.dispatch(TRIGGER_TYPES.ON_GAIN_MANA, { side, color, amount });
+    this._currentRelicTarget = prev;
+  }
+
+  /**
    * Dispatch onTileMatch / onTileMatchType / onMatch4Plus for a cascade
    * step. Fires once per analysis with one `onTileMatch`, then one
    * `onTileMatchType` per individual match, plus `onMatch4Plus` for any
@@ -1789,14 +1827,18 @@ export default class BattleController {
       case 'destroy_random_row':
         return this._applyPassiveDestroyRandomRow(effect, payload);
       case 'destroy_random_skulls': {
-        // Recursion guard: fire at most once per action. The skull damage
-        // this destruction deals fires onDealDamage again — without this
-        // guard it would re-queue itself and loop.
-        if (this._deathbringerFiredThisAction) return true;
+        // The once-per-action recursion guard applies ONLY to damage-triggered
+        // destroyers (Deathbringer, onDealDamage): the skull damage their
+        // destruction deals fires onDealDamage again, so without the guard they
+        // would re-queue and loop. Match-triggered destroyers (Death Familiar,
+        // onTileMatchType) don't recurse on their own damage, so they bypass
+        // the guard and fire per qualifying match.
+        const isDamageTriggered = triggerName === TRIGGER_TYPES.ON_DEAL_DAMAGE;
+        if (isDamageTriggered && this._deathbringerFiredThisAction) return true;
         const amount = (effect.destroySkulls && typeof effect.destroySkulls.amount === 'number')
           ? effect.destroySkulls.amount
           : 1;
-        this._deathbringerFiredThisAction = true;
+        if (isDamageTriggered) this._deathbringerFiredThisAction = true;
         this._pendingSkullDestroy += Math.max(0, amount);
         return true;
       }

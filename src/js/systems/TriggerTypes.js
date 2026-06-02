@@ -42,6 +42,16 @@
  *                        on cascade steps); use it as the focal point for
  *                        radius-based passive effects.
  *
+ *   onGainMana           payload: { side, color, amount }
+ *                        Fires when a combatant gains mana of a color from
+ *                        gameplay (cascade match rewards, skill tile
+ *                        destruction). Fires ONCE per color per gain event
+ *                        (not once per mana point). Intentionally NOT fired
+ *                        for battle-start starting mana or relic-granted
+ *                        bonus mana, to avoid passive chaining. `side` is the
+ *                        side that gained the mana (e.g. Flaming Arrow deals
+ *                        1 damage when its owner gains red mana).
+ *
  *   onTurnStart          payload: { side }
  *                        Fires at the start of a turn (after TURN_INTRO).
  *
@@ -73,6 +83,7 @@ const TRIGGER_TYPES = {
   ON_TILE_MATCH:       'onTileMatch',
   ON_TILE_MATCH_TYPE:  'onTileMatchType',
   ON_MATCH_4_PLUS:     'onMatch4Plus',
+  ON_GAIN_MANA:        'onGainMana',
   ON_TURN_START:       'onTurnStart',
   ON_TURN_END:         'onTurnEnd',
   ON_INCOMING_DAMAGE:  'onIncomingDamage',
