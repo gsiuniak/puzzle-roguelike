@@ -144,24 +144,24 @@ const SKILL_CATALOG = {
   boom_baby: {
     id: 'boom_baby',
     name: 'Boom Baby!',
-    description: 'Deal 20 damage.\nDie',
+    description: 'Deal 999 damage.\nDie',
     icon: 'skill_slash',
     sound: 'skill_slash',
     cost: { red: 20 },
     effects: [
-      { effectType: 'damage', damage: { amount: 20 } },
+      { effectType: 'damage', damage: { amount: 999 } },
       { effectType: 'self_destruct' },
     ],
   },
   ignition: {
     id: 'ignition',
     name: 'Ignition',
-    description: 'Create 10 Red',
+    description: 'Create 20 Red',
     icon: 'skill_slash',
     sound: 'skill_slash',
-    cost: { yellow: 5 },
+    cost: { yellow: 7 },
     effects: [
-      { effectType: 'create_tiles', createTiles: { amount: 10, type: 'red' } },
+      { effectType: 'create_tiles', createTiles: { amount: 20, type: 'red' } },
     ],
   },
 

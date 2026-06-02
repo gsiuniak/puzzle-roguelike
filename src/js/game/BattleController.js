@@ -197,6 +197,12 @@ export default class BattleController {
     // being applied so the nested onDealDamage can't spawn another echo.
     this._echoDamageActive = false;
 
+    // Set when a turn-start passive board effect (e.g. Chokeweed Sap) creates
+    // a match and kicks off a cascade DURING onTurnStart. The active side
+    // hasn't taken its action yet, so when that cascade finishes we resume its
+    // normal turn instead of ending it (the default _finishResolving routing).
+    this._resumeTurnAfterResolve = false;
+
     // ── Callbacks ──
     this.onStateChange = null;
 
@@ -1048,8 +1054,12 @@ export default class BattleController {
     // 4+ group (handles both click-order scenarios correctly).
     // For cascade steps: find which match position overlaps with the
     // previously-empty cells (the tile that fell into place).
+    // A turn-start cascade (Chokeweed Sap) is part of turn setup, not the
+    // side's action — it must not grant or animate an extra turn even if the
+    // conversion lines up a 4+ match. Suppress the extra-turn flag/visual when
+    // resuming the turn after this resolution.
     let causePos = null;
-    if (analysis.extraTurnTrigger) {
+    if (analysis.extraTurnTrigger && !this._resumeTurnAfterResolve) {
       this._extraTurnEarned = true;
       if (this._previousEmptyCells && this._previousEmptyCells.length > 0) {
         causePos = this._findCascadeCausePos(analysis, this._previousEmptyCells);
@@ -1253,13 +1263,16 @@ export default class BattleController {
       this.log.add(`${totalDestroyed} tiles destroyed across ${this._allSteps.length} cascade(s).`);
     }
 
-    if (this._extraTurnEarned) {
+    // A turn-start cascade (e.g. Chokeweed Sap) resolves as part of the turn
+    // setup, NOT as the side's action — so it never grants an extra turn (that
+    // would double the turn). Suppress the extra-turn grant when resuming.
+    if (this._extraTurnEarned && !this._resumeTurnAfterResolve) {
       this.pendingExtraTurn = true;
       // extraTurnTriggerPos was already set in _enterShowMatch — the
       // scene is already animating the effect concurrently with cascades.
       this.log.add(`${this._activeState().name} gets an extra turn!`);
-      this._extraTurnEarned = false;
     }
+    this._extraTurnEarned = false;
 
     this._analysis = null;
     this._allSteps = [];
@@ -1270,7 +1283,22 @@ export default class BattleController {
 
     if (this._checkGameOver()) return;
 
-    if (this.pendingExtraTurn) {
+    if (this._resumeTurnAfterResolve) {
+      // The cascade came from a turn-start passive; the active side still
+      // needs to take its normal action. Resume its turn (do NOT end it, do
+      // NOT re-dispatch onTurnStart — that already fired before the cascade).
+      this._resumeTurnAfterResolve = false;
+      this.pendingExtraTurn = false;
+      this._phaseTimer = 0;
+      this._deathbringerFiredThisAction = false;
+      if (this.activeSide === 'player') {
+        this.state = BattleState.PLAYER_TURN;
+      } else {
+        this.state = BattleState.ENEMY_TURN;
+        this._enemyTimer = 0;
+        this._enemyFired = false;
+      }
+    } else if (this.pendingExtraTurn) {
       this._phaseTimer = 0;
       this._enemyFired = false;
       // Extra turn = new action: re-arm Deathbringer's once-per-action guard
@@ -1944,14 +1972,16 @@ export default class BattleController {
   }
 
   /**
-   * Convert up to N random tiles of one type into another type IN PLACE,
-   * without starting a cascade (Chokeweed Sap: 2 Skulls → Green on turn start).
+   * Convert up to N random tiles of one type into another type
+   * (Chokeweed Sap: 2 Skulls → Green on turn start).
    *
-   * This fires from onTurnStart, which is NOT inside a cascade, so it must NOT
-   * call _beginResolving — doing so would consume the active side's turn. Any
-   * match the conversion happens to form simply resolves on the next swap.
-   * Converted positions are surfaced via _convertedTilePositions so the scene
-   * spawns the same shimmer used by skill conversions.
+   * This fires from onTurnStart. If the conversion lines up a match, the
+   * cascade IS resolved (awarding the active side mana / skull damage), then
+   * the active side resumes its NORMAL turn via the _resumeTurnAfterResolve
+   * flag — _finishResolving must not end the turn or grant an extra turn,
+   * since the side hasn't acted yet. If no match forms, the tiles are just
+   * converted in place. Converted positions are surfaced via
+   * _convertedTilePositions so the scene spawns the conversion shimmer.
    *
    * @param {object} effect — { convertTiles: { from, to, amount } }
    * @returns {boolean} always true (effect recognized/handled)
@@ -1972,11 +2002,25 @@ export default class BattleController {
 
     const chosen = BoardModel.pickRandomTiles(candidates, amount);
     const count = this.board.convertTilesToType(chosen, to);
-    if (count > 0) {
-      this._convertedTilePositions = chosen.slice(0, count).map(p => ({
-        col: p.col, row: p.row, typeId: to,
-      }));
-      this.log.add(`${count} ${from} converted to ${to}.`);
+    if (count <= 0) return true;
+
+    this._convertedTilePositions = chosen.slice(0, count).map(p => ({
+      col: p.col, row: p.row, typeId: to,
+    }));
+    this.log.add(`${count} ${from} converted to ${to}.`);
+
+    // Only resolve a resulting match when this fires at the START of a turn
+    // (its sole use today — onTurnStart). The turn-state guard keeps a future
+    // mid-cascade trigger from clobbering an in-flight resolution.
+    const atTurnStart = this.state === BattleState.PLAYER_TURN ||
+                        this.state === BattleState.ENEMY_TURN;
+    if (atTurnStart) {
+      const analysis = this.resolver.analyzeMatches(this.board, this._activeState());
+      if (analysis) {
+        this._swapTriggerPos = null;
+        this._resumeTurnAfterResolve = true;
+        this._beginResolving(this.activeSide, analysis);
+      }
     }
     return true;
   }
