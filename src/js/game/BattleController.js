@@ -191,6 +191,12 @@ export default class BattleController {
     // onDealDamage. Set when it queues; reset at each (extra-)turn start.
     this._deathbringerFiredThisAction = false;
 
+    // Reentrancy guard for echo_damage relics (Goresnout Collars): the echo
+    // deals damage which re-fires onDealDamage; without this in-stack flag the
+    // relic would echo its own echo forever. Set true only while an echo is
+    // being applied so the nested onDealDamage can't spawn another echo.
+    this._echoDamageActive = false;
+
     // ── Callbacks ──
     this.onStateChange = null;
 
@@ -1850,6 +1856,8 @@ export default class BattleController {
         return this._applyPassiveDestroyRandomRow(effect, payload);
       case 'convert_random_tiles':
         return this._applyPassiveConvertRandomTiles(effect);
+      case 'echo_damage':
+        return this._applyPassiveEchoDamage(effect, payload);
       case 'destroy_random_skulls': {
         // The once-per-action recursion guard applies ONLY to damage-triggered
         // destroyers (Deathbringer, onDealDamage): the skull damage their
@@ -1952,6 +1960,49 @@ export default class BattleController {
       }));
       this.log.add(`${count} ${from} converted to ${to}.`);
     }
+    return true;
+  }
+
+  /**
+   * Re-deal the damage that just landed (Goresnout Collars: "when dealing
+   * damage, deal the same damage again"). Triggered from onDealDamage, whose
+   * payload carries the actual damage and the side that dealt it.
+   *
+   * This is an atomic (non-board) effect, but it lives here rather than in the
+   * stateless EffectResolver because it needs the controller's reentrancy guard
+   * (_echoDamageActive): the echo is dispatched as a FULL damage event
+   * (_dispatchDamageEvent), so it re-fires onDealDamage and would otherwise
+   * echo its own echo forever. The guard caps it at exactly one echo per hit.
+   *
+   * @param {object} effect — { echoDamage?: { multiplier } } (multiplier default 1)
+   * @param {object} payload — onDealDamage payload { side, amount, target }
+   * @returns {boolean} always true (effect recognized/handled)
+   */
+  _applyPassiveEchoDamage(effect, payload) {
+    if (this._echoDamageActive) return true; // already echoing — stop recursion
+    const baseAmount = (payload && typeof payload.amount === 'number') ? payload.amount : 0;
+    if (baseAmount <= 0) return true;
+
+    const mult = (effect && effect.echoDamage && typeof effect.echoDamage.multiplier === 'number')
+      ? effect.echoDamage.multiplier
+      : 1;
+    const echoAmount = Math.max(0, Math.round(baseAmount * mult));
+    if (echoAmount <= 0) return true;
+
+    const attackerSide = payload.side;
+    const targetSide = attackerSide === 'player' ? 'enemy' : 'player';
+    const target = this._getStateBySide(targetSide);
+    if (!target) return true;
+
+    this._echoDamageActive = true;
+    const r = this._applyDamage(target, echoAmount);
+    if (r.actualDamage > 0) {
+      this.log.add(`Goresnout Collars echoes ${r.actualDamage} damage to ${target.name}.`);
+      this._setShakeFromDamage(r.actualDamage, target.maxHp);
+      // Full damage event: re-fires onDealDamage (guarded above) + onTakeDamage.
+      this._dispatchDamageEvent(attackerSide, targetSide, r);
+    }
+    this._echoDamageActive = false;
     return true;
   }
 

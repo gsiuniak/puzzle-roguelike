@@ -28,7 +28,7 @@ const mage = {
   },
 
   skills: ['fracture', 'arcane_inscription'],
-  relics: ['unstable_catalyst', 'copper_coil', 'gorepike'],
+  relics: ['unstable_catalyst'],
 };
 
 export default mage;

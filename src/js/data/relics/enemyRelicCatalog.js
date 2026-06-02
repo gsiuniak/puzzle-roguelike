@@ -82,6 +82,20 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
+  // Reactive damage echo — re-deals the damage just dealt. Routed through the
+  // onBoardEffect path so BattleController can apply its reentrancy guard
+  // (_echoDamageActive) and stop the echo from echoing itself forever.
+  goresnout_collars: {
+    id: 'goresnout_collars',
+    name: 'Goresnout Collars',
+    description: 'When dealing damage, deal the same damage again.',
+    icon: 'relic_goresnout_collars',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      { trigger: 'onDealDamage', effectType: 'echo_damage', echoDamage: { multiplier: 1 } },
+    ],
+  },
+
   // Turn-start board control — converts up to 2 random Skull tiles into Green
   // in place (no cascade). Board-touching, so it's handled by
   // BattleController._handlePassiveBoardEffect via the onBoardEffect path.

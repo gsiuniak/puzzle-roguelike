@@ -10,6 +10,7 @@ import cyclops from './cyclops.js';
 import stoneGargoyle from './stoneGargoyle.js';
 import orcTaskmaster from './orcTaskmaster.js';
 import chokeweed from './chokeweed.js';
+import goresnoutTrackers from './goresnoutTrackers.js';
 
 /** All Act 1 enemy definitions. */
 const ACT1_ENEMIES = [
@@ -22,6 +23,7 @@ const ACT1_ENEMIES = [
   stoneGargoyle,
   orcTaskmaster,
   chokeweed,
+  goresnoutTrackers,
 ];
 
 export {
@@ -34,5 +36,6 @@ export {
   stoneGargoyle,
   orcTaskmaster,
   chokeweed,
+  goresnoutTrackers,
 };
 export default ACT1_ENEMIES;

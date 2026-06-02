@@ -247,6 +247,21 @@ const SKILL_CATALOG = {
       { effectType: 'gain_attack', gainAttack: { amount: 1 } },
     ],
   },
+
+  // Goresnout Trackers — ramps attack while chipping damage. Pairs with the
+  // Goresnout Collars relic (echoes the 2 damage for 4 total).
+  hound: {
+    id: 'hound',
+    name: 'Hound',
+    description: 'Gain +1 Attack.\nDeal 2 damage.',
+    icon: 'skill_hound',
+    sound: 'skill_slash',
+    cost: { red: 3 },
+    effects: [
+      { effectType: 'gain_attack', gainAttack: { amount: 1 } },
+      { effectType: 'damage', damage: { amount: 2 } },
+    ],
+  },
 };
 
 /**
