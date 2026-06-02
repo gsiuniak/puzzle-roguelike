@@ -6,9 +6,18 @@
  * creation time). See data/enemies/index.js for the enemy lookup/spawn API.
  *
  * === Categorization fields ===
- *   act    — 1 | 2 | 3        which act this enemy belongs to (drives spawn pool by depth)
- *   rarity — 'common' | 'uncommon' | 'rare'   weighting within an act+type pool
+ *   act    — 1 | 2 | 3        thematic grouping only (NOT used for spawn selection)
+ *   rarity — 'common' | 'uncommon' | 'rare'   weighting within a floor+type pool
  *   type   — 'minion' | 'elite' | 'boss'      matched against the map node type
+ *
+ * === floors (spawn placement) ===
+ *   floors — number[]   the map floors this enemy is eligible to appear on.
+ *            Floors are 1-indexed: floor 1 = the first encounter, floor 10 =
+ *            the boss (the map's 10 depths, 0-indexed internally, map to floors
+ *            depth+1). selectEnemyForNode() filters candidates by
+ *            `floors.includes(floor)` AND matching `type`, then rarity-weighted
+ *            picks one. This is the authoritative control for WHERE an enemy
+ *            shows up — `act` is just a label.
  *
  * === relics ===
  * Enemy relic IDs are drawn from the ENEMY-ONLY pool in
@@ -44,6 +53,11 @@ const goblin = {
   act: 1,
   rarity: 'common',
   type: 'minion',
+
+  // ── Spawn placement ──
+  // Sole Act 1 minion for now, so it covers every battle floor. When more
+  // Act 1 minions are added, split these floors between them.
+  floors: [1, 2, 3, 4, 5, 6, 7, 8, 9],
 
   hp: 18,
   maxHp: 18,

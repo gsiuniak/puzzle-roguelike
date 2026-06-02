@@ -13,6 +13,9 @@ const goblinBrute = {
   rarity: 'uncommon',
   type: 'elite',
 
+  // Elite nodes never appear before depth 4 (floor 5), per MapGenerator.
+  floors: [5, 6, 7, 8, 9],
+
   hp: 34,
   maxHp: 34,
   attack: 2,

@@ -1,21 +1,27 @@
 /**
  * data/enemies/index.js — central registry + spawn selection for enemies.
  *
- * Enemies are organized into per-act subfolders (act1/, act2/, act3/), each
- * with its own index that exports an array of that act's enemy definitions.
- * This top-level module aggregates them into:
+ * Enemies are organized into per-act subfolders (act1/, … future act2/act3/),
+ * each with its own index that exports an array of that act's enemy
+ * definitions. Only Act 1 exists today. This top-level module aggregates them
+ * into:
  *   - ENEMIES_BY_ID — flat id → def lookup (getEnemyById)
- *   - query helpers  — getEnemiesByAct / getEnemiesByType / getEnemiesByRarity
+ *   - query helpers  — getEnemiesByAct / getEnemiesByType / getEnemiesByRarity / getEnemiesForFloor
  *   - spawn selection — selectEnemyForNode({ depth, nodeType }) used by MapScene
  *
  * Categorization vocabulary (fields on every enemy def):
- *   act    — 1 | 2 | 3
+ *   act    — 1 | 2 | 3   thematic grouping ONLY (does not affect spawning)
  *   rarity — 'common' | 'uncommon' | 'rare'
  *   type   — 'minion' | 'elite' | 'boss'
+ *   floors — number[]    1-indexed map floors the enemy may spawn on (THE
+ *                        authoritative placement control). Floor 1 = the first
+ *                        encounter (depth 0); floor 10 = the boss (depth 9).
+ *
+ * Spawning is driven by `floors` + `type`, NOT by act. See selectEnemyForNode.
  *
  * Adding a new enemy:
  *   1. Create a file in the appropriate actN/ folder that `export default`s
- *      the enemy definition (with act/rarity/type/relics fields).
+ *      the enemy definition (with act/rarity/type/floors/relics fields).
  *   2. Import + add it to that act's actN/index.js array.
  *   3. Register portrait/skill assets in main.js ASSET_MAP.
  *   4. Enemy relics are referenced by ID from the ENEMY-ONLY pool
@@ -23,23 +29,17 @@
  */
 
 import ACT1_ENEMIES, { goblin } from './act1/index.js';
-import ACT2_ENEMIES from './act2/index.js';
-import ACT3_ENEMIES from './act3/index.js';
 
-/** Number of map depths (mirrors MapGenerator.DEPTH_COUNT). */
-const DEPTH_COUNT = 10;
-/** Number of acts the run is divided into. */
-const ACT_COUNT = 3;
+/** Number of map depths (mirrors MapGenerator.DEPTH_COUNT). Floors are 1..FLOOR_COUNT. */
+const FLOOR_COUNT = 10;
 
-/** Enemies grouped by act number (1-indexed). */
+/** Enemies grouped by act number (1-indexed). Act 2/3 are not yet implemented. */
 export const ENEMIES_BY_ACT = {
   1: ACT1_ENEMIES,
-  2: ACT2_ENEMIES,
-  3: ACT3_ENEMIES,
 };
 
 /** Flat list of every enemy definition across all acts. */
-export const ALL_ENEMIES = [...ACT1_ENEMIES, ...ACT2_ENEMIES, ...ACT3_ENEMIES];
+export const ALL_ENEMIES = [...ACT1_ENEMIES];
 
 /** Flat id → definition map. */
 const ENEMIES_BY_ID = ALL_ENEMIES.reduce((acc, def) => {
@@ -50,7 +50,7 @@ const ENEMIES_BY_ID = ALL_ENEMIES.reduce((acc, def) => {
 /**
  * Relative likelihood weights per rarity for the weighted spawn pick. Higher
  * rarity → lower weight, so rare enemies appear less often when several
- * candidates share the same act + type pool.
+ * candidates share the same floor + type pool.
  */
 const RARITY_WEIGHT = {
   common: 100,
@@ -78,7 +78,7 @@ export function getEnemyById(id) {
 }
 
 /**
- * All enemies belonging to a given act (1-indexed).
+ * All enemies belonging to a given act (1-indexed). Act is metadata only.
  * @param {number} act
  * @returns {object[]}
  */
@@ -87,24 +87,34 @@ export function getEnemiesByAct(act) {
 }
 
 /**
- * All enemies of a given type ('minion' | 'elite' | 'boss'), optionally
- * filtered to a single act.
+ * All enemies of a given type ('minion' | 'elite' | 'boss').
  * @param {string} type
- * @param {number} [act] — optional act filter
  * @returns {object[]}
  */
-export function getEnemiesByType(type, act = null) {
-  return ALL_ENEMIES.filter((e) => e.type === type && (act == null || e.act === act));
+export function getEnemiesByType(type) {
+  return ALL_ENEMIES.filter((e) => e.type === type);
 }
 
 /**
- * All enemies of a given rarity, optionally filtered to a single act.
+ * All enemies of a given rarity.
  * @param {string} rarity
- * @param {number} [act] — optional act filter
  * @returns {object[]}
  */
-export function getEnemiesByRarity(rarity, act = null) {
-  return ALL_ENEMIES.filter((e) => e.rarity === rarity && (act == null || e.act === act));
+export function getEnemiesByRarity(rarity) {
+  return ALL_ENEMIES.filter((e) => e.rarity === rarity);
+}
+
+/**
+ * All enemies eligible to spawn on a given (1-indexed) floor, optionally
+ * filtered by enemy type. Inspect what an enemy's `floors` array allows.
+ * @param {number} floor — 1-indexed map floor
+ * @param {string} [type] — optional enemy type filter
+ * @returns {object[]}
+ */
+export function getEnemiesForFloor(floor, type = null) {
+  return ALL_ENEMIES.filter(
+    (e) => Array.isArray(e.floors) && e.floors.includes(floor) && (type == null || e.type === type)
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -112,16 +122,12 @@ export function getEnemiesByRarity(rarity, act = null) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Map a map depth (0..DEPTH_COUNT-1) to an act number (1..ACT_COUNT) by
- * splitting the depths into ACT_COUNT contiguous bands. With the default
- * 10 depths / 3 acts this yields act 1 = depths 0–3, act 2 = 4–6, act 3 = 7–9.
+ * Convert a 0-indexed map depth to a 1-indexed floor number.
  * @param {number} depth
- * @returns {number} act number, clamped to [1, ACT_COUNT]
+ * @returns {number}
  */
-export function getActForDepth(depth) {
-  const perAct = DEPTH_COUNT / ACT_COUNT;
-  const act = Math.floor((depth || 0) / perAct) + 1;
-  return Math.min(ACT_COUNT, Math.max(1, act));
+export function floorForDepth(depth) {
+  return (depth || 0) + 1;
 }
 
 /**
@@ -164,33 +170,39 @@ function weightedPick(pool, rng) {
 /**
  * Choose the enemy definition to spawn for a given map node.
  *
- * Resolution order:
- *   1. enemies matching the node's act (from depth) AND its required type;
- *   2. fall back to any minion in that act;
+ * Placement is driven by each enemy's `floors` list (1-indexed) and `type`:
+ *   1. enemies whose `floors` includes this node's floor AND whose `type`
+ *      matches the node's required type;
+ *   2. fall back to any minion eligible for this floor (covers debug-routed
+ *      non-combat nodes / floors lacking the exact type);
  *   3. fall back to the goblin (always-present default).
  * The final choice within a non-empty pool is rarity-weighted.
+ *
+ * Pass either `depth` (0-indexed, as MapScene has it) or `floor` (1-indexed);
+ * `floor` wins if both are given.
  *
  * The returned object is a shared catalog reference — callers should clone it
  * (MapScene deep-clones before resolving skills/relics).
  *
  * @param {object} opts
- * @param {number} opts.depth — map node depth (0-indexed)
+ * @param {number} [opts.depth] — map node depth (0-indexed)
+ * @param {number} [opts.floor] — map floor (1-indexed); overrides depth
  * @param {string} opts.nodeType — map node type ('battle'|'elite'|'boss'|…)
  * @param {() => number} [opts.rng=Math.random] — injectable RNG for testing
  * @returns {object} enemy definition
  */
-export function selectEnemyForNode({ depth = 0, nodeType = 'battle', rng = Math.random } = {}) {
-  const act = getActForDepth(depth);
+export function selectEnemyForNode({ depth = 0, floor = null, nodeType = 'battle', rng = Math.random } = {}) {
+  const targetFloor = floor != null ? floor : floorForDepth(depth);
   const wantType = enemyTypeForNodeType(nodeType);
 
-  let pool = ALL_ENEMIES.filter((e) => e.act === act && e.type === wantType);
+  let pool = getEnemiesForFloor(targetFloor, wantType);
   if (!pool.length) {
-    // Fall back to any minion in this act so the encounter still spawns.
-    pool = ALL_ENEMIES.filter((e) => e.act === act && e.type === 'minion');
+    // Fall back to any minion eligible for this floor so the encounter spawns.
+    pool = getEnemiesForFloor(targetFloor, 'minion');
   }
 
   return weightedPick(pool, rng) || goblin;
 }
 
-export { goblin };
+export { goblin, FLOOR_COUNT };
 export default ENEMIES_BY_ID;

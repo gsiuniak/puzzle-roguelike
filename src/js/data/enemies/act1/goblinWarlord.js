@@ -12,6 +12,9 @@ const goblinWarlord = {
   rarity: 'rare',
   type: 'boss',
 
+  // Boss occupies the final floor only (depth 9 → floor 10).
+  floors: [10],
+
   hp: 60,
   maxHp: 60,
   attack: 3,
