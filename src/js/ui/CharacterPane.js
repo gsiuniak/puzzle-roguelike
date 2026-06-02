@@ -113,7 +113,7 @@ export default class CharacterPane extends UIPanel {
       color: '#d0d0c4',
       bold: true,
       alignH: 'left',
-      alignV: 'center',
+      alignV: 'top',
       height: 32,
     });
     rightCol.addChild(this._nameText);

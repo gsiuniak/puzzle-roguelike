@@ -13,7 +13,14 @@ const PORTRAIT_HEIGHT = 150;
 const HEADER_GAP = 12;
 
 const NAME_FONT_SIZE = 36;
-const CLASS_FONT_SIZE = 24;
+// Name wraps onto a second line when it's too wide (the class/level line was
+// removed to free this vertical space). NAME_MAX_WIDTH ≈ the info column's
+// inner width (side col 390 − pane padding − portrait − gaps). NAME_BLOCK_HEIGHT
+// reserves room for up to two lines and roughly matches the old name+class
+// block height, so the HP bar / stats below don't shift. Tune freely.
+const NAME_MAX_WIDTH = 190;
+const NAME_LINE_HEIGHT = 36;
+const NAME_BLOCK_HEIGHT = 72;
 const HEALTH_BAR_HEIGHT = 36;
 const HEALTH_LABEL_FONT_SIZE = 20;
 const STATS_HEIGHT = 22;
@@ -74,7 +81,6 @@ export default class CharacterInfoPane extends UIPanel {
     // Refs for fast update
     this._portrait = null;
     this._nameText = null;
-    this._classText = null;
     this._healthBar = null;
     this._attackValue = null;
     this._armorValue = null;
@@ -131,30 +137,19 @@ export default class CharacterInfoPane extends UIPanel {
     info.flexGrow = 1;
     info.padding = { top: 10, right: 4 };
 
-    // Name
+    // Name — wraps onto a second line when too wide (class/level line removed).
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: NAME_FONT_SIZE,
       color: '#d0d0c4',
       bold: true,
       alignH: 'left',
-      alignV: 'center',
-      height: NAME_FONT_SIZE + 6,
+      alignV: 'top',
+      maxWidth: NAME_MAX_WIDTH,
+      lineHeight: NAME_LINE_HEIGHT,
+      height: NAME_BLOCK_HEIGHT,
     });
     info.addChild(this._nameText);
-
-    // Class / level
-    const classStr = cd.className ? `${cd.className}` : '';
-    const levelStr = cd.level ? `  Lv.${cd.level}` : '';
-    this._classText = new UIText(classStr + levelStr);
-    this._classText.setStyle({
-      fontSize: CLASS_FONT_SIZE,
-      color: '#ccaa77',
-      alignH: 'left',
-      alignV: 'center',
-      height: CLASS_FONT_SIZE + 4,
-    });
-    info.addChild(this._classText);
 
     // HP bar
     this._healthBar = new UIProgressBar();

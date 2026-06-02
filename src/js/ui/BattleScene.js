@@ -34,9 +34,9 @@ const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 // visible panel art closer to the board frame; the side panel
 // images include some transparent inner margin so the column rect
 // is typically larger than the visible art.
-const SIDE_COL_WIDTH = 390;
-const SIDE_COL_MIN_WIDTH = 390;
-const SIDE_COL_MAX_WIDTH = 390;
+const SIDE_COL_WIDTH = 385;
+const SIDE_COL_MIN_WIDTH = 385;
+const SIDE_COL_MAX_WIDTH = 385;
 const SIDE_COL_GAP = 5;
 
 // Fixed width for the center (board + combat log) column. Should be
@@ -72,7 +72,7 @@ const RELIC_COL_WIDTH = 90;
 // mirrors that with LEFT padding so its icons sit toward the enemy panel on
 // its left. Tweak these to fit; left padding ≈ the player bar's right padding.
 const ENEMY_RELIC_COL_WIDTH = 90;
-const ENEMY_RELIC_BAR_PADDING = { top: 40, right: 0, bottom: 0, left: 55 };
+const ENEMY_RELIC_BAR_PADDING = { top: 40, right: 0, bottom: 0, left: 60 };
 
 /**
  * BattleScene — battle layout with three compact columns.
