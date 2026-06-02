@@ -10,9 +10,9 @@ const goblinSapper = {
   level: 1,
 
   act: 1,
-  rarity: 'uncommon',
+  rarity: 'common',
   type: 'minion',
-  floors: [2, 3, 4, 5, 6],
+  floors: [3, 4, 5, 6, 7],
 
   hp: 16,
   maxHp: 16,
@@ -27,7 +27,7 @@ const goblinSapper = {
   },
 
   skills: ['boom_baby', 'ignition'],
-  relics: ['cursed_idol'],
+  relics: ['sulfur'],
 };
 
 export default goblinSapper;

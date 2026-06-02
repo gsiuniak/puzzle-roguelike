@@ -82,6 +82,19 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
+  // Static spawn-rate modifier — aggregated at setup by _initStaticModifiers
+  // (board-global). +15 percentage points of Yellow spawn chance.
+  sulfur: {
+    id: 'sulfur',
+    name: 'Sulfur',
+    description: 'Drastically increase chance of Yellow appearing.',
+    icon: 'relic_sulfur',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'yellow', amount: 15 } },
+    ],
+  },
+
   // Reactive damage echo — re-deals the damage just dealt. Routed through the
   // onBoardEffect path so BattleController can apply its reentrancy guard
   // (_echoDamageActive) and stop the echo from echoing itself forever.

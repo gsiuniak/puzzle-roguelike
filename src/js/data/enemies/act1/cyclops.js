@@ -12,7 +12,7 @@ const cyclops = {
   act: 1,
   rarity: 'uncommon',
   type: 'minion',
-  floors: [3, 4, 5, 6, 7, 8, 9],
+  floors: [5, 6, 7, 8, 9],
 
   hp: 45,
   maxHp: 45,

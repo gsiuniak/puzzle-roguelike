@@ -10,7 +10,7 @@ const stoneGargoyle = {
   level: 3,
 
   act: 1,
-  rarity: 'uncommon',
+  rarity: 'rare',
   type: 'elite',
   floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
 

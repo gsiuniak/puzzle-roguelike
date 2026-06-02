@@ -37,7 +37,7 @@ const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 const SIDE_COL_WIDTH = 385;
 const SIDE_COL_MIN_WIDTH = 385;
 const SIDE_COL_MAX_WIDTH = 385;
-const SIDE_COL_GAP = 5;
+const SIDE_COL_GAP = 3;
 
 // Fixed width for the center (board + combat log) column. Should be
 // roughly equal to the available vertical space for the board frame
@@ -72,7 +72,7 @@ const RELIC_COL_WIDTH = 90;
 // mirrors that with LEFT padding so its icons sit toward the enemy panel on
 // its left. Tweak these to fit; left padding ≈ the player bar's right padding.
 const ENEMY_RELIC_COL_WIDTH = 90;
-const ENEMY_RELIC_BAR_PADDING = { top: 40, right: 0, bottom: 0, left: 60 };
+const ENEMY_RELIC_BAR_PADDING = { top: 30, right: 0, bottom: 0, left: 60 };
 
 /**
  * BattleScene — battle layout with three compact columns.
@@ -333,7 +333,7 @@ export default class BattleScene extends UIPanel {
     col.width = SIDE_COL_WIDTH;
     col.minWidth = SIDE_COL_MIN_WIDTH;
     col.maxWidth = SIDE_COL_MAX_WIDTH;
-    col.margin = { top: 40 };
+    col.margin = { top: 15 };
 
     const isPlayer = side === 'player';
     const data    = isPlayer ? this._playerData : this._enemyData;

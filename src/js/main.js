@@ -198,6 +198,7 @@ const ASSET_MAP = {
   relic_briarthorn:          'assets/sprites/relics/relic_briarthorn.png',
   relic_chokeweed_sap:       'assets/sprites/relics/relic_chokeweed_sap.png',
   relic_goresnout_collars:   'assets/sprites/relics/relic_goresnout_collars.png',
+  relic_sulfur:              'assets/sprites/relics/relic_sulfur.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };

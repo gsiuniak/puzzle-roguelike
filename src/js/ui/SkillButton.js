@@ -5,14 +5,14 @@ import UIText from './UIText.js';
 import UIOrb from './UIOrb.js';
 
 // ── Tunable layout constants ─────────────────────────────
-const BTN_PADDING = { top: 8, right: 10, bottom: 8, left: 5 };
+const BTN_PADDING = { top: 8, right: 9, bottom: 8, left: 5 };
 // Horizontal gap between the three main columns: icon | info | cost.
 const BTN_GAP = 10;
 const ICON_SIZE = 90;
 const LOCKED_ICON_SIZE = 40;
 const NAME_FONT_SIZE = 24;
 const DESC_FONT_SIZE = 18;
-const DESC_LINE_HEIGHT = 20;
+const DESC_LINE_HEIGHT = 21;
 // Maximum width for the description text before it word-wraps onto
 // additional lines (0 = no wrap, single line).
 const DESC_MAX_WIDTH = 180;

@@ -10,14 +10,14 @@ const orcTaskmaster = {
   level: 3,
 
   act: 1,
-  rarity: 'uncommon',
+  rarity: 'common',
   type: 'elite',
   floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
 
   hp: 50,
   maxHp: 50,
   attack: 4,
-  armor: 50,
+  armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'orc_taskmaster', // maps to 'portrait_orc_taskmaster' asset key
   music: {
@@ -27,7 +27,7 @@ const orcTaskmaster = {
   },
 
   skills: ['charge', 'frenzy'],
-  relics: ['cracked_fang'],
+  relics: [],
 };
 
 export default orcTaskmaster;
