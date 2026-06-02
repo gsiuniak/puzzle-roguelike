@@ -160,16 +160,26 @@ export default class SkillButton extends UIPanel {
     this.addChild(info);
 
     // ── Column 3: mana cost (number + orb) ──
+    // Skipped entirely for free skills (no cost) so the name/description
+    // column fills the freed space instead of leaving an empty gap.
     this._costCol = this._buildCostColumn(sd.cost);
-    this.addChild(this._costCol);
+    if (this._costCol) this.addChild(this._costCol);
   }
 
   /**
    * Right-hand cost column. Each cost (color, amount) renders as a row
    * of [number] [orb]; multiple costs stack vertically. Centered within
    * the fixed-width column so it stays out of the description's way.
+   *
+   * Returns null when the skill has no positive-cost colors (a free skill),
+   * so the caller can omit the column entirely rather than reserve an empty
+   * fixed-width gap.
    */
   _buildCostColumn(costData) {
+    if (!costData || typeof costData !== 'object') return null;
+    const activeColors = Object.keys(costData).filter(c => costData[c] > 0);
+    if (activeColors.length === 0) return null;
+
     const col = new UIContainer();
     col.direction = 'column';
     col.gap = 4;
@@ -177,9 +187,6 @@ export default class SkillButton extends UIPanel {
     col.justifyContent = 'center';
     col.width = COST_COL_WIDTH;
 
-    if (!costData || typeof costData !== 'object') return col;
-
-    const activeColors = Object.keys(costData).filter(c => costData[c] > 0);
     for (const color of activeColors) {
       const amount = costData[color];
 

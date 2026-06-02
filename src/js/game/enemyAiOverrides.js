@@ -149,6 +149,18 @@ const enemyAiOverrides = {
 
     return bestSwap ? { action: 'swap', swap: bestSwap } : null;
   },
+
+  // ── Chokeweed ───────────────────────────────────────────
+  // Only ever casts its free Encroach (gain +1 attack, end turn). If it
+  // somehow can't (e.g. the skill is removed in a future variant), returns
+  // null to fall back to the standard EnemyAI.
+  chokeweed: ({ enemy }) => {
+    const encroach = (enemy.skills || []).find((s) => s.id === 'encroach');
+    if (canAfford(encroach, enemy.mana || {})) {
+      return { action: 'skill', skill: encroach };
+    }
+    return null;
+  },
 };
 
 export default enemyAiOverrides;

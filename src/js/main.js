@@ -49,6 +49,7 @@ const ASSET_MAP = {
   portrait_cyclops:          'assets/sprites/character_pane/portraits/portrait_cyclops.png',
   portrait_stone_gargoyle:   'assets/sprites/character_pane/portraits/portrait_stone_gargoyle.png',
   portrait_orc_taskmaster:   'assets/sprites/character_pane/portraits/portrait_orc_taskmaster.png',
+  portrait_chokeweed:        'assets/sprites/character_pane/portraits/portrait_chokeweed.png',
   icon_attack:               'assets/sprites/character_pane/icons/icon_attack.png',
   icon_block:                'assets/sprites/character_pane/icons/icon_block.png',
   mana_red:                  'assets/sprites/character_pane/mana/mana_red.png',
@@ -69,6 +70,7 @@ const ASSET_MAP = {
   skill_fracture:            'assets/sprites/character_pane/skills/skill_fracture.png',
   skill_summon_dead:         'assets/sprites/character_pane/skills/skill_summon_dead.png',
   skill_oungan:              'assets/sprites/character_pane/skills/skill_oungan.png',
+  skill_encroach:            'assets/sprites/character_pane/skills/skill_encroach.png',
   skill_flair_left:          'assets/sprites/character_pane/flair/skill_flair_left.png',
   skill_flair_right:         'assets/sprites/character_pane/flair/skill_flair_right.png',
   grid_dark:                 'assets/sprites/battle/board/grid/grid_dark.png',
@@ -190,6 +192,9 @@ const ASSET_MAP = {
   // Individual relics
   relic_slingshot:           'assets/sprites/relics/relic_slingshot.png',
   relic_familiar_skull:      'assets/sprites/relics/relic_familiar_skull.png',
+  // Enemy-only relics (enemyRelicCatalog.js)
+  relic_briarthorn:          'assets/sprites/relics/relic_briarthorn.png',
+  relic_chokeweed_sap:       'assets/sprites/relics/relic_chokeweed_sap.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };

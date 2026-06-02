@@ -1647,6 +1647,19 @@ export default class BattleController {
         return false;
       }
 
+      case SKILL_EFFECT_TYPES.GAIN_ATTACK: {
+        // Permanent attack gain (Chokeweed's Encroach). Delta-based dynamic
+        // attack (Group A relics) composes with this without clobbering it.
+        const amount = (effect.gainAttack && typeof effect.gainAttack.amount === 'number')
+          ? effect.gainAttack.amount
+          : 0;
+        if (amount !== 0) {
+          src.attack = (src.attack || 0) + amount;
+          this.log.add(`${src.name} gains ${amount} attack.`);
+        }
+        return false;
+      }
+
       case SKILL_EFFECT_TYPES.SELF_DESTRUCT: {
         // Caster dies. The post-effect _checkGameOver detects hp <= 0 and ends
         // the battle (if the same skill also killed the opponent, the player's
@@ -1835,6 +1848,8 @@ export default class BattleController {
         return this._applyPassiveDestroyRadius(effect, payload);
       case 'destroy_random_row':
         return this._applyPassiveDestroyRandomRow(effect, payload);
+      case 'convert_random_tiles':
+        return this._applyPassiveConvertRandomTiles(effect);
       case 'destroy_random_skulls': {
         // The once-per-action recursion guard applies ONLY to damage-triggered
         // destroyers (Deathbringer, onDealDamage): the skull damage their
@@ -1899,6 +1914,44 @@ export default class BattleController {
     }
     this._addCellsToAnalysis(cells);
     this.log.add(`A row is destroyed!`);
+    return true;
+  }
+
+  /**
+   * Convert up to N random tiles of one type into another type IN PLACE,
+   * without starting a cascade (Chokeweed Sap: 2 Skulls → Green on turn start).
+   *
+   * This fires from onTurnStart, which is NOT inside a cascade, so it must NOT
+   * call _beginResolving — doing so would consume the active side's turn. Any
+   * match the conversion happens to form simply resolves on the next swap.
+   * Converted positions are surfaced via _convertedTilePositions so the scene
+   * spawns the same shimmer used by skill conversions.
+   *
+   * @param {object} effect — { convertTiles: { from, to, amount } }
+   * @returns {boolean} always true (effect recognized/handled)
+   */
+  _applyPassiveConvertRandomTiles(effect) {
+    const cfg = (effect && effect.convertTiles) || {};
+    const from = cfg.from;
+    const to = cfg.to;
+    const amount = typeof cfg.amount === 'number' ? cfg.amount : 1;
+    if (!from || !to || amount <= 0) return true;
+    if (!TILE_TYPES[String(from).toUpperCase()] || !TILE_TYPES[String(to).toUpperCase()]) {
+      console.warn(`[convert_random_tiles] Unknown tile type from="${from}" to="${to}". Skipping.`);
+      return true;
+    }
+
+    const candidates = this.board.getTilesOfType(from);
+    if (candidates.length === 0) return true;
+
+    const chosen = BoardModel.pickRandomTiles(candidates, amount);
+    const count = this.board.convertTilesToType(chosen, to);
+    if (count > 0) {
+      this._convertedTilePositions = chosen.slice(0, count).map(p => ({
+        col: p.col, row: p.row, typeId: to,
+      }));
+      this.log.add(`${count} ${from} converted to ${to}.`);
+    }
     return true;
   }
 

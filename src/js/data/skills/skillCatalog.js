@@ -231,6 +231,22 @@ const SKILL_CATALOG = {
       { effectType: 'extra_turn' },
     ],
   },
+
+  // Chokeweed — free buff that simply ends the caster's turn. With no
+  // extra_turn / cascade effect, the standard skill flow ends the turn
+  // immediately after resolving. Empty cost = always castable; SkillButton
+  // hides its mana column when the cost is empty. (sound reuses skill_defend.)
+  encroach: {
+    id: 'encroach',
+    name: 'Encroach',
+    description: 'Gain +1 Attack.\nEnd turn.',
+    icon: 'skill_encroach',
+    sound: 'skill_defend',
+    cost: {},
+    effects: [
+      { effectType: 'gain_attack', gainAttack: { amount: 1 } },
+    ],
+  },
 };
 
 /**

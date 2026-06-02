@@ -67,6 +67,38 @@ const ENEMY_RELIC_CATALOG = {
       { trigger: 'onMatch4Plus', effectType: 'damage', damage: { amount: 1 } },
     ],
   },
+
+  // Turn-start damage equal to the owner's attack — resolved via EffectResolver
+  // (damage). Omitting `damage.amount` makes the resolver fall back to
+  // caster.attack, so the hit scales as the owner's attack grows (e.g. Encroach).
+  briarthorn: {
+    id: 'briarthorn',
+    name: 'Briarthorn',
+    description: 'At the start of turn, deal damage equal to attack.',
+    icon: 'relic_briarthorn',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      { trigger: 'onTurnStart', effectType: 'damage' },
+    ],
+  },
+
+  // Turn-start board control — converts up to 2 random Skull tiles into Green
+  // in place (no cascade). Board-touching, so it's handled by
+  // BattleController._handlePassiveBoardEffect via the onBoardEffect path.
+  chokeweed_sap: {
+    id: 'chokeweed_sap',
+    name: 'Chokeweed Sap',
+    description: 'At the start of turn, change 2 Skulls into Green.',
+    icon: 'relic_chokeweed_sap',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      {
+        trigger: 'onTurnStart',
+        effectType: 'convert_random_tiles',
+        convertTiles: { from: 'skull', to: 'green', amount: 2 },
+      },
+    ],
+  },
 };
 
 /**
