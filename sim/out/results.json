@@ -1,0 +1,1778 @@
+{
+  "meta": {
+    "seed": 12345,
+    "runsPerPoint": 100000,
+    "economy": {
+      "SKULL_BOARD_SHARE": 0.2,
+      "MATCH_SIZE_DIST": [
+        [
+          3,
+          0.65
+        ],
+        [
+          4,
+          0.22
+        ],
+        [
+          5,
+          0.09
+        ],
+        [
+          6,
+          0.04
+        ]
+      ],
+      "CASCADE_CHANCE": 0.4,
+      "CASCADE_SIZE": 3,
+      "FOCUS_FRACTION": 0.6,
+      "SKULL_GROUP_SIZE": 3,
+      "MAX_EXTRA_TURN_CHAIN": 5,
+      "CREATE_TILE_MANA_FACTOR": 0.7,
+      "DESTROY_ROW_TILES": 8,
+      "MAX_ROUNDS": 300
+    }
+  },
+  "scenarios": [
+    {
+      "name": "durable_vs_floor1",
+      "player": {
+        "name": "Durable",
+        "maxHp": 34,
+        "attack": 1,
+        "armor": 0,
+        "mana": {
+          "red": 4
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ],
+        "policy": "auto"
+      },
+      "enemy": {
+        "name": "Floor1 minion",
+        "maxHp": 30,
+        "attack": 1,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 100000,
+        "winRate": 0.99,
+        "playerActions": {
+          "mean": 11.88,
+          "median": 12,
+          "p10": 11,
+          "p90": 13
+        },
+        "playerHpFracOnWin": 0.43,
+        "playerHpFrac": {
+          "mean": 0.43,
+          "median": 0.41
+        },
+        "playerDPT": 2.53,
+        "skullGroupsPerAction": 0,
+        "avgSkillCasts": 4.99
+      }
+    },
+    {
+      "name": "durable_vs_floor5",
+      "player": {
+        "name": "Durable",
+        "maxHp": 34,
+        "attack": 1,
+        "armor": 0,
+        "mana": {
+          "red": 4
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ],
+        "policy": "auto"
+      },
+      "enemy": {
+        "name": "Floor5 minion",
+        "maxHp": 46,
+        "attack": 2,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 100000,
+        "winRate": 0.4,
+        "playerActions": {
+          "mean": 17.33,
+          "median": 18,
+          "p10": 14,
+          "p90": 20
+        },
+        "playerHpFracOnWin": 0.19,
+        "playerHpFrac": {
+          "mean": 0.07,
+          "median": 0
+        },
+        "playerDPT": 2.42,
+        "skullGroupsPerAction": 0,
+        "avgSkillCasts": 6.98
+      }
+    },
+    {
+      "name": "durable_vs_floor9",
+      "player": {
+        "name": "Durable",
+        "maxHp": 34,
+        "attack": 1,
+        "armor": 0,
+        "mana": {
+          "red": 4
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ],
+        "policy": "auto"
+      },
+      "enemy": {
+        "name": "Floor9 minion",
+        "maxHp": 62,
+        "attack": 3,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 100000,
+        "winRate": 0.01,
+        "playerActions": {
+          "mean": 18.08,
+          "median": 18,
+          "p10": 14,
+          "p90": 22
+        },
+        "playerHpFracOnWin": 0.13,
+        "playerHpFrac": {
+          "mean": 0,
+          "median": 0
+        },
+        "playerDPT": 2.39,
+        "skullGroupsPerAction": 0,
+        "avgSkillCasts": 7.21
+      }
+    },
+    {
+      "name": "caster_vs_floor5",
+      "player": {
+        "name": "Caster",
+        "maxHp": 26,
+        "attack": 1,
+        "armor": 0,
+        "mana": {
+          "purple": 3
+        },
+        "skills": [
+          {
+            "id": "bolt",
+            "name": "Bolt",
+            "cost": {
+              "purple": 4
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          }
+        ],
+        "policy": "auto"
+      },
+      "enemy": {
+        "name": "Floor5 minion",
+        "maxHp": 46,
+        "attack": 2,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 100000,
+        "winRate": 0.3,
+        "playerActions": {
+          "mean": 14.79,
+          "median": 15,
+          "p10": 12,
+          "p90": 17
+        },
+        "playerHpFracOnWin": 0.1,
+        "playerHpFrac": {
+          "mean": 0.03,
+          "median": 0
+        },
+        "playerDPT": 2.71,
+        "skullGroupsPerAction": 0,
+        "avgSkillCasts": 6.68
+      }
+    },
+    {
+      "name": "skullish_vs_floor5",
+      "player": {
+        "name": "Skullish",
+        "maxHp": 28,
+        "attack": 1,
+        "armor": 0,
+        "mana": {
+          "green": 3
+        },
+        "skills": [
+          {
+            "id": "mend",
+            "name": "Mend",
+            "cost": {
+              "green": 5
+            },
+            "effects": [
+              {
+                "type": "heal",
+                "amount": 6
+              }
+            ]
+          }
+        ],
+        "policy": "skull"
+      },
+      "enemy": {
+        "name": "Floor5 minion",
+        "maxHp": 46,
+        "attack": 2,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 100000,
+        "winRate": 0.15,
+        "playerActions": {
+          "mean": 21.61,
+          "median": 21,
+          "p10": 16,
+          "p90": 28
+        },
+        "playerHpFracOnWin": 0.3,
+        "playerHpFrac": {
+          "mean": 0.05,
+          "median": 0
+        },
+        "playerDPT": 1.49,
+        "skullGroupsPerAction": 0.5,
+        "avgSkillCasts": 1.31
+      }
+    },
+    {
+      "name": "durable_vs_elite",
+      "player": {
+        "name": "Durable",
+        "maxHp": 34,
+        "attack": 1,
+        "armor": 0,
+        "mana": {
+          "red": 4
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ],
+        "policy": "auto"
+      },
+      "enemy": {
+        "name": "Elite",
+        "maxHp": 85,
+        "attack": 3,
+        "armor": 10,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 100000,
+        "winRate": 0,
+        "playerActions": {
+          "mean": 18.09,
+          "median": 18,
+          "p10": 14,
+          "p90": 22
+        },
+        "playerHpFracOnWin": 0,
+        "playerHpFrac": {
+          "mean": 0,
+          "median": 0
+        },
+        "playerDPT": 2.39,
+        "skullGroupsPerAction": 0,
+        "avgSkillCasts": 7.22
+      }
+    },
+    {
+      "name": "durable_vs_boss",
+      "player": {
+        "name": "Durable",
+        "maxHp": 34,
+        "attack": 1,
+        "armor": 0,
+        "mana": {
+          "red": 4
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ],
+        "policy": "auto"
+      },
+      "enemy": {
+        "name": "Boss",
+        "maxHp": 170,
+        "attack": 3,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ],
+        "passives": [
+          {
+            "trigger": "onTurnStart",
+            "type": "gain_attack",
+            "amount": 1
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 100000,
+        "winRate": 0,
+        "playerActions": {
+          "mean": 18.09,
+          "median": 18,
+          "p10": 14,
+          "p90": 22
+        },
+        "playerHpFracOnWin": 0,
+        "playerHpFrac": {
+          "mean": 0,
+          "median": 0
+        },
+        "playerDPT": 2.39,
+        "skullGroupsPerAction": 0,
+        "avgSkillCasts": 7.22
+      }
+    }
+  ],
+  "sweeps": [
+    {
+      "name": "attack_value_vs_floor5",
+      "note": "How much does +1 Attack move win rate / turns vs a mid minion?",
+      "varying": "player.attack",
+      "points": [
+        {
+          "value": 1,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.15,
+            "playerActions": {
+              "mean": 21.61,
+              "median": 21,
+              "p10": 16,
+              "p90": 28
+            },
+            "playerHpFracOnWin": 0.3,
+            "playerHpFrac": {
+              "mean": 0.05,
+              "median": 0
+            },
+            "playerDPT": 1.49,
+            "skullGroupsPerAction": 0.5,
+            "avgSkillCasts": 1.31
+          }
+        },
+        {
+          "value": 2,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.42,
+            "playerActions": {
+              "mean": 19.65,
+              "median": 19,
+              "p10": 15,
+              "p90": 25
+            },
+            "playerHpFracOnWin": 0.34,
+            "playerHpFrac": {
+              "mean": 0.14,
+              "median": 0
+            },
+            "playerDPT": 2.04,
+            "skullGroupsPerAction": 0.51,
+            "avgSkillCasts": 1.11
+          }
+        },
+        {
+          "value": 3,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.61,
+            "playerActions": {
+              "mean": 17.8,
+              "median": 18,
+              "p10": 14,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.38,
+            "playerHpFrac": {
+              "mean": 0.23,
+              "median": 0.14
+            },
+            "playerDPT": 2.61,
+            "skullGroupsPerAction": 0.52,
+            "avgSkillCasts": 0.98
+          }
+        },
+        {
+          "value": 4,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.8,
+            "playerActions": {
+              "mean": 15.21,
+              "median": 15,
+              "p10": 10,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.46,
+            "playerHpFrac": {
+              "mean": 0.37,
+              "median": 0.32
+            },
+            "playerDPT": 3.23,
+            "skullGroupsPerAction": 0.54,
+            "avgSkillCasts": 0.83
+          }
+        },
+        {
+          "value": 5,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.88,
+            "playerActions": {
+              "mean": 13.63,
+              "median": 14,
+              "p10": 9,
+              "p90": 18
+            },
+            "playerHpFracOnWin": 0.51,
+            "playerHpFrac": {
+              "mean": 0.45,
+              "median": 0.5
+            },
+            "playerDPT": 3.84,
+            "skullGroupsPerAction": 0.55,
+            "avgSkillCasts": 0.73
+          }
+        },
+        {
+          "value": 6,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.93,
+            "playerActions": {
+              "mean": 11.86,
+              "median": 12,
+              "p10": 7,
+              "p90": 17
+            },
+            "playerHpFracOnWin": 0.57,
+            "playerHpFrac": {
+              "mean": 0.53,
+              "median": 0.64
+            },
+            "playerDPT": 4.5,
+            "skullGroupsPerAction": 0.56,
+            "avgSkillCasts": 0.6
+          }
+        },
+        {
+          "value": 8,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.97,
+            "playerActions": {
+              "mean": 9.96,
+              "median": 10,
+              "p10": 6,
+              "p90": 15
+            },
+            "playerHpFracOnWin": 0.63,
+            "playerHpFrac": {
+              "mean": 0.61,
+              "median": 0.64
+            },
+            "playerDPT": 5.83,
+            "skullGroupsPerAction": 0.58,
+            "avgSkillCasts": 0.45
+          }
+        },
+        {
+          "value": 10,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.99,
+            "playerActions": {
+              "mean": 7.97,
+              "median": 7,
+              "p10": 4,
+              "p90": 13
+            },
+            "playerHpFracOnWin": 0.71,
+            "playerHpFrac": {
+              "mean": 0.7,
+              "median": 0.68
+            },
+            "playerDPT": 7.3,
+            "skullGroupsPerAction": 0.61,
+            "avgSkillCasts": 0.27
+          }
+        }
+      ]
+    },
+    {
+      "name": "maxhp_value_vs_floor5",
+      "note": "How much does +Max HP move win rate / HP remaining vs a mid minion?",
+      "varying": "player.maxHp",
+      "points": [
+        {
+          "value": 16,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.02,
+            "playerActions": {
+              "mean": 15.26,
+              "median": 15,
+              "p10": 11,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.27,
+            "playerHpFrac": {
+              "mean": 0.01,
+              "median": 0
+            },
+            "playerDPT": 1.46,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1
+          }
+        },
+        {
+          "value": 20,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.07,
+            "playerActions": {
+              "mean": 18.22,
+              "median": 18,
+              "p10": 13,
+              "p90": 25
+            },
+            "playerHpFracOnWin": 0.22,
+            "playerHpFrac": {
+              "mean": 0.01,
+              "median": 0
+            },
+            "playerDPT": 1.47,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.1
+          }
+        },
+        {
+          "value": 24,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.1,
+            "playerActions": {
+              "mean": 18.69,
+              "median": 18,
+              "p10": 13,
+              "p90": 26
+            },
+            "playerHpFracOnWin": 0.25,
+            "playerHpFrac": {
+              "mean": 0.03,
+              "median": 0
+            },
+            "playerDPT": 1.48,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.14
+          }
+        },
+        {
+          "value": 28,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.15,
+            "playerActions": {
+              "mean": 21.61,
+              "median": 21,
+              "p10": 16,
+              "p90": 28
+            },
+            "playerHpFracOnWin": 0.3,
+            "playerHpFrac": {
+              "mean": 0.05,
+              "median": 0
+            },
+            "playerDPT": 1.49,
+            "skullGroupsPerAction": 0.5,
+            "avgSkillCasts": 1.31
+          }
+        },
+        {
+          "value": 32,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.27,
+            "playerActions": {
+              "mean": 24.49,
+              "median": 24,
+              "p10": 19,
+              "p90": 31
+            },
+            "playerHpFracOnWin": 0.27,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 1.5,
+            "skullGroupsPerAction": 0.5,
+            "avgSkillCasts": 1.52
+          }
+        },
+        {
+          "value": 36,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.41,
+            "playerActions": {
+              "mean": 26.95,
+              "median": 27,
+              "p10": 21,
+              "p90": 33
+            },
+            "playerHpFracOnWin": 0.27,
+            "playerHpFrac": {
+              "mean": 0.11,
+              "median": 0
+            },
+            "playerDPT": 1.51,
+            "skullGroupsPerAction": 0.5,
+            "avgSkillCasts": 1.71
+          }
+        },
+        {
+          "value": 40,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.55,
+            "playerActions": {
+              "mean": 28.76,
+              "median": 29,
+              "p10": 22,
+              "p90": 34
+            },
+            "playerHpFracOnWin": 0.26,
+            "playerHpFrac": {
+              "mean": 0.14,
+              "median": 0.05
+            },
+            "playerDPT": 1.52,
+            "skullGroupsPerAction": 0.51,
+            "avgSkillCasts": 1.8
+          }
+        },
+        {
+          "value": 48,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.68,
+            "playerActions": {
+              "mean": 30.04,
+              "median": 30,
+              "p10": 24,
+              "p90": 36
+            },
+            "playerHpFracOnWin": 0.32,
+            "playerHpFrac": {
+              "mean": 0.22,
+              "median": 0.21
+            },
+            "playerDPT": 1.54,
+            "skullGroupsPerAction": 0.51,
+            "avgSkillCasts": 1.81
+          }
+        }
+      ]
+    },
+    {
+      "name": "attack_value_vs_boss",
+      "note": "Attack value should be HIGHER in long fights (research §11.1).",
+      "varying": "player.attack",
+      "points": [
+        {
+          "value": 1,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0,
+            "playerActions": {
+              "mean": 22.31,
+              "median": 21,
+              "p10": 16,
+              "p90": 30
+            },
+            "playerHpFracOnWin": 0,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 1.47,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.35
+          }
+        },
+        {
+          "value": 2,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0,
+            "playerActions": {
+              "mean": 22.31,
+              "median": 21,
+              "p10": 16,
+              "p90": 30
+            },
+            "playerHpFracOnWin": 0,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 1.97,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.35
+          }
+        },
+        {
+          "value": 3,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0,
+            "playerActions": {
+              "mean": 22.31,
+              "median": 21,
+              "p10": 16,
+              "p90": 30
+            },
+            "playerHpFracOnWin": 0.1,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 2.46,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.35
+          }
+        },
+        {
+          "value": 4,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0,
+            "playerActions": {
+              "mean": 22.31,
+              "median": 21,
+              "p10": 16,
+              "p90": 30
+            },
+            "playerHpFracOnWin": 0.15,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 2.95,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.35
+          }
+        },
+        {
+          "value": 5,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.01,
+            "playerActions": {
+              "mean": 22.29,
+              "median": 21,
+              "p10": 16,
+              "p90": 30
+            },
+            "playerHpFracOnWin": 0.22,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 3.44,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.35
+          }
+        },
+        {
+          "value": 6,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.02,
+            "playerActions": {
+              "mean": 22.24,
+              "median": 21,
+              "p10": 16,
+              "p90": 30
+            },
+            "playerHpFracOnWin": 0.25,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 3.94,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.35
+          }
+        },
+        {
+          "value": 8,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.11,
+            "playerActions": {
+              "mean": 21.83,
+              "median": 21,
+              "p10": 16,
+              "p90": 29
+            },
+            "playerHpFracOnWin": 0.29,
+            "playerHpFrac": {
+              "mean": 0.03,
+              "median": 0
+            },
+            "playerDPT": 4.95,
+            "skullGroupsPerAction": 0.49,
+            "avgSkillCasts": 1.33
+          }
+        },
+        {
+          "value": 10,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.2,
+            "playerActions": {
+              "mean": 21.3,
+              "median": 21,
+              "p10": 16,
+              "p90": 28
+            },
+            "playerHpFracOnWin": 0.31,
+            "playerHpFrac": {
+              "mean": 0.06,
+              "median": 0
+            },
+            "playerDPT": 5.98,
+            "skullGroupsPerAction": 0.5,
+            "avgSkillCasts": 1.28
+          }
+        }
+      ]
+    },
+    {
+      "name": "skill_damage_value",
+      "note": "Worth of +1 damage on the workhorse skill (Strike), vs floor5.",
+      "varying": "strike.damage",
+      "points": [
+        {
+          "value": 3,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.38,
+            "playerActions": {
+              "mean": 24.99,
+              "median": 26,
+              "p10": 20,
+              "p90": 29
+            },
+            "playerHpFracOnWin": 0.23,
+            "playerHpFrac": {
+              "mean": 0.09,
+              "median": 0
+            },
+            "playerDPT": 1.62,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 9.26
+          }
+        },
+        {
+          "value": 4,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.51,
+            "playerActions": {
+              "mean": 24.4,
+              "median": 25,
+              "p10": 20,
+              "p90": 27
+            },
+            "playerHpFracOnWin": 0.24,
+            "playerHpFrac": {
+              "mean": 0.12,
+              "median": 0.12
+            },
+            "playerDPT": 1.74,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 9.08
+          }
+        },
+        {
+          "value": 5,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.05,
+            "playerActions": {
+              "mean": 18.04,
+              "median": 18,
+              "p10": 14,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.14,
+            "playerHpFrac": {
+              "mean": 0.01,
+              "median": 0
+            },
+            "playerDPT": 1.99,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.2
+          }
+        },
+        {
+          "value": 6,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 7,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.69,
+            "playerActions": {
+              "mean": 16.12,
+              "median": 16,
+              "p10": 14,
+              "p90": 18
+            },
+            "playerHpFracOnWin": 0.24,
+            "playerHpFrac": {
+              "mean": 0.16,
+              "median": 0.12
+            },
+            "playerDPT": 2.86,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.58
+          }
+        },
+        {
+          "value": 8,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.9,
+            "playerActions": {
+              "mean": 14.29,
+              "median": 14,
+              "p10": 13,
+              "p90": 16
+            },
+            "playerHpFracOnWin": 0.31,
+            "playerHpFrac": {
+              "mean": 0.28,
+              "median": 0.26
+            },
+            "playerDPT": 3.31,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 5.89
+          }
+        },
+        {
+          "value": 10,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.99,
+            "playerActions": {
+              "mean": 11.88,
+              "median": 12,
+              "p10": 11,
+              "p90": 13
+            },
+            "playerHpFracOnWin": 0.43,
+            "playerHpFrac": {
+              "mean": 0.43,
+              "median": 0.41
+            },
+            "playerDPT": 4.22,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 4.99
+          }
+        },
+        {
+          "value": 12,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 1,
+            "playerActions": {
+              "mean": 9.5,
+              "median": 9,
+              "p10": 8,
+              "p90": 11
+            },
+            "playerHpFracOnWin": 0.57,
+            "playerHpFrac": {
+              "mean": 0.57,
+              "median": 0.56
+            },
+            "playerDPT": 5.09,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "skill_cost_value",
+      "note": "Worth of cheaper mana cost on Strike (same 6 damage), vs floor5.",
+      "varying": "strike.cost.red",
+      "points": [
+        {
+          "value": 3,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.85,
+            "playerActions": {
+              "mean": 14.29,
+              "median": 14,
+              "p10": 13,
+              "p90": 15
+            },
+            "playerHpFracOnWin": 0.27,
+            "playerHpFrac": {
+              "mean": 0.23,
+              "median": 0.26
+            },
+            "playerDPT": 3.29,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.8
+          }
+        },
+        {
+          "value": 4,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.63,
+            "playerActions": {
+              "mean": 16.09,
+              "median": 16,
+              "p10": 14,
+              "p90": 18
+            },
+            "playerHpFracOnWin": 0.22,
+            "playerHpFrac": {
+              "mean": 0.14,
+              "median": 0.12
+            },
+            "playerDPT": 2.78,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.46
+          }
+        },
+        {
+          "value": 5,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 6,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.21,
+            "playerActions": {
+              "mean": 18.13,
+              "median": 18,
+              "p10": 14,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.17,
+            "playerHpFrac": {
+              "mean": 0.04,
+              "median": 0
+            },
+            "playerDPT": 2.13,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.44
+          }
+        },
+        {
+          "value": 7,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.25,
+            "playerActions": {
+              "mean": 20.83,
+              "median": 21,
+              "p10": 16,
+              "p90": 25
+            },
+            "playerHpFracOnWin": 0.18,
+            "playerHpFrac": {
+              "mean": 0.05,
+              "median": 0
+            },
+            "playerDPT": 1.89,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.89
+          }
+        },
+        {
+          "value": 8,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.39,
+            "playerActions": {
+              "mean": 23.46,
+              "median": 24,
+              "p10": 19,
+              "p90": 27
+            },
+            "playerHpFracOnWin": 0.21,
+            "playerHpFrac": {
+              "mean": 0.08,
+              "median": 0
+            },
+            "playerDPT": 1.77,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.7
+          }
+        },
+        {
+          "value": 10,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.73,
+            "playerActions": {
+              "mean": 25.95,
+              "median": 26,
+              "p10": 23,
+              "p90": 29
+            },
+            "playerHpFracOnWin": 0.27,
+            "playerHpFrac": {
+              "mean": 0.2,
+              "median": 0.12
+            },
+            "playerDPT": 1.77,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 9.07
+          }
+        }
+      ]
+    },
+    {
+      "name": "enemy_hp_pacing",
+      "note": "Turns-to-kill vs enemy HP — pick HP that hits target fight length.",
+      "varying": "enemy.maxHp",
+      "points": [
+        {
+          "value": 25,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.99,
+            "playerActions": {
+              "mean": 11.88,
+              "median": 12,
+              "p10": 11,
+              "p90": 13
+            },
+            "playerHpFracOnWin": 0.43,
+            "playerHpFrac": {
+              "mean": 0.43,
+              "median": 0.41
+            },
+            "playerDPT": 2.53,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 4.99
+          }
+        },
+        {
+          "value": 35,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.9,
+            "playerActions": {
+              "mean": 14.29,
+              "median": 14,
+              "p10": 13,
+              "p90": 16
+            },
+            "playerHpFracOnWin": 0.31,
+            "playerHpFrac": {
+              "mean": 0.28,
+              "median": 0.26
+            },
+            "playerDPT": 2.48,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 5.89
+          }
+        },
+        {
+          "value": 45,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 55,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.05,
+            "playerActions": {
+              "mean": 18.04,
+              "median": 18,
+              "p10": 14,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.14,
+            "playerHpFrac": {
+              "mean": 0.01,
+              "median": 0
+            },
+            "playerDPT": 2.39,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.2
+          }
+        },
+        {
+          "value": 65,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.01,
+            "playerActions": {
+              "mean": 18.08,
+              "median": 18,
+              "p10": 14,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.13,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 2.39,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.21
+          }
+        },
+        {
+          "value": 80,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0,
+            "playerActions": {
+              "mean": 18.09,
+              "median": 18,
+              "p10": 14,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.12,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 2.39,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.22
+          }
+        },
+        {
+          "value": 95,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0,
+            "playerActions": {
+              "mean": 18.09,
+              "median": 18,
+              "p10": 14,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 2.39,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.22
+          }
+        },
+        {
+          "value": 120,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0,
+            "playerActions": {
+              "mean": 18.09,
+              "median": 18,
+              "p10": 14,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 2.39,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 7.22
+          }
+        }
+      ]
+    },
+    {
+      "name": "enemy_attack_lethality",
+      "note": "Player HP remaining vs enemy attack — calibrate lethality (§13.3).",
+      "varying": "enemy.attack",
+      "points": [
+        {
+          "value": 1,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 2,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 3,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 4,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 5,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 6,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        },
+        {
+          "value": 8,
+          "aggregates": {
+            "n": 100000,
+            "winRate": 0.4,
+            "playerActions": {
+              "mean": 17.33,
+              "median": 18,
+              "p10": 14,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.19,
+            "playerHpFrac": {
+              "mean": 0.07,
+              "median": 0
+            },
+            "playerDPT": 2.42,
+            "skullGroupsPerAction": 0,
+            "avgSkillCasts": 6.98
+          }
+        }
+      ]
+    }
+  ]
+}
