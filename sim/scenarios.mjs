@@ -39,12 +39,15 @@ export const PLAYERS = {
     skills: [SKILLS.strike, SKILLS.bash] },
 };
 
+// HP lowered to the findings §2 targets (≈ playerDPT × targetTurns); boss attack
+// ramp removed (a ramping high-attack boss over a long fight is unwinnable —
+// findings §4). Tune from here against the reference build's measured DPT.
 export const ENEMIES = {
-  floor1: { name: 'Floor1 minion', maxHp: 30, attack: 1, armor: 0, skills: [SKILLS.slash] },
-  floor5: { name: 'Floor5 minion', maxHp: 46, attack: 2, armor: 0, skills: [SKILLS.slash] },
-  floor9: { name: 'Floor9 minion', maxHp: 62, attack: 3, armor: 0, skills: [SKILLS.slash] },
-  elite:  { name: 'Elite',         maxHp: 85, attack: 3, armor: 10, skills: [SKILLS.slash] },
-  boss:   { name: 'Boss',          maxHp: 170, attack: 3, armor: 0, skills: [SKILLS.slash], passives: [{ trigger: 'onTurnStart', type: 'gain_attack', amount: 1 }] },
+  floor1: { name: 'Floor1 minion', maxHp: 25, attack: 1, armor: 0, skills: [SKILLS.slash] },
+  floor5: { name: 'Floor5 minion', maxHp: 35, attack: 2, armor: 0, skills: [SKILLS.slash] },
+  floor9: { name: 'Floor9 minion', maxHp: 50, attack: 3, armor: 0, skills: [SKILLS.slash] },
+  elite:  { name: 'Elite',         maxHp: 45, attack: 3, armor: 10, skills: [SKILLS.slash] }, // +10 armor ≈ 55 EHP
+  boss:   { name: 'Boss',          maxHp: 130, attack: 3, armor: 0, skills: [SKILLS.slash] },
 };
 
 export const SCENARIOS = [
@@ -62,11 +65,13 @@ export const SCENARIOS = [
   { name: 'reference_vs_boss',   player: PLAYERS.reference, enemy: ENEMIES.boss },
 ];
 
-// Helper: a single-skill kit on the mid-act REFERENCE stat line (attack 3,
-// 40 HP), so a skill's value is measured against a realistic skull baseline
-// rather than the unrealistically weak attack-1 kit.
+// Helper: a SKILL-RELIANT (caster) kit for isolated skill sweeps — low Attack so
+// skull-matching is a weak alternative, forcing the build to lean on the skill.
+// This is the right archetype to price a skill: on the Attack-3 build, skull
+// damage drowned the skill's signal (flat/noisy curve). Moderate HP so the
+// measurement isn't bottlenecked by dying.
 const ratioPlayer = (cost, dmg) => ({
-  name: 'RatioKit', maxHp: 40, attack: 3, armor: 0, mana: {},
+  name: 'CasterKit', maxHp: 34, attack: 1, armor: 0, mana: {},
   skills: [{ id: 'nuke', name: 'Nuke', cost: { red: cost }, effects: [{ type: 'damage', amount: dmg }] }],
 });
 
@@ -82,7 +87,7 @@ export const SWEEPS = [
     name: 'maxhp_value_vs_floor5',
     note: '+Max HP vs a mid minion (skull build).',
     base: { player: PLAYERS.skullish, enemy: ENEMIES.floor5 },
-    varying: 'player.maxHp', values: [16, 20, 24, 28, 32, 36, 40, 48],
+    varying: 'player.maxHp', values: [16, 24, 32, 40, 48, 56, 64, 72, 80],
     mutate: (p, _e, v) => { p.maxHp = v; },
   },
   {
@@ -94,16 +99,16 @@ export const SWEEPS = [
   },
   {
     name: 'skill_ratio_value_cost5',
-    note: 'Skill VALUE DENSITY: fixed cost 5, vary damage/cost ratio. Shows how '
-        + 'good a skill must be (vs the skull baseline) to be worth building.',
+    note: 'Skill VALUE DENSITY on a skill-reliant CASTER (atk 1): fixed cost 5, '
+        + 'vary damage/cost ratio. How good a damage skill must be to carry a build.',
     base: { player: ratioPlayer(5, 5), enemy: ENEMIES.floor5 },
     varying: 'ratio@cost5', values: [0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.25, 2.5, 3.0],
     mutate: (p, _e, v) => { p.skills[0].cost.red = 5; p.skills[0].effects[0].amount = Math.round(5 * v); },
   },
   {
     name: 'skill_ratio_value_cost8',
-    note: 'Same ratio sweep at a higher cost (8) — expensive skills need a higher '
-        + 'ratio to justify the longer charge / variance.',
+    note: 'Same ratio sweep at a higher cost (8), skill-reliant caster — expensive '
+        + 'skills need a higher ratio to justify the longer charge / variance.',
     base: { player: ratioPlayer(8, 8), enemy: ENEMIES.floor5 },
     varying: 'ratio@cost8', values: [0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.25, 2.5, 3.0],
     mutate: (p, _e, v) => { p.skills[0].cost.red = 8; p.skills[0].effects[0].amount = Math.round(8 * v); },
