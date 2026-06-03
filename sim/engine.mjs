@@ -1,42 +1,42 @@
 /**
- * sim/engine.mjs — the headless battle engine.
+ * sim/engine.mjs — headless battle on a REAL board with a greedy "smart" AI.
  *
- * runBattle(playerDef, enemyDef, seed, opts) plays out a single fight as a
- * sequence of abstract "turns" and returns a metrics record. No board grid,
- * no animation — turns are resolved instantly using the economy model in
- * model.mjs plus the game's real damage formulas.
+ * No rendering. Each turn the active side evaluates every legal swap on the
+ * actual 8×8 grid, scores the resulting matches (damage / mana-toward-skill /
+ * match-4 extra-turn / shape), and plays the best one — or casts a skill when
+ * that scores higher. The real cascade then resolves (gravity + random refill),
+ * granting mana/skull damage per step, exactly like the game.
  *
- * Combatant definition shape (plain data, JSON-cloneable):
- *   {
- *     name, maxHp, attack, armor,
- *     mana: { red, blue, ... },          // starting mana (optional)
- *     skills: [ Skill ],                 // see SKILL shape below
- *     passives: [ Passive ],             // see PASSIVE shape below
- *     policy: 'auto' | 'skull' | 'skill' // board-targeting bias (default 'auto')
- *   }
+ * Because decisions are made on the real board, the economy constants the old
+ * abstract model ASSUMED (skull matches/turn `m`, 4+ rate, cascade depth, mana/
+ * turn) are instead MEASURED and reported back — that's the point.
  *
- * Skill shape (sim format — mirrors the catalog but flattened):
- *   { id, name, cost: { color: amount }, effects: [ Effect ] }
- *   Effect: { type, amount?, color?, count? }
- *     supported types: damage | skull_damage | armor | heal | gain_mana |
- *                      drain_mana | gain_attack | create_tiles | destroy_row |
- *                      extra_turn
- *
- * Passive shape (sim format — one trigger+effect per entry):
- *   { trigger, ...Effect, condition? }
- *     triggers: onBattleStart | onTurnStart | onMatch4Plus | onTakeDamage |
- *               onDealDamage | onGainMana | onIncomingDamage
- *     condition (optional): { color?, minCount? }
- *
- * Supported subset is documented in sim/README.md §"Fidelity".
+ * Combatant def: { name, maxHp, attack, armor, mana?, skills?, passives? }
+ * Skill (sim): { id, name, cost:{color:amt}, effects:[{type, amount?, color?, count?}] }
+ *   effect types: damage | armor | heal | gain_mana | gain_attack | extra_turn |
+ *                 create_tiles | destroy_row
+ * Passive (sim): { trigger, type, amount?, color?, stat?, condition? }
  */
 
-import {
-  MANA_COLORS, ECONOMY, makeRng, drawBoardAction,
-  destroyedSkullDamage, applyDamage,
-} from './model.mjs';
+import { Board, COLORS, isSkull } from './board.mjs';
+import { makeRng, matchedSkullDamage, destroyedSkullDamage, applyDamage } from './model.mjs';
 
-// ── combatant construction ──────────────────────────────────────────────────
+// ── AI / valuation weights (tunable knobs — these shape "smart") ─────────────
+export const AI = {
+  EXTRA_TURN_VALUE: 4.0,  // HPe an extra turn is worth (≈ one average action)
+  SHAPE_BONUS: 0.5,       // small bonus for L/T/cross shapes
+  TILE_BONUS: 0.1,        // per-tile nudge → prefer bigger clears (cascade potential)
+  BASE_MANA_VALUE: 0.05,  // HPe per mana of a color you can't currently use
+  HEAL_HP_THRESHOLD: 0.6, // only value a heal skill when below this HP fraction
+  MAX_EXTRA_TURN_CHAIN: 5,
+};
+
+const eff = (e) => e.type || e.effect;
+const totalCost = (s) => Object.values(s.cost || {}).reduce((a, b) => a + b, 0);
+const isDamageSkill = (s) => (s.effects || []).some((e) => eff(e) === 'damage');
+const canAfford = (c, s) => Object.entries(s.cost || {}).every(([col, amt]) => (c.mana[col] || 0) >= amt);
+const spend = (c, s) => { for (const [col, amt] of Object.entries(s.cost || {})) c.mana[col] -= amt; };
+
 function makeCombatant(def, side) {
   const c = {
     side,
@@ -47,39 +47,99 @@ function makeCombatant(def, side) {
     armor: def.armor ?? 0,
     block: 0,
     mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0, ...(def.mana || {}) },
-    // Deep-clone skills/passives so per-battle mutation never leaks across runs.
     skills: JSON.parse(JSON.stringify(def.skills || [])),
     passives: JSON.parse(JSON.stringify(def.passives || [])),
-    policy: def.policy || 'auto',
     // metrics
     _dmgDealt: 0, _dmgTaken: 0, _actions: 0, _skillCasts: 0, _skullGroups: 0,
+    _fourPlus: 0, _cascadeSteps: 0, _tilesCleared: 0, _manaGained: 0,
   };
-  // Static onBattleStart modifiers (attack buffs, starting-mana grants).
   for (const p of c.passives) {
     if (p.trigger !== 'onBattleStart') continue;
-    if ((p.type || p.effect) === 'modify_stat' && p.stat === 'attack') c.attack += p.amount || 0;
-    if ((p.type || p.effect) === 'grant_starting_mana') c.mana[p.color] = (c.mana[p.color] || 0) + (p.amount || 0);
+    if (eff(p) === 'modify_stat' && p.stat === 'attack') c.attack += p.amount || 0;
+    if (eff(p) === 'grant_starting_mana') c.mana[p.color] = (c.mana[p.color] || 0) + (p.amount || 0);
   }
   return c;
 }
 
-const eff = (e) => e.type || e.effect; // effects use `type`, passives may use `effect`
+// ── skill valuation (HPe) ─────────────────────────────────────────────────────
+function skillValue(skill, side) {
+  let v = 0;
+  for (const e of skill.effects || []) {
+    switch (eff(e)) {
+      case 'damage': v += e.amount ?? side.attack; break;
+      case 'extra_turn': v += AI.EXTRA_TURN_VALUE; break;
+      case 'armor': case 'heal': v += (e.amount || 0) * 0.8; break;
+      case 'create_tiles': v += (e.count || 0) * 0.5; break;
+      case 'gain_attack': v += (e.amount || 0) * 2; break;
+      case 'destroy_row': v += 5; break;
+      default: break;
+    }
+  }
+  return v;
+}
 
-// ── damage routing (so passives fire uniformly, like BattleController._applyDamage) ─
+// Value of actually casting now (heal only counts when hurt & restoring).
+function skillCastValue(skill, side) {
+  let v = 0;
+  for (const e of skill.effects || []) {
+    if (eff(e) === 'heal') {
+      if (side.hp < side.maxHp * AI.HEAL_HP_THRESHOLD) v += Math.min(e.amount || 0, side.maxHp - side.hp) * 0.8;
+    } else {
+      switch (eff(e)) {
+        case 'damage': v += e.amount ?? side.attack; break;
+        case 'extra_turn': v += AI.EXTRA_TURN_VALUE; break;
+        case 'armor': v += (e.amount || 0) * 0.8; break;
+        case 'create_tiles': v += (e.count || 0) * 0.5; break;
+        case 'gain_attack': v += (e.amount || 0) * 2; break;
+        case 'destroy_row': v += 5; break;
+        default: break;
+      }
+    }
+  }
+  return v;
+}
+
+// HPe value of +1 mana of each color, driven by the best damage skill's ratio.
+function manaValueTable(side) {
+  const table = {};
+  for (const c of COLORS) table[c] = AI.BASE_MANA_VALUE;
+  let best = null, bestRatio = 0;
+  for (const sk of side.skills || []) {
+    if (!isDamageSkill(sk)) continue;
+    const cost = totalCost(sk);
+    if (cost <= 0) continue;
+    const ratio = skillValue(sk, side) / cost;
+    if (ratio > bestRatio) { bestRatio = ratio; best = sk; }
+  }
+  if (best) for (const col of Object.keys(best.cost)) table[col] = Math.max(table[col], bestRatio);
+  return table;
+}
+
+function scoreMatches(matches, side, manaVals) {
+  if (!matches.length) return -Infinity;
+  let score = 0, has4 = false, tiles = 0;
+  for (const m of matches) {
+    tiles += m.count;
+    if (m.count >= 4) has4 = true;
+    if (isSkull(m.typeId)) score += matchedSkullDamage(side.attack, m.count);
+    else score += m.count * (manaVals[m.typeId] ?? AI.BASE_MANA_VALUE);
+    if (m.isShape) score += AI.SHAPE_BONUS;
+  }
+  if (has4) score += AI.EXTRA_TURN_VALUE;
+  score += tiles * AI.TILE_BONUS;
+  return score;
+}
+
+// ── damage routing (passives fire uniformly) ─────────────────────────────────
 function dealDamage(attacker, defender, amount, battle) {
   let amt = amount;
-  // onIncomingDamage reductions (e.g. Evil Eye)
   for (const p of defender.passives) {
-    if (p.trigger === 'onIncomingDamage' && eff(p) === 'reduce_damage') {
-      amt = Math.max(0, amt - (p.amount || 0));
-    }
+    if (p.trigger === 'onIncomingDamage' && eff(p) === 'reduce_damage') amt = Math.max(0, amt - (p.amount || 0));
   }
   const r = applyDamage(defender, amt);
   if (r.actualDamage > 0) {
     attacker._dmgDealt += r.actualDamage;
     defender._dmgTaken += r.actualDamage;
-    // Depth guard: reflect/echo passives (thorns) can chain damage→passive→
-    // damage. Cap the chain so two reflectors can't loop forever.
     battle._ddepth = (battle._ddepth || 0) + 1;
     if (battle._ddepth <= 4) {
       firePassives(defender, 'onTakeDamage', battle);
@@ -88,51 +148,6 @@ function dealDamage(attacker, defender, amount, battle) {
     battle._ddepth--;
   }
   return r;
-}
-
-// ── atomic effect application (shared by skills and passives) ────────────────
-function applyAtomic(e, owner, opp, battle, ctx = {}) {
-  switch (eff(e)) {
-    case 'damage':
-      dealDamage(owner, opp, (e.amount ?? owner.attack), battle);
-      return {};
-    case 'skull_damage': // modeled stand-in for convert/summon-skull payoff
-      dealDamage(owner, opp, destroyedSkullDamage(owner.attack, e.count ?? 0), battle);
-      return {};
-    case 'armor':
-      owner.armor += e.amount ?? 0;
-      return {};
-    case 'heal':
-      owner.hp = Math.min(owner.maxHp, owner.hp + (e.amount ?? 0));
-      return {};
-    case 'gain_mana':
-      owner.mana[e.color] = (owner.mana[e.color] || 0) + (e.amount ?? 0);
-      return {};
-    case 'drain_mana': {
-      const cols = e.color ? [e.color] : MANA_COLORS;
-      for (const col of cols) opp.mana[col] = Math.max(0, (opp.mana[col] || 0) - (e.amount ?? 1));
-      return {};
-    }
-    case 'gain_attack':
-      owner.attack += e.amount ?? 0;
-      return {};
-    case 'create_tiles':
-      owner.mana[e.color] = (owner.mana[e.color] || 0) +
-        Math.round((e.count ?? 0) * battle.econ.CREATE_TILE_MANA_FACTOR);
-      return {};
-    case 'destroy_row': {
-      const tiles = battle.econ.DESTROY_ROW_TILES;
-      const skulls = Math.round(tiles * battle.econ.SKULL_BOARD_SHARE);
-      dealDamage(owner, opp, destroyedSkullDamage(owner.attack, skulls), battle);
-      const per = (tiles - skulls) / 5;
-      for (const col of MANA_COLORS) owner.mana[col] += per;
-      return {};
-    }
-    case 'extra_turn':
-      return { extraTurn: true };
-    default:
-      return {};
-  }
 }
 
 function passesCondition(cond, ctx) {
@@ -147,148 +162,148 @@ function firePassives(owner, trigger, battle, ctx = {}) {
   for (const p of owner.passives) {
     if (p.trigger !== trigger) continue;
     if (!passesCondition(p.condition, ctx)) continue;
-    applyAtomic(p, owner, opp, battle, ctx);
-  }
-}
-
-// ── policy helpers ───────────────────────────────────────────────────────────
-const isDamageSkill = (s) => (s.effects || []).some((e) => eff(e) === 'damage');
-function canAfford(c, s) {
-  for (const [col, amt] of Object.entries(s.cost || {})) if ((c.mana[col] || 0) < amt) return false;
-  return true;
-}
-function spend(c, s) {
-  for (const [col, amt] of Object.entries(s.cost || {})) c.mana[col] -= amt;
-}
-function skillDamage(s) {
-  return (s.effects || []).filter((e) => eff(e) === 'damage').reduce((sum, e) => sum + (e.amount || 0), 0);
-}
-function primaryColor(s) {
-  let best = null, bestAmt = -1;
-  for (const [col, amt] of Object.entries(s.cost || {})) if (amt > bestAmt) { best = col; bestAmt = amt; }
-  return best;
-}
-
-/** Choose a skill to cast this action, or null to make a board move instead. */
-function chooseSkill(c) {
-  const affordable = (c.skills || []).filter((s) => canAfford(c, s));
-  if (affordable.length === 0) return null;
-  // 1. best affordable damage skill
-  const dmg = affordable.filter(isDamageSkill).sort((a, b) => skillDamage(b) - skillDamage(a));
-  if (dmg.length) return dmg[0];
-  // 2. heal if hurt
-  const heal = affordable.find((s) => (s.effects || []).some((e) => eff(e) === 'heal'));
-  if (heal && c.hp < c.maxHp * 0.5) return heal;
-  // NOTE: free self-buff skills (e.g. Encroach: gain_attack, ends turn) are
-  // deliberately NOT auto-cast here — for a player that just skips dealing
-  // damage every turn. Ramp-buff usage needs a dedicated policy (future work);
-  // until then, drive attack ramps via the `gain_attack` passive trigger.
-  return null;
-}
-
-/** Decide which resource a board swap should target: a color id or 'skull'. */
-function chooseTarget(c) {
-  if (c.policy === 'skull') return 'skull';
-  if (c.policy === 'skill') {
-    const s = (c.skills || []).find((sk) => !canAfford(c, sk) && primaryColor(sk));
-    if (s) return primaryColor(s);
-  }
-  // 'auto': build toward the cheapest unaffordable damage skill, else go skull.
-  for (const s of (c.skills || []).filter(isDamageSkill)) {
-    if (!canAfford(c, s)) { const col = primaryColor(s); if (col) return col; }
-  }
-  return 'skull';
-}
-
-// ── a single board action (swap) ─────────────────────────────────────────────
-function boardAction(c, battle, rng) {
-  const opp = c.side === 'player' ? battle.enemy : battle.player;
-  const econ = battle.econ;
-  const { tiles, fourPlus } = drawBoardAction(rng, econ);
-  const target = chooseTarget(c);
-
-  const focus = Math.round(tiles * econ.FOCUS_FRACTION);
-  const incidental = tiles - focus;
-
-  // Incidental skulls (board share) always trickle in regardless of target.
-  let skullTiles = Math.round(incidental * econ.SKULL_BOARD_SHARE);
-  const incidentalColorTiles = incidental - skullTiles;
-
-  if (target === 'skull') {
-    skullTiles += focus;
-  } else {
-    c.mana[target] = (c.mana[target] || 0) + focus;
-    firePassives(c, 'onGainMana', battle, { color: target, amount: focus });
-  }
-
-  // Incidental colored mana spread evenly across the five colors.
-  const perColor = incidentalColorTiles / 5;
-  for (const col of MANA_COLORS) c.mana[col] = (c.mana[col] || 0) + perColor;
-
-  // Skull damage: only tiles that form groups of ≥3 count; (attack−1) per group.
-  if (skullTiles >= 3) {
-    const groups = Math.floor(skullTiles / econ.SKULL_GROUP_SIZE);
-    const inGroups = groups * econ.SKULL_GROUP_SIZE;
-    const dmg = inGroups + groups * Math.max(0, c.attack - 1);
-    c._skullGroups += groups;
-    if (dmg > 0) dealDamage(c, opp, dmg, battle);
-  }
-
-  if (fourPlus) firePassives(c, 'onMatch4Plus', battle, { count: 4 });
-  return { extraTurn: fourPlus };
-}
-
-// ── one full turn for a side (with extra-turn chaining) ──────────────────────
-function takeTurn(c, battle, rng) {
-  firePassives(c, 'onTurnStart', battle);
-  let chain = 0;
-  while (battle.player.hp > 0 && battle.enemy.hp > 0) {
-    c._actions++;
-    const skill = chooseSkill(c);
-    let res;
-    if (skill) {
-      spend(c, skill);
-      c._skillCasts++;
-      const opp = c.side === 'player' ? battle.enemy : battle.player;
-      res = {};
-      for (const e of skill.effects || []) {
-        const r = applyAtomic(e, c, opp, battle);
-        if (r.extraTurn) res.extraTurn = true;
-      }
-    } else {
-      res = boardAction(c, battle, rng);
+    switch (eff(p)) {
+      case 'damage': dealDamage(owner, opp, p.amount ?? owner.attack, battle); break;
+      case 'armor': owner.armor += p.amount || 0; break;
+      case 'heal': owner.hp = Math.min(owner.maxHp, owner.hp + (p.amount || 0)); break;
+      case 'gain_mana': owner.mana[p.color] = (owner.mana[p.color] || 0) + (p.amount || 0); break;
+      case 'gain_attack': owner.attack += p.amount || 0; break;
+      case 'drain_mana': { const cols = p.color ? [p.color] : COLORS; for (const col of cols) opp.mana[col] = Math.max(0, (opp.mana[col] || 0) - (p.amount || 1)); break; }
+      default: break; // reduce_damage handled in dealDamage; board passives not modeled here
     }
-    if (res && res.extraTurn && chain < battle.econ.MAX_EXTRA_TURN_CHAIN) { chain++; continue; }
+  }
+}
+
+// ── cascade resolution (real board) ──────────────────────────────────────────
+function resolveCascades(board, side, opp, battle) {
+  let extraTurn = false, steps = 0;
+  while (steps < 60) {
+    const matches = board.findAllConnectedMatches();
+    if (!matches.length) break;
+    steps++;
+    let any4 = false;
+    for (const m of matches) {
+      side._tilesCleared += m.count;
+      if (isSkull(m.typeId)) {
+        side._skullGroups += 1;
+        dealDamage(side, opp, matchedSkullDamage(side.attack, m.count), battle);
+      } else {
+        side.mana[m.typeId] = (side.mana[m.typeId] || 0) + m.count;
+        side._manaGained += m.count;
+        firePassives(side, 'onGainMana', battle, { color: m.typeId, amount: m.count });
+      }
+      if (m.count >= 4) any4 = true;
+    }
+    if (any4) { extraTurn = true; side._fourPlus += 1; firePassives(side, 'onMatch4Plus', battle, { count: 4 }); }
+    const positions = [];
+    for (const m of matches) for (const p of m.positions) positions.push(p);
+    board.removeTiles(positions);
+    board.applyGravity();
+    board.refill();
+    if (opp.hp <= 0) break;
+  }
+  side._cascadeSteps += steps;
+  return { extraTurn };
+}
+
+function castSkill(side, opp, skill, battle) {
+  spend(side, skill);
+  side._skillCasts += 1;
+  let extraTurn = false, boardTouched = false;
+  for (const e of skill.effects || []) {
+    switch (eff(e)) {
+      case 'damage': dealDamage(side, opp, e.amount ?? side.attack, battle); break;
+      case 'armor': side.armor += e.amount || 0; break;
+      case 'heal': side.hp = Math.min(side.maxHp, side.hp + (e.amount || 0)); break;
+      case 'gain_mana': side.mana[e.color] = (side.mana[e.color] || 0) + (e.amount || 0); break;
+      case 'gain_attack': side.attack += e.amount || 0; break;
+      case 'extra_turn': extraTurn = true; break;
+      case 'create_tiles': battle.board.convertRandomTiles(e.color, e.count || 0); boardTouched = true; break;
+      case 'destroy_row': {
+        const removed = battle.board.destroyRandomRow();
+        let sk = 0;
+        for (const id of removed) { if (isSkull(id)) sk++; else { side.mana[id] = (side.mana[id] || 0) + 1; side._manaGained++; } }
+        if (sk > 0) dealDamage(side, opp, destroyedSkullDamage(side.attack, sk), battle);
+        battle.board.applyGravity(); battle.board.refill(); boardTouched = true;
+        break;
+      }
+      default: break;
+    }
+  }
+  if (boardTouched) { const r = resolveCascades(battle.board, side, opp, battle); if (r.extraTurn) extraTurn = true; }
+  return { extraTurn };
+}
+
+// ── the smart decision ───────────────────────────────────────────────────────
+function chooseAction(side, opp, board) {
+  const manaVals = manaValueTable(side);
+
+  // best legal swap (scored on the real board; pruned by a cheap match test)
+  const swaps = board.getValidSwaps();
+  let bestSwap = null, bestSwapScore = -Infinity;
+  for (const sw of swaps) {
+    board.swap(sw.c1, sw.r1, sw.c2, sw.r2);
+    if (board.hasMatchAt(sw.c1, sw.r1) || board.hasMatchAt(sw.c2, sw.r2)) {
+      const s = scoreMatches(board.findAllConnectedMatches(), side, manaVals);
+      if (s > bestSwapScore) { bestSwapScore = s; bestSwap = sw; }
+    }
+    board.swap(sw.c1, sw.r1, sw.c2, sw.r2); // undo
+  }
+
+  // best affordable skill (by cast value now)
+  let bestSkill = null, bestSkillVal = 0;
+  for (const sk of side.skills || []) {
+    if (!canAfford(side, sk)) continue;
+    const v = skillCastValue(sk, side);
+    if (v > bestSkillVal) { bestSkillVal = v; bestSkill = sk; }
+  }
+
+  if (bestSkill && bestSkillVal >= bestSwapScore) return { type: 'skill', skill: bestSkill };
+  if (bestSwap) return { type: 'swap', swap: bestSwap };
+  return { type: 'reshuffle' };
+}
+
+function takeTurn(side, opp, battle) {
+  firePassives(side, 'onTurnStart', battle);
+  let chain = 0;
+  while (side.hp > 0 && opp.hp > 0) {
+    side._actions += 1;
+    const action = chooseAction(side, opp, battle.board);
+    let res = {};
+    if (action.type === 'skill') res = castSkill(side, opp, action.skill, battle);
+    else if (action.type === 'swap') { battle.board.swap(action.swap.c1, action.swap.r1, action.swap.c2, action.swap.r2); res = resolveCascades(battle.board, side, opp, battle); }
+    else { battle.board.initialize(); } // no move: reshuffle, no reward
+    if (res && res.extraTurn && chain < AI.MAX_EXTRA_TURN_CHAIN && side.hp > 0 && opp.hp > 0) { chain++; continue; }
     break;
   }
 }
 
-// ── public: simulate one battle ──────────────────────────────────────────────
 export function runBattle(playerDef, enemyDef, seed, opts = {}) {
   const rng = makeRng(seed);
   const player = makeCombatant(playerDef, 'player');
   const enemy = makeCombatant(enemyDef, 'enemy');
-  const econ = { ...ECONOMY, ...(opts.econ || {}) };
-  const battle = { player, enemy, econ };
+  const board = new Board(8, 8, rng);
+  board.initialize();
+  const battle = { player, enemy, board, rng };
+  const maxRounds = opts.maxRounds ?? 200;
   const playerFirst = opts.playerFirst !== false;
 
   let round = 0;
-  while (player.hp > 0 && enemy.hp > 0 && round < econ.MAX_ROUNDS) {
+  while (player.hp > 0 && enemy.hp > 0 && round < maxRounds) {
     if (playerFirst) {
-      takeTurn(player, battle, rng);
+      takeTurn(player, enemy, battle);
       if (enemy.hp <= 0) break;
-      takeTurn(enemy, battle, rng);
+      takeTurn(enemy, player, battle);
     } else {
-      takeTurn(enemy, battle, rng);
+      takeTurn(enemy, player, battle);
       if (player.hp <= 0) break;
-      takeTurn(player, battle, rng);
+      takeTurn(player, enemy, battle);
     }
     round++;
   }
 
-  const winner = enemy.hp <= 0 && player.hp > 0 ? 'player'
-    : player.hp <= 0 ? 'enemy' : 'draw';
-
+  const winner = enemy.hp <= 0 && player.hp > 0 ? 'player' : player.hp <= 0 ? 'enemy' : 'draw';
+  const a = Math.max(1, player._actions);
   return {
     winner,
     rounds: round,
@@ -299,9 +314,12 @@ export function runBattle(playerDef, enemyDef, seed, opts = {}) {
     enemyHp: Math.max(0, enemy.hp),
     playerDmgDealt: player._dmgDealt,
     playerDmgTaken: player._dmgTaken,
-    playerDPT: player._dmgDealt / Math.max(1, player._actions),
-    playerSkullGroups: player._skullGroups,
-    playerSkullGroupsPerAction: player._skullGroups / Math.max(1, player._actions),
+    playerDPT: player._dmgDealt / a,
     playerSkillCasts: player._skillCasts,
+    // EMERGENT economy metrics (measured, not assumed):
+    skullGroupsPerAction: player._skullGroups / a,   // = m in the research doc
+    fourPlusPerAction: player._fourPlus / a,          // extra-turn rate
+    cascadeStepsPerAction: player._cascadeSteps / a,  // >1 ⇒ cascades happening
+    manaPerAction: player._manaGained / a,
   };
 }

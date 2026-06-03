@@ -1,35 +1,14 @@
 {
   "meta": {
     "seed": 12345,
-    "runsPerPoint": 100000,
-    "economy": {
-      "SKULL_BOARD_SHARE": 0.2,
-      "MATCH_SIZE_DIST": [
-        [
-          3,
-          0.65
-        ],
-        [
-          4,
-          0.22
-        ],
-        [
-          5,
-          0.09
-        ],
-        [
-          6,
-          0.04
-        ]
-      ],
-      "CASCADE_CHANCE": 0.4,
-      "CASCADE_SIZE": 3,
-      "FOCUS_FRACTION": 0.6,
-      "SKULL_GROUP_SIZE": 3,
-      "MAX_EXTRA_TURN_CHAIN": 5,
-      "CREATE_TILE_MANA_FACTOR": 0.7,
-      "DESTROY_ROW_TILES": 8,
-      "MAX_ROUNDS": 300
+    "runsPerPoint": 10000,
+    "aiWeights": {
+      "EXTRA_TURN_VALUE": 4,
+      "SHAPE_BONUS": 0.5,
+      "TILE_BONUS": 0.1,
+      "BASE_MANA_VALUE": 0.05,
+      "HEAL_HP_THRESHOLD": 0.6,
+      "MAX_EXTRA_TURN_CHAIN": 5
     }
   },
   "scenarios": [
@@ -73,8 +52,7 @@
               }
             ]
           }
-        ],
-        "policy": "auto"
+        ]
       },
       "enemy": {
         "name": "Floor1 minion",
@@ -98,22 +76,25 @@
         ]
       },
       "aggregates": {
-        "n": 100000,
-        "winRate": 0.99,
+        "n": 10000,
+        "winRate": 0.81,
         "playerActions": {
-          "mean": 11.88,
-          "median": 12,
-          "p10": 11,
-          "p90": 13
+          "mean": 16.69,
+          "median": 17,
+          "p10": 12,
+          "p90": 22
         },
-        "playerHpFracOnWin": 0.43,
+        "playerHpFracOnWin": 0.42,
         "playerHpFrac": {
-          "mean": 0.43,
-          "median": 0.41
+          "mean": 0.34,
+          "median": 0.32
         },
-        "playerDPT": 2.53,
-        "skullGroupsPerAction": 0,
-        "avgSkillCasts": 4.99
+        "playerDPT": 1.89,
+        "avgSkillCasts": 2.86,
+        "skullGroupsPerAction": 0.3,
+        "fourPlusPerAction": 0.24,
+        "cascadeStepsPerAction": 1.21,
+        "manaPerAction": 3.42
       }
     },
     {
@@ -156,8 +137,7 @@
               }
             ]
           }
-        ],
-        "policy": "auto"
+        ]
       },
       "enemy": {
         "name": "Floor5 minion",
@@ -181,22 +161,25 @@
         ]
       },
       "aggregates": {
-        "n": 100000,
-        "winRate": 0.4,
+        "n": 10000,
+        "winRate": 0.18,
         "playerActions": {
-          "mean": 17.33,
-          "median": 18,
-          "p10": 14,
-          "p90": 20
+          "mean": 19.38,
+          "median": 20,
+          "p10": 13,
+          "p90": 26
         },
-        "playerHpFracOnWin": 0.19,
+        "playerHpFracOnWin": 0.23,
         "playerHpFrac": {
-          "mean": 0.07,
+          "mean": 0.04,
           "median": 0
         },
-        "playerDPT": 2.42,
-        "skullGroupsPerAction": 0,
-        "avgSkillCasts": 6.98
+        "playerDPT": 1.71,
+        "avgSkillCasts": 3.27,
+        "skullGroupsPerAction": 0.26,
+        "fourPlusPerAction": 0.22,
+        "cascadeStepsPerAction": 1.2,
+        "manaPerAction": 3.53
       }
     },
     {
@@ -239,8 +222,7 @@
               }
             ]
           }
-        ],
-        "policy": "auto"
+        ]
       },
       "enemy": {
         "name": "Floor9 minion",
@@ -264,22 +246,25 @@
         ]
       },
       "aggregates": {
-        "n": 100000,
+        "n": 10000,
         "winRate": 0.01,
         "playerActions": {
-          "mean": 18.08,
-          "median": 18,
-          "p10": 14,
-          "p90": 22
+          "mean": 17.82,
+          "median": 17,
+          "p10": 11,
+          "p90": 25
         },
-        "playerHpFracOnWin": 0.13,
+        "playerHpFracOnWin": 0.21,
         "playerHpFrac": {
           "mean": 0,
           "median": 0
         },
-        "playerDPT": 2.39,
-        "skullGroupsPerAction": 0,
-        "avgSkillCasts": 7.21
+        "playerDPT": 1.64,
+        "avgSkillCasts": 2.97,
+        "skullGroupsPerAction": 0.24,
+        "fourPlusPerAction": 0.25,
+        "cascadeStepsPerAction": 1.21,
+        "manaPerAction": 3.68
       }
     },
     {
@@ -306,8 +291,7 @@
               }
             ]
           }
-        ],
-        "policy": "auto"
+        ]
       },
       "enemy": {
         "name": "Floor5 minion",
@@ -331,22 +315,25 @@
         ]
       },
       "aggregates": {
-        "n": 100000,
-        "winRate": 0.3,
+        "n": 10000,
+        "winRate": 0.04,
         "playerActions": {
-          "mean": 14.79,
-          "median": 15,
-          "p10": 12,
-          "p90": 17
+          "mean": 10.35,
+          "median": 10,
+          "p10": 6,
+          "p90": 15
         },
-        "playerHpFracOnWin": 0.1,
+        "playerHpFracOnWin": 0.21,
         "playerHpFrac": {
-          "mean": 0.03,
+          "mean": 0.01,
           "median": 0
         },
-        "playerDPT": 2.71,
-        "skullGroupsPerAction": 0,
-        "avgSkillCasts": 6.68
+        "playerDPT": 2.6,
+        "avgSkillCasts": 3.13,
+        "skullGroupsPerAction": 0.21,
+        "fourPlusPerAction": 0.2,
+        "cascadeStepsPerAction": 1.02,
+        "manaPerAction": 3.06
       }
     },
     {
@@ -373,8 +360,7 @@
               }
             ]
           }
-        ],
-        "policy": "skull"
+        ]
       },
       "enemy": {
         "name": "Floor5 minion",
@@ -398,22 +384,25 @@
         ]
       },
       "aggregates": {
-        "n": 100000,
-        "winRate": 0.15,
+        "n": 10000,
+        "winRate": 0.12,
         "playerActions": {
-          "mean": 21.61,
-          "median": 21,
-          "p10": 16,
-          "p90": 28
+          "mean": 27.53,
+          "median": 27,
+          "p10": 14,
+          "p90": 42
         },
-        "playerHpFracOnWin": 0.3,
+        "playerHpFracOnWin": 0.39,
         "playerHpFrac": {
           "mean": 0.05,
           "median": 0
         },
-        "playerDPT": 1.49,
-        "skullGroupsPerAction": 0.5,
-        "avgSkillCasts": 1.31
+        "playerDPT": 1.03,
+        "avgSkillCasts": 4.12,
+        "skullGroupsPerAction": 0.33,
+        "fourPlusPerAction": 0.26,
+        "cascadeStepsPerAction": 1.23,
+        "manaPerAction": 3.46
       }
     },
     {
@@ -456,8 +445,7 @@
               }
             ]
           }
-        ],
-        "policy": "auto"
+        ]
       },
       "enemy": {
         "name": "Elite",
@@ -481,22 +469,25 @@
         ]
       },
       "aggregates": {
-        "n": 100000,
+        "n": 10000,
         "winRate": 0,
         "playerActions": {
-          "mean": 18.09,
-          "median": 18,
-          "p10": 14,
-          "p90": 22
+          "mean": 17.85,
+          "median": 17,
+          "p10": 11,
+          "p90": 25
         },
         "playerHpFracOnWin": 0,
         "playerHpFrac": {
           "mean": 0,
           "median": 0
         },
-        "playerDPT": 2.39,
-        "skullGroupsPerAction": 0,
-        "avgSkillCasts": 7.22
+        "playerDPT": 1.64,
+        "avgSkillCasts": 2.97,
+        "skullGroupsPerAction": 0.24,
+        "fourPlusPerAction": 0.25,
+        "cascadeStepsPerAction": 1.21,
+        "manaPerAction": 3.68
       }
     },
     {
@@ -539,8 +530,7 @@
               }
             ]
           }
-        ],
-        "policy": "auto"
+        ]
       },
       "enemy": {
         "name": "Boss",
@@ -571,1205 +561,2036 @@
         ]
       },
       "aggregates": {
-        "n": 100000,
+        "n": 10000,
         "winRate": 0,
         "playerActions": {
-          "mean": 18.09,
-          "median": 18,
-          "p10": 14,
-          "p90": 22
+          "mean": 12.08,
+          "median": 12,
+          "p10": 7,
+          "p90": 17
         },
         "playerHpFracOnWin": 0,
         "playerHpFrac": {
           "mean": 0,
           "median": 0
         },
+        "playerDPT": 1.75,
+        "avgSkillCasts": 2.14,
+        "skullGroupsPerAction": 0.26,
+        "fourPlusPerAction": 0.26,
+        "cascadeStepsPerAction": 1.21,
+        "manaPerAction": 3.64
+      }
+    },
+    {
+      "name": "reference_vs_floor5",
+      "player": {
+        "name": "Reference (mid-act)",
+        "maxHp": 40,
+        "attack": 3,
+        "armor": 0,
+        "mana": {
+          "red": 5
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ]
+      },
+      "enemy": {
+        "name": "Floor5 minion",
+        "maxHp": 46,
+        "attack": 2,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 10000,
+        "winRate": 0.7,
+        "playerActions": {
+          "mean": 16.71,
+          "median": 17,
+          "p10": 12,
+          "p90": 22
+        },
+        "playerHpFracOnWin": 0.34,
+        "playerHpFrac": {
+          "mean": 0.24,
+          "median": 0.2
+        },
+        "playerDPT": 2.72,
+        "avgSkillCasts": 2.84,
+        "skullGroupsPerAction": 0.35,
+        "fourPlusPerAction": 0.18,
+        "cascadeStepsPerAction": 1.19,
+        "manaPerAction": 3.16
+      }
+    },
+    {
+      "name": "reference_vs_floor9",
+      "player": {
+        "name": "Reference (mid-act)",
+        "maxHp": 40,
+        "attack": 3,
+        "armor": 0,
+        "mana": {
+          "red": 5
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ]
+      },
+      "enemy": {
+        "name": "Floor9 minion",
+        "maxHp": 62,
+        "attack": 3,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 10000,
+        "winRate": 0.15,
+        "playerActions": {
+          "mean": 18.02,
+          "median": 18,
+          "p10": 12,
+          "p90": 24
+        },
+        "playerHpFracOnWin": 0.28,
+        "playerHpFrac": {
+          "mean": 0.04,
+          "median": 0
+        },
+        "playerDPT": 2.42,
+        "avgSkillCasts": 3,
+        "skullGroupsPerAction": 0.29,
+        "fourPlusPerAction": 0.2,
+        "cascadeStepsPerAction": 1.2,
+        "manaPerAction": 3.4
+      }
+    },
+    {
+      "name": "reference_vs_elite",
+      "player": {
+        "name": "Reference (mid-act)",
+        "maxHp": 40,
+        "attack": 3,
+        "armor": 0,
+        "mana": {
+          "red": 5
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ]
+      },
+      "enemy": {
+        "name": "Elite",
+        "maxHp": 85,
+        "attack": 3,
+        "armor": 10,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 10000,
+        "winRate": 0.01,
+        "playerActions": {
+          "mean": 18.69,
+          "median": 18,
+          "p10": 12,
+          "p90": 26
+        },
+        "playerHpFracOnWin": 0.21,
+        "playerHpFrac": {
+          "mean": 0,
+          "median": 0
+        },
         "playerDPT": 2.39,
-        "skullGroupsPerAction": 0,
-        "avgSkillCasts": 7.22
+        "avgSkillCasts": 3.07,
+        "skullGroupsPerAction": 0.29,
+        "fourPlusPerAction": 0.2,
+        "cascadeStepsPerAction": 1.2,
+        "manaPerAction": 3.41
+      }
+    },
+    {
+      "name": "reference_vs_boss",
+      "player": {
+        "name": "Reference (mid-act)",
+        "maxHp": 40,
+        "attack": 3,
+        "armor": 0,
+        "mana": {
+          "red": 5
+        },
+        "skills": [
+          {
+            "id": "strike",
+            "name": "Strike",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 6
+              }
+            ]
+          },
+          {
+            "id": "bash",
+            "name": "Bash",
+            "cost": {
+              "red": 6
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              },
+              {
+                "type": "extra_turn"
+              }
+            ]
+          }
+        ]
+      },
+      "enemy": {
+        "name": "Boss",
+        "maxHp": 170,
+        "attack": 3,
+        "armor": 0,
+        "skills": [
+          {
+            "id": "slash",
+            "name": "Slash",
+            "cost": {
+              "red": 5
+            },
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 5
+              }
+            ]
+          }
+        ],
+        "passives": [
+          {
+            "trigger": "onTurnStart",
+            "type": "gain_attack",
+            "amount": 1
+          }
+        ]
+      },
+      "aggregates": {
+        "n": 10000,
+        "winRate": 0,
+        "playerActions": {
+          "mean": 12.34,
+          "median": 12,
+          "p10": 7,
+          "p90": 18
+        },
+        "playerHpFracOnWin": 0,
+        "playerHpFrac": {
+          "mean": 0,
+          "median": 0
+        },
+        "playerDPT": 2.63,
+        "avgSkillCasts": 2.25,
+        "skullGroupsPerAction": 0.31,
+        "fourPlusPerAction": 0.2,
+        "cascadeStepsPerAction": 1.18,
+        "manaPerAction": 3.3
       }
     }
   ],
   "sweeps": [
     {
       "name": "attack_value_vs_floor5",
-      "note": "How much does +1 Attack move win rate / turns vs a mid minion?",
+      "note": "+1 Attack vs a mid minion (skull build).",
       "varying": "player.attack",
       "points": [
         {
           "value": 1,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.15,
+            "n": 10000,
+            "winRate": 0.12,
             "playerActions": {
-              "mean": 21.61,
-              "median": 21,
-              "p10": 16,
-              "p90": 28
+              "mean": 27.53,
+              "median": 27,
+              "p10": 14,
+              "p90": 42
             },
-            "playerHpFracOnWin": 0.3,
+            "playerHpFracOnWin": 0.39,
             "playerHpFrac": {
               "mean": 0.05,
               "median": 0
             },
-            "playerDPT": 1.49,
-            "skullGroupsPerAction": 0.5,
-            "avgSkillCasts": 1.31
+            "playerDPT": 1.03,
+            "avgSkillCasts": 4.12,
+            "skullGroupsPerAction": 0.33,
+            "fourPlusPerAction": 0.26,
+            "cascadeStepsPerAction": 1.23,
+            "manaPerAction": 3.46
           }
         },
         {
           "value": 2,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.42,
+            "n": 10000,
+            "winRate": 0.27,
             "playerActions": {
-              "mean": 19.65,
-              "median": 19,
-              "p10": 15,
-              "p90": 25
+              "mean": 24.94,
+              "median": 25,
+              "p10": 14,
+              "p90": 37
             },
-            "playerHpFracOnWin": 0.34,
+            "playerHpFracOnWin": 0.41,
             "playerHpFrac": {
-              "mean": 0.14,
+              "mean": 0.11,
               "median": 0
             },
-            "playerDPT": 2.04,
-            "skullGroupsPerAction": 0.51,
-            "avgSkillCasts": 1.11
+            "playerDPT": 1.4,
+            "avgSkillCasts": 3.68,
+            "skullGroupsPerAction": 0.34,
+            "fourPlusPerAction": 0.25,
+            "cascadeStepsPerAction": 1.23,
+            "manaPerAction": 3.47
           }
         },
         {
           "value": 3,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.61,
+            "n": 10000,
+            "winRate": 0.44,
             "playerActions": {
-              "mean": 17.8,
-              "median": 18,
-              "p10": 14,
-              "p90": 22
+              "mean": 19.24,
+              "median": 19,
+              "p10": 11,
+              "p90": 28
             },
-            "playerHpFracOnWin": 0.38,
+            "playerHpFracOnWin": 0.41,
             "playerHpFrac": {
-              "mean": 0.23,
-              "median": 0.14
+              "mean": 0.18,
+              "median": 0
             },
-            "playerDPT": 2.61,
-            "skullGroupsPerAction": 0.52,
-            "avgSkillCasts": 0.98
+            "playerDPT": 2.11,
+            "avgSkillCasts": 2.49,
+            "skullGroupsPerAction": 0.41,
+            "fourPlusPerAction": 0.19,
+            "cascadeStepsPerAction": 1.26,
+            "manaPerAction": 3.25
           }
         },
         {
           "value": 4,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.8,
+            "n": 10000,
+            "winRate": 0.58,
             "playerActions": {
-              "mean": 15.21,
-              "median": 15,
+              "mean": 17.25,
+              "median": 17,
               "p10": 10,
-              "p90": 20
+              "p90": 25
             },
-            "playerHpFracOnWin": 0.46,
+            "playerHpFracOnWin": 0.43,
             "playerHpFrac": {
-              "mean": 0.37,
-              "median": 0.32
+              "mean": 0.25,
+              "median": 0.18
             },
-            "playerDPT": 3.23,
-            "skullGroupsPerAction": 0.54,
-            "avgSkillCasts": 0.83
+            "playerDPT": 2.61,
+            "avgSkillCasts": 2.15,
+            "skullGroupsPerAction": 0.43,
+            "fourPlusPerAction": 0.2,
+            "cascadeStepsPerAction": 1.26,
+            "manaPerAction": 3.24
           }
         },
         {
           "value": 5,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.88,
+            "n": 10000,
+            "winRate": 0.68,
             "playerActions": {
-              "mean": 13.63,
-              "median": 14,
+              "mean": 15.48,
+              "median": 15,
               "p10": 9,
-              "p90": 18
+              "p90": 22
             },
-            "playerHpFracOnWin": 0.51,
+            "playerHpFracOnWin": 0.46,
             "playerHpFrac": {
-              "mean": 0.45,
-              "median": 0.5
+              "mean": 0.31,
+              "median": 0.29
             },
-            "playerDPT": 3.84,
-            "skullGroupsPerAction": 0.55,
-            "avgSkillCasts": 0.73
+            "playerDPT": 3.16,
+            "avgSkillCasts": 1.83,
+            "skullGroupsPerAction": 0.44,
+            "fourPlusPerAction": 0.2,
+            "cascadeStepsPerAction": 1.28,
+            "manaPerAction": 3.25
           }
         },
         {
           "value": 6,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.93,
+            "n": 10000,
+            "winRate": 0.78,
             "playerActions": {
-              "mean": 11.86,
-              "median": 12,
-              "p10": 7,
-              "p90": 17
+              "mean": 13.44,
+              "median": 13,
+              "p10": 8,
+              "p90": 20
             },
-            "playerHpFracOnWin": 0.57,
+            "playerHpFracOnWin": 0.49,
             "playerHpFrac": {
-              "mean": 0.53,
-              "median": 0.64
+              "mean": 0.38,
+              "median": 0.43
             },
-            "playerDPT": 4.5,
-            "skullGroupsPerAction": 0.56,
-            "avgSkillCasts": 0.6
+            "playerDPT": 3.81,
+            "avgSkillCasts": 1.48,
+            "skullGroupsPerAction": 0.47,
+            "fourPlusPerAction": 0.21,
+            "cascadeStepsPerAction": 1.3,
+            "manaPerAction": 3.26
           }
         },
         {
           "value": 8,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.97,
+            "n": 10000,
+            "winRate": 0.87,
             "playerActions": {
-              "mean": 9.96,
-              "median": 10,
+              "mean": 11.07,
+              "median": 11,
               "p10": 6,
-              "p90": 15
+              "p90": 17
             },
-            "playerHpFracOnWin": 0.63,
+            "playerHpFracOnWin": 0.53,
             "playerHpFrac": {
-              "mean": 0.61,
-              "median": 0.64
+              "mean": 0.46,
+              "median": 0.54
             },
-            "playerDPT": 5.83,
-            "skullGroupsPerAction": 0.58,
-            "avgSkillCasts": 0.45
+            "playerDPT": 5.18,
+            "avgSkillCasts": 1.07,
+            "skullGroupsPerAction": 0.51,
+            "fourPlusPerAction": 0.22,
+            "cascadeStepsPerAction": 1.33,
+            "manaPerAction": 3.28
           }
         },
         {
           "value": 10,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.99,
+            "n": 10000,
+            "winRate": 0.94,
             "playerActions": {
-              "mean": 7.97,
-              "median": 7,
+              "mean": 8.48,
+              "median": 8,
               "p10": 4,
-              "p90": 13
+              "p90": 14
             },
-            "playerHpFracOnWin": 0.71,
+            "playerHpFracOnWin": 0.61,
             "playerHpFrac": {
-              "mean": 0.7,
-              "median": 0.68
+              "mean": 0.57,
+              "median": 0.61
             },
-            "playerDPT": 7.3,
-            "skullGroupsPerAction": 0.61,
-            "avgSkillCasts": 0.27
+            "playerDPT": 7.04,
+            "avgSkillCasts": 0.67,
+            "skullGroupsPerAction": 0.58,
+            "fourPlusPerAction": 0.24,
+            "cascadeStepsPerAction": 1.37,
+            "manaPerAction": 3.25
           }
         }
       ]
     },
     {
       "name": "maxhp_value_vs_floor5",
-      "note": "How much does +Max HP move win rate / HP remaining vs a mid minion?",
+      "note": "+Max HP vs a mid minion (skull build).",
       "varying": "player.maxHp",
       "points": [
         {
           "value": 16,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.02,
+            "n": 10000,
+            "winRate": 0.03,
             "playerActions": {
-              "mean": 15.26,
+              "mean": 17.12,
               "median": 15,
-              "p10": 11,
-              "p90": 20
+              "p10": 7,
+              "p90": 31
             },
-            "playerHpFracOnWin": 0.27,
+            "playerHpFracOnWin": 0.51,
             "playerHpFrac": {
               "mean": 0.01,
               "median": 0
             },
-            "playerDPT": 1.46,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1
+            "playerDPT": 1.16,
+            "avgSkillCasts": 2.51,
+            "skullGroupsPerAction": 0.37,
+            "fourPlusPerAction": 0.27,
+            "cascadeStepsPerAction": 1.26,
+            "manaPerAction": 3.49
           }
         },
         {
           "value": 20,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.07,
+            "n": 10000,
+            "winRate": 0.05,
             "playerActions": {
-              "mean": 18.22,
-              "median": 18,
-              "p10": 13,
-              "p90": 25
+              "mean": 20.6,
+              "median": 19,
+              "p10": 9,
+              "p90": 35
             },
-            "playerHpFracOnWin": 0.22,
+            "playerHpFracOnWin": 0.44,
             "playerHpFrac": {
-              "mean": 0.01,
+              "mean": 0.02,
               "median": 0
             },
-            "playerDPT": 1.47,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.1
+            "playerDPT": 1.09,
+            "avgSkillCasts": 3.04,
+            "skullGroupsPerAction": 0.35,
+            "fourPlusPerAction": 0.27,
+            "cascadeStepsPerAction": 1.24,
+            "manaPerAction": 3.49
           }
         },
         {
           "value": 24,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.1,
+            "n": 10000,
+            "winRate": 0.08,
             "playerActions": {
-              "mean": 18.69,
-              "median": 18,
-              "p10": 13,
-              "p90": 26
+              "mean": 24.2,
+              "median": 23,
+              "p10": 11,
+              "p90": 39
             },
-            "playerHpFracOnWin": 0.25,
+            "playerHpFracOnWin": 0.42,
             "playerHpFrac": {
               "mean": 0.03,
               "median": 0
             },
-            "playerDPT": 1.48,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.14
+            "playerDPT": 1.05,
+            "avgSkillCasts": 3.61,
+            "skullGroupsPerAction": 0.33,
+            "fourPlusPerAction": 0.26,
+            "cascadeStepsPerAction": 1.23,
+            "manaPerAction": 3.47
           }
         },
         {
           "value": 28,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.15,
+            "n": 10000,
+            "winRate": 0.12,
             "playerActions": {
-              "mean": 21.61,
-              "median": 21,
-              "p10": 16,
-              "p90": 28
+              "mean": 27.53,
+              "median": 27,
+              "p10": 14,
+              "p90": 42
             },
-            "playerHpFracOnWin": 0.3,
+            "playerHpFracOnWin": 0.39,
             "playerHpFrac": {
               "mean": 0.05,
               "median": 0
             },
-            "playerDPT": 1.49,
-            "skullGroupsPerAction": 0.5,
-            "avgSkillCasts": 1.31
+            "playerDPT": 1.03,
+            "avgSkillCasts": 4.12,
+            "skullGroupsPerAction": 0.33,
+            "fourPlusPerAction": 0.26,
+            "cascadeStepsPerAction": 1.23,
+            "manaPerAction": 3.46
           }
         },
         {
           "value": 32,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.27,
+            "n": 10000,
+            "winRate": 0.17,
             "playerActions": {
-              "mean": 24.49,
-              "median": 24,
-              "p10": 19,
-              "p90": 31
+              "mean": 30.64,
+              "median": 30,
+              "p10": 17,
+              "p90": 45
             },
-            "playerHpFracOnWin": 0.27,
+            "playerHpFracOnWin": 0.37,
             "playerHpFrac": {
-              "mean": 0.07,
+              "mean": 0.06,
               "median": 0
             },
-            "playerDPT": 1.5,
-            "skullGroupsPerAction": 0.5,
-            "avgSkillCasts": 1.52
+            "playerDPT": 1.01,
+            "avgSkillCasts": 4.59,
+            "skullGroupsPerAction": 0.32,
+            "fourPlusPerAction": 0.25,
+            "cascadeStepsPerAction": 1.22,
+            "manaPerAction": 3.46
           }
         },
         {
           "value": 36,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.41,
+            "n": 10000,
+            "winRate": 0.22,
             "playerActions": {
-              "mean": 26.95,
-              "median": 27,
-              "p10": 21,
-              "p90": 33
+              "mean": 33.59,
+              "median": 33,
+              "p10": 20,
+              "p90": 48
             },
-            "playerHpFracOnWin": 0.27,
+            "playerHpFracOnWin": 0.36,
             "playerHpFrac": {
-              "mean": 0.11,
+              "mean": 0.08,
               "median": 0
             },
-            "playerDPT": 1.51,
-            "skullGroupsPerAction": 0.5,
-            "avgSkillCasts": 1.71
+            "playerDPT": 1,
+            "avgSkillCasts": 5.03,
+            "skullGroupsPerAction": 0.32,
+            "fourPlusPerAction": 0.25,
+            "cascadeStepsPerAction": 1.22,
+            "manaPerAction": 3.47
           }
         },
         {
           "value": 40,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.55,
+            "n": 10000,
+            "winRate": 0.29,
             "playerActions": {
-              "mean": 28.76,
-              "median": 29,
+              "mean": 36.16,
+              "median": 36,
               "p10": 22,
-              "p90": 34
+              "p90": 50
             },
-            "playerHpFracOnWin": 0.26,
+            "playerHpFracOnWin": 0.34,
             "playerHpFrac": {
-              "mean": 0.14,
-              "median": 0.05
+              "mean": 0.1,
+              "median": 0
             },
-            "playerDPT": 1.52,
-            "skullGroupsPerAction": 0.51,
-            "avgSkillCasts": 1.8
+            "playerDPT": 0.98,
+            "avgSkillCasts": 5.41,
+            "skullGroupsPerAction": 0.31,
+            "fourPlusPerAction": 0.25,
+            "cascadeStepsPerAction": 1.22,
+            "manaPerAction": 3.46
           }
         },
         {
           "value": 48,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.68,
+            "n": 10000,
+            "winRate": 0.43,
             "playerActions": {
-              "mean": 30.04,
-              "median": 30,
-              "p10": 24,
-              "p90": 36
+              "mean": 40.56,
+              "median": 40,
+              "p10": 28,
+              "p90": 53
             },
-            "playerHpFracOnWin": 0.32,
+            "playerHpFracOnWin": 0.35,
             "playerHpFrac": {
-              "mean": 0.22,
-              "median": 0.21
+              "mean": 0.15,
+              "median": 0
             },
-            "playerDPT": 1.54,
-            "skullGroupsPerAction": 0.51,
-            "avgSkillCasts": 1.81
+            "playerDPT": 0.98,
+            "avgSkillCasts": 6.06,
+            "skullGroupsPerAction": 0.31,
+            "fourPlusPerAction": 0.25,
+            "cascadeStepsPerAction": 1.22,
+            "manaPerAction": 3.46
           }
         }
       ]
     },
     {
       "name": "attack_value_vs_boss",
-      "note": "Attack value should be HIGHER in long fights (research §11.1).",
+      "note": "Attack value in a long fight (should be higher).",
       "varying": "player.attack",
       "points": [
         {
           "value": 1,
           "aggregates": {
-            "n": 100000,
+            "n": 10000,
             "winRate": 0,
             "playerActions": {
-              "mean": 22.31,
-              "median": 21,
-              "p10": 16,
-              "p90": 30
+              "mean": 12.54,
+              "median": 12,
+              "p10": 7,
+              "p90": 19
             },
             "playerHpFracOnWin": 0,
             "playerHpFrac": {
               "mean": 0,
               "median": 0
             },
-            "playerDPT": 1.47,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.35
+            "playerDPT": 1.09,
+            "avgSkillCasts": 1.86,
+            "skullGroupsPerAction": 0.34,
+            "fourPlusPerAction": 0.31,
+            "cascadeStepsPerAction": 1.25,
+            "manaPerAction": 3.62
           }
         },
         {
           "value": 2,
           "aggregates": {
-            "n": 100000,
+            "n": 10000,
             "winRate": 0,
             "playerActions": {
-              "mean": 22.31,
-              "median": 21,
-              "p10": 16,
-              "p90": 30
+              "mean": 12.31,
+              "median": 12,
+              "p10": 7,
+              "p90": 19
             },
             "playerHpFracOnWin": 0,
             "playerHpFrac": {
               "mean": 0,
               "median": 0
             },
-            "playerDPT": 1.97,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.35
+            "playerDPT": 1.44,
+            "avgSkillCasts": 1.82,
+            "skullGroupsPerAction": 0.34,
+            "fourPlusPerAction": 0.3,
+            "cascadeStepsPerAction": 1.25,
+            "manaPerAction": 3.62
           }
         },
         {
           "value": 3,
           "aggregates": {
-            "n": 100000,
+            "n": 10000,
             "winRate": 0,
             "playerActions": {
-              "mean": 22.31,
-              "median": 21,
-              "p10": 16,
-              "p90": 30
+              "mean": 11.21,
+              "median": 11,
+              "p10": 6,
+              "p90": 17
             },
-            "playerHpFracOnWin": 0.1,
+            "playerHpFracOnWin": 0,
             "playerHpFrac": {
               "mean": 0,
               "median": 0
             },
-            "playerDPT": 2.46,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.35
+            "playerDPT": 2.07,
+            "avgSkillCasts": 1.49,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.27,
+            "manaPerAction": 3.44
           }
         },
         {
           "value": 4,
           "aggregates": {
-            "n": 100000,
+            "n": 10000,
             "winRate": 0,
             "playerActions": {
-              "mean": 22.31,
-              "median": 21,
-              "p10": 16,
-              "p90": 30
+              "mean": 11.18,
+              "median": 11,
+              "p10": 6,
+              "p90": 17
             },
-            "playerHpFracOnWin": 0.15,
+            "playerHpFracOnWin": 0,
             "playerHpFrac": {
               "mean": 0,
               "median": 0
             },
-            "playerDPT": 2.95,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.35
+            "playerDPT": 2.47,
+            "avgSkillCasts": 1.48,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.27,
+            "manaPerAction": 3.43
           }
         },
         {
           "value": 5,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.01,
+            "n": 10000,
+            "winRate": 0,
             "playerActions": {
-              "mean": 22.29,
-              "median": 21,
-              "p10": 16,
-              "p90": 30
+              "mean": 11.18,
+              "median": 11,
+              "p10": 6,
+              "p90": 17
             },
-            "playerHpFracOnWin": 0.22,
+            "playerHpFracOnWin": 0,
             "playerHpFrac": {
               "mean": 0,
               "median": 0
             },
-            "playerDPT": 3.44,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.35
+            "playerDPT": 2.87,
+            "avgSkillCasts": 1.48,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.27,
+            "manaPerAction": 3.43
           }
         },
         {
           "value": 6,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.02,
+            "n": 10000,
+            "winRate": 0,
             "playerActions": {
-              "mean": 22.24,
-              "median": 21,
-              "p10": 16,
-              "p90": 30
+              "mean": 11.18,
+              "median": 11,
+              "p10": 6,
+              "p90": 17
             },
-            "playerHpFracOnWin": 0.25,
+            "playerHpFracOnWin": 0,
             "playerHpFrac": {
               "mean": 0,
               "median": 0
             },
-            "playerDPT": 3.94,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.35
+            "playerDPT": 3.28,
+            "avgSkillCasts": 1.48,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.27,
+            "manaPerAction": 3.43
           }
         },
         {
           "value": 8,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.11,
+            "n": 10000,
+            "winRate": 0,
             "playerActions": {
-              "mean": 21.83,
-              "median": 21,
-              "p10": 16,
-              "p90": 29
+              "mean": 11.18,
+              "median": 11,
+              "p10": 6,
+              "p90": 17
             },
-            "playerHpFracOnWin": 0.29,
+            "playerHpFracOnWin": 0.39,
             "playerHpFrac": {
-              "mean": 0.03,
+              "mean": 0,
               "median": 0
             },
-            "playerDPT": 4.95,
-            "skullGroupsPerAction": 0.49,
-            "avgSkillCasts": 1.33
+            "playerDPT": 4.08,
+            "avgSkillCasts": 1.48,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.27,
+            "manaPerAction": 3.43
           }
         },
         {
           "value": 10,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.2,
+            "n": 10000,
+            "winRate": 0,
             "playerActions": {
-              "mean": 21.3,
-              "median": 21,
-              "p10": 16,
-              "p90": 28
+              "mean": 11.18,
+              "median": 11,
+              "p10": 6,
+              "p90": 17
             },
-            "playerHpFracOnWin": 0.31,
+            "playerHpFracOnWin": 0.53,
             "playerHpFrac": {
-              "mean": 0.06,
+              "mean": 0,
               "median": 0
             },
-            "playerDPT": 5.98,
-            "skullGroupsPerAction": 0.5,
-            "avgSkillCasts": 1.28
+            "playerDPT": 4.89,
+            "avgSkillCasts": 1.48,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.27,
+            "manaPerAction": 3.43
           }
         }
       ]
     },
     {
-      "name": "skill_damage_value",
-      "note": "Worth of +1 damage on the workhorse skill (Strike), vs floor5.",
-      "varying": "strike.damage",
+      "name": "skill_ratio_value_cost5",
+      "note": "Skill VALUE DENSITY: fixed cost 5, vary damage/cost ratio. Shows how good a skill must be (vs the skull baseline) to be worth building.",
+      "varying": "ratio@cost5",
+      "points": [
+        {
+          "value": 0.8,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.67,
+            "playerActions": {
+              "mean": 17.84,
+              "median": 18,
+              "p10": 13,
+              "p90": 23
+            },
+            "playerHpFracOnWin": 0.34,
+            "playerHpFrac": {
+              "mean": 0.23,
+              "median": 0.18
+            },
+            "playerDPT": 2.56,
+            "avgSkillCasts": 1.98,
+            "skullGroupsPerAction": 0.41,
+            "fourPlusPerAction": 0.24,
+            "cascadeStepsPerAction": 1.29,
+            "manaPerAction": 3.37
+          }
+        },
+        {
+          "value": 1,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.68,
+            "playerActions": {
+              "mean": 16.99,
+              "median": 17,
+              "p10": 12,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.34,
+            "playerHpFrac": {
+              "mean": 0.23,
+              "median": 0.18
+            },
+            "playerDPT": 2.71,
+            "avgSkillCasts": 1.97,
+            "skullGroupsPerAction": 0.41,
+            "fourPlusPerAction": 0.22,
+            "cascadeStepsPerAction": 1.28,
+            "manaPerAction": 3.33
+          }
+        },
+        {
+          "value": 1.2,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.64,
+            "playerActions": {
+              "mean": 16.72,
+              "median": 17,
+              "p10": 12,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.32,
+            "playerHpFrac": {
+              "mean": 0.21,
+              "median": 0.15
+            },
+            "playerDPT": 2.71,
+            "avgSkillCasts": 2.15,
+            "skullGroupsPerAction": 0.38,
+            "fourPlusPerAction": 0.22,
+            "cascadeStepsPerAction": 1.26,
+            "manaPerAction": 3.37
+          }
+        },
+        {
+          "value": 1.4,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.69,
+            "playerActions": {
+              "mean": 16.1,
+              "median": 16,
+              "p10": 12,
+              "p90": 21
+            },
+            "playerHpFracOnWin": 0.33,
+            "playerHpFrac": {
+              "mean": 0.23,
+              "median": 0.18
+            },
+            "playerDPT": 2.87,
+            "avgSkillCasts": 2.09,
+            "skullGroupsPerAction": 0.38,
+            "fourPlusPerAction": 0.22,
+            "cascadeStepsPerAction": 1.26,
+            "manaPerAction": 3.38
+          }
+        },
+        {
+          "value": 1.6,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.7,
+            "playerActions": {
+              "mean": 15.24,
+              "median": 15,
+              "p10": 11,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.33,
+            "playerHpFrac": {
+              "mean": 0.23,
+              "median": 0.18
+            },
+            "playerDPT": 3.05,
+            "avgSkillCasts": 2.1,
+            "skullGroupsPerAction": 0.37,
+            "fourPlusPerAction": 0.19,
+            "cascadeStepsPerAction": 1.25,
+            "manaPerAction": 3.36
+          }
+        },
+        {
+          "value": 1.8,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.63,
+            "playerActions": {
+              "mean": 14.58,
+              "median": 14,
+              "p10": 10,
+              "p90": 19
+            },
+            "playerHpFracOnWin": 0.32,
+            "playerHpFrac": {
+              "mean": 0.2,
+              "median": 0.13
+            },
+            "playerDPT": 3.11,
+            "avgSkillCasts": 2.47,
+            "skullGroupsPerAction": 0.29,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.41
+          }
+        },
+        {
+          "value": 2,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.66,
+            "playerActions": {
+              "mean": 14.14,
+              "median": 14,
+              "p10": 10,
+              "p90": 19
+            },
+            "playerHpFracOnWin": 0.33,
+            "playerHpFrac": {
+              "mean": 0.22,
+              "median": 0.15
+            },
+            "playerDPT": 3.29,
+            "avgSkillCasts": 2.43,
+            "skullGroupsPerAction": 0.29,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.38
+          }
+        },
+        {
+          "value": 2.25,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.71,
+            "playerActions": {
+              "mean": 13.59,
+              "median": 13,
+              "p10": 10,
+              "p90": 18
+            },
+            "playerHpFracOnWin": 0.34,
+            "playerHpFrac": {
+              "mean": 0.24,
+              "median": 0.18
+            },
+            "playerDPT": 3.48,
+            "avgSkillCasts": 2.36,
+            "skullGroupsPerAction": 0.28,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.39
+          }
+        },
+        {
+          "value": 2.5,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.78,
+            "playerActions": {
+              "mean": 12.65,
+              "median": 12,
+              "p10": 9,
+              "p90": 17
+            },
+            "playerHpFracOnWin": 0.37,
+            "playerHpFrac": {
+              "mean": 0.29,
+              "median": 0.28
+            },
+            "playerDPT": 3.91,
+            "avgSkillCasts": 2.22,
+            "skullGroupsPerAction": 0.29,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.39
+          }
+        },
+        {
+          "value": 3,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.82,
+            "playerActions": {
+              "mean": 12.03,
+              "median": 12,
+              "p10": 8,
+              "p90": 16
+            },
+            "playerHpFracOnWin": 0.39,
+            "playerHpFrac": {
+              "mean": 0.32,
+              "median": 0.33
+            },
+            "playerDPT": 4.35,
+            "avgSkillCasts": 2.12,
+            "skullGroupsPerAction": 0.29,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.19,
+            "manaPerAction": 3.39
+          }
+        }
+      ]
+    },
+    {
+      "name": "skill_ratio_value_cost8",
+      "note": "Same ratio sweep at a higher cost (8) — expensive skills need a higher ratio to justify the longer charge / variance.",
+      "varying": "ratio@cost8",
+      "points": [
+        {
+          "value": 0.8,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.58,
+            "playerActions": {
+              "mean": 17.55,
+              "median": 17,
+              "p10": 12,
+              "p90": 23
+            },
+            "playerHpFracOnWin": 0.31,
+            "playerHpFrac": {
+              "mean": 0.18,
+              "median": 0.1
+            },
+            "playerDPT": 2.48,
+            "avgSkillCasts": 1.32,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.34,
+            "manaPerAction": 3.59
+          }
+        },
+        {
+          "value": 1,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.64,
+            "playerActions": {
+              "mean": 17.03,
+              "median": 17,
+              "p10": 12,
+              "p90": 22
+            },
+            "playerHpFracOnWin": 0.32,
+            "playerHpFrac": {
+              "mean": 0.21,
+              "median": 0.13
+            },
+            "playerDPT": 2.66,
+            "avgSkillCasts": 1.29,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.34,
+            "manaPerAction": 3.59
+          }
+        },
+        {
+          "value": 1.2,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.67,
+            "playerActions": {
+              "mean": 16.47,
+              "median": 16,
+              "p10": 12,
+              "p90": 21
+            },
+            "playerHpFracOnWin": 0.34,
+            "playerHpFrac": {
+              "mean": 0.23,
+              "median": 0.18
+            },
+            "playerDPT": 2.83,
+            "avgSkillCasts": 1.25,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.34,
+            "manaPerAction": 3.58
+          }
+        },
+        {
+          "value": 1.4,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.72,
+            "playerActions": {
+              "mean": 15.88,
+              "median": 16,
+              "p10": 11,
+              "p90": 21
+            },
+            "playerHpFracOnWin": 0.35,
+            "playerHpFrac": {
+              "mean": 0.25,
+              "median": 0.23
+            },
+            "playerDPT": 2.93,
+            "avgSkillCasts": 1.22,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.34,
+            "manaPerAction": 3.58
+          }
+        },
+        {
+          "value": 1.6,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.71,
+            "playerActions": {
+              "mean": 15.07,
+              "median": 15,
+              "p10": 11,
+              "p90": 20
+            },
+            "playerHpFracOnWin": 0.35,
+            "playerHpFrac": {
+              "mean": 0.24,
+              "median": 0.2
+            },
+            "playerDPT": 3.15,
+            "avgSkillCasts": 1.25,
+            "skullGroupsPerAction": 0.39,
+            "fourPlusPerAction": 0.2,
+            "cascadeStepsPerAction": 1.33,
+            "manaPerAction": 3.57
+          }
+        },
+        {
+          "value": 1.8,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.61,
+            "playerActions": {
+              "mean": 14.69,
+              "median": 15,
+              "p10": 10,
+              "p90": 19
+            },
+            "playerHpFracOnWin": 0.32,
+            "playerHpFrac": {
+              "mean": 0.2,
+              "median": 0.13
+            },
+            "playerDPT": 3.14,
+            "avgSkillCasts": 1.51,
+            "skullGroupsPerAction": 0.32,
+            "fourPlusPerAction": 0.19,
+            "cascadeStepsPerAction": 1.3,
+            "manaPerAction": 3.68
+          }
+        },
+        {
+          "value": 2,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.69,
+            "playerActions": {
+              "mean": 13.85,
+              "median": 14,
+              "p10": 10,
+              "p90": 18
+            },
+            "playerHpFracOnWin": 0.34,
+            "playerHpFrac": {
+              "mean": 0.24,
+              "median": 0.18
+            },
+            "playerDPT": 3.4,
+            "avgSkillCasts": 1.46,
+            "skullGroupsPerAction": 0.31,
+            "fourPlusPerAction": 0.19,
+            "cascadeStepsPerAction": 1.29,
+            "manaPerAction": 3.65
+          }
+        },
+        {
+          "value": 2.25,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.72,
+            "playerActions": {
+              "mean": 13.46,
+              "median": 13,
+              "p10": 9,
+              "p90": 18
+            },
+            "playerHpFracOnWin": 0.36,
+            "playerHpFrac": {
+              "mean": 0.26,
+              "median": 0.23
+            },
+            "playerDPT": 3.67,
+            "avgSkillCasts": 1.43,
+            "skullGroupsPerAction": 0.31,
+            "fourPlusPerAction": 0.19,
+            "cascadeStepsPerAction": 1.29,
+            "manaPerAction": 3.66
+          }
+        },
+        {
+          "value": 2.5,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.74,
+            "playerActions": {
+              "mean": 13.06,
+              "median": 13,
+              "p10": 9,
+              "p90": 18
+            },
+            "playerHpFracOnWin": 0.37,
+            "playerHpFrac": {
+              "mean": 0.28,
+              "median": 0.25
+            },
+            "playerDPT": 3.92,
+            "avgSkillCasts": 1.39,
+            "skullGroupsPerAction": 0.32,
+            "fourPlusPerAction": 0.19,
+            "cascadeStepsPerAction": 1.3,
+            "manaPerAction": 3.65
+          }
+        },
+        {
+          "value": 3,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0.81,
+            "playerActions": {
+              "mean": 12.27,
+              "median": 12,
+              "p10": 8,
+              "p90": 17
+            },
+            "playerHpFracOnWin": 0.4,
+            "playerHpFrac": {
+              "mean": 0.32,
+              "median": 0.3
+            },
+            "playerDPT": 4.47,
+            "avgSkillCasts": 1.32,
+            "skullGroupsPerAction": 0.32,
+            "fourPlusPerAction": 0.2,
+            "cascadeStepsPerAction": 1.3,
+            "manaPerAction": 3.66
+          }
+        }
+      ]
+    },
+    {
+      "name": "skill_cost_at_fixed_value",
+      "note": "Fix damage 8, vary cost — isolates the tempo cost of an expensive skill.",
+      "varying": "cost@dmg8",
       "points": [
         {
           "value": 3,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.38,
+            "n": 10000,
+            "winRate": 0.76,
             "playerActions": {
-              "mean": 24.99,
-              "median": 26,
-              "p10": 20,
-              "p90": 29
+              "mean": 12.74,
+              "median": 13,
+              "p10": 9,
+              "p90": 16
             },
-            "playerHpFracOnWin": 0.23,
+            "playerHpFracOnWin": 0.36,
             "playerHpFrac": {
-              "mean": 0.09,
-              "median": 0
+              "mean": 0.27,
+              "median": 0.25
             },
-            "playerDPT": 1.62,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 9.26
+            "playerDPT": 3.73,
+            "avgSkillCasts": 3.97,
+            "skullGroupsPerAction": 0.22,
+            "fourPlusPerAction": 0.15,
+            "cascadeStepsPerAction": 1,
+            "manaPerAction": 2.86
           }
         },
         {
           "value": 4,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.51,
+            "n": 10000,
+            "winRate": 0.64,
             "playerActions": {
-              "mean": 24.4,
-              "median": 25,
-              "p10": 20,
-              "p90": 27
+              "mean": 14.33,
+              "median": 14,
+              "p10": 10,
+              "p90": 19
             },
-            "playerHpFracOnWin": 0.24,
+            "playerHpFracOnWin": 0.32,
             "playerHpFrac": {
-              "mean": 0.12,
-              "median": 0.12
+              "mean": 0.2,
+              "median": 0.15
             },
-            "playerDPT": 1.74,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 9.08
+            "playerDPT": 3.19,
+            "avgSkillCasts": 3.04,
+            "skullGroupsPerAction": 0.27,
+            "fourPlusPerAction": 0.17,
+            "cascadeStepsPerAction": 1.14,
+            "manaPerAction": 3.21
           }
         },
         {
           "value": 5,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.05,
+            "n": 10000,
+            "winRate": 0.7,
             "playerActions": {
-              "mean": 18.04,
-              "median": 18,
-              "p10": 14,
-              "p90": 22
+              "mean": 15.24,
+              "median": 15,
+              "p10": 11,
+              "p90": 20
             },
-            "playerHpFracOnWin": 0.14,
+            "playerHpFracOnWin": 0.33,
             "playerHpFrac": {
-              "mean": 0.01,
-              "median": 0
+              "mean": 0.23,
+              "median": 0.18
             },
-            "playerDPT": 1.99,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.2
+            "playerDPT": 3.05,
+            "avgSkillCasts": 2.1,
+            "skullGroupsPerAction": 0.37,
+            "fourPlusPerAction": 0.19,
+            "cascadeStepsPerAction": 1.25,
+            "manaPerAction": 3.36
           }
         },
         {
           "value": 6,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.71,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
-            },
-            "playerHpFracOnWin": 0.19,
-            "playerHpFrac": {
-              "mean": 0.07,
-              "median": 0
-            },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
-          }
-        },
-        {
-          "value": 7,
-          "aggregates": {
-            "n": 100000,
-            "winRate": 0.69,
-            "playerActions": {
-              "mean": 16.12,
+              "mean": 15.99,
               "median": 16,
-              "p10": 14,
-              "p90": 18
+              "p10": 12,
+              "p90": 21
             },
-            "playerHpFracOnWin": 0.24,
+            "playerHpFracOnWin": 0.34,
             "playerHpFrac": {
-              "mean": 0.16,
-              "median": 0.12
+              "mean": 0.24,
+              "median": 0.23
             },
-            "playerDPT": 2.86,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.58
+            "playerDPT": 2.91,
+            "avgSkillCasts": 1.8,
+            "skullGroupsPerAction": 0.39,
+            "fourPlusPerAction": 0.22,
+            "cascadeStepsPerAction": 1.29,
+            "manaPerAction": 3.44
           }
         },
         {
           "value": 8,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.9,
+            "n": 10000,
+            "winRate": 0.64,
             "playerActions": {
-              "mean": 14.29,
-              "median": 14,
-              "p10": 13,
-              "p90": 16
+              "mean": 17.03,
+              "median": 17,
+              "p10": 12,
+              "p90": 22
             },
-            "playerHpFracOnWin": 0.31,
+            "playerHpFracOnWin": 0.32,
             "playerHpFrac": {
-              "mean": 0.28,
-              "median": 0.26
+              "mean": 0.21,
+              "median": 0.13
             },
-            "playerDPT": 3.31,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 5.89
+            "playerDPT": 2.66,
+            "avgSkillCasts": 1.29,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.34,
+            "manaPerAction": 3.59
           }
         },
         {
           "value": 10,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.99,
+            "n": 10000,
+            "winRate": 0.57,
             "playerActions": {
-              "mean": 11.88,
-              "median": 12,
-              "p10": 11,
-              "p90": 13
+              "mean": 17.58,
+              "median": 18,
+              "p10": 12,
+              "p90": 23
             },
-            "playerHpFracOnWin": 0.43,
+            "playerHpFracOnWin": 0.31,
             "playerHpFrac": {
-              "mean": 0.43,
-              "median": 0.41
+              "mean": 0.18,
+              "median": 0.08
             },
-            "playerDPT": 4.22,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 4.99
+            "playerDPT": 2.5,
+            "avgSkillCasts": 0.97,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.23,
+            "cascadeStepsPerAction": 1.36,
+            "manaPerAction": 3.66
           }
         },
         {
           "value": 12,
           "aggregates": {
-            "n": 100000,
-            "winRate": 1,
+            "n": 10000,
+            "winRate": 0.55,
             "playerActions": {
-              "mean": 9.5,
-              "median": 9,
-              "p10": 8,
-              "p90": 11
-            },
-            "playerHpFracOnWin": 0.57,
-            "playerHpFrac": {
-              "mean": 0.57,
-              "median": 0.56
-            },
-            "playerDPT": 5.09,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 4
-          }
-        }
-      ]
-    },
-    {
-      "name": "skill_cost_value",
-      "note": "Worth of cheaper mana cost on Strike (same 6 damage), vs floor5.",
-      "varying": "strike.cost.red",
-      "points": [
-        {
-          "value": 3,
-          "aggregates": {
-            "n": 100000,
-            "winRate": 0.85,
-            "playerActions": {
-              "mean": 14.29,
-              "median": 14,
+              "mean": 17.86,
+              "median": 18,
               "p10": 13,
-              "p90": 15
+              "p90": 23
             },
-            "playerHpFracOnWin": 0.27,
+            "playerHpFracOnWin": 0.31,
             "playerHpFrac": {
-              "mean": 0.23,
-              "median": 0.26
+              "mean": 0.17,
+              "median": 0.05
             },
-            "playerDPT": 3.29,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.8
-          }
-        },
-        {
-          "value": 4,
-          "aggregates": {
-            "n": 100000,
-            "winRate": 0.63,
-            "playerActions": {
-              "mean": 16.09,
-              "median": 16,
-              "p10": 14,
-              "p90": 18
-            },
-            "playerHpFracOnWin": 0.22,
-            "playerHpFrac": {
-              "mean": 0.14,
-              "median": 0.12
-            },
-            "playerDPT": 2.78,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.46
-          }
-        },
-        {
-          "value": 5,
-          "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
-            "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
-            },
-            "playerHpFracOnWin": 0.19,
-            "playerHpFrac": {
-              "mean": 0.07,
-              "median": 0
-            },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
-          }
-        },
-        {
-          "value": 6,
-          "aggregates": {
-            "n": 100000,
-            "winRate": 0.21,
-            "playerActions": {
-              "mean": 18.13,
-              "median": 18,
-              "p10": 14,
-              "p90": 22
-            },
-            "playerHpFracOnWin": 0.17,
-            "playerHpFrac": {
-              "mean": 0.04,
-              "median": 0
-            },
-            "playerDPT": 2.13,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.44
-          }
-        },
-        {
-          "value": 7,
-          "aggregates": {
-            "n": 100000,
-            "winRate": 0.25,
-            "playerActions": {
-              "mean": 20.83,
-              "median": 21,
-              "p10": 16,
-              "p90": 25
-            },
-            "playerHpFracOnWin": 0.18,
-            "playerHpFrac": {
-              "mean": 0.05,
-              "median": 0
-            },
-            "playerDPT": 1.89,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.89
-          }
-        },
-        {
-          "value": 8,
-          "aggregates": {
-            "n": 100000,
-            "winRate": 0.39,
-            "playerActions": {
-              "mean": 23.46,
-              "median": 24,
-              "p10": 19,
-              "p90": 27
-            },
-            "playerHpFracOnWin": 0.21,
-            "playerHpFrac": {
-              "mean": 0.08,
-              "median": 0
-            },
-            "playerDPT": 1.77,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.7
-          }
-        },
-        {
-          "value": 10,
-          "aggregates": {
-            "n": 100000,
-            "winRate": 0.73,
-            "playerActions": {
-              "mean": 25.95,
-              "median": 26,
-              "p10": 23,
-              "p90": 29
-            },
-            "playerHpFracOnWin": 0.27,
-            "playerHpFrac": {
-              "mean": 0.2,
-              "median": 0.12
-            },
-            "playerDPT": 1.77,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 9.07
+            "playerDPT": 2.45,
+            "avgSkillCasts": 0.83,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.24,
+            "cascadeStepsPerAction": 1.38,
+            "manaPerAction": 3.69
           }
         }
       ]
     },
     {
       "name": "enemy_hp_pacing",
-      "note": "Turns-to-kill vs enemy HP — pick HP that hits target fight length.",
+      "note": "Turns-to-kill vs enemy HP for the mid-act reference build (pick HP for target length).",
       "varying": "enemy.maxHp",
       "points": [
         {
           "value": 25,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.99,
+            "n": 10000,
+            "winRate": 0.98,
             "playerActions": {
-              "mean": 11.88,
-              "median": 12,
-              "p10": 11,
+              "mean": 8.79,
+              "median": 8,
+              "p10": 5,
               "p90": 13
             },
-            "playerHpFracOnWin": 0.43,
+            "playerHpFracOnWin": 0.61,
             "playerHpFrac": {
-              "mean": 0.43,
-              "median": 0.41
+              "mean": 0.59,
+              "median": 0.6
             },
-            "playerDPT": 2.53,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 4.99
+            "playerDPT": 3.36,
+            "avgSkillCasts": 1.9,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.21,
+            "cascadeStepsPerAction": 1.13,
+            "manaPerAction": 2.86
           }
         },
         {
           "value": 35,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.9,
+            "n": 10000,
+            "winRate": 0.88,
             "playerActions": {
-              "mean": 14.29,
-              "median": 14,
-              "p10": 13,
-              "p90": 16
+              "mean": 13.02,
+              "median": 13,
+              "p10": 9,
+              "p90": 18
             },
-            "playerHpFracOnWin": 0.31,
+            "playerHpFracOnWin": 0.45,
             "playerHpFrac": {
-              "mean": 0.28,
-              "median": 0.26
+              "mean": 0.4,
+              "median": 0.43
             },
-            "playerDPT": 2.48,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 5.89
+            "playerDPT": 2.94,
+            "avgSkillCasts": 2.41,
+            "skullGroupsPerAction": 0.37,
+            "fourPlusPerAction": 0.19,
+            "cascadeStepsPerAction": 1.17,
+            "manaPerAction": 3.05
           }
         },
         {
           "value": 45,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.71,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
+              "mean": 16.58,
+              "median": 16,
+              "p10": 12,
+              "p90": 21
             },
-            "playerHpFracOnWin": 0.19,
+            "playerHpFracOnWin": 0.35,
             "playerHpFrac": {
-              "mean": 0.07,
-              "median": 0
+              "mean": 0.24,
+              "median": 0.2
             },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
+            "playerDPT": 2.72,
+            "avgSkillCasts": 2.83,
+            "skullGroupsPerAction": 0.35,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.19,
+            "manaPerAction": 3.15
           }
         },
         {
           "value": 55,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.05,
+            "n": 10000,
+            "winRate": 0.48,
             "playerActions": {
-              "mean": 18.04,
-              "median": 18,
-              "p10": 14,
-              "p90": 22
+              "mean": 19.13,
+              "median": 19,
+              "p10": 13,
+              "p90": 25
             },
-            "playerHpFracOnWin": 0.14,
+            "playerHpFracOnWin": 0.28,
             "playerHpFrac": {
-              "mean": 0.01,
+              "mean": 0.13,
               "median": 0
             },
-            "playerDPT": 2.39,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.2
+            "playerDPT": 2.61,
+            "avgSkillCasts": 3.11,
+            "skullGroupsPerAction": 0.34,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.21
           }
         },
         {
           "value": 65,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.01,
+            "n": 10000,
+            "winRate": 0.28,
             "playerActions": {
-              "mean": 18.08,
-              "median": 18,
+              "mean": 20.7,
+              "median": 21,
               "p10": 14,
-              "p90": 22
+              "p90": 27
             },
-            "playerHpFracOnWin": 0.13,
+            "playerHpFracOnWin": 0.23,
             "playerHpFrac": {
-              "mean": 0,
+              "mean": 0.06,
               "median": 0
             },
-            "playerDPT": 2.39,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.21
+            "playerDPT": 2.55,
+            "avgSkillCasts": 3.27,
+            "skullGroupsPerAction": 0.33,
+            "fourPlusPerAction": 0.17,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.24
           }
         },
         {
           "value": 80,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0,
+            "n": 10000,
+            "winRate": 0.1,
             "playerActions": {
-              "mean": 18.09,
-              "median": 18,
+              "mean": 21.79,
+              "median": 22,
               "p10": 14,
-              "p90": 22
+              "p90": 30
             },
-            "playerHpFracOnWin": 0.12,
+            "playerHpFracOnWin": 0.18,
             "playerHpFrac": {
-              "mean": 0,
+              "mean": 0.02,
               "median": 0
             },
-            "playerDPT": 2.39,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.22
+            "playerDPT": 2.51,
+            "avgSkillCasts": 3.38,
+            "skullGroupsPerAction": 0.33,
+            "fourPlusPerAction": 0.17,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.25
           }
         },
         {
           "value": 95,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0,
+            "n": 10000,
+            "winRate": 0.03,
             "playerActions": {
-              "mean": 18.09,
-              "median": 18,
+              "mean": 22.1,
+              "median": 22,
               "p10": 14,
-              "p90": 22
+              "p90": 30
             },
-            "playerHpFracOnWin": 0,
+            "playerHpFracOnWin": 0.16,
             "playerHpFrac": {
               "mean": 0,
               "median": 0
             },
-            "playerDPT": 2.39,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.22
+            "playerDPT": 2.5,
+            "avgSkillCasts": 3.41,
+            "skullGroupsPerAction": 0.33,
+            "fourPlusPerAction": 0.17,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.26
           }
         },
         {
           "value": 120,
           "aggregates": {
-            "n": 100000,
+            "n": 10000,
             "winRate": 0,
             "playerActions": {
-              "mean": 18.09,
-              "median": 18,
+              "mean": 22.2,
+              "median": 22,
               "p10": 14,
-              "p90": 22
+              "p90": 31
             },
-            "playerHpFracOnWin": 0,
+            "playerHpFracOnWin": 0.11,
             "playerHpFrac": {
               "mean": 0,
               "median": 0
             },
-            "playerDPT": 2.39,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 7.22
+            "playerDPT": 2.5,
+            "avgSkillCasts": 3.42,
+            "skullGroupsPerAction": 0.33,
+            "fourPlusPerAction": 0.17,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.26
+          }
+        },
+        {
+          "value": 150,
+          "aggregates": {
+            "n": 10000,
+            "winRate": 0,
+            "playerActions": {
+              "mean": 22.21,
+              "median": 22,
+              "p10": 14,
+              "p90": 31
+            },
+            "playerHpFracOnWin": 0.03,
+            "playerHpFrac": {
+              "mean": 0,
+              "median": 0
+            },
+            "playerDPT": 2.5,
+            "avgSkillCasts": 3.42,
+            "skullGroupsPerAction": 0.33,
+            "fourPlusPerAction": 0.17,
+            "cascadeStepsPerAction": 1.2,
+            "manaPerAction": 3.26
           }
         }
       ]
     },
     {
       "name": "enemy_attack_lethality",
-      "note": "Player HP remaining vs enemy attack — calibrate lethality (§13.3).",
+      "note": "Reference-build HP left vs enemy attack (smart enemy matches skulls).",
       "varying": "enemy.attack",
       "points": [
         {
           "value": 1,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.88,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
+              "mean": 16.78,
+              "median": 17,
+              "p10": 12,
+              "p90": 22
             },
-            "playerHpFracOnWin": 0.19,
+            "playerHpFracOnWin": 0.42,
             "playerHpFrac": {
-              "mean": 0.07,
-              "median": 0
+              "mean": 0.37,
+              "median": 0.38
             },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
+            "playerDPT": 2.9,
+            "avgSkillCasts": 2.63,
+            "skullGroupsPerAction": 0.4,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.21,
+            "manaPerAction": 3.06
           }
         },
         {
           "value": 2,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.7,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
+              "mean": 16.71,
+              "median": 17,
+              "p10": 12,
+              "p90": 22
             },
-            "playerHpFracOnWin": 0.19,
+            "playerHpFracOnWin": 0.34,
             "playerHpFrac": {
-              "mean": 0.07,
-              "median": 0
+              "mean": 0.24,
+              "median": 0.2
             },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
+            "playerDPT": 2.72,
+            "avgSkillCasts": 2.84,
+            "skullGroupsPerAction": 0.35,
+            "fourPlusPerAction": 0.18,
+            "cascadeStepsPerAction": 1.19,
+            "manaPerAction": 3.16
           }
         },
         {
           "value": 3,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.45,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
+              "mean": 16.03,
+              "median": 16,
+              "p10": 11,
+              "p90": 21
             },
-            "playerHpFracOnWin": 0.19,
+            "playerHpFracOnWin": 0.34,
             "playerHpFrac": {
-              "mean": 0.07,
+              "mean": 0.15,
               "median": 0
             },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
+            "playerDPT": 2.53,
+            "avgSkillCasts": 2.79,
+            "skullGroupsPerAction": 0.31,
+            "fourPlusPerAction": 0.21,
+            "cascadeStepsPerAction": 1.19,
+            "manaPerAction": 3.36
           }
         },
         {
           "value": 4,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.35,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
+              "mean": 14.7,
+              "median": 15,
+              "p10": 10,
               "p90": 20
             },
-            "playerHpFracOnWin": 0.19,
+            "playerHpFracOnWin": 0.32,
             "playerHpFrac": {
-              "mean": 0.07,
+              "mean": 0.11,
               "median": 0
             },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
+            "playerDPT": 2.57,
+            "avgSkillCasts": 2.59,
+            "skullGroupsPerAction": 0.31,
+            "fourPlusPerAction": 0.21,
+            "cascadeStepsPerAction": 1.19,
+            "manaPerAction": 3.34
           }
         },
         {
           "value": 5,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.26,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
+              "mean": 13.34,
+              "median": 13,
+              "p10": 8,
+              "p90": 19
             },
-            "playerHpFracOnWin": 0.19,
+            "playerHpFracOnWin": 0.31,
             "playerHpFrac": {
-              "mean": 0.07,
+              "mean": 0.08,
               "median": 0
             },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
+            "playerDPT": 2.62,
+            "avgSkillCasts": 2.4,
+            "skullGroupsPerAction": 0.31,
+            "fourPlusPerAction": 0.21,
+            "cascadeStepsPerAction": 1.18,
+            "manaPerAction": 3.31
           }
         },
         {
           "value": 6,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.22,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
+              "mean": 12.39,
+              "median": 12,
+              "p10": 7,
+              "p90": 18
             },
-            "playerHpFracOnWin": 0.19,
+            "playerHpFracOnWin": 0.29,
             "playerHpFrac": {
-              "mean": 0.07,
+              "mean": 0.06,
               "median": 0
             },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
+            "playerDPT": 2.68,
+            "avgSkillCasts": 2.27,
+            "skullGroupsPerAction": 0.32,
+            "fourPlusPerAction": 0.21,
+            "cascadeStepsPerAction": 1.18,
+            "manaPerAction": 3.28
           }
         },
         {
           "value": 8,
           "aggregates": {
-            "n": 100000,
-            "winRate": 0.4,
+            "n": 10000,
+            "winRate": 0.12,
             "playerActions": {
-              "mean": 17.33,
-              "median": 18,
-              "p10": 14,
-              "p90": 20
+              "mean": 10.09,
+              "median": 10,
+              "p10": 5,
+              "p90": 16
             },
-            "playerHpFracOnWin": 0.19,
+            "playerHpFracOnWin": 0.33,
             "playerHpFrac": {
-              "mean": 0.07,
+              "mean": 0.04,
               "median": 0
             },
-            "playerDPT": 2.42,
-            "skullGroupsPerAction": 0,
-            "avgSkillCasts": 6.98
+            "playerDPT": 2.87,
+            "avgSkillCasts": 1.97,
+            "skullGroupsPerAction": 0.32,
+            "fourPlusPerAction": 0.21,
+            "cascadeStepsPerAction": 1.15,
+            "manaPerAction": 3.19
           }
         }
       ]

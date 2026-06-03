@@ -564,6 +564,8 @@ The catalog already clusters sensibly (vanilla ≈ 1.0, player skills 1.2–1.9,
 
 ## 16. The foundation: the board economy
 
+> **✅ NOW MEASURED.** The headless sim (`sim/`) was built and run — these constants are no longer assumptions. See **[Part IV (§21)](#part-iv--simulator-measured-calibration)** for the measured values (which differ materially from the estimates below) and the recalibration that follows. The estimates here are kept to show the original reasoning.
+
 This is the single most important set of numbers in the game. **Measure these with a simulator before committing** (§9); the values below are reasoned estimates with explicit assumptions.
 
 ### 16.1 What one turn produces
@@ -686,3 +688,97 @@ Scaling relics (per-turn attack, per-unspent-mana) are worth **more in long figh
 3. **Flat skill damage decays in relative value** as Attack and board economy grow (§18.3). Without Attack-scaling or upgrades, skills become "early-game tools" by late act. That may be intentional (pivot to skulls) — just decide it on purpose.
 4. **Color concentration is a hidden cost** (§16.3): a two-color kit is ~half as mana-efficient as a one-color kit. Two skills sharing a color is a meaningful power boost the raw HPe/mana number doesn't show.
 5. **Full heal caps HP value** (§11.2): none of the defensive numbers matter unless enemies stay lethal. Enemy Attack tuning (§13.3) is what makes the HP stat worth picking — treat the two as one coupled decision.
+
+---
+
+# Part IV — Simulator-measured calibration
+
+> **See also [`balance-findings.md`](balance-findings.md)** — the conclusions-first,
+> change-this-number summary of the simulator results. This Part is the detailed
+> calibration; that doc is the actionable digest.
+
+The headless real-board sim (`sim/`, see its README) now plays out fights with a
+greedy "best-move" AI on an actual 8×8 grid. The economy constants Part III
+*assumed* are now **measured**. Numbers below are from a 10,000-runs/point run
+(seed 12345); they are directional (one-ply greedy AI, see sim fidelity notes),
+but the relative signals are solid.
+
+## 21. Measured economy (replaces the §16 estimates)
+
+| Quantity | §16 estimate | **Measured** | Note |
+|---|---|---|---|
+| `m` — skull matches / turn | 0.5–0.6 | **~0.30** | the AI chases 4+ extra-turns over lone skull 3-matches, so `m` is lower than a pure-skull assumption. Rises with Attack (skulls score higher) → ~0.6 at attack 10. |
+| 4+ / extra-turn rate | 0.30 | **~0.24** | close. |
+| cascade depth (steps/action) | — | **~1.2** | mild cascades; rarely deep chains. |
+| mana / turn (focused) | ~3 | **~3.5** | close. |
+| **baseline DPT at Attack 1** | ~3.5 | **~1.0–1.9** | **the big miss.** A pure damage skill or skull build at attack 1 does ~1–2 DPT, not 3.5. |
+
+### 21.1 The headline recalibration
+Because attack-1 DPT is **~half** what Part III assumed, the §13 enemy-HP table
+(30–62 minions, built for DPT 3.5) makes attack-1 fights run **19–27 turns** and
+mostly **lose**. Two levers, pick per design intent:
+- **Raise base player power** (Attack, starting mana, extra-turn skills) so real
+  DPT lands near the assumed curve — then §13's enemy HP holds; **or**
+- **Lower early enemy HP hard** to match attack-1 DPT.
+
+The honest fix is *both*: don't balance against the bare attack-1 kit (it's
+weaker than a character is for most of a run). A **mid-act reference build**
+(Attack ~3, ~40 HP, a 2-skill kit incl. an extra-turn skill) is the right thing
+to tune enemies and skills against; the sim now carries one (`PLAYERS.reference`).
+
+## 22. Measured stat & skill values
+
+- **HP ↔ Attack (skull build, floor5):** attack still beats HP per point and the
+  exchange is fight-length-dependent (§11.1) — confirmed. At the weak attack-1
+  baseline, attack moves win rate far faster than HP (attack 1→10 spans ~12→94%;
+  HP 16→48 spans ~3→46%), because when DPT is low, *speeding the kill* matters more
+  than surviving. As DPT rises the gap narrows toward the §12 design point.
+- **Enemy Attack now matters** (the old flat sweep is fixed): the smart enemy
+  matches skulls, which scale with its Attack, so win rate falls monotonically as
+  enemy Attack rises. Keep early-floor enemy Attack **low (1–2)** — it bites fast.
+
+### 22.1 Skill cost→damage ratio knee (auto-detected by `analyze.mjs`)
+For a **pure single-color damage skill**, the win-rate vs ratio curve is flat at
+the skull baseline until a **knee**, then climbs:
+
+| Cost | baseline (skill ignored) | knee (worth building) | strong |
+|---|---|---|---|
+| 5 | ~15% | **ratio ≈ 2.0** | ~2.5 |
+| 8 | ~10% | **ratio ≈ 1.5** | ~2.5 |
+
+Reading: a pure-damage skill must clear **~1.5–2.0 damage per mana** to beat
+"just match skulls + chase 4+", and ~2.5 to be strong. **Caveat:** that knee is
+high because it's measured against the *weak attack-1 single-skill* baseline and
+because pure damage competes with the extra-turn engine — skills that **bundle
+`extra_turn`/utility** (Bash-style) are worth building far below ratio 2.0, and a
+stronger base character lowers the knee. **Re-read the knee from the mid-act
+reference build** before locking skill numbers.
+
+### 22.2 Cost is a strong lever
+Holding damage fixed at 8 and varying cost vs floor5: win **50%→29%→21%→15%→11%**
+across cost 3→12. Cheaper skills are dramatically better (more casts, less
+charge/variance) — cost matters as much as damage.
+
+## 23. Measured pacing → enemy HP
+
+`analyze.mjs` derives the rule **enemy HP ≈ playerDPT × targetTurns**, anchored on
+the measured pacing sweep. For the reference build's DPT, it prints recommended HP
+for normal/elite/boss target turns directly. The key relationship to carry into
+in-game data: **set enemy HP from the *measured* DPT of the build you're balancing
+against and the target fight length**, and re-derive per act as player DPT grows.
+
+## 24. How to turn this into in-game data (workflow)
+
+1. Tune the **mid-act reference build** (`sim/scenarios.mjs`) to your intended
+   "typical character a few floors in."
+2. Run `node sim/run.mjs --runs 10000` → `node sim/analyze.mjs`.
+3. Read off: the **skill damage-by-cost table** (knee → min/recommended damage per
+   cost) and the **enemy HP-for-target-turns table**. Those are shippable numbers.
+4. Set base character stats so their measured DPT matches the reference; set per-act
+   enemy HP from the rule in §23; keep enemy Attack low and growing slowly (§13.3).
+5. Re-run to confirm fights land in the target turn bands (normal 6–10, elite
+   12–18, boss 20–30).
+
+> Standing caveat: the sim AI is one-ply greedy (matches the game's own `EnemyAI`,
+> not a perfect player) and board-touching passives aren't modeled yet. Treat
+> sweep slopes and A-vs-B as authoritative, single absolute figures as directional.

@@ -1,129 +1,122 @@
-# Battle Simulator (headless, math-only)
+# Battle Simulator (headless, real board + smart AI)
 
-A dependency-free model of the **combat economy** for tuning stat/skill/enemy
-values. It is **not the game**: there is no 8×8 board, no rendering, and the
-real `BattleController` is never used. Turns are resolved instantly by a
-probabilistic economy model (`model.mjs`) plus the game's actual numeric
-formulas (skull damage, armor→block→HP).
+A dependency-free simulator that plays out fights on a **real 8×8 match-3 board**
+with a **greedy "smart" AI**, to tune stat / skill / enemy values. No rendering,
+no real `BattleController` — but unlike the earlier abstract version, the board,
+matches, shapes, and cascades are genuine, so the AI makes localized best-move
+decisions and the economy (skull matches/turn, 4+ rate, cascade depth, mana/turn)
+is **measured rather than assumed**.
 
-Lives outside `src/` on purpose — it is a tuning tool, not shipped code.
-
-## Why it exists
-
-The research doc ([../docs/balance-scaling-research.md](../docs/balance-scaling-research.md))
-derives stat/skill/enemy values analytically but flags that the **board economy
-constants** (tiles/turn, focus fraction, extra-turn rate) are estimates. This
-sim turns those estimates into knobs and lets you read back **win rate, turns,
-HP remaining, and DPT** so you can measure — not guess — what a stat or skill is
-worth.
+Lives outside `src/` on purpose — a tuning tool, not shipped code.
 
 ## Run
 
 ```bash
-node sim/run.mjs                      # 2000 runs/point, seed 12345 → sim/out/results.json
-node sim/run.mjs --runs 5000 --seed 7
-node sim/analyze.mjs                  # process the results file into value tables
-node sim/analyze.mjs sim/out/results.json
+node sim/run.mjs                  # 1500 runs/point, seed 12345 → sim/out/results.json
+node sim/run.mjs --runs 4000 --seed 7
+node sim/analyze.mjs              # pacing, measured economy, marginal values, HP↔Attack
 ```
 
-Pure ESM (`.mjs`), no install, no `package.json` changes. Needs Node ≥ 16.
+Pure ESM (`.mjs`), no install, no `package.json` changes. Node ≥ 16.
+The real board is heavier than the old abstract model, so the default run count is
+lower (1500). Raise it for tighter win rates; lower it (or trim `SWEEPS`) if slow.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `model.mjs` | Economy constants (the knobs) + RNG + faithful formula mirrors + per-action tile draw. |
-| `engine.mjs` | `runBattle(player, enemy, seed, opts)` → one fight's metrics. Turn loop, skill/board policy, passive hooks. |
-| `scenarios.mjs` | What to measure: reference combatants, fixed `SCENARIOS`, and `SWEEPS` (vary one thing). **Edit this to add experiments.** |
-| `run.mjs` | Runs everything N times, aggregates, writes `sim/out/results.json`, prints a summary. |
-| `analyze.mjs` | Starter processor: marginal values per sweep + an HP↔Attack exchange estimate. |
-| `out/results.json` | Output (gitignore-able). |
+| `board.mjs` | Real 8×8 board — faithful port of `BoardModel` + spawn weights. Swap, connected-match/shape detection, gravity, refill, create/destroy tiles, clone. |
+| `model.mjs` | Seedable RNG + faithful numeric formulas (skull damage, armor→block→HP). |
+| `engine.mjs` | The battle + **smart AI**. `runBattle(player, enemy, seed)`. Evaluates every swap, scores matches, casts skills when they score higher, resolves real cascades. AI knobs in the exported `AI` object. |
+| `scenarios.mjs` | Combatants, fixed `SCENARIOS`, and `SWEEPS` (incl. skill cost→damage ratio). **Edit this to add experiments.** |
+| `run.mjs` | Runs everything N times, aggregates, writes `sim/out/results.json`. |
+| `analyze.mjs` | Pacing table, measured-economy table, per-sweep marginal values, HP↔Attack exchange. |
 
-## The model (what one turn does)
+## How the AI decides (the "smart localized" part)
 
-Each action draws a tile yield from `MATCH_SIZE_DIST` (+ a chance of one
-cascade), splits it by `FOCUS_FRACTION` into a **targeted** resource and
-**incidental** tiles, then:
+Each turn the active side:
+1. **Scores every legal swap** on the real board (cheap match-prune first): skull
+   matches → damage (`skullCount + attack−1`); color matches → mana × its value;
+   **+4 bonus for any 4+ (extra turn)**; small bonuses for shapes and bigger clears
+   (cascade potential). Picks the highest-scoring swap.
+2. **Values affordable skills** in the same HPe units and **casts one instead** if
+   it scores higher (heals only count when hurt).
+3. **Mana is valued by what it unlocks:** a color's worth = the best damage skill's
+   `value ÷ cost` (HPe per mana). So a *better* skill (higher cost→damage ratio)
+   makes the AI build toward it; a weak skill makes it just match skulls. This is
+   exactly why the cost→damage ratio sweeps are meaningful.
+4. The chosen action executes on the real board and the **real cascade** resolves
+   (gravity + random refill), granting rewards per step; a 4+ anywhere → extra turn
+   (chained, capped).
 
-- a **color target** → that many mana of the color (toward a skill);
-- a **skull target** → skull tiles grouped into matches of `SKULL_GROUP_SIZE`,
-  dealing `inGroupTiles + groups·(attack−1)` (the real matched-skull formula);
-- incidental tiles → ~20% skulls (board share) for chip damage, rest spread as mana;
-- a base match of 4+ (`P ≈ 0.30–0.40`) grants an **extra turn** (chained, capped).
+A side with no damage skill naturally skull-focuses. Both player and enemy use the
+same AI, so enemy Attack now matters (higher Attack → skull matches score higher →
+the enemy prefers them).
 
-A side casts a skill instead of swapping when its policy wants one it can afford
-(greedy: best affordable damage skill; heal when < 50% HP; free self-buffs).
-Damage routes through the same path as the game so passives fire uniformly.
-
-All constants live at the top of `model.mjs` and are documented against
-research §16.
+AI weights live in the exported `AI` object in `engine.mjs`
+(`EXTRA_TURN_VALUE`, `BASE_MANA_VALUE`, `HEAL_HP_THRESHOLD`, …) — tunable.
 
 ## Output schema (`results.json`)
 
 ```jsonc
 {
-  "meta": { "seed": 12345, "runsPerPoint": 2000, "economy": { /* knobs used */ } },
-  "scenarios": [
-    { "name", "player": {…def}, "enemy": {…def}, "aggregates": { /* see below */ } }
-  ],
-  "sweeps": [
-    { "name", "note", "varying": "player.attack",
-      "points": [ { "value": 1, "aggregates": {…} }, { "value": 2, … } ] }
-  ]
+  "meta": { "seed", "runsPerPoint", "aiWeights": { … } },
+  "scenarios": [ { "name", "player": {…}, "enemy": {…}, "aggregates": {…} } ],
+  "sweeps":    [ { "name", "note", "varying", "points": [ { "value", "aggregates" } ] } ]
 }
 ```
 
-`aggregates` per data point:
+`aggregates`:
 
 | field | meaning |
 |---|---|
-| `n` | runs |
-| `winRate` | fraction the player won (0–1) |
-| `playerActions` | `{ mean, median, p10, p90 }` — **turns to resolve** (pacing) |
-| `playerHpFracOnWin` | avg HP fraction left when the player wins (lethality) |
-| `playerHpFrac` | `{ mean, median }` over all runs |
-| `playerDPT` | avg damage dealt per player action |
-| `skullGroupsPerAction` | measured `m` from research §12.2 (skull matches/turn) |
+| `winRate` | player win fraction |
+| `playerActions` | `{mean, median, p10, p90}` — turns to resolve (pacing) |
+| `playerHpFracOnWin` | avg HP left on a win (lethality) |
+| `playerHpFrac` | `{mean, median}` over all runs |
+| `playerDPT` | damage dealt per player action |
 | `avgSkillCasts` | skills cast per fight |
+| `skullGroupsPerAction` | **measured `m`** (skull matches/turn) |
+| `fourPlusPerAction` | **measured** extra-turn rate |
+| `cascadeStepsPerAction` | **measured** cascade depth (>1 ⇒ chains) |
+| `manaPerAction` | **measured** mana income/turn |
 
-## Fidelity — what's modeled vs simplified
+The last four replace the constants the old abstract model assumed.
 
-**Faithful:** matched/destroyed skull-damage formulas, armor→block→HP, mana
-costs/spending, extra-turn-on-4+, attack scaling skull damage, the common
-effect types and passive triggers.
+## Fidelity — modeled vs simplified
 
-**Abstracted (by design):**
-- The board is probabilistic, not a real grid — no specific tile layouts, no
-  swap search, no "no valid move" reshuffles.
-- Player/enemy "agency" is a simple greedy policy, not the real `EnemyAI`
-  scorer or a human.
-- `create_tiles` ≈ `count × 0.7` mana; `destroy_row` ≈ 8 tiles of reward;
-  convert/summon-skull effects are modeled via a `skull_damage` stand-in.
-- Cascades are a single-step approximation; deep combo chains are under-modeled.
+**Faithful:** real grid, connected-match/shape detection, gravity, random refill,
+real cascades, matched/destroyed skull formulas, armor→block→HP, mana costs,
+extra-turn-on-4+, `create_tiles`/`destroy_row` board effects, the common passive
+triggers.
 
-These are tuning approximations. **Treat absolute numbers as directional and
-relative comparisons (A vs B, sweep slopes) as the real signal.** When a number
-matters precisely, adjust the knob and re-run rather than trusting one figure.
+**Greedy, not optimal / simplified:**
+- The AI is **one-ply** — it scores the immediate post-swap matches (like the real
+  `EnemyAI`), not multi-step cascade lookahead (refills are random anyway). It values
+  4+ and big clears, so it *seeks* cascades without foreseeing them.
+- Skill/board passives that touch the board (spawn-rate relics, convert/destroy
+  passives) aren't modeled yet — only atomic passives (damage/armor/heal/mana/attack/
+  reduce_damage) and `create_tiles`/`destroy_row` on skills.
+- No "no legal move" subtlety beyond a full reshuffle.
 
-## Adding experiments
+Treat relative signals (sweep slopes, A-vs-B) as the real output; turn a knob and
+re-run when an absolute number must be precise.
 
-Edit `scenarios.mjs`:
-- **New matchup:** add to `SCENARIOS` with `player`/`enemy` defs.
-- **New value question:** add to `SWEEPS` with `base`, `varying` (label),
-  `values`, and `mutate(player, enemy, value)` (mutates a fresh clone).
-- **New skill/relic:** add a `SKILLS` entry (effect types in `engine.mjs`
-  header) or a `passives: [{ trigger, type, … }]` array on a combatant.
+## Adding experiments (`scenarios.mjs`)
 
-## Agent workflow (the "process the file later" step)
+- **Matchup:** add to `SCENARIOS`.
+- **Value question:** add to `SWEEPS` with `base`, `varying` (label), `values`,
+  and `mutate(player, enemy, value)`.
+- **Skill cost→damage ratio:** see `skill_ratio_value_cost5/8` — `ratioPlayer(cost, dmg)`
+  builds a one-skill kit; the sweep sets `damage = round(cost × ratio)`.
+- **Skill/relic:** add a `SKILLS` entry or a `passives:[{trigger,type,…}]` array.
 
-1. Run `run.mjs` with the configuration you want measured (and a fixed seed for
-   reproducibility).
-2. Hand `out/results.json` to an analysis agent (or extend `analyze.mjs`). The
-   file is self-describing: it carries the combatant defs, the knobs used, and
-   every aggregate.
-3. Ask the agent to derive: fight-length vs target pacing, marginal value curves
-   (diminishing returns), the HP↔Attack exchange and how it shifts with fight
-   length (research §11.1), and fair skill damage/cost (research §14) by
-   comparing win-rate/turns deltas across sweeps.
-4. Feed conclusions back into the recommended values in the research doc, then
-   re-run to confirm.
+## Agent workflow ("process the file later")
+
+1. Run `run.mjs` (fixed seed) with the experiments you want.
+2. Hand `out/results.json` to an analysis agent (or extend `analyze.mjs`). It carries
+   the combatant defs, AI knobs, and every aggregate.
+3. Ask it to derive: pacing vs target, marginal stat curves (diminishing returns),
+   the HP↔Attack exchange and how it shifts with fight length, the skill cost→damage
+   ratio threshold where a skill beats the skull baseline, and fair enemy HP/Attack.
+4. Fold conclusions into the research doc's recommended values, then re-run to confirm.

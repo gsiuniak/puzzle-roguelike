@@ -18,8 +18,7 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { runBattle } from './engine.mjs';
-import { ECONOMY } from './model.mjs';
+import { runBattle, AI } from './engine.mjs';
 import { SCENARIOS, SWEEPS } from './scenarios.mjs';
 
 // ── arg parsing ──────────────────────────────────────────────────────────────
@@ -27,7 +26,9 @@ function arg(name, def) {
   const i = process.argv.indexOf(`--${name}`);
   return i !== -1 && process.argv[i + 1] != null ? process.argv[i + 1] : def;
 }
-const RUNS = parseInt(arg('runs', '2000'), 10);
+// Real-board sim is heavier than the old abstract model — default lower.
+// 1500 runs/point gives win rate to ~±1.5%. Raise for tighter numbers.
+const RUNS = parseInt(arg('runs', '1500'), 10);
 const SEED = parseInt(arg('seed', '12345'), 10);
 const OUT = arg('out', 'sim/out/results.json');
 
@@ -50,7 +51,6 @@ function summarize(results) {
   const actions = results.map((r) => r.playerActions).sort((a, b) => a - b);
   const hpFrac = results.map((r) => r.playerHpFrac).sort((a, b) => a - b);
   const dpt = results.map((r) => r.playerDPT);
-  const skullPA = results.map((r) => r.playerSkullGroupsPerAction);
   return {
     n: results.length,
     winRate: round2(wins / results.length),
@@ -58,8 +58,12 @@ function summarize(results) {
     playerHpFracOnWin: round2(mean(results.filter((r) => r.winner === 'player').map((r) => r.playerHpFrac))),
     playerHpFrac: { mean: round2(mean(hpFrac)), median: round2(pct(hpFrac, 50)) },
     playerDPT: round2(mean(dpt)),
-    skullGroupsPerAction: round2(mean(skullPA)),
     avgSkillCasts: round2(mean(results.map((r) => r.playerSkillCasts))),
+    // EMERGENT economy metrics (measured by the real-board AI, not assumed):
+    skullGroupsPerAction: round2(mean(results.map((r) => r.skullGroupsPerAction))),
+    fourPlusPerAction: round2(mean(results.map((r) => r.fourPlusPerAction))),
+    cascadeStepsPerAction: round2(mean(results.map((r) => r.cascadeStepsPerAction))),
+    manaPerAction: round2(mean(results.map((r) => r.manaPerAction))),
   };
 }
 
@@ -79,7 +83,8 @@ const scenarioResults = SCENARIOS.map((sc) => {
   console.log(
     `  ${sc.name.padEnd(26)} win=${(agg.winRate * 100).toFixed(0)}%  ` +
     `turns=${agg.playerActions.median}(${agg.playerActions.p10}-${agg.playerActions.p90})  ` +
-    `hpLeftOnWin=${(agg.playerHpFracOnWin * 100).toFixed(0)}%  dpt=${agg.playerDPT}`
+    `hpLeftOnWin=${(agg.playerHpFracOnWin * 100).toFixed(0)}%  dpt=${agg.playerDPT}  ` +
+    `m=${agg.skullGroupsPerAction} 4+=${agg.fourPlusPerAction} casc=${agg.cascadeStepsPerAction}`
   );
   return { name: sc.name, player: sc.player, enemy: sc.enemy, aggregates: agg };
 });
@@ -101,7 +106,7 @@ const sweepResults = SWEEPS.map((sw) => {
 });
 
 const payload = {
-  meta: { seed: SEED, runsPerPoint: RUNS, economy: ECONOMY },
+  meta: { seed: SEED, runsPerPoint: RUNS, aiWeights: AI },
   scenarios: scenarioResults,
   sweeps: sweepResults,
 };
