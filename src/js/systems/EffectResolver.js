@@ -68,7 +68,9 @@ export function applyEffect(effect, ctx) {
         log.add(`${caster.name} deals ${r.actualDamage} damage to ${target.name}.`);
       }
       if (onDamage && r.actualDamage > 0) {
-        onDamage({ side: 'target', ...r });
+        // Pass caster/target refs so the host can identify both sides and fire
+        // onTakeDamage / onDealDamage for this passive-applied damage too.
+        onDamage({ side: 'target', caster, target, ...r });
       }
       return true;
     }

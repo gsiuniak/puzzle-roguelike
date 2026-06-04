@@ -228,9 +228,20 @@ export default class BattleController {
       // Any damage dealt by a relic effect routes screen shake + SFX
       // through the same hooks that normal damage uses.
       onDamage: (info) => {
-        const target = info.side === 'target' ? this._currentRelicTarget : null;
+        const target = info.target || (info.side === 'target' ? this._currentRelicTarget : null);
         if (target) {
           this._setShakeFromDamage(info.actualDamage, target.maxHp);
+        }
+        // Passive-applied damage (e.g. Briarthorn's onTurnStart hit) must fire
+        // the SAME onTakeDamage / onDealDamage triggers that skill & match damage
+        // do, so defensive reactors like Family Crest (gain mana when damaged)
+        // respond to every instance of damage regardless of its source. Damage-
+        // triggered passives invoked from here (echo, Deathbringer) carry their
+        // own reentrancy / once-per-action guards, so this can't loop.
+        if (info.caster && info.target && info.actualDamage > 0) {
+          const attackerSide = info.caster === this.playerState ? 'player' : 'enemy';
+          const targetSide = info.target === this.playerState ? 'player' : 'enemy';
+          this._dispatchDamageEvent(attackerSide, targetSide, info);
         }
       },
       onExtraTurn: () => { this._extraTurnEarned = true; },

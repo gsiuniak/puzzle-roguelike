@@ -161,7 +161,7 @@ const SKILL_CATALOG = {
     description: 'Create 20 Red',
     icon: 'skill_slash',
     sound: 'skill_ignition',
-    cost: { yellow: 7 },
+    cost: { yellow: 10 },
     effects: [
       { effectType: 'create_tiles', createTiles: { amount: 20, type: 'red' } },
     ],

@@ -123,7 +123,7 @@ const RELIC_CATALOG = {
     name: 'Flint',
     description: 'Increase the chance of Red appearing.',
     icon: 'relic_flint',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'red', amount: 10 } },
     ],
@@ -134,7 +134,7 @@ const RELIC_CATALOG = {
     name: 'Dewstone',
     description: 'Increase the chance of Blue appearing.',
     icon: 'relic_dewstone',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'blue', amount: 10 } },
     ],
@@ -145,7 +145,7 @@ const RELIC_CATALOG = {
     name: 'Fossilized Fern',
     description: 'Increase the chance of Green appearing.',
     icon: 'relic_fossilized_fern',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'green', amount: 10 } },
     ],
@@ -156,7 +156,7 @@ const RELIC_CATALOG = {
     name: 'Copper Coil',
     description: 'Increase the chance of Yellow appearing.',
     icon: 'relic_copper_coil',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'yellow', amount: 10 } },
     ],
@@ -167,7 +167,7 @@ const RELIC_CATALOG = {
     name: 'Obsidian Shard',
     description: 'Increase the chance of Purple appearing.',
     icon: 'relic_obsidian_shard',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'purple', amount: 10 } },
     ],
@@ -178,7 +178,7 @@ const RELIC_CATALOG = {
     name: 'Catacomb Key',
     description: 'Increase the chance of Skull appearing.',
     icon: 'relic_catacomb_key',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'skull', amount: 10 } },
     ],
@@ -294,7 +294,7 @@ const RELIC_CATALOG = {
   claymore: {
     id: 'claymore',
     name: 'Claymore',
-    description: 'Gain +3 Attack.',
+    description: 'Gain +2 Attack.',
     icon: 'relic_claymore',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -327,7 +327,7 @@ const RELIC_CATALOG = {
   alabaster_flask: {
     id: 'alabaster_flask',
     name: 'Alabaster Flask',
-    description: 'Heal 1 HP at the start of each of your turns.',
+    description: 'Heal 2 HP at the start of each of your turns.',
     icon: 'relic_alabaster_flask',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -479,55 +479,55 @@ const RELIC_CATALOG = {
   red_potion: {
     id: 'red_potion',
     name: 'Red Potion',
-    description: 'Gain 3 red mana at the start of battle.',
+    description: 'Gain 5 red mana at the start of battle.',
     icon: 'relic_potion_red',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'red', amount: 3 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'red', amount: 5 } },
     ],
   },
 
   blue_potion: {
     id: 'blue_potion',
     name: 'Blue Potion',
-    description: 'Gain 3 blue mana at the start of battle.',
+    description: 'Gain 5 blue mana at the start of battle.',
     icon: 'relic_potion_blue',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'blue', amount: 3 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'blue', amount: 5 } },
     ],
   },
 
   green_potion: {
     id: 'green_potion',
     name: 'Green Potion',
-    description: 'Gain 3 green mana at the start of battle.',
+    description: 'Gain 5 green mana at the start of battle.',
     icon: 'relic_potion_green',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'green', amount: 3 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'green', amount: 5 } },
     ],
   },
 
   yellow_potion: {
     id: 'yellow_potion',
     name: 'Yellow Potion',
-    description: 'Gain 3 yellow mana at the start of battle.',
+    description: 'Gain 5 yellow mana at the start of battle.',
     icon: 'relic_potion_yellow',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'yellow', amount: 3 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'yellow', amount: 5 } },
     ],
   },
 
   purple_potion: {
     id: 'purple_potion',
     name: 'Purple Potion',
-    description: 'Gain 3 purple mana at the start of battle.',
+    description: 'Gain 5 purple mana at the start of battle.',
     icon: 'relic_potion_purple',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'purple', amount: 3 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'purple', amount: 5 } },
     ],
   },
 
@@ -599,7 +599,7 @@ const RELIC_CATALOG = {
     name: 'Fire Familiar',
     description: 'Gain 1 red mana whenever you match 3 or more tiles.',
     icon: 'relic_familiar_red',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'red', amount: 1 } },
     ],
@@ -610,7 +610,7 @@ const RELIC_CATALOG = {
     name: 'Water Familiar',
     description: 'Gain 1 blue mana whenever you match 3 or more tiles.',
     icon: 'relic_familiar_blue',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'blue', amount: 1 } },
     ],
@@ -621,7 +621,7 @@ const RELIC_CATALOG = {
     name: 'Earth Familiar',
     description: 'Gain 1 green mana whenever you match 3 or more tiles.',
     icon: 'relic_familiar_green',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'green', amount: 1 } },
     ],
@@ -632,7 +632,7 @@ const RELIC_CATALOG = {
     name: 'Energy Familiar',
     description: 'Gain 1 yellow mana whenever you match 3 or more tiles.',
     icon: 'relic_familiar_yellow',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'yellow', amount: 1 } },
     ],
@@ -643,7 +643,7 @@ const RELIC_CATALOG = {
     name: 'Arcane Familiar',
     description: 'Gain 1 purple mana whenever you match 3 or more tiles.',
     icon: 'relic_familiar_purple',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'purple', amount: 1 } },
     ],
@@ -666,7 +666,7 @@ const RELIC_CATALOG = {
     name: 'Death Familiar',
     description: 'Destroy a random skull whenever you match 3 or more tiles.',
     icon: 'relic_familiar_skull',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       // Board-touching — queues a deferred skull destruction (same path as
       // Deathbringer) but on a match trigger; bypasses the once-per-action

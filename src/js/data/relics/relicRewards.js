@@ -31,8 +31,8 @@ import RELIC_CATALOG, { RELIC_RARITY } from './relicCatalog.js';
  * them however is convenient. A weight of 0 means "never offered as a reward".
  */
 export const RELIC_RARITY_WEIGHTS = {
-  [RELIC_RARITY.COMMON]:    100,
-  [RELIC_RARITY.UNCOMMON]:   45,
+  [RELIC_RARITY.COMMON]:    70,
+  [RELIC_RARITY.UNCOMMON]:   20,
   [RELIC_RARITY.RARE]:       15,
   [RELIC_RARITY.LEGENDARY]:   4,
   // Starter relics are filtered out of the pool already; 0 is a safety net.
