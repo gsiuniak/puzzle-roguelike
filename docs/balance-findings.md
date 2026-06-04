@@ -103,15 +103,32 @@ Then **ramp HP per floor with the expected player-DPT curve** (DPT rises mainly 
 
 ---
 
-## 5. Skills
+## 5. Skills (clean — measured on a skill-reliant caster)
 
-**The big caveat:** the ratio sweeps were run on the Attack-3 reference, where the lone pure-damage skill is a *small* part of the build's power (skull-matching dominates). Result: the curve is **noisy and nearly flat** (~63–71% win across ratio 0.8–2.25, climbing to 78–82% only at 2.5–3.0), and the auto-derived "min 2.5 dmg/mana → cost5 = 13 dmg" table is **confounded — do not ship it.**
+Re-running the ratio sweeps on a **skill-reliant caster** (Attack 1, no skull alternative) removed the confound. The curve is now cleanly monotonic, with a real knee:
 
-**Real conclusions:**
-1. **Pure-damage skills are weak for Attack/skull characters** — they compete with already-strong skull damage. Such skills must **bundle `extra_turn`/utility or be cheap** to earn a slot.
-2. **Measure skill numbers on a skill-reliant (caster) archetype** — low Attack, no skull alternative. There a ~**1.0–1.5 dmg/mana** ratio is meaningful and carries the build.
-3. **Cost is a modest lever on a strong character** (cost 3 = 76% → cost 12 = 55% at fixed 8 dmg) but cheaper workhorse skills (cost **3–6**) are clearly better; expensive skills (8+) must over-deliver.
-4. **The extra-turn engine dominates** (Bash is why durable/reference function at all). Skills/relics that grant or enable 4+ matches / extra turns are **disproportionately strong — price them high.**
+| cost | baseline (skill ignored) | **knee** (worth building) | strong |
+|---|---|---|---|
+| 5 | 37% | **~1.6 dmg/mana** | ~2.5 |
+| 8 | 36% | **~1.4 dmg/mana** | ~2.5 |
+
+**Shippable skill damage-by-cost** (pure single-color damage skill):
+
+| cost | min (~1.6/mana) | strong (~2.5/mana) |
+|---|---|---|
+| 3 | 5 | 8 |
+| 4 | 6 | 10 |
+| 5 | 8 | 13 |
+| 6 | 10 | 15 |
+| 8 | 13 | 20 |
+| 10 | 16 | 25 |
+
+**Rules:**
+1. A **pure-damage** skill needs **~1.6 dmg/mana** to beat skull-matching, ~2.5 to be build-defining.
+2. Skills that **bundle `extra_turn`/utility can sit below `min`** (extra_turn ≈ 4 HPe, ~one turn). Bash (5 dmg + extra turn / 5 red) is effectively ~1.8/mana and is the workhorse — keep.
+3. **Cost is a strong lever** (8 dmg costs 74% win at cost 3 → 39% at cost 8). Keep workhorse skills **cost 3–6**; expensive skills (8+) must over-deliver.
+4. **The extra-turn engine dominates** — skills/relics that grant or enable 4+ matches / extra turns are **disproportionately strong — price them high.**
+5. The current game's player skills are mostly fine; **Defend** (armor 5→6) and **Oungan** (heal 5→6) were under the curve and have been bumped.
 
 ---
 
@@ -141,12 +158,38 @@ Then **ramp HP per floor with the expected player-DPT curve** (DPT rises mainly 
 
 ---
 
-## 8. Sim caveats & next steps
+## 8. Confirmed exchange numbers
 
-**Caveats**
-- One-ply greedy AI (matches the game's `EnemyAI`, not a perfect player); board-touching passives (spawn-rate, convert/destroy) not yet modeled.
-- Skill ratio data is **confounded** on the Attack build and **noisy** (Δwin ±0.35) — needs a skill-reliant archetype.
-- HP↔Attack exchange goes "off-scale" past Attack 2 because the maxHp sweep tops out at 48 HP.
+With the maxHp sweep extended to 80 and floor5 at 35 HP, the HP↔Attack exchange now fully resolves (skullish, floor5):
+
+| transition | HP per +1 Attack |
+|---|---|
+| atk 1→2 | ~9.7 |
+| atk 2→3 | ~10.3 |
+| atk 3→4 | ~8.9 |
+| atk 4→5 | ~8.6 |
+| atk 5→6 | ~6.9 |
+| atk 6→8 | ~6.4 |
+
+So **+1 Attack ≈ +9–10 HP at low attack, decaying to ~6–7 by attack 6+** (diminishing returns; fight-length-dependent per §11.1 of the research doc). A "+1 Attack vs +N HP" growth pick with **N ≈ 8** is roughly fair and self-balancing.
+
+---
+
+## 9. Applied changes (Phase 1)
+
+Edited in `src/` to reflect the findings:
+- **Auto-growth on victory (placeholder):** `BattleScene._applyVictoryGrowth` grants **+4 Max HP every win and +1 Attack every 2nd win** (via a `runState.victories` counter) through `applyRunModifier` (wires the previously-dead progression). Attack grows **slowly on purpose** — +1 Attack *every* win over-scaled DPT; +0.5/floor lands Attack ≈ 3 by mid-act and ~5–6 by the boss, matching the sim's reference curve. **Temporary** — to be replaced by a player-facing *growth screen* (choose a stat), analogous to the reward overlay.
+- **Skills:** Defend armor 5→6; Oungan heal 5→6 (both were under the value curve).
+- **Enemy attack (lethality knob, §4):** Orc 3→2, Shadow Weaver 5→4, Orc Taskmaster 4→3.
+- **Bug fix:** Stone Gargoyle `hp 60 / maxHp 40` → `45 / 45`.
+
+## 10. Phase 2 (next, needs more care)
+
+- **Per-floor enemy HP/attack scaling at spawn** (`MapScene._transitionToBattle`) so a floor-gated minion stays relevant as player Attack grows — the proper "enemies track player DPT" mechanism (and what CLAUDE.md decision #11 *claims* but never implemented).
+- **Add the missing boss** (`type:'boss'`, `floors:[10]`, ~150 HP, attack 3, no ramp) — floor 10 currently falls back to a Goblin. Can reuse an existing portrait to avoid new art.
+- **Re-run the sim with the actual character kits** (Warrior/Mage/Witch Doctor) to validate, instead of the synthetic archetypes.
+
+**Standing sim caveats:** one-ply greedy AI (matches the game's `EnemyAI`, not a perfect player); board-touching passives (spawn-rate, convert/destroy) not yet modeled. Trust relative signals; re-run after changes.
 
 **Next steps to get shippable skill numbers**
 1. Add a **caster/skill-reliant archetype** (Attack 1, moderate HP, lone nuke) and point the ratio/cost sweeps at it.

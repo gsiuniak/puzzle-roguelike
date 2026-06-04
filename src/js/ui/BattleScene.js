@@ -15,9 +15,21 @@ import RewardOverlay from './RewardOverlay.js';
 import TooltipManager from '../systems/TooltipManager.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
-import { syncBattleResultsToRunState } from '../data/playerStats.js';
+import { syncBattleResultsToRunState, applyRunModifier } from '../data/playerStats.js';
 import { generateRelicRewardOptions } from '../data/relics/relicRewards.js';
 import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
+
+// ── Post-victory growth (PLACEHOLDER) ────────────────────
+// Auto-applied stat growth granted on won battles. Temporary stand-in for a
+// future player-facing "growth screen" (like the reward screen) where the player
+// will CHOOSE a stat increase. Tuned from the sim (docs/balance-findings.md):
+// Attack is the dominant lever, so it grows SLOWLY — +1 Attack every 2nd victory
+// (≈ +0.5/floor) lands Attack ≈ 3 by mid-act and ~5-6 by the boss, matching the
+// sim's reference curve. (+1 Attack EVERY win over-scaled DPT — too much.)
+// HP grows every win (cheap survivability). All values tunable.
+const HP_GROWTH_PER_VICTORY = 4;          // +Max HP per won battle
+const ATTACK_GROWTH_AMOUNT = 1;           // +Attack granted...
+const ATTACK_GROWTH_EVERY_N_VICTORIES = 2; // ...once every N wins
 
 // ── Tunable layout constants ─────────────────────────────
 const MAIN_ROW_MAX_WIDTH = 1820;
@@ -1385,6 +1397,10 @@ export default class BattleScene extends UIPanel {
         syncBattleResultsToRunState(mapData.runState, this._battleController.playerState);
         // Apply post-battle healing
         this._applyPostBattleHealing(mapData.runState, this._battleController.playerState);
+        // Auto-apply victory growth (placeholder for a future growth screen).
+        if (winner === 'player') {
+          this._applyVictoryGrowth(mapData.runState);
+        }
         mapScene.setRunState(mapData.runState, null);
       }
     }
@@ -1429,6 +1445,25 @@ export default class BattleScene extends UIPanel {
    * @param {object} runState — player run state (mutated in place)
    * @param {object} playerBattleState — player state from the concluded battle
    */
+  /**
+   * Auto-apply stat growth after a won battle. PLACEHOLDER — will be replaced
+   * by a player-facing "growth screen" (choose a stat) analogous to the reward
+   * overlay. Mutates runState.statModifiers via the centralized applyRunModifier,
+   * so growth persists and seeds the next battle's effective stats.
+   * @param {object} runState — player run state (mutated in place)
+   */
+  _applyVictoryGrowth(runState) {
+    if (!runState) return;
+    runState.victories = (runState.victories || 0) + 1;
+    applyRunModifier(runState, 'maxHp', HP_GROWTH_PER_VICTORY);
+    let attackGranted = 0;
+    if (runState.victories % ATTACK_GROWTH_EVERY_N_VICTORIES === 0) {
+      applyRunModifier(runState, 'startingAttack', ATTACK_GROWTH_AMOUNT);
+      attackGranted = ATTACK_GROWTH_AMOUNT;
+    }
+    console.log(`[BattleScene] Victory #${runState.victories} growth (placeholder): +${HP_GROWTH_PER_VICTORY} HP, +${attackGranted} Attack.`);
+  }
+
   _applyPostBattleHealing(runState, playerBattleState) {
     if (!runState || !playerBattleState) return;
     const healPct = 0.0;

@@ -43,12 +43,13 @@ const SKILL_CATALOG = {
   defend: {
     id: 'defend',
     name: 'Defend',
-    description: 'Gain 5 armor\nCreate 3 blue',
+    description: 'Gain 6 armor\nCreate 3 blue',
     icon: 'skill_defend',
     sound: 'skill_defend',
     cost: { blue: 5 },
     effects: [
-      { effectType: 'armor', armor: { amount: 5 } },
+      // Armor 5→6: sim showed Defend sat under the value curve (~1.2 HPe/mana).
+      { effectType: 'armor', armor: { amount: 6 } },
       { effectType: 'create_tiles', createTiles: { amount: 3, type: 'blue' } },
     ],
   },
@@ -113,12 +114,13 @@ const SKILL_CATALOG = {
   oungan: {
     id: 'oungan',
     name: 'Oungan',
-    description: 'Heal 5 HP\nCreate 5 green',
+    description: 'Heal 6 HP\nCreate 5 green',
     icon: 'skill_oungan',
     sound: 'skill_oungan',
     cost: { green: 6 },
     effects: [
-      { effectType: 'heal', heal: { amount: 5 } },
+      // Heal 5→6: sim showed Oungan was the most under-budget player skill (~0.8 HPe/mana).
+      { effectType: 'heal', heal: { amount: 6 } },
       { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
     ],
   },

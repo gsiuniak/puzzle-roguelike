@@ -17,7 +17,7 @@ const shadowWeaver = {
 
   hp: 60,
   maxHp: 60,
-  attack: 5,
+  attack: 4, // was 5 — sustained attack 5 over a long elite fight is too lethal (sim §4)
   armor: 10,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'shadow_weaver', // maps to 'portrait_shadow_weaver' asset key

@@ -16,7 +16,7 @@ const orc = {
 
   hp: 24,
   maxHp: 24,
-  attack: 3,
+  attack: 2, // was 3 — attack 3 on floors 1-3 is too lethal for an early player (sim §4)
   armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'orc', // maps to 'portrait_orc' asset key

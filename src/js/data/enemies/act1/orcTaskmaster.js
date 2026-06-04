@@ -16,7 +16,7 @@ const orcTaskmaster = {
 
   hp: 50,
   maxHp: 50,
-  attack: 4,
+  attack: 3, // was 4 — keep elite attack in the 2-3 band (sim §4)
   armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'orc_taskmaster', // maps to 'portrait_orc_taskmaster' asset key

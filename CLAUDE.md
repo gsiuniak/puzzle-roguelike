@@ -336,6 +336,11 @@ Per-frame: BattleScene.update(dt)
      → ESC → RewardOverlay.dismiss()
         → syncBattleResultsToRunState(runState, playerState)
         → _applyPostBattleHealing(runState, playerState)
+        → on victory: _applyVictoryGrowth(runState) — PLACEHOLDER auto-growth
+          (applyRunModifier: +4 Max HP every win, +1 Attack every 2nd win via
+          runState.victories counter — Attack grows slowly on purpose);
+          to be replaced by a player-facing "growth screen" like the reward overlay.
+          See docs/balance-findings.md.
         → _onBattleComplete({result, nodeId})
         → MapScene._handleBattleComplete() sets flag
         → fadeToScene('MapScene')
