@@ -213,7 +213,7 @@ const SKILL_CATALOG = {
     description: 'Deal 10 damage.\nCreate 5 Red.\nGain a turn',
     icon: 'skill_bash',
     sound: 'skill_charge',
-    cost: { red: 7 },
+    cost: { red: 8 },
     effects: [
       { effectType: 'damage', damage: { amount: 10 } },
       { effectType: 'create_tiles', createTiles: { amount: 5, type: 'red' } },
@@ -226,7 +226,7 @@ const SKILL_CATALOG = {
     description: 'Gain 10 armor.\nCreate 5 Blue.\nGain a turn',
     icon: 'skill_defend',
     sound: 'skill_frenzy',
-    cost: { blue: 7 },
+    cost: { blue: 8 },
     effects: [
       { effectType: 'armor', armor: { amount: 10 } },
       { effectType: 'create_tiles', createTiles: { amount: 5, type: 'blue' } },

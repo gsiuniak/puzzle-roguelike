@@ -81,6 +81,7 @@ export function applyEffect(effect, ctx) {
         ? effect.armor.amount
         : (caster.attack || 1);
       caster.armor = (caster.armor || 0) + amount;
+      if (amount > 0 && ctx.onStatChange) ctx.onStatChange({ kind: 'armor', target: caster, amount });
       if (log) log.add(`${caster.name} gains ${amount} armor.`);
       return true;
     }
@@ -94,6 +95,7 @@ export function applyEffect(effect, ctx) {
       const before = caster.hp;
       caster.hp = Math.min(caster.maxHp, caster.hp + amount);
       const actual = caster.hp - before;
+      if (actual > 0 && ctx.onStatChange) ctx.onStatChange({ kind: 'heal', target: caster, amount: actual });
       if (log && actual > 0) log.add(`${caster.name} heals for ${actual} HP.`);
       return true;
     }

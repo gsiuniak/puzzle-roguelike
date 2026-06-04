@@ -93,6 +93,18 @@ export default class BattleController {
     this._matchTextTriggers = [];
 
     /**
+     * Accumulated combat-stat floating text events for the current frame.
+     * Each entry: { side: 'player'|'enemy', kind: 'damage'|'heal'|'armor', amount }.
+     * The scene reads and clears this each frame (via getState()) to animate
+     * "-x" (red, damage) / "+x" (green, heal) / "+x" (blue, armor) over the
+     * affected character's portrait. Emitted via _emitFloatingStat() from the
+     * single damage chokepoint (_applyDamage) and the heal/armor handlers
+     * (skill effects + passive relic effects).
+     * @type {Array<{side:string, kind:string, amount:number}>}
+     */
+    this._floatingStatEvents = [];
+
+    /**
      * Speed multiplier for all animation timing.
      * 1.0 = normal, 2.0 = fast, 0.5 = slow.
      * Scales phase durations, enemy delay, and swap duration.
@@ -258,6 +270,13 @@ export default class BattleController {
         this._manaGainDepth++;
         this._dispatchManaGain(side, color, amount);
         this._manaGainDepth--;
+      },
+      // Passive heal/armor effects (e.g. Goblin Totem armor, Soul Eater heal)
+      // animate floating "+x" text over the owner's portrait, same as skill
+      // heal/armor. info: { kind:'heal'|'armor', target, amount }.
+      onStatChange: (info) => {
+        const side = info.target === this.playerState ? 'player' : 'enemy';
+        this._emitFloatingStat(side, info.kind, info.amount);
       },
     });
     /** Set during a relic dispatch so onDamage can reference the right side. */
@@ -492,6 +511,11 @@ export default class BattleController {
     const pendingSkillSound = this._pendingSkillSound;
     this._pendingSkillSound = null;
 
+    // Capture combat-stat floating text events and clear so the scene spawns
+    // each "-x"/"+x" portrait animation exactly once.
+    const floatingStatEvents = this._floatingStatEvents;
+    this._floatingStatEvents = [];
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -505,6 +529,7 @@ export default class BattleController {
       destroyedTiles,
       convertedTiles,
       pendingSkillSound,
+      floatingStatEvents,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -1688,6 +1713,7 @@ export default class BattleController {
           ? effect.armor.amount
           : (src.attack || 1);
         src.armor += amount;
+        this._emitFloatingStat(side, 'armor', amount);
         this.log.add(`${src.name} gains ${amount} armor.`);
         return false;
       }
@@ -1703,6 +1729,7 @@ export default class BattleController {
         const beforeHp = src.hp;
         src.hp = Math.min(src.maxHp, src.hp + amount);
         const actualHeal = src.hp - beforeHp;
+        this._emitFloatingStat(side, 'heal', actualHeal);
         this.log.add(`${src.name} heals for ${actualHeal} HP.`);
         return false;
       }
@@ -1782,6 +1809,19 @@ export default class BattleController {
   }
 
   /**
+   * Queue a floating combat-stat text event for the scene to animate over a
+   * portrait. Read & cleared each frame via getState(). No-op for amount <= 0.
+   *
+   * @param {'player'|'enemy'} side — the affected combatant
+   * @param {'damage'|'heal'|'armor'} kind — drives color & sign in BattleScene
+   * @param {number} amount — magnitude shown (always positive)
+   */
+  _emitFloatingStat(side, kind, amount) {
+    if (!amount || amount <= 0) return;
+    this._floatingStatEvents.push({ side, kind, amount: amount | 0 });
+  }
+
+  /**
    * Apply damage to `target` with a pre-mitigation pass for defensive
    * passives. Dispatches `onIncomingDamage` so relics like Evil Eye can
    * mutate the mutable `amount` field before MatchResolver.applyDamage
@@ -1806,6 +1846,10 @@ export default class BattleController {
     this._currentRelicTarget = prevRelicTarget;
     const finalAmount = Math.max(0, payload.amount | 0);
     const result = this.resolver.applyDamage(target, finalAmount);
+    // Floating "-x" damage text over the damaged side's portrait. This is the
+    // single chokepoint for ALL damage (skill, skull, passive), so every hit
+    // animates here. Uses actualDamage to match the combat-log number.
+    this._emitFloatingStat(side, 'damage', result.actualDamage);
     // Death is STICKY: once a side's HP is reduced to 0 it has lost, even if a
     // later heal in the same resolution window (Soul Eater, Alabaster Flask,
     // Oungan, …) brings HP back above 0. Without this, lethal-damage-then-heal

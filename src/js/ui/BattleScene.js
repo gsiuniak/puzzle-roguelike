@@ -788,6 +788,17 @@ export default class BattleScene extends UIPanel {
       }
     }
 
+    // ── Spawn combat-stat floating text over portraits ──
+    // Damage (red "-x"), heal (green "+x"), armor (blue "+x"). Multiple events
+    // for the same side this frame are stacked vertically so they don't overlap.
+    if (state.floatingStatEvents && state.floatingStatEvents.length > 0) {
+      const stackBySide = { player: 0, enemy: 0 };
+      for (const ev of state.floatingStatEvents) {
+        this._spawnStatTextEffect(ev, stackBySide[ev.side] || 0);
+        stackBySide[ev.side] = (stackBySide[ev.side] || 0) + 1;
+      }
+    }
+
     // Update turn label
     if (this._turnLabel) {
       this._turnLabel.text = this._battleController.getTurnLabel();
@@ -956,6 +967,43 @@ export default class BattleScene extends UIPanel {
       holdDuration: 300,
       fadeDuration: 100,
       overshoot: 1.18,
+    });
+
+    this._floatingEffects.push(effect);
+  }
+
+  /**
+   * Spawn a floating combat-stat text effect over a character's portrait:
+   *   damage → red "-x", heal → green "+x", armor → blue "+x".
+   * @param {{side:'player'|'enemy', kind:'damage'|'heal'|'armor', amount:number}} ev
+   * @param {number} stackIndex - 0-based index of this event among same-side
+   *                              events this frame (offsets Y so they stack).
+   */
+  _spawnStatTextEffect(ev, stackIndex = 0) {
+    const pane = ev.side === 'player' ? this._playerPane : this._enemyPane;
+    if (!pane || typeof pane.getPortraitCenter !== 'function') return;
+    const center = pane.getPortraitCenter();
+    if (!center) return;
+
+    const STAT_TEXT_STYLE = {
+      damage: { color: '#e23b3b', sign: '-' },
+      heal:   { color: '#3fbf3f', sign: '+' },
+      armor:  { color: '#4aa3ff', sign: '+' },
+    };
+    const style = STAT_TEXT_STYLE[ev.kind];
+    if (!style) return;
+
+    const text = `${style.sign}${ev.amount}`;
+    // Stack successive same-frame events upward so they remain legible.
+    const y = center.y - stackIndex * 34;
+
+    const effect = new FloatingTextEffect(text, style.color, center.x, y, {
+      fontSize: 40,
+      growDuration: 160,
+      settleDuration: 90,
+      holdDuration: 380,
+      fadeDuration: 220,
+      overshoot: 1.22,
     });
 
     this._floatingEffects.push(effect);

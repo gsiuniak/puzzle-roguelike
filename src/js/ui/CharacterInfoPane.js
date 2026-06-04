@@ -331,4 +331,16 @@ export default class CharacterInfoPane extends UIPanel {
   updateFromData() {
     if (this._characterData) this.updateFromState(this._characterData);
   }
+
+  /**
+   * Center of the portrait in design-space screen coordinates (the same space
+   * BattleScene's floating effects render in). Returns null until the pane has
+   * been laid out at least once. Used to anchor floating combat-stat text.
+   * @returns {{x:number, y:number}|null}
+   */
+  getPortraitCenter() {
+    const r = this._portrait && this._portrait.rect;
+    if (!r || r.w <= 0) return null;
+    return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  }
 }

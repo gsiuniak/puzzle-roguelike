@@ -51,6 +51,9 @@ export default class PassiveSystem {
     // Fired by EffectResolver's gain_mana so relic-granted mana also triggers
     // onGainMana reactors. Signature: (side, color, amount).
     this.onGainMana    = ctx.onGainMana || null;
+    // Fired by EffectResolver's heal/armor effects so the host can animate
+    // floating "+x" text. Signature: ({ kind:'heal'|'armor', target, amount }).
+    this.onStatChange  = ctx.onStatChange || null;
   }
 
   /**
@@ -78,6 +81,7 @@ export default class PassiveSystem {
       onDamage: this.onDamage,
       onExtraTurn: this.onExtraTurn,
       onGainMana: this.onGainMana,
+      onStatChange: this.onStatChange,
       // Pass the trigger payload through so mutating effects (e.g.
       // reduce_damage on onIncomingDamage) can modify it in place.
       payload,
