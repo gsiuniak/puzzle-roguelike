@@ -56,6 +56,40 @@ the enemy prefers them).
 AI weights live in the exported `AI` object in `engine.mjs`
 (`EXTRA_TURN_VALUE`, `BASE_MANA_VALUE`, `HEAL_HP_THRESHOLD`, …) — tunable.
 
+## Power / enemy-budget tooling (`run-power.mjs`)
+
+A second mode that answers **"give me a floor → the player's power and a fair enemy stat spread."**
+
+```bash
+node sim/run-power.mjs                 # 200 runs, 10 floors → sim/out/power.json
+node sim/run-power.mjs --runs 500
+```
+
+A **mock character** starts at base and, each floor, **gains the auto-growth + a
+random relic** (`relics.mjs`), then we measure its **Power = EHP × DPT** (Lanchester
+combat power):
+
+- **DPT** — damage/turn vs an inert punching-bag (`inertEnemy`).
+- **EHP** — total damage withstood before dying vs a fixed-damage metronome
+  (`enemyFixedDamage`); captures armor / heal / reduce-damage relics (they extend
+  survival → raise total absorbed).
+
+From the per-floor player power it derives, via `sim/power.mjs`:
+- **Enemy stat budgets** per role — `enemy HP ≈ playerDPT × turns`,
+  `enemy DPT ≈ lossFrac × playerEHP / turns` (normal/elite/boss targets in `ROLE_TARGETS`).
+- A **Chokeweed-style "scaling check"** — a no-board-interaction enemy with moderate
+  HP and a ramping attack; a race (TTK vs TTD) sized so a player *at* the floor's
+  power passes. `chokeweedCheck()` returns `{hp, startAttack, ramp}`.
+
+Files: `relics.mjs` (pool + `grantRandomRelic`), `power.mjs` (`measurePower`,
+`enemyBudgets`, `chokeweedCheck`), `progression.mjs` (per-floor run), `run-power.mjs`.
+
+> Relic coverage: the pool models relics expressible with the engine's passive
+> triggers + static modifiers (attack/armor/heal/mana/spawn/skull-damage/reduce).
+> Board-touching relics (Gorepike, Unstable Catalyst), `onTileMatchType` relics
+> (Familiars/Scythe), and `attack_per_unspent_mana` (Cestus group) aren't modeled
+> yet — power will rise once they are.
+
 ## Output schema (`results.json`)
 
 ```jsonc

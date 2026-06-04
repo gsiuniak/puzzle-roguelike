@@ -49,14 +49,24 @@ function makeCombatant(def, side) {
     mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0, ...(def.mana || {}) },
     skills: JSON.parse(JSON.stringify(def.skills || [])),
     passives: JSON.parse(JSON.stringify(def.passives || [])),
+    // static-modifier bonuses (aggregated from onBattleStart relics)
+    _skullDamageBonus: 0,        // bonus matched-skull damage per group (Funerary Bell)
+    _manaGainBonus: {},          // bonus mana per matched color (Bellows etc.)
+    _spawnBoosts: {},            // board spawn-rate boosts in pp (Flint etc.)
     // metrics
     _dmgDealt: 0, _dmgTaken: 0, _actions: 0, _skillCasts: 0, _skullGroups: 0,
     _fourPlus: 0, _cascadeSteps: 0, _tilesCleared: 0, _manaGained: 0,
   };
   for (const p of c.passives) {
     if (p.trigger !== 'onBattleStart') continue;
-    if (eff(p) === 'modify_stat' && p.stat === 'attack') c.attack += p.amount || 0;
-    if (eff(p) === 'grant_starting_mana') c.mana[p.color] = (c.mana[p.color] || 0) + (p.amount || 0);
+    switch (eff(p)) {
+      case 'modify_stat': if (p.stat === 'attack') c.attack += p.amount || 0; break;
+      case 'grant_starting_mana': c.mana[p.color] = (c.mana[p.color] || 0) + (p.amount || 0); break;
+      case 'modify_skull_damage': c._skullDamageBonus += p.amount || 0; break;
+      case 'modify_mana_gain': c._manaGainBonus[p.color] = (c._manaGainBonus[p.color] || 0) + (p.amount || 0); break;
+      case 'modify_spawn_rate': c._spawnBoosts[p.tile] = (c._spawnBoosts[p.tile] || 0) + (p.amount || 0); break;
+      default: break;
+    }
   }
   return c;
 }
@@ -186,11 +196,12 @@ function resolveCascades(board, side, opp, battle) {
       side._tilesCleared += m.count;
       if (isSkull(m.typeId)) {
         side._skullGroups += 1;
-        dealDamage(side, opp, matchedSkullDamage(side.attack, m.count), battle);
+        dealDamage(side, opp, matchedSkullDamage(side.attack, m.count) + (side._skullDamageBonus || 0), battle);
       } else {
-        side.mana[m.typeId] = (side.mana[m.typeId] || 0) + m.count;
-        side._manaGained += m.count;
-        firePassives(side, 'onGainMana', battle, { color: m.typeId, amount: m.count });
+        const gained = m.count + (side._manaGainBonus[m.typeId] || 0);
+        side.mana[m.typeId] = (side.mana[m.typeId] || 0) + gained;
+        side._manaGained += gained;
+        firePassives(side, 'onGainMana', battle, { color: m.typeId, amount: gained });
       }
       if (m.count >= 4) any4 = true;
     }
@@ -282,20 +293,30 @@ export function runBattle(playerDef, enemyDef, seed, opts = {}) {
   const rng = makeRng(seed);
   const player = makeCombatant(playerDef, 'player');
   const enemy = makeCombatant(enemyDef, 'enemy');
-  const board = new Board(8, 8, rng);
+  // Board spawn-rate boosts are board-global — merge both sides' relic boosts.
+  const boosts = { ...player._spawnBoosts, ...enemy._spawnBoosts };
+  const board = new Board(8, 8, rng, boosts);
   board.initialize();
   const battle = { player, enemy, board, rng };
   const maxRounds = opts.maxRounds ?? 200;
   const playerFirst = opts.playerFirst !== false;
+  const inertEnemy = !!opts.inertEnemy;          // enemy never acts (DPT calibration)
+  const fixedDmg = opts.enemyFixedDamage ?? null; // enemy deals fixed D/round (EHP calibration)
+
+  // The enemy's turn: a fixed-damage "metronome", an inert no-op, or a real turn.
+  const enemyTurn = () => {
+    if (fixedDmg != null) dealDamage(enemy, player, fixedDmg, battle);
+    else if (!inertEnemy) takeTurn(enemy, player, battle);
+  };
 
   let round = 0;
   while (player.hp > 0 && enemy.hp > 0 && round < maxRounds) {
     if (playerFirst) {
       takeTurn(player, enemy, battle);
       if (enemy.hp <= 0) break;
-      takeTurn(enemy, player, battle);
+      enemyTurn();
     } else {
-      takeTurn(enemy, player, battle);
+      enemyTurn();
       if (player.hp <= 0) break;
       takeTurn(player, enemy, battle);
     }

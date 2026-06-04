@@ -1,0 +1,448 @@
+{
+  "meta": {
+    "seed": 12345,
+    "runs": 10000,
+    "floors": 10,
+    "powerCfg": {
+      "DPT_WINDOW": 20,
+      "EHP_METRONOME_DMG": 8,
+      "EHP_MAX_ROUNDS": 100
+    },
+    "roleTargets": {
+      "normal": {
+        "turns": 8,
+        "lossFrac": 0.35
+      },
+      "elite": {
+        "turns": 14,
+        "lossFrac": 0.55
+      },
+      "boss": {
+        "turns": 24,
+        "lossFrac": 0.8
+      }
+    }
+  },
+  "floors": [
+    {
+      "floor": 1,
+      "attack": 1,
+      "maxHp": 30,
+      "player": {
+        "dpt": 1.7,
+        "ehp": 32
+      },
+      "power": {
+        "median": 55,
+        "mean": 55,
+        "p10": 45,
+        "p90": 66
+      },
+      "budgets": {
+        "normal": {
+          "hp": 14,
+          "dpt": 1.4,
+          "power": 20,
+          "attackApprox": 1
+        },
+        "elite": {
+          "hp": 24,
+          "dpt": 1.3,
+          "power": 31,
+          "attackApprox": 1
+        },
+        "boss": {
+          "hp": 41,
+          "dpt": 1.1,
+          "power": 45,
+          "attackApprox": 1
+        }
+      },
+      "chokeweed": {
+        "hp": 14,
+        "startAttack": 1,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 2,
+      "attack": 1,
+      "maxHp": 34,
+      "player": {
+        "dpt": 2,
+        "ehp": 40
+      },
+      "power": {
+        "median": 79,
+        "mean": 94,
+        "p10": 59,
+        "p90": 115
+      },
+      "budgets": {
+        "normal": {
+          "hp": 16,
+          "dpt": 1.8,
+          "power": 29,
+          "attackApprox": 2
+        },
+        "elite": {
+          "hp": 28,
+          "dpt": 1.6,
+          "power": 45,
+          "attackApprox": 2
+        },
+        "boss": {
+          "hp": 48,
+          "dpt": 1.3,
+          "power": 62,
+          "attackApprox": 1
+        }
+      },
+      "chokeweed": {
+        "hp": 16,
+        "startAttack": 1,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 3,
+      "attack": 2,
+      "maxHp": 38,
+      "player": {
+        "dpt": 2.6,
+        "ehp": 40
+      },
+      "power": {
+        "median": 114,
+        "mean": 152,
+        "p10": 84,
+        "p90": 278
+      },
+      "budgets": {
+        "normal": {
+          "hp": 21,
+          "dpt": 1.8,
+          "power": 38,
+          "attackApprox": 2
+        },
+        "elite": {
+          "hp": 36,
+          "dpt": 1.6,
+          "power": 58,
+          "attackApprox": 2
+        },
+        "boss": {
+          "hp": 62,
+          "dpt": 1.3,
+          "power": 81,
+          "attackApprox": 1
+        }
+      },
+      "chokeweed": {
+        "hp": 21,
+        "startAttack": 1,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 4,
+      "attack": 2,
+      "maxHp": 42,
+      "player": {
+        "dpt": 2.9,
+        "ehp": 48
+      },
+      "power": {
+        "median": 152,
+        "mean": 241,
+        "p10": 103,
+        "p90": 443
+      },
+      "budgets": {
+        "normal": {
+          "hp": 23,
+          "dpt": 2.1,
+          "power": 48,
+          "attackApprox": 2
+        },
+        "elite": {
+          "hp": 41,
+          "dpt": 1.9,
+          "power": 78,
+          "attackApprox": 2
+        },
+        "boss": {
+          "hp": 70,
+          "dpt": 1.6,
+          "power": 112,
+          "attackApprox": 2
+        }
+      },
+      "chokeweed": {
+        "hp": 23,
+        "startAttack": 1,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 5,
+      "attack": 3,
+      "maxHp": 46,
+      "player": {
+        "dpt": 3.7,
+        "ehp": 56
+      },
+      "power": {
+        "median": 222,
+        "mean": 410,
+        "p10": 145,
+        "p90": 659
+      },
+      "budgets": {
+        "normal": {
+          "hp": 30,
+          "dpt": 2.4,
+          "power": 72,
+          "attackApprox": 2
+        },
+        "elite": {
+          "hp": 52,
+          "dpt": 2.2,
+          "power": 114,
+          "attackApprox": 2
+        },
+        "boss": {
+          "hp": 89,
+          "dpt": 1.9,
+          "power": 169,
+          "attackApprox": 2
+        }
+      },
+      "chokeweed": {
+        "hp": 30,
+        "startAttack": 1,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 6,
+      "attack": 3,
+      "maxHp": 50,
+      "player": {
+        "dpt": 4.2,
+        "ehp": 63
+      },
+      "power": {
+        "median": 317,
+        "mean": 643,
+        "p10": 185,
+        "p90": 1175
+      },
+      "budgets": {
+        "normal": {
+          "hp": 34,
+          "dpt": 2.8,
+          "power": 95,
+          "attackApprox": 3
+        },
+        "elite": {
+          "hp": 59,
+          "dpt": 2.5,
+          "power": 148,
+          "attackApprox": 3
+        },
+        "boss": {
+          "hp": 101,
+          "dpt": 2.1,
+          "power": 212,
+          "attackApprox": 2
+        }
+      },
+      "chokeweed": {
+        "hp": 34,
+        "startAttack": 1,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 7,
+      "attack": 4,
+      "maxHp": 54,
+      "player": {
+        "dpt": 5.2,
+        "ehp": 64
+      },
+      "power": {
+        "median": 480,
+        "mean": 1030,
+        "p10": 232,
+        "p90": 2705
+      },
+      "budgets": {
+        "normal": {
+          "hp": 42,
+          "dpt": 2.8,
+          "power": 118,
+          "attackApprox": 3
+        },
+        "elite": {
+          "hp": 73,
+          "dpt": 2.5,
+          "power": 183,
+          "attackApprox": 3
+        },
+        "boss": {
+          "hp": 125,
+          "dpt": 2.1,
+          "power": 263,
+          "attackApprox": 2
+        }
+      },
+      "chokeweed": {
+        "hp": 42,
+        "startAttack": 1,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 8,
+      "attack": 4,
+      "maxHp": 58,
+      "player": {
+        "dpt": 5.9,
+        "ehp": 80
+      },
+      "power": {
+        "median": 693,
+        "mean": 1523,
+        "p10": 294,
+        "p90": 3818
+      },
+      "budgets": {
+        "normal": {
+          "hp": 47,
+          "dpt": 3.5,
+          "power": 165,
+          "attackApprox": 4
+        },
+        "elite": {
+          "hp": 83,
+          "dpt": 3.1,
+          "power": 257,
+          "attackApprox": 3
+        },
+        "boss": {
+          "hp": 142,
+          "dpt": 2.7,
+          "power": 383,
+          "attackApprox": 3
+        }
+      },
+      "chokeweed": {
+        "hp": 47,
+        "startAttack": 2,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 9,
+      "attack": 5,
+      "maxHp": 62,
+      "player": {
+        "dpt": 7.1,
+        "ehp": 91
+      },
+      "power": {
+        "median": 1008,
+        "mean": 2287,
+        "p10": 382,
+        "p90": 5900
+      },
+      "budgets": {
+        "normal": {
+          "hp": 57,
+          "dpt": 4,
+          "power": 228,
+          "attackApprox": 4
+        },
+        "elite": {
+          "hp": 99,
+          "dpt": 3.6,
+          "power": 356,
+          "attackApprox": 4
+        },
+        "boss": {
+          "hp": 170,
+          "dpt": 3,
+          "power": 510,
+          "attackApprox": 3
+        }
+      },
+      "chokeweed": {
+        "hp": 57,
+        "startAttack": 3,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    },
+    {
+      "floor": 10,
+      "attack": 5,
+      "maxHp": 66,
+      "player": {
+        "dpt": 7.9,
+        "ehp": 152
+      },
+      "power": {
+        "median": 1419,
+        "mean": 3107,
+        "p10": 464,
+        "p90": 8089
+      },
+      "budgets": {
+        "normal": {
+          "hp": 63,
+          "dpt": 6.7,
+          "power": 422,
+          "attackApprox": 7
+        },
+        "elite": {
+          "hp": 111,
+          "dpt": 6,
+          "power": 666,
+          "attackApprox": 6
+        },
+        "boss": {
+          "hp": 190,
+          "dpt": 5.1,
+          "power": 969,
+          "attackApprox": 5
+        }
+      },
+      "chokeweed": {
+        "hp": 63,
+        "startAttack": 9,
+        "ramp": 1,
+        "killTurns": 8,
+        "dieTurns": 11
+      }
+    }
+  ]
+}
