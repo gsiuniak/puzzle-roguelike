@@ -14,11 +14,11 @@ const orc = {
   type: 'minion',
   floors: [1, 2, 3],
 
-  hp: 24,
-  maxHp: 24,
-  attack: 2, // was 3 — attack 3 on floors 1-3 is too lethal for an early player (sim §4)
+  hp: 18, // floor-1-equivalent baseline (MapScene scales maxHp by depth); bruiser, above-avg
+  maxHp: 18,
+  attack: 2,
   armor: 0,
-  mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
+  mana: { red: 3, blue: 0, green: 0, yellow: 0, purple: 0 }, // starting red so the bruiser can Slash
   portrait: 'orc', // maps to 'portrait_orc' asset key
   music: {
     trackKey: 'battle_theme',
@@ -26,7 +26,8 @@ const orc = {
     isSpecialTrack: false,
   },
 
-  skills: [],
+  // Was a no-kit auto-attacker; give it a basic hit so it has an identity.
+  skills: ['slash'],
   relics: [],
 };
 

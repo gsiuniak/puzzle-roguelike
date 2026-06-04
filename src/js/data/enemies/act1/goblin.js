@@ -59,8 +59,8 @@ const goblin = {
   // Act 1 minions are added, split these floors between them.
   floors: [1, 2],
 
-  hp: 18,
-  maxHp: 18,
+  hp: 14, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 14,
   attack: 1,
   armor: 0,
   mana: {

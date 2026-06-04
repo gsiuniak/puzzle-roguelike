@@ -35,6 +35,22 @@ import { createRunState } from '../data/runState.js';
 import { resolveSkillIds } from '../data/skills/skillCatalog.js';
 import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
 
+// ── Per-floor enemy HP scaling ───────────────────────────
+// Enemy `maxHp` in the data files is a FLOOR-1-EQUIVALENT baseline. At spawn it is
+// multiplied by this per-depth factor so a given enemy stays appropriately tough
+// as the player's power grows over the act. The curve is the measured player-DPT
+// ratio from the sim (sim/out/power.json: DPT[floor] / DPT[floor1]); enemy HP is
+// budgeted as playerDPT × targetTurns, so HP tracks DPT. Regenerate with
+// `node sim/run-power.mjs` if the growth/relic model changes.
+// Index = node.depth (0-indexed; depth 0 = floor 1).
+const ENEMY_HP_FLOOR_MULT = [1.0, 1.18, 1.53, 1.71, 2.18, 2.47, 3.06, 3.47, 4.18, 4.65];
+
+/** Per-floor HP multiplier for a 0-indexed map depth (clamps past the last floor). */
+function enemyHpFloorMult(depth) {
+  const d = Math.max(0, depth | 0);
+  return ENEMY_HP_FLOOR_MULT[Math.min(d, ENEMY_HP_FLOOR_MULT.length - 1)];
+}
+
 export default class MapScene extends UIPanel {
   constructor() {
     super();
@@ -381,6 +397,14 @@ export default class MapScene extends UIPanel {
     // Record the pick so later nodes this act avoid repeating it.
     markEnemySeen(this._runState, enemyDef);
     const enemyData = JSON.parse(JSON.stringify(enemyDef));
+
+    // Per-floor HP scaling: enemy maxHp in data is a floor-1-equivalent baseline;
+    // scale it up by depth so it tracks the player's growing power (see
+    // ENEMY_HP_FLOOR_MULT). Attack is NOT auto-scaled (lethality is sharp — it's
+    // authored per enemy + roster floor-gating provides the attack ramp).
+    const hpMult = enemyHpFloorMult(node.depth);
+    enemyData.maxHp = Math.round((enemyData.maxHp || 1) * hpMult);
+    enemyData.hp = enemyData.maxHp;
 
     // Resolve enemy skill/relic IDs into full objects via the catalogs.
     // Characters/enemies store IDs; the BattleController operates on resolved

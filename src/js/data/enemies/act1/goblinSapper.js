@@ -14,8 +14,8 @@ const goblinSapper = {
   type: 'minion',
   floors: [3, 4, 5, 6, 7],
 
-  hp: 16,
-  maxHp: 16,
+  hp: 11, // floor-1-equivalent baseline (MapScene scales maxHp by depth); frail bomber
+  maxHp: 11,
   attack: 2,
   armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },

@@ -14,11 +14,11 @@ const orcTaskmaster = {
   type: 'elite',
   floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
 
-  hp: 50,
-  maxHp: 50,
-  attack: 3, // was 4 — keep elite attack in the 2-3 band (sim §4)
+  hp: 28, // floor-1-equivalent elite baseline (MapScene scales maxHp by depth)
+  maxHp: 28,
+  attack: 3,
   armor: 0,
-  mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
+  mana: { red: 4, blue: 0, green: 0, yellow: 0, purple: 0 }, // starting red toward Charge
   portrait: 'orc_taskmaster', // maps to 'portrait_orc_taskmaster' asset key
   music: {
     trackKey: 'battle_theme',

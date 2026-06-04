@@ -19,8 +19,8 @@ const chokeweed = {
   type: 'minion',
   floors: [3, 4, 5, 7, 8, 9],
 
-  hp: 30,
-  maxHp: 30,
+  hp: 16, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 16,
   attack: 2,
   armor: 0,
   // No starting mana — Encroach is free, so it never needs any.

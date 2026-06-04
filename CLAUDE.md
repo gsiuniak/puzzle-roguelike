@@ -413,7 +413,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 8. **MapView is shared** between MapScene (fullscreen) and BattleScene (overlay via 'm' key).
 9. **BattleScene is created on demand** (registered lazily by MapScene), not at boot.
 10. **MapScene is a singleton** — graph, renderer, traversal, `_runState`, and `_characterDef` all survive scene switches.
-11. **Enemy difficulty scaling** happens in MapScene: elite = 1.5× HP, boss = 2.5× HP.
+11. **Enemy HP scaling happens in MapScene** ([`_transitionToBattle`](src/js/scenes/MapScene.js)): each enemy's `maxHp` in the data files is a **floor-1-equivalent baseline**, multiplied at spawn by `ENEMY_HP_FLOOR_MULT[node.depth]` so it tracks the player's growing power over the act. The multiplier curve is the measured player-DPT ratio from the sim (`sim/out/power.json`; regenerate via `node sim/run-power.mjs`). **Tiering is by base value + role** (minions authored ~12-18, elites ~24-28) and floor-gating, NOT a separate elite/boss multiplier. **Attack is NOT auto-scaled** (lethality is sharp; it's authored per enemy). Sim-derived enemy stat budgets + an on-demand generator live in `sim/` (`run-power.mjs`, `enemy-gen.mjs`); see [`docs/balance-findings.md`](docs/balance-findings.md).
 12. **Music transitions are state-driven** in BattleScene: battle_theme on PLAYER/ENEMY_TURN, stopped on GAME_OVER.
 13. **All one-shot visual/SFX flags** are read-and-cleared in `BattleController.getState()` to prevent double-firing.
 14. **Player stat architecture uses three-layer separation** (NEW):

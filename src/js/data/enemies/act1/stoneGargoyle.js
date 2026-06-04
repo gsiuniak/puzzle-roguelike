@@ -14,11 +14,11 @@ const stoneGargoyle = {
   type: 'elite',
   floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
 
-  hp: 45,
-  maxHp: 45, // fix: was hp 60 / maxHp 40 (inconsistent). +10 armor ≈ 55 EHP.
+  hp: 24, // floor-1-equivalent elite baseline (MapScene scales maxHp by depth); +armor 10
+  maxHp: 24,
   attack: 3,
   armor: 10,
-  mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
+  mana: { red: 0, blue: 4, green: 0, yellow: 0, purple: 0 }, // starting blue toward Frenzy
   portrait: 'stone_gargoyle', // maps to 'portrait_stone_gargoyle' asset key
   music: {
     trackKey: 'battle_theme',
@@ -26,7 +26,9 @@ const stoneGargoyle = {
     isSpecialTrack: false,
   },
 
-  skills: ['slash'],
+  // Stone wall: Frenzy stacks armor (+ an extra turn) and Goblin Totem adds armor
+  // each turn — a defense check the player must out-damage. (was Slash-only.)
+  skills: ['slash', 'frenzy'],
   relics: ['goblin_totem'],
 };
 
