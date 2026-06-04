@@ -90,6 +90,22 @@ Files: `relics.mjs` (pool + `grantRandomRelic`), `power.mjs` (`measurePower`,
 > (Familiars/Scythe), and `attack_per_unspent_mana` (Cestus group) aren't modeled
 > yet — power will rise once they are.
 
+## Playtest metrics (real play → ongoing file)
+
+Record real games to a file and analyze them against the sim's predictions.
+
+```bash
+node sim/serve.mjs                                  # serves the game + collects metrics on :8080
+# open  http://localhost:8080/src/index.html?metrics   ← the ?metrics flag turns recording on
+node sim/analyze-playtest.mjs                       # per-floor/enemy win%, turns, HP-left, implied DPT
+```
+
+- `serve.mjs` serves the project (correct ES-module MIME) **and** appends one JSON line per battle to `sim/out/playtest.jsonl`.
+- `src/js/engine/Metrics.js` is the in-game recorder — **a no-op unless `?metrics` is in the URL**, so the `recordBattle()` call is safe to leave in. Each battle logs: **character (id + name)**, result, floor, node type, enemy + its (scaled) HP/attack, turns, player HP/maxHP/attack/armor, victories, relics.
+- `analyze-playtest.mjs` reports an **overall** summary, a **by-character** table (win%, turns, HP-left, max floor reached), and by-floor / by-enemy breakdowns.
+- Already serving the game yourself (Live Server, etc.)? Run `serve.mjs` as a pure collector and open the game with `?metrics=http://localhost:8080/__metrics` (CORS is open).
+- `analyze-playtest.mjs` aggregates the JSONL and, if `power.json` exists, shows **real implied DPT vs the sim's predicted DPT per floor** — the validation loop.
+
 ## Output schema (`results.json`)
 
 ```jsonc

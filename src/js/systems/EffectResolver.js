@@ -105,6 +105,12 @@ export function applyEffect(effect, ctx) {
       if (!caster.mana) caster.mana = {};
       caster.mana[color] = (caster.mana[color] || 0) + amount;
       if (log) log.add(`${caster.name} gains ${amount} ${color} mana.`);
+      // Notify the host so onGainMana reactors (e.g. Tuning Rod / Flaming Arrow)
+      // fire for RELIC-granted mana too (Familiars, Family Crest, Prism), not
+      // just board-matched mana. ctx.payload.side identifies who gained it.
+      if (ctx.onGainMana && ctx.payload && ctx.payload.side) {
+        ctx.onGainMana(ctx.payload.side, color, amount);
+      }
       return true;
     }
 

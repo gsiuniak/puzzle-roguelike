@@ -43,14 +43,17 @@
  *                        radius-based passive effects.
  *
  *   onGainMana           payload: { side, color, amount }
- *                        Fires when a combatant gains mana of a color from
- *                        gameplay (cascade match rewards, skill tile
- *                        destruction). Fires ONCE per color per gain event
- *                        (not once per mana point). Intentionally NOT fired
- *                        for battle-start starting mana or relic-granted
- *                        bonus mana, to avoid passive chaining. `side` is the
- *                        side that gained the mana (e.g. Flaming Arrow deals
- *                        1 damage when its owner gains red mana).
+ *                        Fires when a combatant gains mana of a color in battle:
+ *                        cascade match rewards, skill tile destruction, AND
+ *                        relic-granted mana (Familiars, Family Crest, Prism — via
+ *                        EffectResolver.gain_mana → PassiveSystem onGainMana
+ *                        callback). Fires ONCE per color per gain event (not once
+ *                        per mana point). NOT fired for one-time battle-start
+ *                        starting mana / Potion grants (grant_starting_mana).
+ *                        Relic-triggered dispatches are depth-guarded
+ *                        (BattleController._manaGainDepth) against loops. `side`
+ *                        is the side that gained the mana (e.g. Tuning Rod deals
+ *                        1 damage when its owner gains purple mana).
  *
  *   onTurnStart          payload: { side }
  *                        Fires at the start of a turn (after TURN_INTRO).

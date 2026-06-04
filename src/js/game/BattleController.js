@@ -239,9 +239,20 @@ export default class BattleController {
       // stays in charge of board mutations.
       onBoardEffect: (effect, triggerName, payload, ctx) =>
         this._handlePassiveBoardEffect(effect, triggerName, payload, ctx),
+      // Relic-granted mana (Familiars, Family Crest, Prism) routes back here so
+      // onGainMana reactors (Tuning Rod, Flaming Arrow, …) fire for it too. Depth-
+      // guarded so a hypothetical gain-mana-on-gain-mana relic can't loop forever.
+      onGainMana: (side, color, amount) => {
+        if (this._manaGainDepth >= 4) return;
+        this._manaGainDepth++;
+        this._dispatchManaGain(side, color, amount);
+        this._manaGainDepth--;
+      },
     });
     /** Set during a relic dispatch so onDamage can reference the right side. */
     this._currentRelicTarget = null;
+    /** Reentrancy depth for relic-triggered onGainMana dispatches. */
+    this._manaGainDepth = 0;
 
     // ── Static passive modifiers (onBattleStart) ──
     // Aggregate persistent relic modifiers (attack, spawn rate, mana gain,
@@ -520,8 +531,10 @@ export default class BattleController {
   }
 
   _winner() {
-    if (this.playerState.hp <= 0) return 'enemy';
-    if (this.enemyState.hp <= 0) return 'player';
+    // Player checked first: if both fell (or the player was ever reduced to 0),
+    // it's a defeat. `_defeated` makes a 0-HP moment stick through later heals.
+    if (this.playerState.hp <= 0 || this.playerState._defeated) return 'enemy';
+    if (this.enemyState.hp <= 0 || this.enemyState._defeated) return 'player';
     return null;
   }
 
@@ -1730,13 +1743,15 @@ export default class BattleController {
   // ── Game Over ────────────────────────────────────────
 
   _checkGameOver() {
-    if (this.playerState.hp <= 0) {
+    // Player first + sticky `_defeated` so a 0-HP moment is a loss even if a
+    // heal revived HP before this check ran.
+    if (this.playerState.hp <= 0 || this.playerState._defeated) {
       this.state = BattleState.GAME_OVER;
       this.log.add(`${this.playerState.name} has been defeated...`);
       if (this.onStateChange) this.onStateChange();
       return true;
     }
-    if (this.enemyState.hp <= 0) {
+    if (this.enemyState.hp <= 0 || this.enemyState._defeated) {
       this.state = BattleState.GAME_OVER;
       this.log.add(`Victory! ${this.enemyState.name} has been slain!`);
       if (this.onStateChange) this.onStateChange();
@@ -1779,7 +1794,13 @@ export default class BattleController {
     this.passives.dispatch(TRIGGER_TYPES.ON_INCOMING_DAMAGE, payload);
     this._currentRelicTarget = prevRelicTarget;
     const finalAmount = Math.max(0, payload.amount | 0);
-    return this.resolver.applyDamage(target, finalAmount);
+    const result = this.resolver.applyDamage(target, finalAmount);
+    // Death is STICKY: once a side's HP is reduced to 0 it has lost, even if a
+    // later heal in the same resolution window (Soul Eater, Alabaster Flask,
+    // Oungan, …) brings HP back above 0. Without this, lethal-damage-then-heal
+    // could flip a loss into a recorded victory. Honored by _winner/_checkGameOver.
+    if (target.hp <= 0) target._defeated = true;
+    return result;
   }
 
   /**
@@ -1814,10 +1835,11 @@ export default class BattleController {
    * any damage dealt by the reacting relic routes screen shake to the right
    * side.
    *
-   * Only the primary gameplay mana-gain sites (cascade match rewards in
-   * _doRemove and skill tile-destruction rewards in _executeDestroyTiles)
-   * call this — starting mana (Potions) and relic-granted bonus mana
-   * (Familiars, Prism) intentionally do not, to avoid passive chaining.
+   * Called for ALL in-battle mana gains: board match rewards (_doRemove), skill
+   * tile-destruction rewards (_executeDestroyTiles), AND relic-granted mana
+   * (Familiars, Family Crest, Prism) via the PassiveSystem onGainMana callback —
+   * so onGainMana reactors (Tuning Rod, Flaming Arrow) fire for relic mana too.
+   * Starting mana / one-time Potion grants (grant_starting_mana) do NOT call this.
    *
    * @param {'player'|'enemy'} side — the side that gained mana
    * @param {string} color — mana color gained

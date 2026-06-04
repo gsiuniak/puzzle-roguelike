@@ -16,6 +16,7 @@ import TooltipManager from '../systems/TooltipManager.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
 import { syncBattleResultsToRunState, applyRunModifier } from '../data/playerStats.js';
+import Metrics from '../engine/Metrics.js';
 import { generateRelicRewardOptions } from '../data/relics/relicRewards.js';
 import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
 
@@ -1376,6 +1377,9 @@ export default class BattleScene extends UIPanel {
       : (this._enemyData && this._enemyData.hp <= 0 ? 'player' : 'enemy');
     const nodeId = mapData.nodeId || null;
 
+    // Playtest telemetry — no-op unless launched with ?metrics (see Metrics.js).
+    this._recordBattleMetrics(winner, mapData);
+
     // Report battle completion to the run/map controller
     // This allows MapScene to mark the node as completed and update
     // reachability before the scene transition completes.
@@ -1462,6 +1466,42 @@ export default class BattleScene extends UIPanel {
       attackGranted = ATTACK_GROWTH_AMOUNT;
     }
     console.log(`[BattleScene] Victory #${runState.victories} growth (placeholder): +${HP_GROWTH_PER_VICTORY} HP, +${attackGranted} Attack.`);
+  }
+
+  /**
+   * Record a one-line battle snapshot for offline analysis (no-op unless the
+   * game was launched with ?metrics). Captured at battle end, before the victory
+   * growth is applied, so `victories` reflects progression ENTERING this fight.
+   * Since HP fully resets each battle, `playerMaxHp - playerHp` = damage taken,
+   * and `enemyMaxHp / turns` ≈ player DPT.
+   * @param {string} winner — 'player' | 'enemy'
+   * @param {object} mapData — this.userData (runState, node info)
+   */
+  _recordBattleMetrics(winner, mapData) {
+    if (!Metrics.enabled) return;
+    const ctrl = this._battleController;
+    const ps = ctrl && ctrl.playerState;
+    const e = this._enemyData || {};
+    const rs = (mapData && mapData.runState) || {};
+    Metrics.recordBattle({
+      result: winner === 'player' ? 'victory' : 'defeat',
+      characterId: rs.characterId || (ps && ps.className) || null,
+      characterName: (ps && ps.name) || null,
+      floor: (mapData && typeof mapData.nodeDepth === 'number' ? mapData.nodeDepth : 0) + 1,
+      nodeType: (mapData && mapData.nodeType) || null,
+      enemyId: e.id || null,
+      enemyName: e.name || null,
+      enemyMaxHp: typeof e.maxHp === 'number' ? e.maxHp : null,
+      enemyAttack: typeof e.attack === 'number' ? e.attack : null,
+      turns: (ctrl && ctrl.log) ? ctrl.log.turnNumber : null,
+      playerHp: ps ? ps.hp : null,
+      playerMaxHp: ps ? ps.maxHp : null,
+      playerAttack: ps ? ps.attack : null,
+      playerArmor: ps ? ps.armor : null,
+      victories: rs.victories || 0,
+      relicCount: Array.isArray(rs.relics) ? rs.relics.length : 0,
+      relics: Array.isArray(rs.relics) ? rs.relics.slice() : [],
+    });
   }
 
   _applyPostBattleHealing(runState, playerBattleState) {

@@ -48,6 +48,9 @@ export default class PassiveSystem {
     this.onDamage      = ctx.onDamage || null;
     this.onExtraTurn   = ctx.onExtraTurn || null;
     this.onBoardEffect = ctx.onBoardEffect || null;
+    // Fired by EffectResolver's gain_mana so relic-granted mana also triggers
+    // onGainMana reactors. Signature: (side, color, amount).
+    this.onGainMana    = ctx.onGainMana || null;
   }
 
   /**
@@ -74,6 +77,7 @@ export default class PassiveSystem {
       resolver: this.resolver,
       onDamage: this.onDamage,
       onExtraTurn: this.onExtraTurn,
+      onGainMana: this.onGainMana,
       // Pass the trigger payload through so mutating effects (e.g.
       // reduce_damage on onIncomingDamage) can modify it in place.
       payload,
