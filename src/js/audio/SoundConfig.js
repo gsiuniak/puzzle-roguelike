@@ -141,6 +141,44 @@ const SOUNDS = {
     category: AudioCategory.SFX,
   },
 
+  // ── Enemy skill resolve sounds ──────────────────────────
+  skill_doomsong: {
+    src: ['assets/audio/sfx/skills/acolyte/sfx_skill_doomsong.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_ignition: {
+    src: ['assets/audio/sfx/skills/goblin_sapper/sfx_skill_ignition.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_boom_baby: {
+    src: ['assets/audio/sfx/skills/goblin_sapper/sfx_skill_boom_baby.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_encroach: {
+    src: ['assets/audio/sfx/skills/chokeweed/sfx_skill_encroach.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_boulder_throw: {
+    src: ['assets/audio/sfx/skills/cyclops/sfx_skill_boulder_throw.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_smash: {
+    src: ['assets/audio/sfx/skills/cyclops/sfx_smash.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_hound: {
+    src: ['assets/audio/sfx/skills/goresnout/sfx_hound.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_frenzy: {
+    src: ['assets/audio/sfx/skills/orc_taskmaster/sfx_skill_frenzy.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_charge: {
+    src: ['assets/audio/sfx/skills/orc_taskmaster/sfx_skill_charge.mp3'],
+    category: AudioCategory.SFX,
+  },
+
   // ── Character Select ────────────────────────────────────
   character_select_pick: {
     src: ['assets/audio/sfx/character_select/character_select_pick.mp3'],

@@ -148,7 +148,7 @@ const SKILL_CATALOG = {
     name: 'Boom Baby!',
     description: 'Deal 999 damage.\nDie',
     icon: 'skill_slash',
-    sound: 'skill_slash',
+    sound: 'skill_boom_baby',
     cost: { red: 20 },
     effects: [
       { effectType: 'damage', damage: { amount: 999 } },
@@ -160,7 +160,7 @@ const SKILL_CATALOG = {
     name: 'Ignition',
     description: 'Create 20 Red',
     icon: 'skill_slash',
-    sound: 'skill_slash',
+    sound: 'skill_ignition',
     cost: { yellow: 7 },
     effects: [
       { effectType: 'create_tiles', createTiles: { amount: 20, type: 'red' } },
@@ -173,7 +173,7 @@ const SKILL_CATALOG = {
     name: 'Boulder Throw',
     description: 'Deal 10 damage.\nCreate 6 Green',
     icon: 'skill_slash',
-    sound: 'skill_slash',
+    sound: 'skill_boulder_throw',
     cost: { green: 6 },
     effects: [
       { effectType: 'damage', damage: { amount: 10 } },
@@ -185,7 +185,7 @@ const SKILL_CATALOG = {
     name: 'Smash',
     description: 'Deal 10 damage.\nGain a turn',
     icon: 'skill_bash',
-    sound: 'skill_bash',
+    sound: 'skill_smash',
     cost: { red: 6 },
     effects: [
       { effectType: 'damage', damage: { amount: 10 } },
@@ -199,7 +199,7 @@ const SKILL_CATALOG = {
     name: 'Doomsong',
     description: 'Create 10 skulls',
     icon: 'skill_summon_dead',
-    sound: 'skill_create_skull',
+    sound: 'skill_doomsong',
     cost: { purple: 7 },
     effects: [
       { effectType: 'create_tiles', createTiles: { amount: 10, type: 'skull' } },
@@ -212,7 +212,7 @@ const SKILL_CATALOG = {
     name: 'Charge!',
     description: 'Deal 10 damage.\nCreate 5 Red.\nGain a turn',
     icon: 'skill_bash',
-    sound: 'skill_bash',
+    sound: 'skill_charge',
     cost: { red: 7 },
     effects: [
       { effectType: 'damage', damage: { amount: 10 } },
@@ -225,7 +225,7 @@ const SKILL_CATALOG = {
     name: 'Frenzy',
     description: 'Gain 10 armor.\nCreate 5 Blue.\nGain a turn',
     icon: 'skill_defend',
-    sound: 'skill_defend',
+    sound: 'skill_frenzy',
     cost: { blue: 7 },
     effects: [
       { effectType: 'armor', armor: { amount: 10 } },
@@ -237,13 +237,13 @@ const SKILL_CATALOG = {
   // Chokeweed — free buff that simply ends the caster's turn. With no
   // extra_turn / cascade effect, the standard skill flow ends the turn
   // immediately after resolving. Empty cost = always castable; SkillButton
-  // hides its mana column when the cost is empty. (sound reuses skill_defend.)
+  // hides its mana column when the cost is empty.
   encroach: {
     id: 'encroach',
     name: 'Encroach',
     description: 'Gain +1 Attack.\nEnd turn.',
     icon: 'skill_encroach',
-    sound: 'skill_defend',
+    sound: 'skill_encroach',
     cost: {},
     effects: [
       { effectType: 'gain_attack', gainAttack: { amount: 1 } },
@@ -257,7 +257,7 @@ const SKILL_CATALOG = {
     name: 'Hound',
     description: 'Gain +1 Attack.\nDeal 2 damage.',
     icon: 'skill_hound',
-    sound: 'skill_slash',
+    sound: 'skill_hound',
     cost: { red: 3 },
     effects: [
       { effectType: 'gain_attack', gainAttack: { amount: 1 } },
