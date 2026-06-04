@@ -105,6 +105,15 @@ export default class BattleController {
     this._floatingStatEvents = [];
 
     /**
+     * Relic-trigger events for the current frame. Each entry:
+     * { side: 'player'|'enemy', relicId }. Emitted whenever a relic's passive
+     * effect fires (via PassiveSystem's onRelicTrigger callback); read & cleared
+     * each frame via getState() so BattleScene can "jiggle" the relic's icon.
+     * @type {Array<{side:string, relicId:string}>}
+     */
+    this._relicTriggerEvents = [];
+
+    /**
      * Speed multiplier for all animation timing.
      * 1.0 = normal, 2.0 = fast, 0.5 = slow.
      * Scales phase durations, enemy delay, and swap duration.
@@ -277,6 +286,10 @@ export default class BattleController {
       onStatChange: (info) => {
         const side = info.target === this.playerState ? 'player' : 'enemy';
         this._emitFloatingStat(side, info.kind, info.amount);
+      },
+      // A relic's passive fired — queue a "jiggle" animation for its icon.
+      onRelicTrigger: (relicId, side) => {
+        if (relicId) this._relicTriggerEvents.push({ side, relicId });
       },
     });
     /** Set during a relic dispatch so onDamage can reference the right side. */
@@ -516,6 +529,11 @@ export default class BattleController {
     const floatingStatEvents = this._floatingStatEvents;
     this._floatingStatEvents = [];
 
+    // Capture relic-trigger events and clear so the scene starts each icon
+    // jiggle exactly once per trigger.
+    const relicTriggers = this._relicTriggerEvents;
+    this._relicTriggerEvents = [];
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -530,6 +548,7 @@ export default class BattleController {
       convertedTiles,
       pendingSkillSound,
       floatingStatEvents,
+      relicTriggers,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,

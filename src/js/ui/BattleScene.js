@@ -788,6 +788,16 @@ export default class BattleScene extends UIPanel {
       }
     }
 
+    // ── Jiggle relic icons whose passive just fired ──
+    if (state.relicTriggers && state.relicTriggers.length > 0) {
+      for (const ev of state.relicTriggers) {
+        const bar = ev.side === 'player' ? this._relicBar : this._enemyRelicBar;
+        if (bar && typeof bar.triggerJiggle === 'function') {
+          bar.triggerJiggle(ev.relicId);
+        }
+      }
+    }
+
     // ── Spawn combat-stat floating text over portraits ──
     // Damage (red "-x"), heal (green "+x"), armor (blue "+x"). Multiple events
     // for the same side this frame are stacked vertically so they don't overlap.

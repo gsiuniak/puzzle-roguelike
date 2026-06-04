@@ -11,6 +11,7 @@ import UIElement from './UIElement.js';
  *   imageAlignV - 'top' | 'center' | 'bottom' vertical alignment within box (default 'center')
  *   drawWidth  - override draw width (null = use rect)
  *   drawHeight - override draw height (null = use rect)
+ *   rotation   - radians; rotates the drawn image around its rect center (default 0)
  */
 export default class UIImage extends UIElement {
   constructor(assetKey = '', assetManager = null) {
@@ -22,6 +23,8 @@ export default class UIImage extends UIElement {
     this.imageAlignV = 'center';
     this.drawWidth = null;
     this.drawHeight = null;
+    /** Rotation in radians, applied around the rect center at draw time. */
+    this.rotation = 0;
   }
 
   /** Get the loaded Image element or null */
@@ -65,6 +68,15 @@ export default class UIImage extends UIElement {
     this._applySmoothing(ctx);
 
     ctx.save();
+
+    // Optional rotation about the rect center (e.g. relic "jiggle" feedback).
+    if (this.rotation) {
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate(this.rotation);
+      ctx.translate(-cx, -cy);
+    }
 
     if (this.fitMode === 'stretch') {
       ctx.drawImage(

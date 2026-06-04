@@ -22,6 +22,13 @@ const ARROW_HIT_PADDING = 14;
 const ARROW_COLOR = '#ccaa77';
 const ARROW_SHADOW = 'rgba(0, 0, 0, 0.6)';
 
+// ── Trigger "jiggle" animation ────────────────────────────
+// When a relic's passive fires, its icon quickly rotates back and forth in a
+// small arc, then settles back to upright. All three are configurable.
+const JIGGLE_AMPLITUDE_DEG = 10;   // peak rotation to each side (±degrees)
+const JIGGLE_OSCILLATIONS  = 3;    // number of full back-and-forth swings
+const JIGGLE_DURATION_MS   = 420;  // total animation length
+
 // Tooltip layout for relic icons. Tweak here, not at call sites.
 const TOOLTIP_SCALE   = 1.0;
 const TOOLTIP_OFFSET  = 16;
@@ -73,6 +80,16 @@ export default class RelicBar extends UIContainer {
     this._lastRelics = [];
     /** @type {UIImage[]} icon images for the CURRENT page only. */
     this._iconImages = [];
+    /** @type {string[]} relic ids parallel to _iconImages (current page). */
+    this._iconRelicIds = [];
+
+    /**
+     * Active jiggle animations keyed by relic id → elapsed ms. Keyed by id
+     * (not icon index) so the animation survives page rebuilds and applies to
+     * whichever icon currently represents that relic. Advanced in update(dt).
+     * @type {Map<string, number>}
+     */
+    this._jiggles = new Map();
 
     // ── Pagination state ──
     /** Current page index (0-based). */
@@ -191,6 +208,7 @@ export default class RelicBar extends UIContainer {
     }
     this.clearChildren();
     this._iconImages = [];
+    this._iconRelicIds = [];
 
     for (const relic of slice) {
       if (!relic) continue;
@@ -202,6 +220,7 @@ export default class RelicBar extends UIContainer {
         fitMode: 'contain',
       });
       this._iconImages.push(img);
+      this._iconRelicIds.push(relic.id || '');
       this.addChild(img);
 
       if (this._tooltipManager && (relic.description || relic.name)) {
@@ -274,6 +293,46 @@ export default class RelicBar extends UIContainer {
   _hitArrow(r, x, y) {
     const p = ARROW_HIT_PADDING;
     return x >= r.x - p && x <= r.x + r.w + p && y >= r.y - p && y <= r.y + r.h + p;
+  }
+
+  // ── Trigger jiggle ───────────────────────────────────
+  /**
+   * Start (or restart) the jiggle animation for the relic with the given id.
+   * Safe to call when the relic isn't on the visible page — the animation is
+   * tracked by id and applies to whichever icon represents it.
+   * @param {string} relicId
+   */
+  triggerJiggle(relicId) {
+    if (!relicId) return;
+    this._jiggles.set(relicId, 0); // restart from the beginning
+  }
+
+  /**
+   * Advance active jiggles and write each animating relic's current rotation
+   * onto its on-page icon. Completed jiggles snap the icon back to upright.
+   * @param {number} dt — delta time in ms
+   */
+  update(dt) {
+    super.update(dt);
+    if (this._jiggles.size === 0) return;
+
+    const amp = (JIGGLE_AMPLITUDE_DEG * Math.PI) / 180;
+    for (const [relicId, elapsedPrev] of this._jiggles) {
+      const elapsed = elapsedPrev + dt;
+      const idx = this._iconRelicIds.indexOf(relicId);
+      if (elapsed >= JIGGLE_DURATION_MS) {
+        // Done — settle upright and stop tracking.
+        if (idx >= 0 && this._iconImages[idx]) this._iconImages[idx].rotation = 0;
+        this._jiggles.delete(relicId);
+        continue;
+      }
+      this._jiggles.set(relicId, elapsed);
+      // Pure sine over N full swings: starts and ends at exactly 0, peaking at
+      // ±amplitude on each swing. (Integer oscillations → sin = 0 at p = 1.)
+      const p = elapsed / JIGGLE_DURATION_MS;
+      const angle = amp * Math.sin(p * Math.PI * 2 * JIGGLE_OSCILLATIONS);
+      if (idx >= 0 && this._iconImages[idx]) this._iconImages[idx].rotation = angle;
+    }
   }
 
   // ── Render ───────────────────────────────────────────

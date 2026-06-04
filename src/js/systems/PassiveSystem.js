@@ -54,6 +54,11 @@ export default class PassiveSystem {
     // Fired by EffectResolver's heal/armor effects so the host can animate
     // floating "+x" text. Signature: ({ kind:'heal'|'armor', target, amount }).
     this.onStatChange  = ctx.onStatChange || null;
+    // Fired once per relic per dispatch when at least one of its effects
+    // actually fires, so the host can animate the icon. Signature:
+    // (relicId, side). Static onBattleStart modifiers bypass dispatch and so
+    // never jiggle (correct — they apply silently at setup).
+    this.onRelicTrigger = ctx.onRelicTrigger || null;
   }
 
   /**
@@ -90,11 +95,13 @@ export default class PassiveSystem {
 
     for (const relic of relics) {
       const effects = relic.effects || [];
+      let relicFired = false;
       for (const effect of effects) {
         if (effect.trigger !== triggerName) continue;
         // Optional payload gate — lets a relic react only to specific match
         // types / sizes (e.g. Scythe: only skull matches of 3+).
         if (effect.condition && !this._passesCondition(effect.condition, payload)) continue;
+        relicFired = true;
         let handled = applyEffect(effect, ctx);
         // Board-touching effects (destroy/create tiles, radius blasts, ...)
         // are routed to the host (BattleController) via onBoardEffect so the
@@ -109,6 +116,10 @@ export default class PassiveSystem {
             `which is not supported by EffectResolver or onBoardEffect. Skipping.`
           );
         }
+      }
+      // Animate the relic icon once if any of its effects fired this dispatch.
+      if (relicFired && this.onRelicTrigger) {
+        this.onRelicTrigger(relic.id, payload.side);
       }
     }
   }
