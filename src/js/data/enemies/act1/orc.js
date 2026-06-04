@@ -16,7 +16,7 @@ const orc = {
 
   hp: 18, // floor-1-equivalent baseline (MapScene scales maxHp by depth); bruiser, above-avg
   maxHp: 18,
-  attack: 2,
+  attack: 3,
   armor: 0,
   mana: { red: 3, blue: 0, green: 0, yellow: 0, purple: 0 }, // starting red so the bruiser can Slash
   portrait: 'orc', // maps to 'portrait_orc' asset key
@@ -27,7 +27,7 @@ const orc = {
   },
 
   // Was a no-kit auto-attacker; give it a basic hit so it has an identity.
-  skills: ['slash'],
+  skills: [],
   relics: [],
 };
 
