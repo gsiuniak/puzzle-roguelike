@@ -25,6 +25,7 @@ import {
   NORMAL_BATTLE_MUSIC_VOLUME,
   BACKGROUND_BATTLE_MUSIC_VOLUME,
   MUSIC_FADE_DURATION,
+  POST_BATTLE_TRACK_HANDOFF_FADE,
 } from './BattleMusicConfig.js';
 
 class _AudioManager {
@@ -67,6 +68,16 @@ class _AudioManager {
      * @type {number|null}
      */
     this._currentMusicId = null;
+
+    /**
+     * Logical base volume (0..1, pre category/master) of the current track.
+     * Updated by playMusic() and fadeMusic() so the manual loop-restart handler
+     * re-plays each loop at the CURRENT target volume (e.g. background volume
+     * during rewards/map) instead of snapping back to the volume it first
+     * started at.
+     * @type {number}
+     */
+    this._currentMusicBaseVolume = 1.0;
 
     // ── Volume state (0..1) ────────────────────────────
     this._masterVolume = 1.0;
@@ -180,10 +191,14 @@ class _AudioManager {
   /**
    * Play a music track. Ensures no duplicate playback:
    *   - If the requested track is already playing, does nothing.
-   *   - If a different track is playing, fades it out first.
+   *   - If a different track is playing, it is FADED out (not hard-cut) while
+   *     the new track fades in — a natural fade-out → fade-in transition.
    *
    * @param {string} key     — sound key
-   * @param {object} [opts]  — { fadeIn?: number (ms), volume?: number }
+   * @param {object} [opts]  — { fadeIn?: number (ms), fadeOut?: number (ms),
+   *                             volume?: number }. fadeOut defaults to fadeIn
+   *                             (or MUSIC_FADE_DURATION) so any track switch
+   *                             gets a natural cross-fade out of the box.
    * @returns {number|null}
    */
   playMusic(key, opts = {}) {
@@ -192,10 +207,26 @@ class _AudioManager {
       return this._currentMusicId;
     }
 
-    // Stop any currently playing music with optional fade
+    const fadeIn = opts.fadeIn || 0;
+    // Outgoing track fades out over fadeOut ms. Default to a natural fade so
+    // callers don't have to opt in for every transition.
+    const fadeOut = opts.fadeOut !== undefined
+      ? opts.fadeOut
+      : (fadeIn || MUSIC_FADE_DURATION);
+
+    // Fade out (rather than hard-cut) any currently playing music.
     if (this._currentMusicHowl && this._currentMusicId !== null) {
-      this._currentMusicHowl.off('end', undefined, this._currentMusicId);
-      this._currentMusicHowl.stop();
+      const oldHowl = this._currentMusicHowl;
+      const oldId = this._currentMusicId;
+      // Detach the loop handler so the outgoing track does not restart as it fades.
+      oldHowl.off('end', undefined, oldId);
+      if (fadeOut > 0) {
+        const oldVol = oldHowl.volume(oldId) || 0;
+        oldHowl.fade(oldVol, 0, fadeOut, oldId);
+        setTimeout(() => oldHowl.stop(oldId), fadeOut + 50);
+      } else {
+        oldHowl.stop(oldId);
+      }
       this._currentMusicHowl = null;
       this._currentMusicId = null;
       this._currentMusicKey = null;
@@ -208,7 +239,7 @@ class _AudioManager {
     }
 
     const volume = opts.volume !== undefined ? opts.volume : 1.0;
-    const fadeIn = opts.fadeIn || 0;
+    this._currentMusicBaseVolume = volume;
 
     // Apply category + master volume
     const effectiveVolume = this._muted ? 0 : volume * this._musicVolume * this._masterVolume;
@@ -222,10 +253,11 @@ class _AudioManager {
       howl.on('end', function restartLoop() {
         // Only re-loop if this is still the current music
         if (self._currentMusicKey === key && self._currentMusicHowl === howl) {
-          // Recompute effective volume in case volume settings changed
+          // Recompute from the CURRENT base volume so a track faded to
+          // background volume (rewards/map) stays there across loops.
           const currentEffVolume = self._muted
             ? 0
-            : volume * self._musicVolume * self._masterVolume;
+            : self._currentMusicBaseVolume * self._musicVolume * self._masterVolume;
           const newId = howl.play();
           if (newId !== null && newId !== undefined) {
             self._currentMusicId = newId;
@@ -285,6 +317,9 @@ class _AudioManager {
    */
   fadeMusic(targetVolume, duration) {
     if (!this._currentMusicHowl || this._currentMusicId === null) return;
+
+    // Remember the new logical volume so loop restarts hold it (see playMusic).
+    this._currentMusicBaseVolume = targetVolume;
 
     const effectiveVolume = this._muted
       ? 0
@@ -559,7 +594,21 @@ class _AudioManager {
       return;
     }
 
-    // Normal music — fade to background volume for rewards/map
+    // A non-default battle track (e.g. the elite theme) just ended: slowly fade
+    // it out and bring the normal battle music back in underneath (at the quiet
+    // rewards/map background volume). The cross-fade is handled by playMusic.
+    if (this._currentMusicKey && this._currentMusicKey !== DEFAULT_BATTLE_MUSIC_KEY) {
+      this.playMusic(DEFAULT_BATTLE_MUSIC_KEY, {
+        fadeIn: POST_BATTLE_TRACK_HANDOFF_FADE,
+        fadeOut: POST_BATTLE_TRACK_HANDOFF_FADE,
+        volume: BACKGROUND_BATTLE_MUSIC_VOLUME,
+      });
+      this._battleMusicActive = true;
+      this._isSpecialBattleMusic = false;
+      return;
+    }
+
+    // Default normal music — fade to background volume for rewards/map
     this.fadeMusic(BACKGROUND_BATTLE_MUSIC_VOLUME, MUSIC_FADE_DURATION);
   }
 
