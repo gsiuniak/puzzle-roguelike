@@ -254,13 +254,13 @@ const SKILL_CATALOG = {
   // A skull/curse kit. Desecrate (green→skull) is the engine: it manufactures
   // skulls to match (his Heart of the Usurper relic grows attack per skull
   // match). Harvest recycles skulls back into Purple to refuel Desecrate.
-  // Soul Burn / Exsanguinate are the cripple skills. Icons/sounds reuse
-  // existing keys until dedicated art exists.
+  // Soul Burn / Exsanguinate are the cripple skills. Each has its own
+  // dedicated icon + resolve sound (skill_<id>).
   desecrate: {
     id: 'desecrate',
     name: 'Desecrate',
     description: 'Turn all Green into Skulls.',
-    icon: 'skill_summon_dead',
+    icon: 'skill_desecrate',
     sound: 'skill_desecrate',
     cost: { purple: 7 },
     effects: [
@@ -271,7 +271,7 @@ const SKILL_CATALOG = {
     id: 'soul_burn',
     name: 'Soul Burn',
     description: 'Silence enemy 1 turn.\nDrain 5 of every mana.',
-    icon: 'skill_explode',
+    icon: 'skill_soul_burn',
     sound: 'skill_soul_burn',
     cost: { blue: 7 },
     effects: [
@@ -285,7 +285,7 @@ const SKILL_CATALOG = {
     id: 'harvest',
     name: 'Harvest',
     description: 'Turn all Skulls to Purple.',
-    icon: 'skill_summon_dead',
+    icon: 'skill_harvest',
     sound: 'skill_harvest',
     cost: { yellow: 7 },
     effects: [
@@ -296,7 +296,7 @@ const SKILL_CATALOG = {
     id: 'exsanguinate',
     name: 'Exsanguinate',
     description: 'Reduce enemy attack to 1 for 1 turn.',
-    icon: 'skill_slash',
+    icon: 'skill_exsanguinate',
     sound: 'skill_exsanguinate',
     cost: { red: 7 },
     effects: [
