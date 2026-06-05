@@ -127,6 +127,8 @@ const ASSET_MAP = {
   rewards_button_confirm_hover:  'assets/sprites/reward_screen/rewards_button_confirm_hover.png',
   rewards_button_skip:           'assets/sprites/reward_screen/rewards_button_skip.png',
   rewards_button_skip_hover:     'assets/sprites/reward_screen/rewards_button_skip_hover.png',
+  battle_button_skip:            'assets/sprites/temp/skip_button.png',
+  battle_button_map:             'assets/sprites/temp/map_button.png',
   rewards_background_splash:     'assets/sprites/reward_screen/rewards_background_splash.png',
   // ── New battle screen panel assets ──────────────────
   battle_board_panel:        'assets/sprites/battle/board/battle_board_panel.png',

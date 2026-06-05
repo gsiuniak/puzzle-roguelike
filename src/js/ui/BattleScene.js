@@ -87,6 +87,15 @@ const RELIC_COL_WIDTH = 90;
 const ENEMY_RELIC_COL_WIDTH = 90;
 const ENEMY_RELIC_BAR_PADDING = { top: 30, right: 0, bottom: 0, left: 60 };
 
+// ── Corner action buttons (skip / map) ───────────────────
+// Two 60×60 icons stacked vertically in the FAR top-right corner of the
+// physical canvas (not bound by the design viewport / inner container).
+// Drawn in renderForeground (after the viewport clip) so they can sit out
+// in the pillarbox bar, and hit-tested in design-space coords.
+const CORNER_BUTTON_SIZE = 60;     // icon width/height
+const CORNER_BUTTON_GAP = 8;       // vertical gap between the two icons
+const CORNER_BUTTON_MARGIN = 12;   // inset from the physical top-right corner
+
 /**
  * BattleScene — battle layout with three compact columns.
  *
@@ -529,7 +538,18 @@ export default class BattleScene extends UIPanel {
       this._rewardOverlay.handleMouseDown(x, y);
       return;
     }
-    if (this._mapView && this._mapView.isOverlayActive()) return;
+    // Map overlay open: clicking anywhere closes it.
+    if (this._mapView && this._mapView.isOverlayActive()) {
+      if (this._mapView.getOverlayState() === 'open') {
+        this._mapView.closeOverlay();
+        if (this._audioManager) this._audioManager.playSfx('sfx_map_overlay_close');
+      }
+      return;
+    }
+
+    // Corner action buttons (skip / map) — clickable regardless of turn state.
+    if (this._handleCornerButtonClick(x, y)) return;
+
     if (this._tooltipManager) this._tooltipManager.onMouseDown(x, y);
 
     // Relic bar page arrows are clickable regardless of turn state.
@@ -1189,6 +1209,11 @@ export default class BattleScene extends UIPanel {
     const w = sm._app.width;
     const h = sm._app.height;
 
+    // Corner action buttons (skip / map) — drawn before the overlays so a
+    // map/reward overlay backdrop sits on top of them. Self-gated when an
+    // overlay is active.
+    this._renderCornerButtons(ctx);
+
     if (this._mapView && this._mapView.isOverlayActive()) {
       this._mapView.renderOverlay(ctx, w, h, 16, sm._app);
     }
@@ -1200,6 +1225,69 @@ export default class BattleScene extends UIPanel {
       sm._app.fillFullCanvas(`rgba(0, 0, 0, ${this._rewardOverlay.getBackdropAlpha()})`);
       this._rewardOverlay.render(ctx, w, h);
     }
+  }
+
+  // ── Corner action buttons (skip / map) ──────────────
+
+  /**
+   * Compute the design-space rects for the two stacked top-right corner
+   * buttons. Anchored to the FAR physical top-right corner (via the app's
+   * CSS→design transform) so they sit out past the design viewport, not
+   * bound by the inner battle layout. Returns null if the app isn't ready.
+   * @returns {{skip:object, map:object}|null}
+   */
+  _getCornerButtonRects() {
+    const app = this._sceneManager && this._sceneManager._app;
+    if (!app || !app.cssToDesign) return null;
+    const corner = app.cssToDesign(app.cssWidth, 0); // physical top-right in design coords
+    const x = corner.x - CORNER_BUTTON_MARGIN - CORNER_BUTTON_SIZE;
+    const yTop = corner.y + CORNER_BUTTON_MARGIN;
+    const s = CORNER_BUTTON_SIZE;
+    return {
+      skip: { x, y: yTop, w: s, h: s },
+      map:  { x, y: yTop + s + CORNER_BUTTON_GAP, w: s, h: s },
+    };
+  }
+
+  static _pointInRect(px, py, r) {
+    return r && px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+  }
+
+  /**
+   * Hit-test the corner buttons. Returns true if a button was clicked.
+   * Skip = force-win the battle (same as the 'K' debug key); Map = open the
+   * map overlay.
+   */
+  _handleCornerButtonClick(x, y) {
+    const rects = this._getCornerButtonRects();
+    if (!rects) return false;
+    if (BattleScene._pointInRect(x, y, rects.skip)) {
+      this._debugWinBattle();
+      return true;
+    }
+    if (BattleScene._pointInRect(x, y, rects.map)) {
+      if (this._mapView && this._mapView.getOverlayState() === 'closed') {
+        this._mapView.openOverlay();
+        if (this._audioManager) this._audioManager.playSfx('sfx_map_overlay_open');
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /** Draw the two stacked corner buttons. Hidden while an overlay is active. */
+  _renderCornerButtons(ctx) {
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
+    if (this._mapView && this._mapView.isOverlayActive()) return;
+    const rects = this._getCornerButtonRects();
+    if (!rects || !this._assetManager) return;
+    const skipImg = this._assetManager.get('battle_button_skip');
+    const mapImg  = this._assetManager.get('battle_button_map');
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = true;
+    if (skipImg) ctx.drawImage(skipImg, rects.skip.x, rects.skip.y, rects.skip.w, rects.skip.h);
+    if (mapImg)  ctx.drawImage(mapImg, rects.map.x, rects.map.y, rects.map.w, rects.map.h);
+    ctx.imageSmoothingEnabled = prevSmoothing;
   }
 
   render(ctx) {
