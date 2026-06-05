@@ -197,6 +197,25 @@ const SOUNDS = {
     category: AudioCategory.SFX,
   },
 
+  // Lord Malakor (Act 1 boss). NOTE: the Desecrate file is misspelled
+  // "descecrate" on disk — the src path must match it; the key stays clean.
+  skill_desecrate: {
+    src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_descecrate.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_soul_burn: {
+    src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_soul_burn.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_harvest: {
+    src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_harvest.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_exsanguinate: {
+    src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_exsanguinate.mp3'],
+    category: AudioCategory.SFX,
+  },
+
   // ── Character Select ────────────────────────────────────
   character_select_pick: {
     src: ['assets/audio/sfx/character_select/character_select_pick.mp3'],
