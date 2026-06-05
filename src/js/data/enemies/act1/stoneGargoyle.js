@@ -21,7 +21,7 @@ const stoneGargoyle = {
   mana: { red: 0, blue: 4, green: 0, yellow: 0, purple: 0 }, // starting blue toward Frenzy
   portrait: 'stone_gargoyle', // maps to 'portrait_stone_gargoyle' asset key
   music: {
-    trackKey: 'battle_theme',
+    trackKey: 'battle_theme_act_1_elite',
     persistAfterBattle: true,
     isSpecialTrack: false,
   },

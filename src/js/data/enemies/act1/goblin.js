@@ -81,7 +81,7 @@ const goblin = {
   skills: ['slash'],
 
   /** Enemy relic IDs — resolved via enemyRelicCatalog at battle creation */
-  relics: ['goblin_totem'],
+  relics: [],
 };
 
 export default goblin;

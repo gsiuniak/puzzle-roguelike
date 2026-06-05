@@ -21,7 +21,7 @@ const orcTaskmaster = {
   mana: { red: 4, blue: 0, green: 0, yellow: 0, purple: 0 }, // starting red toward Charge
   portrait: 'orc_taskmaster', // maps to 'portrait_orc_taskmaster' asset key
   music: {
-    trackKey: 'battle_theme',
+    trackKey: 'battle_theme_act_1_elite',
     persistAfterBattle: true,
     isSpecialTrack: false,
   },

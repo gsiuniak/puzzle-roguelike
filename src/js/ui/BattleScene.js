@@ -1004,16 +1004,21 @@ export default class BattleScene extends UIPanel {
     if (!style) return;
 
     const text = `${style.sign}${ev.amount}`;
-    // Stack successive same-frame events upward so they remain legible.
-    const y = center.y - stackIndex * 34;
+    // Floating-combat-text style: each instance is independent — it pops in
+    // large, then floats upward while fading out. Successive same-frame events
+    // get a small horizontal + vertical start offset so concurrent hits don't
+    // perfectly overlap as they rise.
+    const startX = center.x + (stackIndex % 2 === 0 ? 1 : -1) * Math.ceil(stackIndex / 2) * 26;
+    const startY = center.y - stackIndex * 10;
 
-    const effect = new FloatingTextEffect(text, style.color, center.x, y, {
-      fontSize: 40,
-      growDuration: 160,
-      settleDuration: 90,
-      holdDuration: 380,
-      fadeDuration: 220,
-      overshoot: 1.22,
+    const effect = new FloatingTextEffect(text, style.color, startX, startY, {
+      fontSize: 54,            // larger spawn than before
+      growDuration: 130,       // quick pop-in
+      settleDuration: 80,
+      holdDuration: 90,        // brief hold at full size
+      fadeDuration: 520,       // fade out across the float
+      overshoot: 1.3,
+      riseDistance: 85,        // drift upward over the lifetime
     });
 
     this._floatingEffects.push(effect);

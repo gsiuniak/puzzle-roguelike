@@ -27,7 +27,7 @@ const acolyte = {
   },
 
   skills: ['doomsong'],
-  relics: ['goblin_totem'],
+  relics: [],
 };
 
 export default acolyte;

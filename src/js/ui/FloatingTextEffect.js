@@ -2,8 +2,10 @@
  * FloatingTextEffect — animated floating text for match feedback.
  *
  * Renders colored text that scales up with a bouncy ease-out from an origin
- * position, holds briefly at full size, then fades out. Designed for
- * "+3", "+4", "+5" match-count feedback that floats above the board.
+ * position, holds briefly at full size, then fades out. Optionally drifts
+ * upward over its lifetime (config.riseDistance) for floating-combat-text
+ * style. Used for both "+3"/"+4" match-count feedback above the board (static)
+ * and "-x"/"+x" damage/heal/armor numbers above portraits (rising).
  *
  * Renders text with a white dropshadow and black outline for readability
  * against any background.
@@ -38,6 +40,10 @@ export default class FloatingTextEffect {
    * @param {number}  [config.holdDuration=300]   - ms, hold at full
    * @param {number}  [config.fadeDuration=100]   - ms, alpha→0
    * @param {number}  [config.overshoot=1.18]     - peak scale
+   * @param {number}  [config.riseDistance=0]     - px the text drifts UPWARD
+   *                                                over its lifetime (0 = static,
+   *                                                the classic "+3" match style;
+   *                                                >0 = floating-combat-text style)
    */
   constructor(text, color, originX, originY, config = {}) {
     this.text = text;
@@ -47,6 +53,7 @@ export default class FloatingTextEffect {
 
     this.fontSize = config.fontSize || 22;
     this.fontFamily = config.fontFamily || 'Marcellus SC, serif';
+    this.riseDistance = config.riseDistance || 0;
 
     this.elapsed = 0;          // ms since creation
     this.done = false;         // true when animation complete
@@ -114,6 +121,19 @@ export default class FloatingTextEffect {
   }
 
   /**
+   * Current upward drift in pixels (0 → riseDistance), eased so the text moves
+   * quickly at first and decelerates as it fades — the classic floating-combat-
+   * text arc. Returns 0 when riseDistance is 0 (static match-count style).
+   * @returns {number}
+   */
+  get riseOffset() {
+    if (!this.riseDistance) return 0;
+    const p = Math.min(1, this.elapsed / this._totalDuration);
+    const ease = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    return this.riseDistance * ease;
+  }
+
+  /**
    * Current alpha (0 → 1).
    * @returns {number}
    */
@@ -141,6 +161,9 @@ export default class FloatingTextEffect {
     const scaledFontSize = Math.round(this.fontSize * s);
     const font = `bold ${scaledFontSize}px "${this.fontFamily}"`;
 
+    // Drift upward over the lifetime (0 for static match-count text).
+    const y = this.originY - this.riseOffset;
+
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.textAlign = 'center';
@@ -150,17 +173,17 @@ export default class FloatingTextEffect {
     const shadowOffset = Math.max(1, 2 * s);
     ctx.font = font;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.fillText(this.text, this.originX + shadowOffset, this.originY + shadowOffset);
+    ctx.fillText(this.text, this.originX + shadowOffset, y + shadowOffset);
 
     // Black outline stroke
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.lineWidth = Math.max(1.5, 3.5 * s);
     ctx.lineJoin = 'round';
-    ctx.strokeText(this.text, this.originX, this.originY);
+    ctx.strokeText(this.text, this.originX, y);
 
     // Colored fill on top
     ctx.fillStyle = this.color;
-    ctx.fillText(this.text, this.originX, this.originY);
+    ctx.fillText(this.text, this.originX, y);
 
     ctx.restore();
   }
