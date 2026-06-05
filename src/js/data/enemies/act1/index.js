@@ -11,6 +11,7 @@ import stoneGargoyle from './stoneGargoyle.js';
 import orcTaskmaster from './orcTaskmaster.js';
 import chokeweed from './chokeweed.js';
 import goresnoutTrackers from './goresnoutTrackers.js';
+import lordMalakor from './lordMalakor.js';
 
 /** All Act 1 enemy definitions. */
 const ACT1_ENEMIES = [
@@ -24,6 +25,7 @@ const ACT1_ENEMIES = [
   orcTaskmaster,
   chokeweed,
   goresnoutTrackers,
+  lordMalakor,
 ];
 
 export {
@@ -37,5 +39,6 @@ export {
   orcTaskmaster,
   chokeweed,
   goresnoutTrackers,
+  lordMalakor,
 };
 export default ACT1_ENEMIES;

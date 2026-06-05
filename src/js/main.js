@@ -51,6 +51,7 @@ const ASSET_MAP = {
   portrait_orc_taskmaster:   'assets/sprites/character_pane/portraits/portrait_orc_taskmaster.png',
   portrait_chokeweed:        'assets/sprites/character_pane/portraits/portrait_chokeweed.png',
   portrait_goresnout_trackers: 'assets/sprites/character_pane/portraits/portrait_goresnout_trackers.png',
+  portrait_malakor:          'assets/sprites/character_pane/portraits/portrait_malakor.png',
   icon_attack:               'assets/sprites/character_pane/icons/icon_attack.png',
   icon_block:                'assets/sprites/character_pane/icons/icon_block.png',
   mana_red:                  'assets/sprites/character_pane/mana/mana_red.png',
@@ -199,6 +200,7 @@ const ASSET_MAP = {
   relic_chokeweed_sap:       'assets/sprites/relics/relic_chokeweed_sap.png',
   relic_goresnout_collars:   'assets/sprites/relics/relic_goresnout_collars.png',
   relic_sulfur:              'assets/sprites/relics/relic_sulfur.png',
+  relic_heart_of_usurper:    'assets/sprites/relics/relic_heart_of_usurper.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };

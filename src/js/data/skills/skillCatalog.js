@@ -250,6 +250,61 @@ const SKILL_CATALOG = {
     ],
   },
 
+  // ── Lord Malakor (Act 1 boss) ───────────────────────
+  // A skull/curse kit. Desecrate (green→skull) is the engine: it manufactures
+  // skulls to match (his Heart of the Usurper relic grows attack per skull
+  // match). Harvest recycles skulls back into Purple to refuel Desecrate.
+  // Soul Burn / Exsanguinate are the cripple skills. Icons/sounds reuse
+  // existing keys until dedicated art exists.
+  desecrate: {
+    id: 'desecrate',
+    name: 'Desecrate',
+    description: 'Turn all Green into Skulls.',
+    icon: 'skill_summon_dead',
+    sound: 'skill_create_skull',
+    cost: { purple: 7 },
+    effects: [
+      { effectType: 'convert_tiles_by_type', convertByType: { from: 'green', to: 'skull' } },
+    ],
+  },
+  soul_burn: {
+    id: 'soul_burn',
+    name: 'Soul Burn',
+    description: 'Silence enemy 1 turn.\nDrain 5 of every mana.',
+    icon: 'skill_explode',
+    sound: 'skill_explode',
+    cost: { blue: 7 },
+    effects: [
+      // Silence the opponent for their next turn (blocks skill casting).
+      { effectType: 'silence', silence: { turns: 1 } },
+      // Remove 5 of EVERY mana color from the opponent (no color = all).
+      { effectType: 'drain_mana', drainMana: { amount: 5 } },
+    ],
+  },
+  harvest: {
+    id: 'harvest',
+    name: 'Harvest',
+    description: 'Turn all Skulls to Purple.',
+    icon: 'skill_summon_dead',
+    sound: 'skill_doomsong',
+    cost: { yellow: 7 },
+    effects: [
+      { effectType: 'convert_tiles_by_type', convertByType: { from: 'skull', to: 'purple' } },
+    ],
+  },
+  exsanguinate: {
+    id: 'exsanguinate',
+    name: 'Exsanguinate',
+    description: 'Reduce enemy attack to 1 for 1 turn.',
+    icon: 'skill_slash',
+    sound: 'skill_slash',
+    cost: { red: 7 },
+    effects: [
+      // Force the opponent's attack to 1 for their next turn; restored after.
+      { effectType: 'set_attack', setAttack: { value: 1, turns: 1 } },
+    ],
+  },
+
   // Goresnout Trackers — ramps attack while chipping damage. Pairs with the
   // Goresnout Collars relic (echoes the 2 damage for 4 total).
   hound: {

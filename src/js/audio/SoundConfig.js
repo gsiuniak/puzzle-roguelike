@@ -59,6 +59,15 @@ const SOUNDS = {
       preload: true,
     },
   },
+  battle_theme_act_1_lord_malakor: {
+    src: ['assets/audio/music/battle_theme_act_1_lord_malakor.mp3'],
+    category: AudioCategory.MUSIC,
+    options: {
+      loop: true,
+      volume: 0.15,
+      preload: true,
+    },
+  },
   victory_theme: {
     src: ['assets/audio/music/victory_theme.mp3'],
     category: AudioCategory.MUSIC,

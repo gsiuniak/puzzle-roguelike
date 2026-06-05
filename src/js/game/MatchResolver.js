@@ -38,6 +38,18 @@ export const SKILL_EFFECT_TYPES = {
   // in BattleController._resolveEffect; the subsequent _checkGameOver ends the
   // battle. Pair after a DAMAGE effect for a "deal damage then die" skill.
   SELF_DESTRUCT: 'self_destruct',
+  // Removes mana from the OPPONENT (Lord Malakor's "Soul Burn"). Payload
+  // drainMana: { amount, color? } — omit color to drain every color. Resolved
+  // in BattleController._resolveEffect.
+  DRAIN_MANA: 'drain_mana',
+  // Silences the OPPONENT for N of their upcoming turns (blocks skill casting).
+  // Payload silence: { turns }. Resolved in BattleController._resolveEffect;
+  // enforced in tryPlayerSkill. (Lord Malakor's "Soul Burn".)
+  SILENCE: 'silence',
+  // Forces the OPPONENT's attack to a fixed value for N of their upcoming turns,
+  // then restores it (Lord Malakor's "Exsanguinate"). Payload setAttack:
+  // { value, turns }. Resolved in BattleController._resolveEffect.
+  SET_ATTACK: 'set_attack',
 };
 
 /**

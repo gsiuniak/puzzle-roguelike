@@ -560,7 +560,16 @@ class _AudioManager {
     }
 
     if (isSpecialTrack) {
-      // Special music — always start fresh
+      // Special music — start fresh, but DON'T restart if this exact track is
+      // already the active battle music. _updateMusicFromState_persistent calls
+      // startBattleMusic on every PLAYER_TURN/ENEMY_TURN transition (i.e. after
+      // every match/cascade), and the stopMusic(0) below nulls _currentMusicKey,
+      // which would defeat playMusic's own "already playing" guard and audibly
+      // restart the track each turn. Mirror the normal-track idempotency check.
+      if (this._currentMusicKey === trackKey && this._battleMusicActive) {
+        this._isSpecialBattleMusic = true;
+        return;
+      }
       this.stopMusic(0);
       this.playMusic(trackKey, { fadeIn: MUSIC_FADE_DURATION });
       this._battleMusicActive = true;

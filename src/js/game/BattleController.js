@@ -13,7 +13,7 @@ import MatchResolver, { SKILL_EFFECT_TYPES } from './MatchResolver.js';
 import CombatLog from './CombatLog.js';
 import EnemyAI from './EnemyAI.js';
 import { chooseEnemyAction } from './customEnemyAi.js';
-import { TILE_TYPES, isSkull } from './TileTypes.js';
+import { TILE_TYPES, isSkull, MANA_COLORS } from './TileTypes.js';
 import PassiveSystem from '../systems/PassiveSystem.js';
 import TRIGGER_TYPES from '../systems/TriggerTypes.js';
 
@@ -411,6 +411,11 @@ export default class BattleController {
    */
   _recomputeDynamicAttack(side) {
     if (!side) return;
+    // While an attack override is active (Exsanguinate), the side's attack is
+    // pinned to a fixed value — freeze dynamic recompute so mana changes don't
+    // fight it. _lastDynamicAttack stays put, so on expiry the saved attack and
+    // the resumed delta math reconcile correctly against the current mana.
+    if (side._attackOverride) return;
     const rules = side._attackPerManaRules;
     if (!rules || rules.length === 0) return;
     let bonus = 0;
@@ -628,6 +633,10 @@ export default class BattleController {
 
   tryPlayerSkill(skill) {
     if (this.state !== BattleState.PLAYER_TURN || !skill) return false;
+    if (this._isSilenced(this.playerState)) {
+      this.log.add(`${this.playerState.name} is Silenced and cannot cast skills.`);
+      return false;
+    }
     if (!this._affordable(this.playerState, skill)) {
       this.log.add(`Not enough mana for ${skill.name}.`);
       return false;
@@ -1391,6 +1400,11 @@ export default class BattleController {
     // relic effects see the correct active-side context.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_END, { side });
 
+    // Tick down any turn-scoped debuffs (Silence, Exsanguinate attack override)
+    // on the side whose turn just ended, so a debuff applied during the
+    // opponent's turn lasts exactly through this side's next turn.
+    this._tickTurnDebuffs(side);
+
     this.pendingExtraTurn = false;
     this._swapTriggerPos = null;
     // Enter turn-intro animation before the actual turn begins.
@@ -1445,6 +1459,70 @@ export default class BattleController {
     return this.activeSide === 'player' ? this.enemyState : this.playerState;
   }
 
+  // ── Turn-scoped debuffs (Silence / Exsanguinate) ─────
+  //
+  // Both are applied to a side by the OPPONENT's skill and last through that
+  // side's upcoming turn(s). The counters live directly on the combatant
+  // battle state (`_silencedTurns`, `_attackOverride`) and are decremented in
+  // _tickTurnDebuffs at the END of the affected side's own turn, so a debuff
+  // applied during the opponent's turn always covers exactly the next own turn.
+
+  /** Whether `state` currently cannot cast skills (Soul Burn). */
+  _isSilenced(state) {
+    return !!state && (state._silencedTurns || 0) > 0;
+  }
+
+  /**
+   * Pin a side's attack to a fixed value for `turns` of its upcoming turns.
+   * Stores the pre-override attack so it can be restored on expiry. Refreshing
+   * an existing override keeps the ORIGINAL saved attack (so stacking casts
+   * don't bake the forced value in).
+   * @param {object} state
+   * @param {number} value
+   * @param {number} turns
+   */
+  _applyAttackOverride(state, value, turns) {
+    if (!state) return;
+    const savedAttack = state._attackOverride
+      ? state._attackOverride.savedAttack
+      : state.attack;
+    state._attackOverride = { value, turns, savedAttack };
+    state.attack = value;
+  }
+
+  /** Re-pin an active attack override to its forced value (called each frame). */
+  _enforceAttackOverride(state) {
+    if (state && state._attackOverride) state.attack = state._attackOverride.value;
+  }
+
+  /**
+   * Decrement turn-scoped debuffs on `side` at the end of its turn, expiring
+   * those that hit 0. Restoring the attack override hands control back to the
+   * dynamic-attack recompute, which reconciles against the side's current mana.
+   * @param {'player'|'enemy'} side
+   */
+  _tickTurnDebuffs(side) {
+    const state = this._getStateBySide(side);
+    if (!state) return;
+
+    if ((state._silencedTurns || 0) > 0) {
+      state._silencedTurns -= 1;
+      if (state._silencedTurns <= 0) {
+        state._silencedTurns = 0;
+        this.log.add(`${state.name} is no longer Silenced.`);
+      }
+    }
+
+    if (state._attackOverride) {
+      state._attackOverride.turns -= 1;
+      if (state._attackOverride.turns <= 0) {
+        state.attack = state._attackOverride.savedAttack;
+        state._attackOverride = null;
+        this.log.add(`${state.name}'s attack returns to normal.`);
+      }
+    }
+  }
+
   // ── Update ────────────────────────────────────────────
 
   update(dt) {
@@ -1452,6 +1530,12 @@ export default class BattleController {
     // the current mana pools each frame. Idempotent (delta-based).
     this._recomputeDynamicAttack(this.playerState);
     this._recomputeDynamicAttack(this.enemyState);
+
+    // Keep any active attack override (Exsanguinate) pinned to its forced
+    // value — catches stray mutations (e.g. a relic's gain_attack firing during
+    // the debuffed turn) so the "attack = N this turn" guarantee holds.
+    this._enforceAttackOverride(this.playerState);
+    this._enforceAttackOverride(this.enemyState);
 
     // ── Swap animation ──
     if (this.state === BattleState.SWAPPING && this.swapAnim) {
@@ -1788,6 +1872,48 @@ export default class BattleController {
         // death is checked first, so a mutual-kill still resolves as a loss).
         src.hp = 0;
         this.log.add(`${src.name} self-destructs!`);
+        return false;
+      }
+
+      case SKILL_EFFECT_TYPES.DRAIN_MANA: {
+        // Remove mana from the OPPONENT (tgt). `color` optional — omit to drain
+        // `amount` of every color (Soul Burn). The caster does NOT gain it.
+        const dm = effect.drainMana || {};
+        const amount = typeof dm.amount === 'number' ? dm.amount : 1;
+        if (amount > 0) {
+          if (!tgt.mana) tgt.mana = {};
+          const colors = dm.color ? [dm.color] : MANA_COLORS;
+          let drained = 0;
+          for (const color of colors) {
+            const before = tgt.mana[color] || 0;
+            tgt.mana[color] = Math.max(0, before - amount);
+            drained += before - tgt.mana[color];
+          }
+          // Draining unspent mana can lower the opponent's dynamic attack.
+          this._recomputeDynamicAttack(tgt);
+          if (drained > 0) this.log.add(`${tgt.name} is drained of ${drained} mana.`);
+        }
+        return false;
+      }
+
+      case SKILL_EFFECT_TYPES.SILENCE: {
+        // Silence the OPPONENT for their next N turns (blocks skill casting).
+        // Decremented at the end of the silenced side's turn (_tickTurnDebuffs).
+        const turns = (effect.silence && typeof effect.silence.turns === 'number')
+          ? effect.silence.turns : 1;
+        tgt._silencedTurns = Math.max(tgt._silencedTurns || 0, turns);
+        this.log.add(`${tgt.name} is Silenced for ${turns} turn(s).`);
+        return false;
+      }
+
+      case SKILL_EFFECT_TYPES.SET_ATTACK: {
+        // Force the OPPONENT's attack to a fixed value for their next N turns,
+        // then restore it. Expiry is handled in _tickTurnDebuffs.
+        const cfg = effect.setAttack || {};
+        const value = typeof cfg.value === 'number' ? cfg.value : 1;
+        const turns = typeof cfg.turns === 'number' ? cfg.turns : 1;
+        this._applyAttackOverride(tgt, value, turns);
+        this.log.add(`${tgt.name}'s attack is reduced to ${value} for ${turns} turn(s).`);
         return false;
       }
 

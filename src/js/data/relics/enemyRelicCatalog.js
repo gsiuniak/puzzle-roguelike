@@ -109,6 +109,25 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
+  // Match-reactive attack growth — gains +1 Attack on every skull match.
+  // Mirrors the player Scythe relic but fires on ANY skull match (matches are
+  // always 3+, so no minCount gate). Resolved via EffectResolver (gain_attack).
+  heart_of_usurper: {
+    id: 'heart_of_usurper',
+    name: 'Heart of the Usurper',
+    description: 'Gain +1 Attack when matching Skulls.',
+    icon: 'relic_heart_of_usurper',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      {
+        trigger: 'onTileMatchType',
+        condition: { typeId: 'skull' },
+        effectType: 'gain_attack',
+        gainAttack: { amount: 1 },
+      },
+    ],
+  },
+
   // Turn-start board control — converts up to 2 random Skull tiles into Green
   // in place (no cascade). Board-touching, so it's handled by
   // BattleController._handlePassiveBoardEffect via the onBoardEffect path.

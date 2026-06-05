@@ -112,6 +112,61 @@ function scoreSapperBoard(board) {
   return score;
 }
 
+/**
+ * Score a (simulated) post-swap board for Lord Malakor's priorities.
+ *
+ * Malakor wins through skulls and the Desecrate engine, so his board ranking is
+ * NOT the standard AI's. Strict tiers, each weighted above the max realistic
+ * total of the tier below it:
+ *
+ *   4+ match (extra turn) > match skulls (damage) > match Purple (Desecrate
+ *   fuel) > match the non-Purple skill color he's CLOSEST to affording
+ *
+ * The last tier implements the "don't collect any color — collect the color
+ * you're close to casting with" rule: each Yellow/Blue/Red match is weighted by
+ * how much of that color he already has (capped at the 7 cost). Green mana funds
+ * nothing for him, so Green/other matches earn only the baseline. Returns -1
+ * when the swap makes no match.
+ *
+ * @param {import('./BoardModel.js').default} board — cloned, post-swap board
+ * @param {object} mana — Malakor's current mana pools
+ * @returns {number}
+ */
+function scoreMalakorBoard(board, mana) {
+  const matches = board.findAllConnectedMatches();
+  if (matches.length === 0) return -1;
+
+  const SKILL_COST = 7; // every Malakor skill costs 7 of one color
+  let has4Plus = false;
+  let skull = 0;
+  let purple = 0;
+  let progress = 0; // closeness-weighted Yellow/Blue/Red (skill colors)
+  let total = 0;
+
+  for (const match of matches) {
+    if (match.count >= 4) has4Plus = true;
+    total += match.count;
+    const t = match.typeId;
+    if (isSkull(t)) {
+      skull += match.count;
+    } else if (t === 'purple') {
+      purple += match.count;
+    } else if (t === 'yellow' || t === 'blue' || t === 'red') {
+      // Closer to the 7 cost → higher score. +1 so a from-zero match still ranks.
+      const have = Math.min(mana[t] || 0, SKILL_COST);
+      progress += match.count * (have + 1);
+    }
+    // Green (and anything else) gives no progression value — Green mana is wasted.
+  }
+
+  let score = total; // baseline so any match beats "no match" (-1)
+  if (has4Plus) score += 1_000_000; // extra turn dominates
+  score += skull * 10_000;          // primary: skull damage + Heart of the Usurper
+  score += purple * 1_000;          // primary: fuel Desecrate
+  score += progress * 10;           // collect the color closest to a cast
+  return score;
+}
+
 const enemyAiOverrides = {
   // ── Goblin Sapper ───────────────────────────────────────
   // Ignores skulls to bank red mana for Boom Baby!. Action preference:
@@ -160,6 +215,63 @@ const enemyAiOverrides = {
       return { action: 'skill', skill: encroach };
     }
     return null;
+  },
+
+  // ── Lord Malakor (Act 1 boss) ───────────────────────────
+  // Cripple-and-skulls plan. Decision order:
+  //   1) Desecrate (7 purple) when there's Green to convert — the skull engine.
+  //   2) Harvest  (7 yellow) when skulls exist and he still needs purple —
+  //      recycles skulls back into Desecrate fuel.
+  //   3) Soul Burn (7 blue) / Exsanguinate (7 red) — Blue/Red fund nothing else,
+  //      so spend them to cripple the moment they're affordable.
+  //   4) Otherwise match the board via scoreMalakorBoard: skulls > Purple >
+  //      the skill color he's closest to affording.
+  malakor: ({ enemy, board }) => {
+    const mana = enemy.mana || {};
+    const skills = enemy.skills || [];
+    const byId = (id) => skills.find((s) => s.id === id);
+
+    const desecrate = byId('desecrate');
+    const harvest = byId('harvest');
+    const soulBurn = byId('soul_burn');
+    const exsanguinate = byId('exsanguinate');
+
+    const greenCount = board.getTilesOfType('green').length;
+    const skullCount = board.getTilesOfType('skull').length;
+    const desecratePurpleCost =
+      (desecrate && desecrate.cost && desecrate.cost.purple) || 7;
+
+    // 1) PRIMARY: Desecrate — manufacture skulls from Green.
+    if (canAfford(desecrate, mana) && greenCount > 0) {
+      return { action: 'skill', skill: desecrate };
+    }
+
+    // 2) SECONDARY: Harvest — recycle skulls into Purple when short on Desecrate fuel.
+    if (canAfford(harvest, mana) && skullCount > 0 && (mana.purple || 0) < desecratePurpleCost) {
+      return { action: 'skill', skill: harvest };
+    }
+
+    // 3) Leftover-mana cripples (Blue/Red fund only these skills).
+    if (canAfford(soulBurn, mana)) return { action: 'skill', skill: soulBurn };
+    if (canAfford(exsanguinate, mana)) return { action: 'skill', skill: exsanguinate };
+
+    // 4) Board matching, ranked by Malakor's custom priorities.
+    const swaps = board.getValidSwaps();
+    if (swaps.length === 0) return null; // no moves → let standard AI reshuffle
+
+    let bestSwap = null;
+    let bestScore = -Infinity;
+    for (const sw of swaps) {
+      const clone = board.clone();
+      clone.swap(sw.col1, sw.row1, sw.col2, sw.row2);
+      const score = scoreMalakorBoard(clone, mana);
+      if (score > bestScore) {
+        bestScore = score;
+        bestSwap = sw;
+      }
+    }
+
+    return bestSwap ? { action: 'swap', swap: bestSwap } : null;
   },
 };
 
