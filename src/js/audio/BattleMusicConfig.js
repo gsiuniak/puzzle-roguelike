@@ -47,14 +47,6 @@ export const BACKGROUND_BATTLE_MUSIC_VOLUME = 0.15;
 /** Duration for music fades in milliseconds (quick, natural track switches) */
 export const MUSIC_FADE_DURATION = 400;
 
-/**
- * Fade duration (ms) for the post-battle hand-off when a non-default battle
- * track (e.g. the Act 1 elite theme) ends: the special track slowly fades out
- * and the normal battle music fades back in underneath. Longer than the normal
- * quick switch so the elite outro feels deliberate.
- */
-export const POST_BATTLE_TRACK_HANDOFF_FADE = 1500;
-
 // ═══════════════════════════════════════════════════════════
 // Default track key
 // ═══════════════════════════════════════════════════════════

@@ -25,7 +25,6 @@ import {
   NORMAL_BATTLE_MUSIC_VOLUME,
   BACKGROUND_BATTLE_MUSIC_VOLUME,
   MUSIC_FADE_DURATION,
-  POST_BATTLE_TRACK_HANDOFF_FADE,
 } from './BattleMusicConfig.js';
 
 class _AudioManager {
@@ -214,22 +213,37 @@ class _AudioManager {
       ? opts.fadeOut
       : (fadeIn || MUSIC_FADE_DURATION);
 
-    // Fade out (rather than hard-cut) any currently playing music.
+    // Fade out (rather than hard-cut) any currently playing music. The outgoing
+    // track is always a DIFFERENT Howl than the incoming one (same-key plays
+    // returned early above), so when the fade finishes we stop ALL of its
+    // instances — this is far more reliable on mobile than stopping a single
+    // play id, which previously let the old song keep playing under the new one.
     if (this._currentMusicHowl && this._currentMusicId !== null) {
       const oldHowl = this._currentMusicHowl;
       const oldId = this._currentMusicId;
-      // Detach the loop handler so the outgoing track does not restart as it fades.
-      oldHowl.off('end', undefined, oldId);
-      if (fadeOut > 0) {
-        const oldVol = oldHowl.volume(oldId) || 0;
-        oldHowl.fade(oldVol, 0, fadeOut, oldId);
-        setTimeout(() => oldHowl.stop(oldId), fadeOut + 50);
-      } else {
-        oldHowl.stop(oldId);
-      }
+      // Detach the manual loop handler entirely so the outgoing track can never
+      // restart itself mid/after fade and leave two songs playing.
+      oldHowl.off('end');
+      // Mark this howl as no longer current BEFORE scheduling teardown so the
+      // stop guard below works even within this same tick.
       this._currentMusicHowl = null;
       this._currentMusicId = null;
       this._currentMusicKey = null;
+
+      const stopOld = () => {
+        // Guard against a rapid switch back to this same track within the fade
+        // window — only tear it down if it hasn't become current again.
+        if (this._currentMusicHowl !== oldHowl) oldHowl.stop();
+      };
+
+      if (fadeOut > 0) {
+        const oldVol = oldHowl.volume(oldId) || 0;
+        oldHowl.fade(oldVol, 0, fadeOut, oldId);
+        oldHowl.once('fade', stopOld, oldId); // fires when the gain ramp completes
+        setTimeout(stopOld, fadeOut + 80);     // wall-clock fallback (mobile-safe)
+      } else {
+        stopOld();
+      }
     }
 
     const howl = this._sounds.get(key);
@@ -594,21 +608,10 @@ class _AudioManager {
       return;
     }
 
-    // A non-default battle track (e.g. the elite theme) just ended: slowly fade
-    // it out and bring the normal battle music back in underneath (at the quiet
-    // rewards/map background volume). The cross-fade is handled by playMusic.
-    if (this._currentMusicKey && this._currentMusicKey !== DEFAULT_BATTLE_MUSIC_KEY) {
-      this.playMusic(DEFAULT_BATTLE_MUSIC_KEY, {
-        fadeIn: POST_BATTLE_TRACK_HANDOFF_FADE,
-        fadeOut: POST_BATTLE_TRACK_HANDOFF_FADE,
-        volume: BACKGROUND_BATTLE_MUSIC_VOLUME,
-      });
-      this._battleMusicActive = true;
-      this._isSpecialBattleMusic = false;
-      return;
-    }
-
-    // Default normal music — fade to background volume for rewards/map
+    // Normal/persistent music (including the elite theme, which is not flagged
+    // special) — fade to background volume for rewards/map. It keeps playing
+    // quietly and the NEXT battle's startBattleMusic cross-fades to that fight's
+    // track naturally as it loads.
     this.fadeMusic(BACKGROUND_BATTLE_MUSIC_VOLUME, MUSIC_FADE_DURATION);
   }
 
