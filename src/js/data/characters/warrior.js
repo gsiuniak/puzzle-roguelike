@@ -17,7 +17,7 @@ const warrior = {
 
   /** Immutable base stats — never modified during a run */
   baseStats: {
-    maxHp: 30,
+    maxHp: 1,
     startingAttack: 1,
     startingArmor: 0,
     startingMana: {

@@ -17,6 +17,7 @@ import SceneManager from './scenes/SceneManager.js';
 import TitleScreen from './scenes/TitleScreen.js';
 import CharacterSelectScene from './scenes/CharacterSelectScene.js';
 import MapScene from './scenes/MapScene.js';
+import GameOverScene from './scenes/GameOverScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
 
@@ -35,6 +36,7 @@ const DEBUG_MODE = true;
 const ASSET_MAP = {
   title_screen:               'assets/sprites/title/title_screen.png',
   battle_background_default:  'assets/sprites/battle/battle_background_default.png',
+  battle_background_game_over: 'assets/sprites/battle/battle_background_game_over.png',
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
   character_pane_skill_row:  'assets/sprites/character_pane/background/character_pane_skill_row.png',
@@ -261,10 +263,14 @@ async function init() {
   // 9. MapScene — created once, reused between battle returns
   const mapScene = new MapScene();
 
+  // 9b. GameOverScene — shown on player defeat; any input → CharacterSelect
+  const gameOverScene = new GameOverScene();
+
   // 10. Register scenes
   sceneManager.registerScene('TitleScreen', titleScreen);
   sceneManager.registerScene('CharacterSelectScene', characterSelectScene);
   sceneManager.registerScene('MapScene', mapScene);
+  sceneManager.registerScene('GameOverScene', gameOverScene);
   // BattleScene is registered lazily by MapScene._transitionToBattle()
 
   // 11. Wire the fullscreen toggle button.

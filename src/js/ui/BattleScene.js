@@ -1139,18 +1139,27 @@ export default class BattleScene extends UIPanel {
     // Sync UI state from game state
     this.updateFromController();
 
-    // ── Detect game over and show reward overlay ──
+    // ── Detect game over ──
     if (this._battleController && this._battleController.state === BattleState.GAME_OVER) {
       this._gameOverTimer += dt;
       if (this._gameOverTimer >= this._gameOverDelay && !this._rewardOverlayShown) {
         this._rewardOverlayShown = true;
+        const isVictory = this._battleController
+          ? this._battleController._winner() === 'player'
+          : false;
+
+        // ── Defeat: go to the dedicated Game Over scene (any input there
+        //    returns to character select for a fresh run). No reward overlay,
+        //    no return-to-map. ──
+        if (!isVictory) {
+          if (this._sceneManager) {
+            this._sceneManager.fadeToScene('GameOverScene', 500);
+          }
+          return;
+        }
+
+        // ── Victory: show the relic reward overlay. ──
         if (this._rewardOverlay) {
-          // Relic rewards are only offered on victory. On defeat the overlay
-          // still appears (it drives the return-to-map transition) but with
-          // no reward options — just the Skip button.
-          const isVictory = this._battleController
-            ? this._battleController._winner() === 'player'
-            : false;
           const runState = this.userData ? this.userData.runState : null;
           // Authoritative "already owned" set = the relics resolved onto the
           // battle player (character starting relics + run-acquired relics),
@@ -1159,9 +1168,7 @@ export default class BattleScene extends UIPanel {
             ? this._battleController.playerState.relics || []
             : [];
           const ownedRelicIds = playerRelics.map((r) => r && r.id).filter(Boolean);
-          const rewardRelics = isVictory
-            ? generateRelicRewardOptions({ count: 3, playerRunState: runState, ownedRelicIds })
-            : [];
+          const rewardRelics = generateRelicRewardOptions({ count: 3, playerRunState: runState, ownedRelicIds });
           this._rewardOverlay.prepareRewards(rewardRelics);
           this._rewardOverlay.show();
         }

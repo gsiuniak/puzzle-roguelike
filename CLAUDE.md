@@ -59,13 +59,15 @@ src/
 
 ```
 TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
-                                           (roam)       (combat)
-                                                           ↓
-                                                     RewardOverlay
-                                                    (post-battle)
-                                                           ↓
-                                                        MapScene
+                       ↑                   (roam)       (combat)
+                       │                                   ↓
+                       │                         victory: RewardOverlay → MapScene
+                       │                         defeat:  GameOverScene
+                       └─────────(any input)─────────────────┘
 ```
+On **victory** the post-battle RewardOverlay drives the return to MapScene. On
+**defeat** the player is routed to the full-screen **GameOverScene**; any input
+there returns to CharacterSelectScene to start a fresh run.
 
 ---
 
@@ -115,7 +117,8 @@ TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
 | [`src/js/scenes/TitleScreen.js`](src/js/scenes/TitleScreen.js) | `TitleScreen` | Cover-fit title image, fade-in, any-input → CharacterSelectScene |
 | [`src/js/scenes/CharacterSelectScene.js`](src/js/scenes/CharacterSelectScene.js) | `CharacterSelectScene` | Character selection, splash cross-fade, info panel, aura effect, → MapScene |
 | [`src/js/scenes/MapScene.js`](src/js/scenes/MapScene.js) | `MapScene` | Map traversal, node clicking, battle transition, battle result handling |
-| [`src/js/ui/BattleScene.js`](src/js/ui/BattleScene.js) | `BattleScene` | Battle layout: MainRow = player `RelicBar` \| 3 character columns (player \| board+combat-log center \| enemy) \| enemy `RelicBar`, centered with negative gap so the side panels overlap the board frame. The two relic bars mirror each other: the player bar (`RELIC_COL_WIDTH`) floats left of the player panel; the enemy bar (`ENEMY_RELIC_COL_WIDTH` / `ENEMY_RELIC_BAR_PADDING`) floats right of the enemy panel and is fed from `enemyState.relics`. Input handling, visual effects, game-over → reward overlay transition. Hidden turn label retained for backwards-compat (state/data binding only — visual display disabled). **Corner action buttons:** two 60×60 icons (`battle_button_skip` / `battle_button_map`) stacked in the FAR physical top-right corner — drawn in `renderForeground` via `_renderCornerButtons` (anchored past the design viewport using `app.cssToDesign(cssWidth, 0)`, hit-tested in design space by `_handleCornerButtonClick`/`_getCornerButtonRects`). Skip → `_debugWinBattle()` (same as the 'K' key, force-wins). Map → opens the MapView overlay; while the overlay is open, clicking anywhere closes it (handled at the top of `_handleMouseDown`). Tunables: `CORNER_BUTTON_SIZE` / `CORNER_BUTTON_GAP` / `CORNER_BUTTON_MARGIN`. |
+| [`src/js/scenes/GameOverScene.js`](src/js/scenes/GameOverScene.js) | `GameOverScene` | **Player-defeat scene.** Full-canvas `battle_background_game_over` (cover-fit, drawn in `renderBackground` so it covers the bars), short fade-in. `onEnter` cross-fades music to `game_over_theme` (via `AudioManager.playMusic`, which fades the outgoing battle track out as this fades in). Any keyboard/mouse/touch input (after a brief grace period) → `fadeToScene('CharacterSelectScene')` for a fresh run. Modeled on `TitleScreen`. Registered once in [`main.js`](src/js/main.js); BattleScene routes here on defeat (see decision #27) instead of the RewardOverlay. |
+| [`src/js/ui/BattleScene.js`](src/js/ui/BattleScene.js) | `BattleScene` | Battle layout: MainRow = player `RelicBar` \| 3 character columns (player \| board+combat-log center \| enemy) \| enemy `RelicBar`, centered with negative gap so the side panels overlap the board frame. The two relic bars mirror each other: the player bar (`RELIC_COL_WIDTH`) floats left of the player panel; the enemy bar (`ENEMY_RELIC_COL_WIDTH` / `ENEMY_RELIC_BAR_PADDING`) floats right of the enemy panel and is fed from `enemyState.relics`. Input handling, visual effects, game-over routing (**victory** → RewardOverlay → MapScene; **defeat** → `fadeToScene('GameOverScene')`, no overlay/return-to-map). Hidden turn label retained for backwards-compat (state/data binding only — visual display disabled). **Corner action buttons:** two 60×60 icons (`battle_button_skip` / `battle_button_map`) stacked in the FAR physical top-right corner — drawn in `renderForeground` via `_renderCornerButtons` (anchored past the design viewport using `app.cssToDesign(cssWidth, 0)`, hit-tested in design space by `_handleCornerButtonClick`/`_getCornerButtonRects`). Skip → `_debugWinBattle()` (same as the 'K' key, force-wins). Map → opens the MapView overlay; while the overlay is open, clicking anywhere closes it (handled at the top of `_handleMouseDown`). Tunables: `CORNER_BUTTON_SIZE` / `CORNER_BUTTON_GAP` / `CORNER_BUTTON_MARGIN`. |
 
 **Scene lifecycle:** Each scene must implement `onEnter()` and `onExit()`. Scenes receive `_sceneManager` back-reference from SceneManager.
 
@@ -441,6 +444,8 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 
 26. **Turn-scoped debuffs (Silence, Exsanguinate) live on the combatant state and tick at the END of the debuffed side's own turn.** Soul Burn's `silence` sets `state._silencedTurns`; Exsanguinate's `set_attack` stores `state._attackOverride = { value, turns, savedAttack }` and pins `state.attack = value`. Both are applied to the OPPONENT by the caster's skill, so they're applied during one side's turn and must cover the OTHER side's next turn. [`BattleController._endTurn(side)`](src/js/game/BattleController.js) calls `_tickTurnDebuffs(side)` which decrements only THAT side's counters — so a debuff applied during the opponent's turn always lasts exactly through the affected side's next turn, then expires. **Silence** is enforced in `tryPlayerSkill` (`_isSilenced` early-returns, blocking skill casts; swaps still allowed); the visual indicator is intentionally not implemented yet. **Attack override** freezes the dynamic-attack recompute (`_recomputeDynamicAttack` early-returns while `_attackOverride` is set) and is re-pinned every frame in `update()` via `_enforceAttackOverride` (so a relic's mid-turn `gain_attack` can't break the "attack = N this turn" guarantee); on expiry `_tickTurnDebuffs` restores `savedAttack` and the recompute resumes, reconciling against current mana. Limitation (documented, rare): attack changes a player relic would make DURING an exsanguinated turn are suppressed and do not carry over. Both fields are runtime-only (not in catalogs), so a fresh battle state starts clean.
 
+27. **Defeat routes to a dedicated GameOverScene, not the RewardOverlay.** The post-battle game-over handler in [`BattleScene.update()`](src/js/ui/BattleScene.js) branches on `_winner() === 'player'`: **victory** shows the RewardOverlay (which then drives the return to MapScene); **defeat** calls `fadeToScene('GameOverScene')` and returns — it does NOT run `_onBattleComplete`, run-state sync, healing, or growth (a lost run is over). [`GameOverScene`](src/js/scenes/GameOverScene.js) covers the canvas with `battle_background_game_over` and, on any input (after a short grace period), fades to CharacterSelectScene for a fresh run via `createRunState`. The scene is registered once in [`main.js`](src/js/main.js) alongside the other singletons.
+
 ---
 
 ## 8. Reference / Legacy / Old Folders
@@ -494,7 +499,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 | `AudioCategory` | [`SoundConfig.js:15`](src/js/audio/SoundConfig.js:15) | MASTER, MUSIC, SFX, UI, AMBIENT |
 | `MANA_COLORS` | [`TileTypes.js:21`](src/js/game/TileTypes.js:21) | ['red', 'blue', 'green', 'yellow', 'purple'] |
 | `DEBUG_MODE` | [`main.js:32`](src/js/main.js:32) | `true` — press 'K' in battle for instant win |
-| Scene names | [`main.js:150`](src/js/main.js:150) | 'TitleScreen', 'CharacterSelectScene', 'MapScene', 'BattleScene' |
+| Scene names | [`main.js:150`](src/js/main.js:150) | 'TitleScreen', 'CharacterSelectScene', 'MapScene', 'GameOverScene', 'BattleScene' |
 | `RewardOverlay` state | [`RewardOverlay.js:49`](src/js/ui/RewardOverlay.js:49) | INACTIVE, ACTIVE |
 
 ---
