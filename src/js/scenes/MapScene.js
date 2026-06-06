@@ -217,6 +217,28 @@ export default class MapScene extends UIPanel {
   }
 
   /**
+   * Reset all map/traversal state for a brand-new run. Called by
+   * CharacterSelectScene when a hero is chosen so the next `onEnter`
+   * regenerates a fresh map from the new seed instead of taking the
+   * "return from battle" fast path.
+   *
+   * This matters because `_transitionToBattle` stashes `_savedTraversalState`
+   * up front, but a run that ends in DEFEAT routes to GameOverScene and never
+   * runs `_handleBattleComplete`/`_returnToMap` — so that saved state would
+   * otherwise linger and the next run would reuse the old map, position, and
+   * revealed nodes. (Run-state/HP is replaced separately via setRunState.)
+   */
+  resetForNewRun() {
+    this._savedTraversalState = null;
+    this._graph = null;
+    this._traversal = null;
+    this._renderer = null;
+    this._mapView = null;
+    this._seed = '';
+    this._transitioning = false;
+  }
+
+  /**
    * Set the run state and optionally the character definition.
    * Stores both the immutable character def and the persistent run state.
    * When characterDef is null/undefined, the existing _characterDef is preserved.

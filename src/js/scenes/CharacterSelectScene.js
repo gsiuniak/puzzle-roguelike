@@ -937,6 +937,12 @@ export default class CharacterSelectScene extends UIPanel {
     // Set up MapScene for this run
     const mapScene = sm._scenes['MapScene'];
     if (mapScene) {
+      // Fully reset map/traversal state so this run starts clean — without
+      // this, a prior run that ended in defeat (which bypasses the normal
+      // return-to-map flow) leaves stale traversal state and the new run
+      // would reuse the old map/position. (setRunState below replaces HP/stats.)
+      if (mapScene.resetForNewRun) mapScene.resetForNewRun();
+
       // Generate a fresh seed for this run
       mapScene.setSeed('run_' + Date.now());
       mapScene.setRunState(runState, def.characterData);
