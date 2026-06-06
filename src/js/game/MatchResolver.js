@@ -144,9 +144,11 @@ export default class MatchResolver {
 
       const count = match.count;
 
-      // Inert tiles (Disease) are removed but award nothing and never grant
-      // an extra turn — matching them "does nothing except get rid of them".
+      // Inert tiles (Disease) are removed but award no mana and no skull
+      // damage — matching them "does nothing except get rid of them". A 4+
+      // match still grants an extra turn, like any other big match.
       if (isInert(match.typeId)) {
+        if (count >= 4) cascadeExtraTurn = true;
         continue;
       }
 

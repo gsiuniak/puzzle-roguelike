@@ -311,12 +311,12 @@ const SKILL_CATALOG = {
   infected_bite: {
     id: 'infected_bite',
     name: 'Infected Bite',
-    description: 'Deal 1 damage.\nGain a turn.',
+    description: 'Deal 3 damage.\nGain a turn.',
     icon: 'skill_infected_bite',
     sound: 'skill_infected_bite',
     cost: { red: 1 },
     effects: [
-      { effectType: 'damage', damage: { amount: 1 } },
+      { effectType: 'damage', damage: { amount: 3 } },
       { effectType: 'extra_turn' },
     ],
   },
@@ -326,7 +326,7 @@ const SKILL_CATALOG = {
     description: 'Turn all Disease into Skulls.',
     icon: 'skill_cyst_burst',
     sound: 'skill_cyst_burst',
-    cost: { green: 10 },
+    cost: { green: 7 },
     effects: [
       { effectType: 'convert_tiles_by_type', convertByType: { from: 'disease', to: 'skull' } },
     ],
