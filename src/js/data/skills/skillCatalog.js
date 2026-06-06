@@ -277,7 +277,7 @@ const SKILL_CATALOG = {
     description: 'Drain 5 of Every Mana.\nGain a turn.',
     icon: 'skill_soul_burn',
     sound: 'skill_soul_burn',
-    cost: { blue: 3 },
+    cost: { blue: 9 },
     effects: [
       // Remove 5 of EVERY mana color from the opponent (no color = all).
       { effectType: 'drain_mana', drainMana: { amount: 5 } },
@@ -287,11 +287,12 @@ const SKILL_CATALOG = {
   harvest: {
     id: 'harvest',
     name: 'Harvest',
-    description: 'Turn Skulls into Purple.',
+    description: 'Create 10 Green. Turn Skulls into Purple.',
     icon: 'skill_harvest',
     sound: 'skill_harvest',
     cost: { yellow: 7 },
     effects: [
+      { effectType: 'create_tiles', createTiles: { amount: 10, type: 'green' } },
       { effectType: 'convert_tiles_by_type', convertByType: { from: 'skull', to: 'purple' } },
       // extra_turn AFTER the convert — see desecrate note above.
       // { effectType: 'extra_turn' },
