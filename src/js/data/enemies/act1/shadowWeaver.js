@@ -21,7 +21,7 @@ const shadowWeaver = {
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 4 }, // starting purple toward doomsong
   portrait: 'shadow_weaver', // maps to 'portrait_shadow_weaver' asset key
   music: {
-    trackKey: 'battle_theme_act_1_elite',
+    trackKey: 'battle_theme',
     persistAfterBattle: true,
     isSpecialTrack: false,
   },
