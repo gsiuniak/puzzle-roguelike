@@ -2124,6 +2124,8 @@ export default class BattleController {
         return this._applyPassiveDestroyRandomRow(effect, payload);
       case 'convert_random_tiles':
         return this._applyPassiveConvertRandomTiles(effect);
+      case 'create_tiles':
+        return this._applyPassiveCreateTiles(effect, payload);
       case 'echo_damage':
         return this._applyPassiveEchoDamage(effect, payload);
       case 'destroy_random_skulls': {
@@ -2242,6 +2244,54 @@ export default class BattleController {
         this._swapTriggerPos = null;
         this._resumeTurnAfterResolve = true;
         this._beginResolving(this.activeSide, analysis);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Create N tiles of a type by converting random non-matching tiles in place
+   * (Infected Tooth: "create a Disease tile after dealing damage", on
+   * onDealDamage). Unlike the CREATE_TILES skill, this does NOT analyze for
+   * matches or kick off a cascade — it just stamps the tiles down. It can fire
+   * mid-cascade (skull damage re-fires onDealDamage); an in-place type change of
+   * one tile is harmless to the running phase machine (the tile is still removed
+   * normally if it was already part of the active step). Each created tile
+   * dispatches onTileCreated so reactors (Severed Maxilla) fire per tile.
+   *
+   * @param {object} effect — { createTiles: { type, amount } }
+   * @param {object} payload — trigger payload { side, ... } (the creating side)
+   * @returns {boolean} always true (effect recognized/handled)
+   */
+  _applyPassiveCreateTiles(effect, payload) {
+    const cfg = (effect && effect.createTiles) || {};
+    const type = cfg.type;
+    const amount = typeof cfg.amount === 'number' ? cfg.amount : 1;
+    if (!type || amount <= 0) return true;
+    if (!TILE_TYPES[String(type).toUpperCase()]) {
+      console.warn(`[create_tiles passive] Unknown tile type="${type}". Skipping.`);
+      return true;
+    }
+
+    // Convert random tiles that aren't already the target type.
+    const candidates = this.board.getTilesNotOfType(type);
+    if (candidates.length === 0) return true;
+    const chosen = BoardModel.pickRandomTiles(candidates, amount);
+    const count = this.board.convertTilesToType(chosen, type);
+    if (count <= 0) return true;
+
+    // Surface the new tiles for the conversion shimmer (concat so we don't
+    // clobber any pending conversions from the action that triggered us).
+    const created = chosen.slice(0, count).map((p) => ({ col: p.col, row: p.row, typeId: type }));
+    this._convertedTilePositions = (this._convertedTilePositions || []).concat(created);
+    this.log.add(`${count} ${type} tile(s) created.`);
+
+    // Notify onTileCreated reactors — once per created tile so per-tile effects
+    // (Severed Maxilla → +1 attack) accumulate correctly.
+    const side = payload && payload.side;
+    if (side) {
+      for (let i = 0; i < count; i++) {
+        this.passives.dispatch(TRIGGER_TYPES.ON_TILE_CREATED, { side, typeId: type, count: 1 });
       }
     }
     return true;

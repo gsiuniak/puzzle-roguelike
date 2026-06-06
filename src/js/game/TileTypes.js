@@ -7,7 +7,14 @@
  * Extend this object to add new tile types (e.g., bomb tiles, wildcards).
  */
 
-/** @type {Object<string, { id: string, isSkull: boolean, color: string, particleColor: string, spawnWeight: number }>} */
+/**
+ * @type {Object<string, { id: string, isSkull: boolean, isInert?: boolean, color: string, particleColor: string, spawnWeight: number }>}
+ *
+ * `isInert` tiles (Disease) are special: they never spawn naturally
+ * (spawnWeight 0) and are only ever placed by effects. Matching/destroying
+ * them does nothing except remove them — they award no mana and deal no
+ * damage (see MatchResolver). They are neither a mana color nor a skull.
+ */
 export const TILE_TYPES = {
   RED:    { id: 'red',    isSkull: false, color: '#cc3333', particleColor: '#E74C3C', spawnWeight: 16 },
   BLUE:   { id: 'blue',   isSkull: false, color: '#3366cc', particleColor: '#3498DB', spawnWeight: 16 },
@@ -15,6 +22,8 @@ export const TILE_TYPES = {
   YELLOW: { id: 'yellow', isSkull: false, color: '#cccc33', particleColor: '#F1C40F', spawnWeight: 16 },
   PURPLE: { id: 'purple', isSkull: false, color: '#9933cc', particleColor: '#9B59B6', spawnWeight: 16 },
   SKULL:  { id: 'skull',  isSkull: true,  color: '#555555', particleColor: '#2C3E50', spawnWeight: 20 },
+  // Inert tile — never spawns (weight 0), placed only by effects (Infected Tooth).
+  DISEASE: { id: 'disease', isSkull: false, isInert: true, color: '#7d8a3a', particleColor: '#a4c639', spawnWeight: 0 },
 };
 
 /** Quick array of mana color IDs (non-skull) */
@@ -54,12 +63,22 @@ export function isSkull(typeId) {
 }
 
 /**
- * Check if a tile type is a mana color.
+ * Check if a tile type is inert (Disease) — neither mana nor skull.
+ * Inert tiles award nothing when destroyed.
+ * @param {string} typeId
+ * @returns {boolean}
+ */
+export function isInert(typeId) {
+  return TILE_TYPES[typeId?.toUpperCase()]?.isInert ?? false;
+}
+
+/**
+ * Check if a tile type is a mana color (not a skull, not inert).
  * @param {string} typeId
  * @returns {boolean}
  */
 export function isMana(typeId) {
-  return !isSkull(typeId);
+  return !isSkull(typeId) && !isInert(typeId);
 }
 
 /**

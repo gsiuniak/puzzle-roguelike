@@ -55,6 +55,15 @@
  *                        is the side that gained the mana (e.g. Tuning Rod deals
  *                        1 damage when its owner gains purple mana).
  *
+ *   onTileCreated        payload: { side, typeId, count }
+ *                        Fires when a tile is placed on the board by an
+ *                        effect (not by a natural match/refill) — e.g.
+ *                        Infected Tooth creating a Disease tile. Dispatched
+ *                        once per created tile so reactors (Severed Maxilla →
+ *                        +1 attack per Disease tile) fire per tile. `side` is
+ *                        the side whose effect created the tile. Use an effect
+ *                        `condition: { typeId }` to react to a specific tile.
+ *
  *   onTurnStart          payload: { side }
  *                        Fires at the start of a turn (after TURN_INTRO).
  *
@@ -87,6 +96,7 @@ const TRIGGER_TYPES = {
   ON_TILE_MATCH_TYPE:  'onTileMatchType',
   ON_MATCH_4_PLUS:     'onMatch4Plus',
   ON_GAIN_MANA:        'onGainMana',
+  ON_TILE_CREATED:     'onTileCreated',
   ON_TURN_START:       'onTurnStart',
   ON_TURN_END:         'onTurnEnd',
   ON_INCOMING_DAMAGE:  'onIncomingDamage',

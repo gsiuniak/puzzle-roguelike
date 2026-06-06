@@ -305,6 +305,33 @@ const SKILL_CATALOG = {
     ],
   },
 
+  // ── Abomination ─────────────────────────────────────
+  // Spreads Disease (via Infected Tooth relic on dealing damage) then converts
+  // the accumulated Disease into Skulls with Cyst Burst for a skull payoff.
+  infected_bite: {
+    id: 'infected_bite',
+    name: 'Infected Bite',
+    description: 'Deal 1 damage.\nGain a turn.',
+    icon: 'skill_infected_bite',
+    sound: 'skill_infected_bite',
+    cost: { red: 1 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 1 } },
+      { effectType: 'extra_turn' },
+    ],
+  },
+  cyst_burst: {
+    id: 'cyst_burst',
+    name: 'Cyst Burst',
+    description: 'Turn all Disease into Skulls.',
+    icon: 'skill_cyst_burst',
+    sound: 'skill_cyst_burst',
+    cost: { green: 10 },
+    effects: [
+      { effectType: 'convert_tiles_by_type', convertByType: { from: 'disease', to: 'skull' } },
+    ],
+  },
+
   // Goresnout Trackers — ramps attack while chipping damage. Pairs with the
   // Goresnout Collars relic (echoes the 2 damage for 4 total).
   hound: {

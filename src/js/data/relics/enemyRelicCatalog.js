@@ -128,6 +128,44 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
+  // Reactive board control — on dealing damage, create a Disease tile (an inert
+  // tile that does nothing when matched). Board-touching, so it's handled by
+  // BattleController._handlePassiveBoardEffect via the onBoardEffect path; the
+  // creation dispatches onTileCreated so Severed Maxilla can react.
+  infected_tooth: {
+    id: 'infected_tooth',
+    name: 'Infected Tooth',
+    description: 'Create a Disease tile after dealing damage.',
+    icon: 'relic_infected_tooth',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      {
+        trigger: 'onDealDamage',
+        effectType: 'create_tiles',
+        createTiles: { type: 'disease', amount: 1 },
+      },
+    ],
+  },
+
+  // Reactive attack growth — gains +1 Attack whenever a Disease tile is created
+  // (pairs with Infected Tooth). Resolved via EffectResolver (gain_attack); the
+  // onTileCreated condition gates it to Disease tiles specifically.
+  severed_maxilla: {
+    id: 'severed_maxilla',
+    name: 'Severed Maxilla',
+    description: 'Whenever a Disease tile is created, gain +1 Attack.',
+    icon: 'relic_severed_maxilla',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      {
+        trigger: 'onTileCreated',
+        condition: { typeId: 'disease' },
+        effectType: 'gain_attack',
+        gainAttack: { amount: 1 },
+      },
+    ],
+  },
+
   // Turn-start board control — converts up to 2 random Skull tiles into Green
   // in place (no cascade). Board-touching, so it's handled by
   // BattleController._handlePassiveBoardEffect via the onBoardEffect path.

@@ -129,6 +129,7 @@ export default class BoardPlaceholder extends UIElement {
     const fallbackColors = {
       red: '#cc3333', blue: '#3366cc', green: '#33aa33',
       yellow: '#cccc33', purple: '#9933cc', skull: '#555555',
+      disease: '#7d8a3a',
     };
 
     const bgDark = '#2a2a1a';

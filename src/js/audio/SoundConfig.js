@@ -197,6 +197,14 @@ const SOUNDS = {
     src: ['assets/audio/sfx/skills/goresnout/sfx_hound.mp3'],
     category: AudioCategory.SFX,
   },
+  skill_infected_bite: {
+    src: ['assets/audio/sfx/skills/abomination/sfx_skill_infected_bite.mp3'],
+    category: AudioCategory.SFX,
+  },
+  skill_cyst_burst: {
+    src: ['assets/audio/sfx/skills/abomination/sfx_skill_cyst_burst.mp3'],
+    category: AudioCategory.SFX,
+  },
   skill_frenzy: {
     src: ['assets/audio/sfx/skills/orc_taskmaster/sfx_skill_frenzy.mp3'],
     category: AudioCategory.SFX,

@@ -54,6 +54,7 @@ const ASSET_MAP = {
   portrait_chokeweed:        'assets/sprites/character_pane/portraits/portrait_chokeweed.png',
   portrait_goresnout_trackers: 'assets/sprites/character_pane/portraits/portrait_goresnout_trackers.png',
   portrait_malakor:          'assets/sprites/character_pane/portraits/portrait_malakor.png',
+  portrait_abomination:      'assets/sprites/character_pane/portraits/portrait_abomination.png',
   icon_attack:               'assets/sprites/character_pane/icons/icon_attack.png',
   icon_block:                'assets/sprites/character_pane/icons/icon_block.png',
   mana_red:                  'assets/sprites/character_pane/mana/mana_red.png',
@@ -80,6 +81,8 @@ const ASSET_MAP = {
   skill_soul_burn:           'assets/sprites/character_pane/skills/skill_soul_burn.png',
   skill_harvest:             'assets/sprites/character_pane/skills/skill_harvest.png',
   skill_exsanguinate:        'assets/sprites/character_pane/skills/skill_exsanguinate.png',
+  skill_infected_bite:       'assets/sprites/character_pane/skills/skill_infected_bite.png',
+  skill_cyst_burst:          'assets/sprites/character_pane/skills/skill_cyst_burst.png',
   skill_flair_left:          'assets/sprites/character_pane/flair/skill_flair_left.png',
   skill_flair_right:         'assets/sprites/character_pane/flair/skill_flair_right.png',
   grid_dark:                 'assets/sprites/battle/board/grid/grid_dark.png',
@@ -93,6 +96,7 @@ const ASSET_MAP = {
   tile_yellow:               'assets/sprites/battle/board/tiles/yellow_tile.png',
   tile_purple:               'assets/sprites/battle/board/tiles/purple_tile.png',
   tile_skull:                'assets/sprites/battle/board/tiles/skull_tile.png',
+  tile_disease:              'assets/sprites/battle/board/tiles/diseased_tile.png',
   // ── Character select scene assets ───────────────────
   character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.png',
   character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.png',
@@ -209,6 +213,8 @@ const ASSET_MAP = {
   relic_goresnout_collars:   'assets/sprites/relics/relic_goresnout_collars.png',
   relic_sulfur:              'assets/sprites/relics/relic_sulfur.png',
   relic_heart_of_usurper:    'assets/sprites/relics/relic_heart_of_usurper.png',
+  relic_infected_tooth:      'assets/sprites/relics/relic_infected_tooth.png',
+  relic_severed_maxilla:     'assets/sprites/relics/relic_severed_maxilla.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };

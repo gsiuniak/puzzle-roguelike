@@ -13,7 +13,7 @@
  * (removeTiles, gravity, refill) at the appropriate times.
  */
 
-import { isSkull } from './TileTypes.js';
+import { isSkull, isInert } from './TileTypes.js';
 
 /**
  * Skill effect type constants.
@@ -144,6 +144,12 @@ export default class MatchResolver {
 
       const count = match.count;
 
+      // Inert tiles (Disease) are removed but award nothing and never grant
+      // an extra turn — matching them "does nothing except get rid of them".
+      if (isInert(match.typeId)) {
+        continue;
+      }
+
       if (isSkull(match.typeId)) {
         const damage = calculateMatchedSkullDamage(attacker || { attack: 1 }, count);
         cascadeSkullDamage += damage;
@@ -227,7 +233,8 @@ export default class MatchResolver {
       if (!tileId) continue;
       if (isSkull(tileId)) {
         skullCount++;
-      } else {
+      } else if (!isInert(tileId)) {
+        // Inert tiles (Disease) award no mana when destroyed.
         mana[tileId] = (mana[tileId] || 0) + 1;
       }
     }
