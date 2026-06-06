@@ -262,7 +262,7 @@ const SKILL_CATALOG = {
     description: 'Turn all Green into Skulls.',
     icon: 'skill_desecrate',
     sound: 'skill_desecrate',
-    cost: { purple: 7 },
+    cost: { purple: 3 },
     effects: [
       { effectType: 'convert_tiles_by_type', convertByType: { from: 'green', to: 'skull' } },
     ],
@@ -273,7 +273,7 @@ const SKILL_CATALOG = {
     description: 'Silence enemy 1 turn.\nDrain 5 of every mana.',
     icon: 'skill_soul_burn',
     sound: 'skill_soul_burn',
-    cost: { blue: 7 },
+    cost: { blue: 3 },
     effects: [
       // Silence the opponent for their next turn (blocks skill casting).
       { effectType: 'silence', silence: { turns: 1 } },
@@ -287,7 +287,7 @@ const SKILL_CATALOG = {
     description: 'Turn all Skulls to Purple.',
     icon: 'skill_harvest',
     sound: 'skill_harvest',
-    cost: { yellow: 7 },
+    cost: { yellow: 3 },
     effects: [
       { effectType: 'convert_tiles_by_type', convertByType: { from: 'skull', to: 'purple' } },
     ],
@@ -298,7 +298,7 @@ const SKILL_CATALOG = {
     description: 'Reduce enemy attack to 1 for 1 turn.',
     icon: 'skill_exsanguinate',
     sound: 'skill_exsanguinate',
-    cost: { red: 7 },
+    cost: { red: 3 },
     effects: [
       // Force the opponent's attack to 1 for their next turn; restored after.
       { effectType: 'set_attack', setAttack: { value: 1, turns: 1 } },
