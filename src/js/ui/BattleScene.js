@@ -387,8 +387,11 @@ export default class BattleScene extends UIPanel {
     if (!input) return;
 
     // ── Full-canvas background (covers letterbox/pillarbox bars) ──
+    // Data-driven: enemy defs may specify a `background` asset key (passed
+    // through userData by MapScene); fall back to the default battle backdrop.
+    const bgKey = (this.userData && this.userData.background) || 'battle_background_default';
     const bgImg = this._assetManager
-      ? this._assetManager.get('battle_background_default')
+      ? this._assetManager.get(bgKey)
       : null;
     if (this._sceneManager._app && this._sceneManager._app.setBackgroundImage) {
       this._sceneManager._app.setBackgroundImage(bgImg);

@@ -18,6 +18,7 @@ import TitleScreen from './scenes/TitleScreen.js';
 import CharacterSelectScene from './scenes/CharacterSelectScene.js';
 import MapScene from './scenes/MapScene.js';
 import GameOverScene from './scenes/GameOverScene.js';
+import BossIntroScene from './scenes/BossIntroScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
 
@@ -36,6 +37,7 @@ const DEBUG_MODE = true;
 const ASSET_MAP = {
   title_screen:               'assets/sprites/title/title_screen.png',
   battle_background_default:  'assets/sprites/battle/battle_background_default.png',
+  battle_background_malakor:  'assets/sprites/battle/battle_background_malakor.png',
   battle_background_game_over: 'assets/sprites/battle/battle_background_game_over.png',
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
@@ -272,11 +274,16 @@ async function init() {
   // 9b. GameOverScene — shown on player defeat; any input → CharacterSelect
   const gameOverScene = new GameOverScene();
 
+  // 9c. BossIntroScene — full-canvas video cutscene played before a boss fight
+  //     (configured on demand by MapScene._transitionToBattle).
+  const bossIntroScene = new BossIntroScene();
+
   // 10. Register scenes
   sceneManager.registerScene('TitleScreen', titleScreen);
   sceneManager.registerScene('CharacterSelectScene', characterSelectScene);
   sceneManager.registerScene('MapScene', mapScene);
   sceneManager.registerScene('GameOverScene', gameOverScene);
+  sceneManager.registerScene('BossIntroScene', bossIntroScene);
   // BattleScene is registered lazily by MapScene._transitionToBattle()
 
   // 11. Wire the fullscreen toggle button.

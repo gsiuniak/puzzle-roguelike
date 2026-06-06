@@ -462,6 +462,9 @@ export default class MapScene extends UIPanel {
       nodeType: node.type,
       nodeDepth: node.depth,
       music,
+      // Optional per-enemy battle background asset key (BattleScene falls back
+      // to 'battle_background_default' when absent).
+      background: enemyData.background || null,
     };
 
     // Wire onBattleComplete callback so BattleScene reports back
@@ -470,9 +473,24 @@ export default class MapScene extends UIPanel {
       this._handleBattleComplete(result);
     };
 
-    // Register and fade transition to battle
+    // Register the battle scene. If this enemy defines an intro cutscene
+    // (e.g. the boss), fade to the BossIntroScene first — it plays the video,
+    // starts the boss music, then cross-fades into the battle. Otherwise fade
+    // straight to the battle.
     sm.registerScene('BattleScene', battleScene);
-    sm.fadeToScene('BattleScene', 400);
+
+    const introScene = sm._scenes['BossIntroScene'];
+    if (enemyData.introVideo && introScene && typeof introScene.configure === 'function') {
+      introScene.configure({
+        videoSrc: enemyData.introVideo,
+        musicKey: music.trackKey,
+        isSpecialTrack: music.isSpecialTrack,
+        nextScene: 'BattleScene',
+      });
+      sm.fadeToScene('BossIntroScene', 400);
+    } else {
+      sm.fadeToScene('BattleScene', 400);
+    }
   }
 
   /**

@@ -32,6 +32,12 @@ const lordMalakor = {
   // No starting mana — he must match to fuel his 7-cost skills.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'malakor', // maps to 'portrait_malakor' asset key
+  // Battle background asset key (registered in main.js ASSET_MAP). When absent
+  // the BattleScene falls back to 'battle_background_default'.
+  background: 'battle_background_malakor',
+  // Full-canvas, no-audio cutscene played before this fight via BossIntroScene.
+  // URL is relative to index.html. The boss music starts as the video plays.
+  introVideo: 'assets/audio/video/video_malakor_intro.mp4',
   music: {
     trackKey: 'battle_theme_act_1_lord_malakor',
     persistAfterBattle: false,
