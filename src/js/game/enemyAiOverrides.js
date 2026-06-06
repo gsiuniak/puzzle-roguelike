@@ -161,7 +161,7 @@ function scoreMalakorBoard(board, mana) {
 
   let score = total; // baseline so any match beats "no match" (-1)
   if (has4Plus) score += 1_000_000; // extra turn dominates
-  score += skull * 10_000;          // primary: skull damage + Heart of the Usurper
+  score += skull * 10_000;          // primary: skull damage
   score += purple * 1_000;          // primary: fuel Desecrate
   score += progress * 10;           // collect the color closest to a cast
   return score;
@@ -218,14 +218,19 @@ const enemyAiOverrides = {
   },
 
   // ── Lord Malakor (Act 1 boss) ───────────────────────────
-  // Cripple-and-skulls plan. Decision order:
-  //   1) Desecrate (7 purple) when there's Green to convert — the skull engine.
-  //   2) Harvest  (7 yellow) when skulls exist and he still needs purple —
-  //      recycles skulls back into Desecrate fuel.
-  //   3) Soul Burn (7 blue) / Exsanguinate (7 red) — Blue/Red fund nothing else,
-  //      so spend them to cripple the moment they're affordable.
-  //   4) Otherwise match the board via scoreMalakorBoard: skulls > Purple >
+  // His Heart of the Usurper relic now feeds him 2 of every mana each turn, and
+  // every skill grants an extra turn ("Gain a turn"), so he chains skills down a
+  // fixed priority until he runs out of affordable casts, then matches the board.
+  // Cast priority (strict): Desecrate > Harvest > Soul Burn > Exsanguinate.
+  //   1) Desecrate (3 purple) when there's Green to convert — the skull engine.
+  //   2) Harvest  (3 yellow) when there are Skulls to recycle into Purple.
+  //   3) Soul Burn (3 blue)  — drain 5 of every enemy mana.
+  //   4) Exsanguinate (3 red) — cripple the enemy's attack.
+  //   5) Otherwise match the board via scoreMalakorBoard: skulls > Purple >
   //      the skill color he's closest to affording.
+  // (Convert skills gate on having tiles to convert so a cast is never wasted;
+  // the cripples gate on affordability only. Extra turns don't refill mana, so
+  // the chain always terminates.)
   malakor: ({ enemy, board }) => {
     const mana = enemy.mana || {};
     const skills = enemy.skills || [];
@@ -238,24 +243,24 @@ const enemyAiOverrides = {
 
     const greenCount = board.getTilesOfType('green').length;
     const skullCount = board.getTilesOfType('skull').length;
-    const desecratePurpleCost =
-      (desecrate && desecrate.cost && desecrate.cost.purple) || 7;
 
-    // 1) PRIMARY: Desecrate — manufacture skulls from Green.
+    // 1) Desecrate — manufacture skulls from Green.
     if (canAfford(desecrate, mana) && greenCount > 0) {
       return { action: 'skill', skill: desecrate };
     }
 
-    // 2) SECONDARY: Harvest — recycle skulls into Purple when short on Desecrate fuel.
-    if (canAfford(harvest, mana) && skullCount > 0 && (mana.purple || 0) < desecratePurpleCost) {
+    // 2) Harvest — recycle Skulls into Purple (Desecrate fuel).
+    if (canAfford(harvest, mana) && skullCount > 0) {
       return { action: 'skill', skill: harvest };
     }
 
-    // 3) Leftover-mana cripples (Blue/Red fund only these skills).
+    // 3) Soul Burn — drain enemy mana.
     if (canAfford(soulBurn, mana)) return { action: 'skill', skill: soulBurn };
+
+    // 4) Exsanguinate — cripple enemy attack.
     if (canAfford(exsanguinate, mana)) return { action: 'skill', skill: exsanguinate };
 
-    // 4) Board matching, ranked by Malakor's custom priorities.
+    // 5) Board matching, ranked by Malakor's custom priorities.
     const swaps = board.getValidSwaps();
     if (swaps.length === 0) return null; // no moves → let standard AI reshuffle
 

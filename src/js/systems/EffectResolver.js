@@ -103,17 +103,22 @@ export function applyEffect(effect, ctx) {
     case EFFECT_TYPES.GAIN_MANA: {
       if (!caster) return true;
       const gm = effect.gainMana || {};
-      const color = gm.color;
       const amount = typeof gm.amount === 'number' ? gm.amount : 0;
-      if (!color || amount <= 0) return true;
+      if (amount <= 0) return true;
       if (!caster.mana) caster.mana = {};
-      caster.mana[color] = (caster.mana[color] || 0) + amount;
-      if (log) log.add(`${caster.name} gains ${amount} ${color} mana.`);
-      // Notify the host so onGainMana reactors (e.g. Tuning Rod / Flaming Arrow)
-      // fire for RELIC-granted mana too (Familiars, Family Crest, Prism), not
-      // just board-matched mana. ctx.payload.side identifies who gained it.
-      if (ctx.onGainMana && ctx.payload && ctx.payload.side) {
-        ctx.onGainMana(ctx.payload.side, color, amount);
+      // `color` is optional; when omitted, grant `amount` of EVERY mana color
+      // (mirrors drain_mana). Used by Lord Malakor's Heart of the Usurper.
+      const colors = gm.color ? [gm.color] : MANA_COLORS;
+      for (const color of colors) {
+        caster.mana[color] = (caster.mana[color] || 0) + amount;
+        if (log) log.add(`${caster.name} gains ${amount} ${color} mana.`);
+        // Notify the host so onGainMana reactors (e.g. Tuning Rod / Flaming
+        // Arrow) fire for RELIC-granted mana too (Familiars, Family Crest,
+        // Prism), not just board-matched mana. ctx.payload.side identifies who
+        // gained it.
+        if (ctx.onGainMana && ctx.payload && ctx.payload.side) {
+          ctx.onGainMana(ctx.payload.side, color, amount);
+        }
       }
       return true;
     }

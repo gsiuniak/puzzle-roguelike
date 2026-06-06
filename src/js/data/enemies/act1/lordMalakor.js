@@ -1,15 +1,15 @@
 /**
  * Lord Malakor — Act 1 BOSS (floor 10). The act's sole boss.
  *
- * A skull/curse tyrant. His kit forms a loop: Desecrate turns Green into Skulls
- * (manufacturing damage + feeding his Heart of the Usurper relic, which grows
- * his attack on every skull match), and Harvest recycles those Skulls back into
- * Purple to refuel Desecrate. Soul Burn (silence + mana drain) and Exsanguinate
- * (reduce the player's attack to 1) are his cripple tools. His custom AI
- * (aiBehavior: 'malakor', see enemyAiOverrides.js) drives that plan and, when
- * collecting mana, prefers the color it's closest to casting with.
+ * A skull/curse tyrant. Every skill grants an extra turn ("Gain a turn"), and
+ * his Heart of the Usurper relic feeds him 2 of every mana at the start of each
+ * turn, so he chains casts down a fixed priority: Desecrate (Green→Skulls, the
+ * skull engine) > Harvest (Skulls→Purple, refuels Desecrate) > Soul Burn (drain
+ * 5 of every enemy mana) > Exsanguinate (reduce the player's attack to 1). His
+ * custom AI (aiBehavior: 'malakor', see enemyAiOverrides.js) drives that plan,
+ * falling back to board matching when no cast is affordable.
  *
- * Starts with NO mana — Malakor must match to fuel his 7-cost skills.
+ * Starts with NO mana — the relic refills him on his first turn.
  *
  * See act1/goblin.js for the full field documentation.
  */
@@ -25,9 +25,9 @@ const lordMalakor = {
   type: 'boss',
   floors: [10], // floor 10 = the boss node (depth 9)
 
-  hp: 50, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 50,
-  attack: 4,
+  hp: 70, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 70,
+  attack: 10,
   armor: 0,
   // No starting mana — he must match to fuel his 7-cost skills.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },

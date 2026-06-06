@@ -259,49 +259,55 @@ const SKILL_CATALOG = {
   desecrate: {
     id: 'desecrate',
     name: 'Desecrate',
-    description: 'Turn all Green into Skulls.',
+    description: 'Turn Green into Skulls.',
     icon: 'skill_desecrate',
     sound: 'skill_desecrate',
-    cost: { purple: 3 },
+    cost: { purple: 7 },
     effects: [
       { effectType: 'convert_tiles_by_type', convertByType: { from: 'green', to: 'skull' } },
+      // extra_turn MUST come AFTER the convert: convert_tiles_by_type's
+      // _beginResolving resets _extraTurnEarned, so set it afterward to survive
+      // the cascade (see AGENT_ENTRYPOINT decision #4).
+      // { effectType: 'extra_turn' },
     ],
   },
   soul_burn: {
     id: 'soul_burn',
     name: 'Soul Burn',
-    description: 'Silence enemy 1 turn.\nDrain 5 of every mana.',
+    description: 'Drain 5 of Every Mana.\nGain a turn.',
     icon: 'skill_soul_burn',
     sound: 'skill_soul_burn',
     cost: { blue: 3 },
     effects: [
-      // Silence the opponent for their next turn (blocks skill casting).
-      { effectType: 'silence', silence: { turns: 1 } },
       // Remove 5 of EVERY mana color from the opponent (no color = all).
       { effectType: 'drain_mana', drainMana: { amount: 5 } },
+      { effectType: 'extra_turn' },
     ],
   },
   harvest: {
     id: 'harvest',
     name: 'Harvest',
-    description: 'Turn all Skulls to Purple.',
+    description: 'Turn Skulls into Purple.',
     icon: 'skill_harvest',
     sound: 'skill_harvest',
-    cost: { yellow: 3 },
+    cost: { yellow: 7 },
     effects: [
       { effectType: 'convert_tiles_by_type', convertByType: { from: 'skull', to: 'purple' } },
+      // extra_turn AFTER the convert — see desecrate note above.
+      // { effectType: 'extra_turn' },
     ],
   },
   exsanguinate: {
     id: 'exsanguinate',
     name: 'Exsanguinate',
-    description: 'Reduce enemy attack to 1 for 1 turn.',
+    description: 'Reduce Enemy Attack to 1 for 1 turn.\nGain a turn.',
     icon: 'skill_exsanguinate',
     sound: 'skill_exsanguinate',
     cost: { red: 3 },
     effects: [
       // Force the opponent's attack to 1 for their next turn; restored after.
       { effectType: 'set_attack', setAttack: { value: 1, turns: 1 } },
+      { effectType: 'extra_turn' },
     ],
   },
 

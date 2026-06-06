@@ -109,21 +109,22 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
-  // Match-reactive attack growth — gains +1 Attack on every skull match.
-  // Mirrors the player Scythe relic but fires on ANY skull match (matches are
-  // always 3+, so no minCount gate). Resolved via EffectResolver (gain_attack).
+  // Turn-start mana engine — grants Lord Malakor 2 of EVERY mana color at the
+  // start of each of his turns, fuelling his skill loop without relying on the
+  // board. Resolved via EffectResolver (gain_mana with no color = all colors).
+  // Fires onTurnStart, which only triggers on real turns (not the "Gain a turn"
+  // extras granted by his skills), so the mana ramp stays bounded.
   heart_of_usurper: {
     id: 'heart_of_usurper',
     name: 'Heart of the Usurper',
-    description: 'Gain +1 Attack when matching Skulls.',
+    description: 'Gain 2 of every mana at the start of turn.',
     icon: 'relic_heart_of_usurper',
     rarity: RELIC_RARITY.RARE,
     effects: [
       {
-        trigger: 'onTileMatchType',
-        condition: { typeId: 'skull' },
-        effectType: 'gain_attack',
-        gainAttack: { amount: 1 },
+        trigger: 'onTurnStart',
+        effectType: 'gain_mana',
+        gainMana: { amount: 2 },
       },
     ],
   },
