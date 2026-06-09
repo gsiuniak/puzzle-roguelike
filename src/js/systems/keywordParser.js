@@ -141,13 +141,20 @@ export function hasKeywords(raw) {
  *
  * @param {string} rootText — text whose keywords seed the chain
  * @param {number} [maxDepth=3] — maximum number of links returned
+ * @param {Iterable<string>} [excludeIds] — keyword ids to pre-mark as visited,
+ *   so they never appear in the chain. Pass the hovered keyword's own id here
+ *   when the parent tooltip IS a keyword, so its definition isn't repeated when
+ *   a nested description links back to it (e.g. Tiles → Match → Tiles).
  * @returns {Array<{ id:string, label:string, color:string, description:string }>}
  */
-export function buildTooltipChain(rootText, maxDepth = 3) {
+export function buildTooltipChain(rootText, maxDepth = 3, excludeIds = null) {
   const result = [];
   if (maxDepth <= 0) return result;
 
   const visited = new Set();
+  if (excludeIds) {
+    for (const id of excludeIds) visited.add(id);
+  }
   let frontier = [rootText];
 
   while (frontier.length > 0 && result.length < maxDepth) {

@@ -392,7 +392,11 @@ export default class TooltipManager {
 
     const rootText = `${opts.title || ''} ${opts.text || ''}`;
     const maxDepth = opts.maxChainDepth != null ? opts.maxChainDepth : this._maxChainDepth;
-    const links = buildTooltipChain(rootText, maxDepth);
+    // When the parent tooltip IS a keyword (a hovered span), exclude its own id
+    // so a nested description that links back to it doesn't repeat it.
+    const el = attachment.element;
+    const excludeIds = el && el._keywordId ? [el._keywordId] : null;
+    const links = buildTooltipChain(rootText, maxDepth, excludeIds);
 
     for (let i = 0; i < links.length; i++) {
       const def = links[i];

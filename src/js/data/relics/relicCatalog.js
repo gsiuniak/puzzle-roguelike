@@ -81,7 +81,7 @@ const RELIC_CATALOG = {
   unstable_catalyst: {
     id: 'unstable_catalyst',
     name: 'Unstable Catalyst',
-    description: 'Explode [[tiles]] in radius 1 when matching 4+ [[tiles]].',
+    description: 'Explode [[tiles]] in radius 1 when matching 4+ tiles.',
     icon: 'relic_unstable_catalyst',
     rarity: RELIC_RARITY.STARTER,
     effects: [

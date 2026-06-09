@@ -42,10 +42,20 @@ export const KEYWORD_DEFAULT_COLOR = KEYWORD_COLOR;
  * @type {Record<string, { id:string, label:string, description:string }>}
  */
 export const KEYWORD_DEFINITIONS = {
+  change: {
+    id: 'change',
+    label: 'Change',
+    description: 'Turns a specified [[Tile]] into a specific type.',
+  },
   create: {
     id: 'create',
     label: 'Create',
     description: 'Add new [[Tiles]] of the specified type directly to the board.',
+  },
+  tile: {
+    id: 'tile',
+    label: 'Tile',
+    description: 'The gems on the board. [[Match]] 3 or more of a kind to clear them.',
   },
   tiles: {
     id: 'tiles',

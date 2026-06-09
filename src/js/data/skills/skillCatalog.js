@@ -31,7 +31,7 @@ const SKILL_CATALOG = {
   bash: {
     id: 'bash',
     name: 'Bash',
-    description: 'Deal 5 [[damage]]\nGain a turn',
+    description: 'Deal 5 [[damage]]\nGain an [[extra turn]]',
     icon: 'skill_bash',
     sound: 'skill_bash',
     cost: { red: 5 },
@@ -43,7 +43,7 @@ const SKILL_CATALOG = {
   defend: {
     id: 'defend',
     name: 'Defend',
-    description: 'Gain 6 [[armor]]\n[[Create]] 3 blue',
+    description: 'Gain 6 [[armor]]\n[[Create]] 3 Blue [[tiles]]',
     icon: 'skill_defend',
     sound: 'skill_defend',
     cost: { blue: 5 },
@@ -86,7 +86,7 @@ const SKILL_CATALOG = {
   arcane_inscription: {
     id: 'arcane_inscription',
     name: 'Arcane Inscription',
-    description: 'Change 1 [[tile]] into Yellow',
+    description: '[[Change]] 1 [[tile]] into Yellow',
     // Re-uses the explode icon/sound for now — swap to a dedicated
     // skill_arcane_inscription asset whenever new art is added.
     icon: 'skill_explode',
