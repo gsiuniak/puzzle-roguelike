@@ -41,7 +41,7 @@ const SWAP_BASE_DURATION = 120;
 /** Turn intro animation delay in ms (NOT scaled — presentation timing) */
 const TURN_INTRO_DURATION = 600;
 /**
- * How long (ms) the boss waits at turn start while the Baron's Signet harvest
+ * How long (ms) the boss waits at turn start while the Usurper's Heart harvest
  * tendrils spiral to its portrait before it takes its action. Presentation
  * timing — keep roughly in sync with HarvestTendrilEffect's total duration.
  */
@@ -192,9 +192,10 @@ export default class BattleController {
 
     /**
      * Extra delay (ms) added to the enemy's pre-action wait for the CURRENT
-     * turn only, so a turn-start spectacle (e.g. the Baron's Signet harvest
-     * tendrils) can play out before the boss acts. Reset every turn intro and
-     * consumed when the enemy fires. See update()/_completeTurnIntro().
+     * turn only, so a turn-START spectacle (the Usurper's Heart harvest
+     * tendrils, fired on the boss's onTurnStart) can play out before the boss
+     * acts. Reset at each turn intro (before onTurnStart dispatch so the harvest
+     * can set it); applied in update()'s ENEMY_TURN branch.
      * @type {number}
      */
     this._extraEnemyTurnDelay = 0;
@@ -1460,8 +1461,8 @@ export default class BattleController {
 
     // New turn = new action: re-arm Deathbringer's once-per-action guard.
     this._deathbringerFiredThisAction = false;
-    // Reset before dispatching onTurnStart so a turn-start passive (Baron's
-    // Signet harvest) can extend the enemy's pre-action wait for this turn.
+    // Reset before dispatching onTurnStart so a turn-start passive (Usurper's
+    // Heart harvest) can extend the enemy's pre-action wait for this turn.
     this._extraEnemyTurnDelay = 0;
 
     this.log.nextTurn();
@@ -1619,7 +1620,7 @@ export default class BattleController {
     }
 
     // ── Enemy turn delay ──
-    // _extraEnemyTurnDelay lets a turn-start spectacle (Baron's Signet harvest
+    // _extraEnemyTurnDelay lets a turn-start spectacle (Usurper's Heart harvest
     // tendrils) finish before the boss acts; it's consumed once per turn.
     if (this.state === BattleState.ENEMY_TURN && !this._enemyFired) {
       this._enemyTimer += dt;
@@ -2365,10 +2366,10 @@ export default class BattleController {
    * The board mutation is applied immediately (synchronous passive dispatch),
    * but the Thrall positions are captured BEFORE conversion and surfaced via
    * _harvestEvents so BattleScene can spiral "tendril" effects from each Thrall
-   * to the harvester's portrait. We also extend the enemy's pre-action wait
-   * (_extraEnemyTurnDelay) so, on the boss's turn, the tendrils play out before
-   * the boss takes its action — matching the "harvest animation runs first"
-   * requirement within the synchronous turn machine.
+   * to the harvester's portrait. This fires on the boss's turn START (before it
+   * acts), so we extend its pre-action wait (_extraEnemyTurnDelay) to let the
+   * tendrils play out first — matching the "harvest animation runs before other
+   * boss actions" requirement within the synchronous turn machine.
    *
    * @param {object} effect — { harvestTiles: { type, toType, attackPer, tendrilColor? } }
    * @param {object} payload — trigger payload { side, ... } (the harvesting side)
@@ -2399,7 +2400,8 @@ export default class BattleController {
       positions: positions.map((p) => ({ col: p.col, row: p.row })),
       color: cfg.tendrilColor || '#d22a2a',
     });
-    // Give the tendrils time to reach the portrait before the boss acts.
+    // Harvest fires at the boss's turn START, so extend its pre-action wait to
+    // give the tendrils time to reach the portrait before the boss acts.
     if (side === 'enemy') this._extraEnemyTurnDelay += HARVEST_ANIM_DELAY;
 
     // 2) Gain attack per harvested Thrall (permanent for the battle — same

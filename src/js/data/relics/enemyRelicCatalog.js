@@ -109,48 +109,50 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
-  // Turn-start Thrall engine — at the start of each of his turns Lord Malakor
-  // seeds the board with 3 Thrall (wild) tiles. Board-touching, so it's handled
-  // by BattleController._handlePassiveBoardEffect via the create_tiles path with
-  // avoidMatches:true so the wilds don't immediately resolve into free matches.
-  // Pairs with Baron's Signet, which harvests any Thralls the player leaves
-  // behind. Fires onTurnStart (real turns only, not "Gain a turn" extras), so
-  // the board doesn't flood unbounded. Tunables: createTiles.amount.
+  // Turn-START Thrall harvest — at the START of each of his turns Lord Malakor
+  // counts every Thrall still on the board (i.e. the ones the player didn't
+  // spend during their turn), grants himself +1 Attack per Thrall, then converts
+  // those Thralls into Skulls. Board-touching, handled by
+  // BattleController._handlePassiveBoardEffect via the harvest_tiles path (which
+  // also surfaces the red "tendril" harvest animation and delays the boss's
+  // action until it plays). Pairs with Baron's Signet, which seeds the Thralls at
+  // the END of his prior turn — so the player gets a full turn to use them before
+  // this reaps the leftovers. Fires onTurnStart (real turns only, not "Gain a
+  // turn" extras). Tunables: harvestTiles.attackPer / toType / tendrilColor.
   heart_of_usurper: {
     id: 'heart_of_usurper',
-    name: "Usurper's Heart",
-    description: '[[Create]] 3 [[Thrall]] tiles at the start of turn.',
+    name: "Heart of the Usurper",
+    description: 'At the start of turn, [[Harvest]] all [[Thrall]]. Gain 1 [[Attack]] for each Thrall harvested, then turn those Thralls into [[Skulls]].',
     icon: 'relic_heart_of_usurper',
-    rarity: RELIC_RARITY.RARE,
-    effects: [
-      {
-        trigger: 'onTurnStart',
-        effectType: 'create_tiles',
-        createTiles: { type: 'thrall', amount: 3, avoidMatches: true },
-      },
-    ],
-  },
-
-  // Turn-start Thrall harvest — counts every Thrall left on the board, grants
-  // the owner +1 Attack per Thrall, then converts those Thralls into Skulls.
-  // Board-touching, handled by BattleController._handlePassiveBoardEffect via the
-  // harvest_tiles path (which also surfaces the red "tendril" harvest animation
-  // and delays the boss's action until it plays). With Usurper's Heart this is
-  // the boss's core engine: Thralls the player doesn't spend become permanent
-  // Attack + Skull pressure. Tunables: harvestTiles.attackPer / toType /
-  // tendrilColor; ordered BEFORE Usurper's Heart in the enemy def so it harvests
-  // last turn's Thralls before fresh ones are seeded.
-  barons_signet: {
-    id: 'barons_signet',
-    name: "Baron's Signet",
-    description: '[[Harvest]] all Thrall [[tiles]]. Gain 1 [[Attack]] for each Thrall harvested, then turn those Thralls into [[Skulls]].',
-    icon: 'relic_barons_signet',
     rarity: RELIC_RARITY.RARE,
     effects: [
       {
         trigger: 'onTurnStart',
         effectType: 'harvest_tiles',
         harvestTiles: { type: 'thrall', toType: 'skull', attackPer: 1, tendrilColor: '#d22a2a' },
+      },
+    ],
+  },
+
+  // End-of-turn Thrall engine — at the END of each of his turns Lord Malakor
+  // seeds the board with 3 Thrall (wild) tiles. Board-touching, so it's handled
+  // by BattleController._handlePassiveBoardEffect via the create_tiles path with
+  // avoidMatches:true so the wilds don't immediately resolve into free matches.
+  // Seeding at turn END (before the player's turn) gives the player a turn to
+  // spend the Thralls for their own matches; whatever they leave is reaped by
+  // Usurper's Heart at the boss's next turn start. Fires onTurnEnd (once per turn
+  // sequence, after any "Gain a turn" extras). Tunables: createTiles.amount.
+  barons_signet: {
+    id: 'barons_signet',
+    name: "Baron's Signet",
+    description: '[[Create]] 2 [[Thrall]] tiles at the end of turn.',
+    icon: 'relic_barons_signet',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      {
+        trigger: 'onTurnEnd',
+        effectType: 'create_tiles',
+        createTiles: { type: 'thrall', amount: 2, avoidMatches: true },
       },
     ],
   },

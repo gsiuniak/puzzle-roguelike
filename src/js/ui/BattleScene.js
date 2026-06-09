@@ -826,8 +826,9 @@ export default class BattleScene extends UIPanel {
 
     // ── Spawn Thrall-harvest tendril animations ──
     // Red tendrils spiral from each harvested Thrall tile to the harvester's
-    // portrait (Baron's Signet). Spawned before the board flips the Thralls to
-    // Skulls visually; runs while the boss waits out _extraEnemyTurnDelay.
+    // portrait (Usurper's Heart, fired at the boss's turn start). The boss's
+    // pre-action wait is extended (_extraEnemyTurnDelay) so the tendrils finish
+    // before it acts.
     if (state.harvestEvents && state.harvestEvents.length > 0 && this._board) {
       for (const ev of state.harvestEvents) {
         this._spawnHarvestTendrils(ev);

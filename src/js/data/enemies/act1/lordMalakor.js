@@ -1,11 +1,13 @@
 /**
  * Lord Malakor — Act 1 BOSS (floor 10). The act's sole boss.
  *
- * A skull/curse tyrant. His engine is now the Thrall/harvest pair: each turn
- * Usurper's Heart seeds the board with 3 Thrall (wild) tiles and Baron's Signet
- * harvests any Thralls left behind — gaining +1 Attack per Thrall and turning
- * them into Skulls. Thralls help the PLAYER make matches, but every one left on
- * the board feeds the boss permanent Attack and skull pressure. He still carries
+ * A skull/curse tyrant. His engine is now the Thrall/harvest pair: Baron's
+ * Signet seeds the board with 3 Thrall (wild) tiles at the END of his turn (so
+ * the player gets a turn to use them), and Usurper's Heart harvests whatever
+ * Thralls remain at the START of his next turn — gaining +1 Attack per Thrall
+ * and turning them into Skulls. Thralls help the PLAYER make matches, but every
+ * one left on the board feeds the boss permanent Attack and skull pressure. He
+ * still carries
  * his skills (Desecrate > Harvest > Soul Burn > Exsanguinate, each granting an
  * extra turn) and casts them opportunistically when board matches fund the cost;
  * his custom AI (aiBehavior: 'malakor', see enemyAiOverrides.js) otherwise ranks
@@ -27,9 +29,9 @@ const lordMalakor = {
   type: 'boss',
   floors: [10], // floor 10 = the boss node (depth 9)
 
-  hp: 70, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 70,
-  attack: 10,
+  hp: 50, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 50,
+  attack: 1,
   armor: 0,
   // No starting mana — he must match to fuel his 7-cost skills.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
@@ -46,10 +48,11 @@ const lordMalakor = {
     isSpecialTrack: true,
   },
 
-  skills: ['desecrate', 'soul_burn', 'harvest', 'exsanguinate'],
-  // Enemy-only pool (enemyRelicCatalog.js). Order matters: Baron's Signet
-  // harvests LAST turn's Thralls BEFORE Usurper's Heart seeds 3 new ones
-  // (onTurnStart effects resolve in relic-array order).
+  skills: ['desecrate'],
+  // Enemy-only pool (enemyRelicCatalog.js). Baron's Signet seeds 3 Thralls at
+  // his turn END (player then gets a turn to use them); Usurper's Heart harvests
+  // whatever Thralls remain at his next turn START (gain Attack + turn them to
+  // Skulls). Different triggers, so array order doesn't matter here.
   relics: ['barons_signet', 'heart_of_usurper'],
 };
 
