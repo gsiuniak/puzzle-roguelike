@@ -121,7 +121,7 @@ const RELIC_CATALOG = {
   flint: {
     id: 'flint',
     name: 'Flint',
-    description: 'Increase the chance of Red appearing.',
+    description: 'Increase the chance of Red [[tiles]] appearing.',
     icon: 'relic_flint',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -132,7 +132,7 @@ const RELIC_CATALOG = {
   dewstone: {
     id: 'dewstone',
     name: 'Dewstone',
-    description: 'Increase the chance of Blue appearing.',
+    description: 'Increase the chance of Blue [[tiles] appearing.',
     icon: 'relic_dewstone',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -143,7 +143,7 @@ const RELIC_CATALOG = {
   fossilized_fern: {
     id: 'fossilized_fern',
     name: 'Fossilized Fern',
-    description: 'Increase the chance of Green appearing.',
+    description: 'Increase the chance of Green [[tiles]] appearing.',
     icon: 'relic_fossilized_fern',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -154,7 +154,7 @@ const RELIC_CATALOG = {
   copper_coil: {
     id: 'copper_coil',
     name: 'Copper Coil',
-    description: 'Increase the chance of Yellow appearing.',
+    description: 'Increase the chance of Yellow [[tiles]] appearing.',
     icon: 'relic_copper_coil',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -165,7 +165,7 @@ const RELIC_CATALOG = {
   obsidian_shard: {
     id: 'obsidian_shard',
     name: 'Obsidian Shard',
-    description: 'Increase the chance of Purple appearing.',
+    description: 'Increase the chance of Purple [[tiles]] appearing.',
     icon: 'relic_obsidian_shard',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -176,7 +176,7 @@ const RELIC_CATALOG = {
   catacomb_key: {
     id: 'catacomb_key',
     name: 'Catacomb Key',
-    description: 'Increase the chance of Skull appearing.',
+    description: 'Increase the chance of [[Skulls]] appearing.',
     icon: 'relic_catacomb_key',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -189,7 +189,7 @@ const RELIC_CATALOG = {
   bellows: {
     id: 'bellows',
     name: 'Bellows',
-    description: 'Increase the mana gained from matching Red by 1.',
+    description: 'Increase the [[mana]] gained from [[matched]] Red [[tiles]] by 1.',
     icon: 'relic_bellows',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -200,7 +200,7 @@ const RELIC_CATALOG = {
   gourd_flask: {
     id: 'gourd_flask',
     name: 'Gourd Flask',
-    description: 'Increase the mana gained from matching Blue by 1.',
+    description: 'Increase the [[mana]] gained from [[matched]] Blue [[tiles]] by 1.',
     icon: 'relic_gourd_flask',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -211,7 +211,7 @@ const RELIC_CATALOG = {
   pestle: {
     id: 'pestle',
     name: 'Pestle',
-    description: 'Increase the mana gained from matching Green by 1.',
+    description: 'Increase the [[mana]] gained from [[matched]] Green [[tiles]] by 1.',
     icon: 'relic_pestle',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -222,7 +222,7 @@ const RELIC_CATALOG = {
   thimble: {
     id: 'thimble',
     name: 'Thimble',
-    description: 'Increase the mana gained from matching Yellow by 1.',
+    description: 'Increase the [[mana]] gained from [[matched]] Yellow [[tiles]] by 1.',
     icon: 'relic_thimble',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -233,7 +233,7 @@ const RELIC_CATALOG = {
   astrolabe: {
     id: 'astrolabe',
     name: 'Astrolabe',
-    description: 'Increase the mana gained from matching Purple by 1.',
+    description: 'Increase the [[mana]] gained from matching Purple [[tiles]] by 1.',
     icon: 'relic_astrolabe',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -244,7 +244,7 @@ const RELIC_CATALOG = {
   funerary_bell: {
     id: 'funerary_bell',
     name: 'Funerary Bell',
-    description: 'Increases [[damage]] dealt when matching [[skulls]] by 2.',
+    description: 'Increases [[damage]] dealt of [[matched]] [[skulls]] by 2.',
     icon: 'relic_funerary_bell',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -256,7 +256,7 @@ const RELIC_CATALOG = {
   prism: {
     id: 'prism',
     name: 'Prism',
-    description: 'Gain 1 of each mana when matching 4+ tiles.',
+    description: 'Gain 1 of each [[mana]] when matching 4+ [[tiles]].',
     icon: 'relic_prism',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -271,7 +271,7 @@ const RELIC_CATALOG = {
   blighted_hook: {
     id: 'blighted_hook',
     name: 'Blighted Hook',
-    description: 'Drain 1 of each mana from the opponent when matching 4+ tiles.',
+    description: '[[Drain]] 1 of each [[mana]] from the opponent when [[matching]] 4+ [[tiles]].',
     icon: 'relic_blighted_hook',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [

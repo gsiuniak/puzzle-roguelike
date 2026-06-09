@@ -52,6 +52,16 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Create',
     description: 'Add new [[Tiles]] of the specified type directly to the board.',
   },
+  destroy: {
+    id: 'destroy',
+    label: 'Destroy',
+    description: 'Remove [[tiles]] or [[skulls]] from the board and gain their effects.',
+  },
+  drain: {
+    id: 'drain',
+    label: 'Drain',
+    description: 'Subtract [[mana]] from the enemy totals.',
+  },
   tile: {
     id: 'tile',
     label: 'Tile',
@@ -111,8 +121,7 @@ export const KEYWORD_DEFINITIONS = {
  */
 export const KEYWORD_ALIASES = {
   skull: 'skulls',
-  tile: 'tiles',
-  gem: 'tiles',
+  gem: 'tile',
   gems: 'tiles',
   matches: 'match',
   matched: 'match',
@@ -139,8 +148,11 @@ export function normalizeKeywordKey(raw) {
 export function getKeywordDefinition(raw) {
   const key = normalizeKeywordKey(raw);
   if (!key) return null;
-  const canonical = KEYWORD_ALIASES[key] || key;
-  return KEYWORD_DEFINITIONS[canonical] || null;
+  // A direct definition always wins over an alias, so a real keyword (e.g.
+  // 'tile') is never shadowed by an alias of the same spelling (tile→tiles).
+  if (KEYWORD_DEFINITIONS[key]) return KEYWORD_DEFINITIONS[key];
+  const canonical = KEYWORD_ALIASES[key];
+  return (canonical && KEYWORD_DEFINITIONS[canonical]) || null;
 }
 
 export default KEYWORD_DEFINITIONS;

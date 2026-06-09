@@ -58,7 +58,7 @@ const SKILL_CATALOG = {
   fracture: {
     id: 'fracture',
     name: 'Fracture',
-    description: 'Destroy 1 row\n[[Create]] 5 purple',
+    description: '[[Destroy]] 1 row\n[[Create]] 5 purple',
     icon: 'skill_fracture',
     sound: 'skill_fracture',
     targeting: 'board_tile',
