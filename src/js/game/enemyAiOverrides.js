@@ -218,9 +218,11 @@ const enemyAiOverrides = {
   },
 
   // ── Lord Malakor (Act 1 boss) ───────────────────────────
-  // His Heart of the Usurper relic now feeds him 2 of every mana each turn, and
-  // every skill grants an extra turn ("Gain a turn"), so he chains skills down a
-  // fixed priority until he runs out of affordable casts, then matches the board.
+  // His engine is the Thrall/harvest relic pair (Usurper's Heart seeds Thralls,
+  // Baron's Signet harvests them for Attack + Skulls) — driven by passives, not
+  // this handler. He has no mana engine, so casts only happen when board matches
+  // fund a 7-cost skill; every skill grants an extra turn ("Gain a turn"). He
+  // chains skills down a fixed priority while affordable, then matches the board.
   // Cast priority (strict): Desecrate > Harvest > Soul Burn > Exsanguinate.
   //   1) Desecrate (3 purple) when there's Green to convert — the skull engine.
   //   2) Harvest  (3 yellow) when there are Skulls to recycle into Purple.

@@ -250,11 +250,11 @@ const SKILL_CATALOG = {
   },
 
   // ── Lord Malakor (Act 1 boss) ───────────────────────
-  // A skull/curse kit. Desecrate (green→skull) is the engine: it manufactures
-  // skulls to match (his Heart of the Usurper relic grows attack per skull
-  // match). Harvest recycles skulls back into Purple to refuel Desecrate.
-  // Soul Burn / Exsanguinate are the cripple skills. Each has its own
-  // dedicated icon + resolve sound (skill_<id>).
+  // A skull/curse kit, secondary to his Thrall/harvest relic engine (Usurper's
+  // Heart + Baron's Signet — see enemyRelicCatalog.js). Desecrate (green→skull)
+  // manufactures skulls to match; Harvest recycles skulls back into Purple to
+  // refuel Desecrate. Soul Burn / Exsanguinate are the cripple skills. Each has
+  // its own dedicated icon + resolve sound (skill_<id>).
   desecrate: {
     id: 'desecrate',
     name: 'Desecrate',

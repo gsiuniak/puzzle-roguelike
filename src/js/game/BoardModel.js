@@ -13,7 +13,7 @@
  *   - fall animation data generation
  */
 
-import { getRandomTileType, getDefaultSpawnWeights, isSkull, BOARD_COLS, BOARD_ROWS } from './TileTypes.js';
+import { getRandomTileType, getDefaultSpawnWeights, isSkull, isInert, isWild, BOARD_COLS, BOARD_ROWS } from './TileTypes.js';
 
 export default class BoardModel {
   /**
@@ -225,62 +225,115 @@ export default class BoardModel {
   // ── Match Detection ──────────────────────────────────
 
   /**
-   * Find all simple horizontal and vertical matches (3+ in a line).
-   * Each run is a separate match.
-   * @returns {Array<{typeId: string, positions: Array<{col:number, row:number}>, count: number}>}
+   * Scan a single line (row or column) for matchable runs of 3+, WILD-AWARE.
+   *
+   * A wild tile (Thrall) stands in for any concrete COLOR/SKULL type, so for
+   * each such type `c` present on the line we find maximal consecutive runs
+   * whose every cell is either `c` or a wild. A run is only emitted when it is
+   * 3+ long AND contains at least one concrete `c` (a pure-wild run has no host
+   * type and never matches on its own). Because the scan repeats per type, a
+   * single wild that bridges two colors can legitimately belong to a run of
+   * each — the caller (findAllConnectedMatches) keeps differently-typed matches
+   * separate.
+   *
+   * Inert types (Disease) still match as same-type runs (3+ identical tiles in
+   * a line) so existing clutter-clearing behavior is preserved, but wilds do
+   * NOT substitute for inert tiles — a Thrall never completes a Disease match.
+   *
+   * @private
+   * @param {Array<string|null>} line - tile ids along the line (null = empty)
+   * @returns {Array<{ typeId: string, idxs: number[] }>} runs by line index
    */
-  findAllMatches() {
-    const matched = new Set();
-    const matches = [];
+  _scanLineRuns(line) {
+    const L = line.length;
+    const runs = [];
 
-    // Horizontal
-    for (let y = 0; y < this.rows; y++) {
-      let x = 0;
-      while (x < this.cols) {
-        const tile = this.grid[x][y];
-        if (!tile) { x++; continue; }
-        let runEnd = x;
-        while (runEnd + 1 < this.cols && this.grid[runEnd + 1][y] === tile) runEnd++;
-        const runLength = runEnd - x + 1;
-        if (runLength >= 3) {
-          const positions = [];
-          for (let i = x; i <= runEnd; i++) {
-            matched.add(`${i},${y}`);
-            positions.push({ col: i, row: y });
+    // Concrete matchable types present (skip empty + wild tiles; inert tiles
+    // are included but only ever match as themselves — see allowWild below).
+    const colors = new Set();
+    for (const t of line) {
+      if (t && !isWild(t)) colors.add(t);
+    }
+
+    for (const c of colors) {
+      const allowWild = !isInert(c); // wilds never substitute for inert tiles
+      let i = 0;
+      while (i < L) {
+        const cell = line[i];
+        if (cell === c || (allowWild && isWild(cell))) {
+          let j = i;
+          let hasConcrete = false;
+          while (j < L && (line[j] === c || (allowWild && isWild(line[j])))) {
+            if (line[j] === c) hasConcrete = true;
+            j++;
           }
-          matches.push({ typeId: tile, positions, count: runLength });
+          if (j - i >= 3 && hasConcrete) {
+            const idxs = [];
+            for (let k = i; k < j; k++) idxs.push(k);
+            runs.push({ typeId: c, idxs });
+          }
+          i = j;
+        } else {
+          i++;
         }
-        x = runEnd + 1;
       }
     }
 
-    // Vertical
+    return runs;
+  }
+
+  /**
+   * Find all simple horizontal and vertical matches (3+ in a line), wild-aware.
+   * Each run is a separate match (horizontal and vertical runs are NOT merged
+   * here — see findAllConnectedMatches for shape merging). Consumers of this
+   * method only need match existence / position membership, so overlapping
+   * positions across a horizontal and a vertical run are reported independently.
+   * @returns {Array<{typeId: string, positions: Array<{col:number, row:number}>, count: number}>}
+   */
+  findAllMatches() {
+    const matches = [];
+
+    // Horizontal — one line per row.
+    for (let y = 0; y < this.rows; y++) {
+      const line = [];
+      for (let x = 0; x < this.cols; x++) line.push(this.grid[x][y]);
+      for (const run of this._scanLineRuns(line)) {
+        const positions = run.idxs.map((x) => ({ col: x, row: y }));
+        matches.push({ typeId: run.typeId, positions, count: positions.length });
+      }
+    }
+
+    // Vertical — one line per column.
     for (let x = 0; x < this.cols; x++) {
-      let y = 0;
-      while (y < this.rows) {
-        const tile = this.grid[x][y];
-        if (!tile) { y++; continue; }
-        let runEnd = y;
-        while (runEnd + 1 < this.rows && this.grid[x][runEnd + 1] === tile) runEnd++;
-        const runLength = runEnd - y + 1;
-        if (runLength >= 3) {
-          const positions = [];
-          for (let i = y; i <= runEnd; i++) {
-            const key = `${x},${i}`;
-            if (!matched.has(key)) {
-              matched.add(key);
-              positions.push({ col: x, row: i });
-            }
-          }
-          if (positions.length >= 3) {
-            matches.push({ typeId: tile, positions, count: positions.length });
-          }
-        }
-        y = runEnd + 1;
+      const line = this.grid[x];
+      for (const run of this._scanLineRuns(line)) {
+        const positions = run.idxs.map((y) => ({ col: x, row: y }));
+        matches.push({ typeId: run.typeId, positions, count: positions.length });
       }
     }
 
     return matches;
+  }
+
+  /**
+   * Would placing `typeId` at (col, row) make that cell part of a match?
+   * Wild-aware (uses findAllMatches). Temporarily stamps the tile, checks
+   * membership, then restores the original cell. Used for safe Thrall spawning.
+   * @param {number} col @param {number} row @param {string} typeId
+   * @returns {boolean}
+   */
+  positionCreatesMatch(col, row, typeId) {
+    if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) return false;
+    const prev = this.grid[col][row];
+    this.grid[col][row] = typeId;
+    const matches = this.findAllMatches();
+    this.grid[col][row] = prev;
+    for (const m of matches) {
+      for (const p of m.positions) {
+        if (p.col === col && p.row === row) return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -293,42 +346,24 @@ export default class BoardModel {
    * @returns {Array<{typeId: string, positions: Array<{col:number, row:number}>, count: number, isShape: boolean}>}
    */
   findAllConnectedMatches() {
-    // Step 1: Find all raw horizontal and vertical runs
+    // Step 1: Find all raw horizontal and vertical runs (wild-aware).
     const rawRuns = [];
 
-    // Horizontal
+    // Horizontal — one line per row.
     for (let y = 0; y < this.rows; y++) {
-      let x = 0;
-      while (x < this.cols) {
-        const tile = this.grid[x][y];
-        if (!tile) { x++; continue; }
-        let runEnd = x;
-        while (runEnd + 1 < this.cols && this.grid[runEnd + 1][y] === tile) runEnd++;
-        const runLength = runEnd - x + 1;
-        if (runLength >= 3) {
-          const positions = [];
-          for (let i = x; i <= runEnd; i++) positions.push({ col: i, row: y });
-          rawRuns.push({ typeId: tile, positions, isHorizontal: true });
-        }
-        x = runEnd + 1;
+      const line = [];
+      for (let x = 0; x < this.cols; x++) line.push(this.grid[x][y]);
+      for (const run of this._scanLineRuns(line)) {
+        const positions = run.idxs.map((x) => ({ col: x, row: y }));
+        rawRuns.push({ typeId: run.typeId, positions, isHorizontal: true });
       }
     }
 
-    // Vertical
+    // Vertical — one line per column.
     for (let x = 0; x < this.cols; x++) {
-      let y = 0;
-      while (y < this.rows) {
-        const tile = this.grid[x][y];
-        if (!tile) { y++; continue; }
-        let runEnd = y;
-        while (runEnd + 1 < this.rows && this.grid[x][runEnd + 1] === tile) runEnd++;
-        const runLength = runEnd - y + 1;
-        if (runLength >= 3) {
-          const positions = [];
-          for (let i = y; i <= runEnd; i++) positions.push({ col: x, row: i });
-          rawRuns.push({ typeId: tile, positions, isHorizontal: false });
-        }
-        y = runEnd + 1;
+      for (const run of this._scanLineRuns(this.grid[x])) {
+        const positions = run.idxs.map((y) => ({ col: x, row: y }));
+        rawRuns.push({ typeId: run.typeId, positions, isHorizontal: false });
       }
     }
 

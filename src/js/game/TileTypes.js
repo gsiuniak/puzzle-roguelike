@@ -8,12 +8,19 @@
  */
 
 /**
- * @type {Object<string, { id: string, isSkull: boolean, isInert?: boolean, color: string, particleColor: string, spawnWeight: number }>}
+ * @type {Object<string, { id: string, isSkull: boolean, isInert?: boolean, isWild?: boolean, color: string, particleColor: string, spawnWeight: number }>}
  *
  * `isInert` tiles (Disease) are special: they never spawn naturally
  * (spawnWeight 0) and are only ever placed by effects. Matching/destroying
  * them does nothing except remove them — they award no mana and deal no
  * damage (see MatchResolver). They are neither a mana color nor a skull.
+ *
+ * `isWild` tiles (Thrall) are also effect-only (spawnWeight 0) but behave as a
+ * "match anything" joker: in match detection a wild stands in for whatever
+ * concrete neighbour it lines up with (Red + Thrall + Red = a Red match, Skull
+ * + Thrall + Skull = a Skull match). Wild matching lives in BoardModel; a wild
+ * that is destroyed WITHOUT a host (e.g. by a raw destroy effect) awards nothing
+ * — it is neither a mana color nor a skull on its own.
  */
 export const TILE_TYPES = {
   RED:    { id: 'red',    isSkull: false, color: '#cc3333', particleColor: '#E74C3C', spawnWeight: 16 },
@@ -24,6 +31,9 @@ export const TILE_TYPES = {
   SKULL:  { id: 'skull',  isSkull: true,  color: '#555555', particleColor: '#2C3E50', spawnWeight: 20 },
   // Inert tile — never spawns (weight 0), placed only by effects (Infected Tooth).
   DISEASE: { id: 'disease', isSkull: false, isInert: true, color: '#7d8a3a', particleColor: '#a4c639', spawnWeight: 0 },
+  // Wild tile — never spawns (weight 0), placed only by effects (Usurper's Heart).
+  // Matches as any adjacent concrete type. See BoardModel wild-aware detection.
+  THRALL: { id: 'thrall', isSkull: false, isWild: true, color: '#b0392f', particleColor: '#e2452f', spawnWeight: 0 },
 };
 
 /** Quick array of mana color IDs (non-skull) */
@@ -73,12 +83,21 @@ export function isInert(typeId) {
 }
 
 /**
- * Check if a tile type is a mana color (not a skull, not inert).
+ * Check if a tile type is wild (Thrall) — matches as any concrete type.
+ * @param {string} typeId
+ * @returns {boolean}
+ */
+export function isWild(typeId) {
+  return TILE_TYPES[typeId?.toUpperCase()]?.isWild ?? false;
+}
+
+/**
+ * Check if a tile type is a mana color (not a skull, not inert, not wild).
  * @param {string} typeId
  * @returns {boolean}
  */
 export function isMana(typeId) {
-  return !isSkull(typeId) && !isInert(typeId);
+  return !isSkull(typeId) && !isInert(typeId) && !isWild(typeId);
 }
 
 /**

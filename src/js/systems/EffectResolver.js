@@ -107,7 +107,7 @@ export function applyEffect(effect, ctx) {
       if (amount <= 0) return true;
       if (!caster.mana) caster.mana = {};
       // `color` is optional; when omitted, grant `amount` of EVERY mana color
-      // (mirrors drain_mana). Used by Lord Malakor's Heart of the Usurper.
+      // (mirrors drain_mana), for "gain N of every mana" relic effects.
       const colors = gm.color ? [gm.color] : MANA_COLORS;
       for (const color of colors) {
         caster.mana[color] = (caster.mana[color] || 0) + amount;

@@ -62,6 +62,16 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Destroy',
     description: 'Remove [[tiles]] or [[skulls]] from the board and gain their effects.',
   },
+  thrall: {
+    id: 'thrall',
+    label: 'Thrall',
+    description: 'A wild [[Tile]] that counts as any type for [[matching]] — it completes a [[Match]] with whatever it lines up beside.',
+  },
+  harvest: {
+    id: 'harvest',
+    label: 'Harvest',
+    description: 'Consume all [[Thrall]] [[tiles]] on the board for their effect.',
+  },
   destroying: {
     id: 'destroying',
     label: 'Destroying',

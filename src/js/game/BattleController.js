@@ -40,6 +40,12 @@ const ENEMY_BASE_DELAY = 400;
 const SWAP_BASE_DURATION = 120;
 /** Turn intro animation delay in ms (NOT scaled — presentation timing) */
 const TURN_INTRO_DURATION = 600;
+/**
+ * How long (ms) the boss waits at turn start while the Baron's Signet harvest
+ * tendrils spiral to its portrait before it takes its action. Presentation
+ * timing — keep roughly in sync with HarvestTendrilEffect's total duration.
+ */
+const HARVEST_ANIM_DELAY = 700;
 
 export default class BattleController {
   constructor(playerData, enemyData) {
@@ -173,6 +179,25 @@ export default class BattleController {
      * @type {Array<{col:number, row:number, typeId:string}>|null}
      */
     this._convertedTilePositions = null;
+
+    /**
+     * Pending Thrall-harvest animation events (Baron's Signet). Each entry
+     * captures the Thrall tile positions (BEFORE they are converted to skulls)
+     * and the side harvesting them, so BattleScene can spiral red "tendril"
+     * effects from each Thrall toward the harvester's portrait. Read & cleared
+     * by BattleScene via getState().
+     * @type {Array<{side:'player'|'enemy', positions:Array<{col:number,row:number}>, color:string}>}
+     */
+    this._harvestEvents = [];
+
+    /**
+     * Extra delay (ms) added to the enemy's pre-action wait for the CURRENT
+     * turn only, so a turn-start spectacle (e.g. the Baron's Signet harvest
+     * tendrils) can play out before the boss acts. Reset every turn intro and
+     * consumed when the enemy fires. See update()/_completeTurnIntro().
+     * @type {number}
+     */
+    this._extraEnemyTurnDelay = 0;
 
     /**
      * Pending screen-shake intensity (0-1). Set when damage is dealt,
@@ -539,6 +564,11 @@ export default class BattleController {
     const relicTriggers = this._relicTriggerEvents;
     this._relicTriggerEvents = [];
 
+    // Capture Thrall-harvest animation events and clear so the scene spawns
+    // each tendril effect exactly once per harvest.
+    const harvestEvents = this._harvestEvents;
+    this._harvestEvents = [];
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -554,6 +584,7 @@ export default class BattleController {
       pendingSkillSound,
       floatingStatEvents,
       relicTriggers,
+      harvestEvents,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -1429,6 +1460,9 @@ export default class BattleController {
 
     // New turn = new action: re-arm Deathbringer's once-per-action guard.
     this._deathbringerFiredThisAction = false;
+    // Reset before dispatching onTurnStart so a turn-start passive (Baron's
+    // Signet harvest) can extend the enemy's pre-action wait for this turn.
+    this._extraEnemyTurnDelay = 0;
 
     this.log.nextTurn();
     if (side === 'enemy') {
@@ -1585,10 +1619,13 @@ export default class BattleController {
     }
 
     // ── Enemy turn delay ──
+    // _extraEnemyTurnDelay lets a turn-start spectacle (Baron's Signet harvest
+    // tendrils) finish before the boss acts; it's consumed once per turn.
     if (this.state === BattleState.ENEMY_TURN && !this._enemyFired) {
       this._enemyTimer += dt;
-      if (this._enemyTimer >= this._enemyDelay()) {
+      if (this._enemyTimer >= this._enemyDelay() + this._extraEnemyTurnDelay) {
         this._enemyFired = true;
+        this._extraEnemyTurnDelay = 0;
         this._doEnemyTurn();
       }
     }
@@ -2126,6 +2163,8 @@ export default class BattleController {
         return this._applyPassiveConvertRandomTiles(effect);
       case 'create_tiles':
         return this._applyPassiveCreateTiles(effect, payload);
+      case 'harvest_tiles':
+        return this._applyPassiveHarvest(effect, payload);
       case 'echo_damage':
         return this._applyPassiveEchoDamage(effect, payload);
       case 'destroy_random_skulls': {
@@ -2259,7 +2298,13 @@ export default class BattleController {
    * normally if it was already part of the active step). Each created tile
    * dispatches onTileCreated so reactors (Severed Maxilla) fire per tile.
    *
-   * @param {object} effect — { createTiles: { type, amount } }
+   * When cfg.avoidMatches is true (e.g. Thrall tiles from Usurper's Heart),
+   * tiles are placed one at a time, each preferring a position that would NOT
+   * immediately form a match — re-evaluated after every placement so two new
+   * tiles can't accidentally complete a run together. If no safe position
+   * exists at a step it falls back to any replaceable tile.
+   *
+   * @param {object} effect — { createTiles: { type, amount, avoidMatches? } }
    * @param {object} payload — trigger payload { side, ... } (the creating side)
    * @returns {boolean} always true (effect recognized/handled)
    */
@@ -2267,22 +2312,36 @@ export default class BattleController {
     const cfg = (effect && effect.createTiles) || {};
     const type = cfg.type;
     const amount = typeof cfg.amount === 'number' ? cfg.amount : 1;
+    const avoidMatches = !!cfg.avoidMatches;
     if (!type || amount <= 0) return true;
     if (!TILE_TYPES[String(type).toUpperCase()]) {
       console.warn(`[create_tiles passive] Unknown tile type="${type}". Skipping.`);
       return true;
     }
 
-    // Convert random tiles that aren't already the target type.
-    const candidates = this.board.getTilesNotOfType(type);
-    if (candidates.length === 0) return true;
-    const chosen = BoardModel.pickRandomTiles(candidates, amount);
-    const count = this.board.convertTilesToType(chosen, type);
+    // Place tiles one at a time so safe-spawn checks see prior placements.
+    const placed = [];
+    for (let i = 0; i < amount; i++) {
+      let candidates = this.board.getTilesNotOfType(type);
+      if (candidates.length === 0) break;
+      if (avoidMatches) {
+        const safe = candidates.filter(
+          (p) => !this.board.positionCreatesMatch(p.col, p.row, type)
+        );
+        // Fall back to any replaceable tile when no safe spot remains.
+        if (safe.length > 0) candidates = safe;
+      }
+      const [chosen] = BoardModel.pickRandomTiles(candidates, 1);
+      if (!chosen) break;
+      if (this.board.convertTilesToType([chosen], type) > 0) placed.push(chosen);
+    }
+
+    const count = placed.length;
     if (count <= 0) return true;
 
     // Surface the new tiles for the conversion shimmer (concat so we don't
     // clobber any pending conversions from the action that triggered us).
-    const created = chosen.slice(0, count).map((p) => ({ col: p.col, row: p.row, typeId: type }));
+    const created = placed.map((p) => ({ col: p.col, row: p.row, typeId: type }));
     this._convertedTilePositions = (this._convertedTilePositions || []).concat(created);
     this.log.add(`${count} ${type} tile(s) created.`);
 
@@ -2294,6 +2353,68 @@ export default class BattleController {
         this.passives.dispatch(TRIGGER_TYPES.ON_TILE_CREATED, { side, typeId: type, count: 1 });
       }
     }
+    return true;
+  }
+
+  /**
+   * Harvest every tile of one type on the board (Baron's Signet): the owner
+   * gains `attackPer` attack per harvested tile, then each harvested tile is
+   * converted into another type (Thrall → Skull). No tiles are harvested ⇒
+   * nothing happens (no attack, no animation) — the action flow just continues.
+   *
+   * The board mutation is applied immediately (synchronous passive dispatch),
+   * but the Thrall positions are captured BEFORE conversion and surfaced via
+   * _harvestEvents so BattleScene can spiral "tendril" effects from each Thrall
+   * to the harvester's portrait. We also extend the enemy's pre-action wait
+   * (_extraEnemyTurnDelay) so, on the boss's turn, the tendrils play out before
+   * the boss takes its action — matching the "harvest animation runs first"
+   * requirement within the synchronous turn machine.
+   *
+   * @param {object} effect — { harvestTiles: { type, toType, attackPer, tendrilColor? } }
+   * @param {object} payload — trigger payload { side, ... } (the harvesting side)
+   * @returns {boolean} always true (effect recognized/handled)
+   */
+  _applyPassiveHarvest(effect, payload) {
+    const cfg = (effect && effect.harvestTiles) || {};
+    const fromType = cfg.type || 'thrall';
+    const toType = cfg.toType || 'skull';
+    const attackPer = typeof cfg.attackPer === 'number' ? cfg.attackPer : 1;
+    if (!TILE_TYPES[String(fromType).toUpperCase()] || !TILE_TYPES[String(toType).toUpperCase()]) {
+      console.warn(`[harvest_tiles] Unknown tile type from="${fromType}" to="${toType}". Skipping.`);
+      return true;
+    }
+
+    const side = (payload && payload.side) || this.activeSide;
+    const harvester = this._getStateBySide(side);
+    if (!harvester) return true;
+
+    const positions = this.board.getTilesOfType(fromType);
+    const count = positions.length;
+    if (count === 0) return true; // No Thralls — do nothing, no animation.
+
+    // 1) Animation event — capture positions BEFORE conversion so the tendrils
+    //    originate from where the Thralls were.
+    this._harvestEvents.push({
+      side,
+      positions: positions.map((p) => ({ col: p.col, row: p.row })),
+      color: cfg.tendrilColor || '#d22a2a',
+    });
+    // Give the tendrils time to reach the portrait before the boss acts.
+    if (side === 'enemy') this._extraEnemyTurnDelay += HARVEST_ANIM_DELAY;
+
+    // 2) Gain attack per harvested Thrall (permanent for the battle — same
+    //    semantics as EffectResolver's gain_attack; safe to add directly).
+    const attackGain = attackPer * count;
+    if (attackGain > 0) harvester.attack = (harvester.attack || 0) + attackGain;
+
+    // 3) Convert the harvested Thralls into the target type (Skulls) in place.
+    //    Surface them as a conversion shimmer (concat so we don't clobber other
+    //    pending conversions). No cascade — the new Skulls sit as a threat.
+    this.board.convertTilesToType(positions, toType);
+    const converted = positions.map((p) => ({ col: p.col, row: p.row, typeId: toType }));
+    this._convertedTilePositions = (this._convertedTilePositions || []).concat(converted);
+
+    this.log.add(`${harvester.name} harvests ${count} Thrall(s), gaining ${attackGain} Attack.`);
     return true;
   }
 

@@ -99,6 +99,7 @@ const ASSET_MAP = {
   tile_purple:               'assets/sprites/battle/board/tiles/purple_tile.png',
   tile_skull:                'assets/sprites/battle/board/tiles/skull_tile.png',
   tile_disease:              'assets/sprites/battle/board/tiles/diseased_tile.png',
+  tile_thrall:               'assets/sprites/battle/board/tiles/thrall_tile.png',
   // ── Character select scene assets ───────────────────
   character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.png',
   character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.png',
@@ -215,6 +216,7 @@ const ASSET_MAP = {
   relic_goresnout_collars:   'assets/sprites/relics/relic_goresnout_collars.png',
   relic_sulfur:              'assets/sprites/relics/relic_sulfur.png',
   relic_heart_of_usurper:    'assets/sprites/relics/relic_heart_of_usurper.png',
+  relic_barons_signet:       'assets/sprites/relics/relic_barons_signet.png',
   relic_infected_tooth:      'assets/sprites/relics/relic_infected_tooth.png',
   relic_severed_maxilla:     'assets/sprites/relics/relic_severed_maxilla.png',
   // ── General UI ──────────────────────────────────────

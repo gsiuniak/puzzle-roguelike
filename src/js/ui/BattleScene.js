@@ -10,6 +10,7 @@ import UIText from './UIText.js';
 import FloatingImageEffect from './FloatingImageEffect.js';
 import FloatingTextEffect from './FloatingTextEffect.js';
 import TileParticleEffect from './TileParticleEffect.js';
+import HarvestTendrilEffect from './HarvestTendrilEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
 import TooltipManager from '../systems/TooltipManager.js';
@@ -823,6 +824,16 @@ export default class BattleScene extends UIPanel {
       }
     }
 
+    // ── Spawn Thrall-harvest tendril animations ──
+    // Red tendrils spiral from each harvested Thrall tile to the harvester's
+    // portrait (Baron's Signet). Spawned before the board flips the Thralls to
+    // Skulls visually; runs while the boss waits out _extraEnemyTurnDelay.
+    if (state.harvestEvents && state.harvestEvents.length > 0 && this._board) {
+      for (const ev of state.harvestEvents) {
+        this._spawnHarvestTendrils(ev);
+      }
+    }
+
     // ── Spawn combat-stat floating text over portraits ──
     // Damage (red "-x"), heal (green "+x"), armor (blue "+x"). Multiple events
     // for the same side this frame are stacked vertically so they don't overlap.
@@ -1047,6 +1058,28 @@ export default class BattleScene extends UIPanel {
     });
 
     this._floatingEffects.push(effect);
+  }
+
+  /**
+   * Spawn the red "tendril" harvest animation: spirals from each harvested
+   * Thrall cell to the harvester's portrait (Baron's Signet).
+   * @param {{side:'player'|'enemy', positions:Array<{col:number,row:number}>, color:string}} ev
+   */
+  _spawnHarvestTendrils(ev) {
+    if (!ev || !ev.positions || ev.positions.length === 0) return;
+    const pane = ev.side === 'player' ? this._playerPane : this._enemyPane;
+    if (!pane || typeof pane.getPortraitCenter !== 'function') return;
+    const target = pane.getPortraitCenter();
+    if (!target) return;
+
+    const sources = ev.positions
+      .map((p) => this._cellToScreen(p))
+      .filter(Boolean);
+    if (sources.length === 0) return;
+
+    this._floatingEffects.push(
+      new HarvestTendrilEffect(sources, target, { color: ev.color || '#d22a2a' })
+    );
   }
 
   /**

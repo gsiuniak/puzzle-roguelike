@@ -13,7 +13,7 @@
  * (removeTiles, gravity, refill) at the appropriate times.
  */
 
-import { isSkull, isInert } from './TileTypes.js';
+import { isSkull, isInert, isMana } from './TileTypes.js';
 
 /**
  * Skill effect type constants.
@@ -235,8 +235,9 @@ export default class MatchResolver {
       if (!tileId) continue;
       if (isSkull(tileId)) {
         skullCount++;
-      } else if (!isInert(tileId)) {
-        // Inert tiles (Disease) award no mana when destroyed.
+      } else if (isMana(tileId)) {
+        // Only mana colors award mana on destruction. Inert (Disease) and wild
+        // (Thrall) tiles destroyed without a host award nothing.
         mana[tileId] = (mana[tileId] || 0) + 1;
       }
     }

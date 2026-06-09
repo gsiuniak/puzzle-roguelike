@@ -1,15 +1,17 @@
 /**
  * Lord Malakor — Act 1 BOSS (floor 10). The act's sole boss.
  *
- * A skull/curse tyrant. Every skill grants an extra turn ("Gain a turn"), and
- * his Heart of the Usurper relic feeds him 2 of every mana at the start of each
- * turn, so he chains casts down a fixed priority: Desecrate (Green→Skulls, the
- * skull engine) > Harvest (Skulls→Purple, refuels Desecrate) > Soul Burn (drain
- * 5 of every enemy mana) > Exsanguinate (reduce the player's attack to 1). His
- * custom AI (aiBehavior: 'malakor', see enemyAiOverrides.js) drives that plan,
- * falling back to board matching when no cast is affordable.
+ * A skull/curse tyrant. His engine is now the Thrall/harvest pair: each turn
+ * Usurper's Heart seeds the board with 3 Thrall (wild) tiles and Baron's Signet
+ * harvests any Thralls left behind — gaining +1 Attack per Thrall and turning
+ * them into Skulls. Thralls help the PLAYER make matches, but every one left on
+ * the board feeds the boss permanent Attack and skull pressure. He still carries
+ * his skills (Desecrate > Harvest > Soul Burn > Exsanguinate, each granting an
+ * extra turn) and casts them opportunistically when board matches fund the cost;
+ * his custom AI (aiBehavior: 'malakor', see enemyAiOverrides.js) otherwise ranks
+ * skull-building swaps.
  *
- * Starts with NO mana — the relic refills him on his first turn.
+ * Starts with NO mana — he must match the board to fuel his skills.
  *
  * See act1/goblin.js for the full field documentation.
  */
@@ -45,7 +47,10 @@ const lordMalakor = {
   },
 
   skills: ['desecrate', 'soul_burn', 'harvest', 'exsanguinate'],
-  relics: ['heart_of_usurper'], // enemy-only pool (enemyRelicCatalog.js)
+  // Enemy-only pool (enemyRelicCatalog.js). Order matters: Baron's Signet
+  // harvests LAST turn's Thralls BEFORE Usurper's Heart seeds 3 new ones
+  // (onTurnStart effects resolve in relic-array order).
+  relics: ['barons_signet', 'heart_of_usurper'],
 };
 
 export default lordMalakor;
