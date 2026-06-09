@@ -2,6 +2,7 @@ import UIPanel from './UIPanel.js';
 import UIContainer from './UIContainer.js';
 import UIImage from './UIImage.js';
 import UIText from './UIText.js';
+import KeywordText from './KeywordText.js';
 import UIOrb from './UIOrb.js';
 
 // ── Tunable layout constants ─────────────────────────────
@@ -144,8 +145,9 @@ export default class SkillButton extends UIPanel {
     });
     info.addChild(this._nameText);
 
-    // Description (may contain '\n' line breaks — UIText supports them).
-    this._descText = new UIText(sd.description || '');
+    // Description: KeywordText so [[Keyword]] markup renders colored + bracket-
+    // free (and its spans can be registered as tooltip sources). Supports '\n'.
+    this._descText = new KeywordText(sd.description || '');
     this._descText.setStyle({
       fontSize: DESC_FONT_SIZE,
       color: '#cfc8a8',
@@ -229,6 +231,12 @@ export default class SkillButton extends UIPanel {
       col.addChild(pair);
     }
     return col;
+  }
+
+  /** The description's KeywordText element (null for locked slots), so callers
+   * can register its inline keyword spans as tooltip sources. */
+  get descKeywordText() {
+    return this._descText || null;
   }
 
   // ── Mana affordability ──────────────────────────────

@@ -18,6 +18,7 @@
 import {
   getKeywordDefinition,
   normalizeKeywordKey,
+  KEYWORD_COLOR,
   KEYWORD_MISSING_COLOR,
 } from '../data/keywordDefinitions.js';
 
@@ -79,7 +80,7 @@ export function parseKeywordText(raw) {
         type: 'keyword',
         keywordId: def.id,
         label: def.label,
-        color: def.color,
+        color: KEYWORD_COLOR,
         missing: false,
       });
     } else {

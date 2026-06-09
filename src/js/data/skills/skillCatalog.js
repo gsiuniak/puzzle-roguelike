@@ -31,7 +31,7 @@ const SKILL_CATALOG = {
   bash: {
     id: 'bash',
     name: 'Bash',
-    description: 'Deal 5 damage\nGain a turn',
+    description: 'Deal 5 [[damage]]\nGain a turn',
     icon: 'skill_bash',
     sound: 'skill_bash',
     cost: { red: 5 },
@@ -43,7 +43,7 @@ const SKILL_CATALOG = {
   defend: {
     id: 'defend',
     name: 'Defend',
-    description: 'Gain 6 armor\nCreate 3 blue',
+    description: 'Gain 6 [[armor]]\n[[Create]] 3 blue',
     icon: 'skill_defend',
     sound: 'skill_defend',
     cost: { blue: 5 },
@@ -58,7 +58,7 @@ const SKILL_CATALOG = {
   fracture: {
     id: 'fracture',
     name: 'Fracture',
-    description: 'Destroy 1 row\nCreate 5 purple',
+    description: 'Destroy 1 row\n[[Create]] 5 purple',
     icon: 'skill_fracture',
     sound: 'skill_fracture',
     targeting: 'board_tile',
@@ -86,7 +86,7 @@ const SKILL_CATALOG = {
   arcane_inscription: {
     id: 'arcane_inscription',
     name: 'Arcane Inscription',
-    description: 'Change 1 tile into Yellow',
+    description: 'Change 1 [[tile]] into Yellow',
     // Re-uses the explode icon/sound for now — swap to a dedicated
     // skill_arcane_inscription asset whenever new art is added.
     icon: 'skill_explode',
@@ -103,7 +103,7 @@ const SKILL_CATALOG = {
   summon_dead: {
     id: 'summon_dead',
     name: 'Summon Dead',
-    description: 'Change all Yellow into Skulls',
+    description: 'Change all Yellow into [[Skulls]]',
     icon: 'skill_summon_dead',
     sound: 'skill_create_skull',
     cost: { purple: 4 },
@@ -114,7 +114,7 @@ const SKILL_CATALOG = {
   oungan: {
     id: 'oungan',
     name: 'Oungan',
-    description: 'Heal 6 HP\nCreate 5 green',
+    description: '[[Heal]] 6 HP\n[[Create]] 5 green',
     icon: 'skill_oungan',
     sound: 'skill_oungan',
     cost: { green: 6 },

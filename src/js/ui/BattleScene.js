@@ -441,6 +441,8 @@ export default class BattleScene extends UIPanel {
     if (this._enemyRelicBar) {
       this._enemyRelicBar.setTooltipManager(this._tooltipManager);
     }
+    // Inline [[keyword]] tooltips for skill descriptions.
+    this._registerSkillKeywordSources();
 
     // Create bound handlers (stored for cleanup in onExit)
     this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
@@ -1345,12 +1347,30 @@ export default class BattleScene extends UIPanel {
         this._battleController.tryPlayerSkill(skill);
       };
     }
+    this._registerSkillKeywordSources();
   }
 
   setEnemyData(data) {
     this._enemyData = data;
     if (this._enemyPane) this._enemyPane.setCharacterData(data);
     if (this._enemySkillsPane) this._enemySkillsPane.setSkills((data && data.skills) || []);
+    this._registerSkillKeywordSources();
+  }
+
+  /**
+   * Register the player's & enemy's skill-description KeywordText elements as
+   * inline keyword tooltip sources. Re-runs whenever skills are (re)built, so
+   * stale span sources are dropped first (relic icon tooltips are unaffected).
+   */
+  _registerSkillKeywordSources() {
+    const tm = this._tooltipManager;
+    if (!tm) return;
+    tm.clearKeywordSources();
+    const opts = { scale: 1.0, padding: 22, offset: 16, hitPadding: 6 };
+    for (const pane of [this._playerSkillsPane, this._enemySkillsPane]) {
+      if (!pane) continue;
+      for (const kt of pane.descKeywordTexts) tm.attachKeywordSource(kt, opts);
+    }
   }
 
   updateFromData() {

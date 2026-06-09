@@ -1,5 +1,6 @@
 import Tooltip from '../ui/Tooltip.js';
 import { buildTooltipChain } from './keywordParser.js';
+import { getKeywordDefinition, KEYWORD_COLOR } from '../data/keywordDefinitions.js';
 
 /**
  * TooltipManager — reusable tooltip system attachable to any UI element.
@@ -96,6 +97,16 @@ export default class TooltipManager {
     /** @type {Array<{ element: import('../ui/UIElement.js').default, options: object }>} */
     this._attachments = [];
 
+    // ── Inline keyword spans ──
+    // KeywordText elements whose individual [[keyword]] spans become hoverable
+    // tooltip sources (each span shows that keyword's definition + chain). This
+    // is what makes keyword tooltips work inside any inline description, not
+    // just relic icons.
+    /** @type {Array<{ element: any, options: object }>} */
+    this._keywordSources = [];
+    /** element → Map(keywordId → synthetic span attachment), for stable hover identity. */
+    this._spanCache = new Map();
+
     // Currently-shown attachment (any source); null = nothing visible.
     /** @type {{ element, options }|null} */
     this._activeAttachment = null;
@@ -154,9 +165,46 @@ export default class TooltipManager {
   /** Remove all attachments and hide any visible tooltip. */
   clear() {
     this._attachments.length = 0;
+    this._keywordSources.length = 0;
+    this._spanCache.clear();
     this._hoverElement = null;
     this._cancelTouchHold();
     this._hide();
+  }
+
+  /**
+   * Register a KeywordText element so its inline [[keyword]] spans become
+   * hoverable/touchable tooltip sources. Idempotent per element.
+   * @param {import('../ui/KeywordText.js').default} element — must expose getKeywordRects()
+   * @param {object} [options] — tooltip styling: { scale, width, padding, offset, hitPadding }
+   */
+  attachKeywordSource(element, options = {}) {
+    if (!element || typeof element.getKeywordRects !== 'function') return;
+    const idx = this._keywordSources.findIndex(s => s.element === element);
+    if (idx !== -1) this._keywordSources[idx].options = options;
+    else this._keywordSources.push({ element, options });
+  }
+
+  /** Remove all keyword-span sources (leaves regular element attachments). */
+  clearKeywordSources() {
+    this._keywordSources.length = 0;
+    this._spanCache.clear();
+    if (this._activeAttachment && this._activeAttachment.element &&
+        this._activeAttachment.element._spanSource) {
+      this._hide();
+    }
+  }
+
+  /** Stop sourcing keyword tooltips from a KeywordText element. */
+  detachKeywordSource(element) {
+    const idx = this._keywordSources.findIndex(s => s.element === element);
+    if (idx !== -1) this._keywordSources.splice(idx, 1);
+    this._spanCache.delete(element);
+    // If a span from this element is showing, hide it.
+    if (this._activeAttachment && this._activeAttachment.element &&
+        this._activeAttachment.element._spanSource === element) {
+      this._hide();
+    }
   }
 
   /**
@@ -201,7 +249,7 @@ export default class TooltipManager {
     }
 
     // Desktop hover path
-    const att = this._findAttachmentAt(x, y);
+    const att = this._findAnyAt(x, y);
     const el = att ? att.element : null;
     if (el !== this._hoverElement) {
       this._hoverElement = el;
@@ -212,7 +260,7 @@ export default class TooltipManager {
 
   onMouseDown(x, y) {
     if (!this._enabled) return;
-    const att = this._findAttachmentAt(x, y);
+    const att = this._findAnyAt(x, y);
     if (att) {
       this._touchHoldAttachment = att;
       this._touchHoldTimer = 0;
@@ -248,6 +296,13 @@ export default class TooltipManager {
   render(ctx) {
     if (!this._enabled) return;
     if (!this._activeAttachment) return;
+
+    // For inline keyword spans, the source rect is recomputed each frame the
+    // KeywordText renders; refresh it (and hide if the span vanished, e.g. the
+    // text changed or scrolled away).
+    if (this._activeAttachment.element && this._activeAttachment.element._spanSource) {
+      if (!this._refreshActiveSpanRect()) return;
+    }
 
     // Rebuild the keyword chain if the active attachment / its options changed.
     if (this._chainBuiltFor !== this._activeAttachment) {
@@ -315,7 +370,7 @@ export default class TooltipManager {
       const tt = this._acquireChainTooltip(i);
       tt.setOptions({
         title: def.label,
-        titleColor: def.color,
+        titleColor: KEYWORD_COLOR,
         text: def.description || '',
         scale: opts.scale,
         width: opts.width,
@@ -361,6 +416,93 @@ export default class TooltipManager {
       }
     }
     return null;
+  }
+
+  /**
+   * Find a tooltip source at (x, y): an explicitly-attached element first,
+   * then an inline keyword span. Returns a (possibly synthetic) attachment.
+   * @returns {{element, options}|null}
+   */
+  _findAnyAt(x, y) {
+    return this._findAttachmentAt(x, y) || this._findKeywordSpanAt(x, y);
+  }
+
+  /**
+   * Hit-test the keyword spans of every registered KeywordText source. Returns
+   * a synthetic attachment (cached per element+keyword for stable hover
+   * identity) built from the keyword's definition, or null.
+   * @returns {{element, options}|null}
+   */
+  _findKeywordSpanAt(x, y) {
+    for (let i = this._keywordSources.length - 1; i >= 0; i--) {
+      const src = this._keywordSources[i];
+      const el = src.element;
+      if (!el || el.visible === false) continue;
+      const rects = el.getKeywordRects ? el.getKeywordRects() : null;
+      if (!rects || rects.length === 0) continue;
+      const pad = (src.options && src.options.hitPadding) || 0;
+      for (const span of rects) {
+        const r = span.rect;
+        if (!r) continue;
+        if (x >= r.x - pad && x <= r.x + r.w + pad &&
+            y >= r.y - pad && y <= r.y + r.h + pad) {
+          return this._getSpanAttachment(src, span);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get (or lazily create + cache) the synthetic attachment for a keyword span.
+   * Cached by element → keywordId so the hover identity is stable across frames
+   * even though the span rect is recomputed every render.
+   */
+  _getSpanAttachment(source, span) {
+    let byKeyword = this._spanCache.get(source.element);
+    if (!byKeyword) { byKeyword = new Map(); this._spanCache.set(source.element, byKeyword); }
+
+    let att = byKeyword.get(span.keywordId);
+    if (!att) {
+      const def = getKeywordDefinition(span.keywordId);
+      const o = source.options || {};
+      att = {
+        element: {
+          _spanSource: source.element,
+          _keywordId: span.keywordId,
+          visible: true,
+          rect: { x: span.rect.x, y: span.rect.y, w: span.rect.w, h: span.rect.h },
+        },
+        options: {
+          title: def ? def.label : (span.label || ''),
+          titleColor: KEYWORD_COLOR,
+          text: def ? def.description : '',
+          scale: o.scale,
+          width: o.width,
+          padding: o.padding,
+          offset: o.offset,
+        },
+      };
+      byKeyword.set(span.keywordId, att);
+    }
+    // Always refresh to the rect just hit (multiple spans may share a keyword).
+    att.element.rect = { x: span.rect.x, y: span.rect.y, w: span.rect.w, h: span.rect.h };
+    return att;
+  }
+
+  /**
+   * Refresh the active span attachment's rect from its source's current spans.
+   * @returns {boolean} false if the span no longer exists (and was hidden).
+   */
+  _refreshActiveSpanRect() {
+    const synthetic = this._activeAttachment.element;
+    const src = synthetic._spanSource;
+    if (!src || src.visible === false) { this._hide(); return false; }
+    const rects = src.getKeywordRects ? src.getKeywordRects() : null;
+    const match = rects && rects.find(r => r.keywordId === synthetic._keywordId);
+    if (!match) { this._hide(); return false; }
+    synthetic.rect = { x: match.rect.x, y: match.rect.y, w: match.rect.w, h: match.rect.h };
+    return true;
   }
 
   /** Position the parent tooltip relative to its source element. */

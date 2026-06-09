@@ -115,4 +115,11 @@ export default class SkillsPane extends UIPanel {
   get skillButtons() {
     return this._buttons.filter(b => !b._locked);
   }
+
+  /** Description KeywordText elements of active skills (for keyword tooltips). */
+  get descKeywordTexts() {
+    return this._buttons
+      .filter(b => !b._locked && b.descKeywordText)
+      .map(b => b.descKeywordText);
+  }
 }

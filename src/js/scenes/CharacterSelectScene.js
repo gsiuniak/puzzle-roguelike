@@ -20,6 +20,8 @@ import UIPanel from '../ui/UIPanel.js';
 import UIContainer from '../ui/UIContainer.js';
 import UIImage from '../ui/UIImage.js';
 import UIText from '../ui/UIText.js';
+import KeywordText from '../ui/KeywordText.js';
+import TooltipManager from '../systems/TooltipManager.js';
 import AudioManager from '../audio/AudioManager.js';
 import characterSelectDefinitions from '../data/characterSelectDefinitions.js';
 import { goblin } from '../data/enemies/index.js';
@@ -82,6 +84,12 @@ export default class CharacterSelectScene extends UIPanel {
     /** @type {AuraStrandsEffect} */
     this._auraEffect = new AuraStrandsEffect();
 
+    // ── Tooltips (inline keyword tooltips on skill/relic descriptions) ──
+    /** @type {TooltipManager|null} */
+    this._tooltipManager = null;
+    /** @type {KeywordText[]} description elements with inline [[keyword]] markup */
+    this._keywordDescs = [];
+
     // ── Hover state ────────────────────────────────────
     /** @type {boolean} */
     this._buttonHovered = false;
@@ -98,6 +106,8 @@ export default class CharacterSelectScene extends UIPanel {
     this._onMouseDown = null;
     /** @type {Function|null} */
     this._onMouseMove = null;
+    /** @type {Function|null} */
+    this._onMouseUp = null;
     /** @type {Function|null} */
     this._onKeyDown = null;
 
@@ -191,6 +201,8 @@ export default class CharacterSelectScene extends UIPanel {
     if (!panel) return;
 
     panel.clearChildren();
+    // Rebuilt from scratch each time — drop stale keyword desc references.
+    this._keywordDescs = [];
 
     const def = this._getSelectedDef();
     if (!def) return;
@@ -252,7 +264,7 @@ export default class CharacterSelectScene extends UIPanel {
     panel.addChild(classRow);
 
     // ── Character description — centered, readable ──────
-    const descText = new UIText(cd.description || '');
+    const descText = new KeywordText(cd.description || '');
     descText.setStyle({
       fontSize: 18 * S,
       color: '#b0a880',
@@ -262,6 +274,7 @@ export default class CharacterSelectScene extends UIPanel {
       maxWidth: 560 * S,
     });
     panel.addChild(descText);
+    this._keywordDescs.push(descText);
 
     // ── Divider ─────────────────────────────────────────
     const divider1 = new UIImage('character_select_divider', am);
@@ -446,6 +459,22 @@ export default class CharacterSelectScene extends UIPanel {
       relicsRow.addChild(relicBlock);
       panel.addChild(relicsRow);
     }
+
+    // Re-register the rebuilt description elements as keyword tooltip sources.
+    this._registerKeywordTooltips();
+  }
+
+  /**
+   * Register every collected description KeywordText as an inline keyword
+   * tooltip source on the scene's TooltipManager (clears the previous set
+   * first, since the panel is rebuilt each selection change).
+   */
+  _registerKeywordTooltips() {
+    const tm = this._tooltipManager;
+    if (!tm) return;
+    tm.clearKeywordSources();
+    const opts = { scale: 1.0, padding: 22, offset: 16, hitPadding: 7 };
+    for (const kt of this._keywordDescs) tm.attachKeywordSource(kt, opts);
   }
 
   /**
@@ -489,7 +518,7 @@ export default class CharacterSelectScene extends UIPanel {
     });
     textCol.addChild(nameText);
 
-    const descText = new UIText(skillData.description || '');
+    const descText = new KeywordText(skillData.description || '');
     descText.setStyle({
       fontSize: 14 * S,
       color: '#c0b890',
@@ -499,6 +528,7 @@ export default class CharacterSelectScene extends UIPanel {
       maxWidth: 150 * S,
     });
     textCol.addChild(descText);
+    this._keywordDescs.push(descText);
 
     block.addChild(textCol);
 
@@ -557,7 +587,7 @@ export default class CharacterSelectScene extends UIPanel {
     });
     textCol.addChild(nameText);
 
-    const descText = new UIText(relicData.description || '');
+    const descText = new KeywordText(relicData.description || '');
     descText.setStyle({
       fontSize: 14 * S,
       color: '#c0b890',
@@ -567,6 +597,7 @@ export default class CharacterSelectScene extends UIPanel {
       maxWidth: TEXT_COL_WIDTH,
     });
     textCol.addChild(descText);
+    this._keywordDescs.push(descText);
 
     block.addChild(textCol);
 
@@ -791,6 +822,19 @@ export default class CharacterSelectScene extends UIPanel {
     // Propagate assetManager to all UIImage children
     this._propagateAssetManager(this);
 
+    // ── Tooltip manager (created once; reused across re-entries) ──
+    // Created BEFORE _updateInfoPanel so the rebuilt description elements can
+    // register their inline keyword spans as tooltip sources.
+    if (!this._tooltipManager) {
+      this._tooltipManager = new TooltipManager({
+        input: sm._input,
+        app: sm._app,
+        assetManager: this._assetManager,
+      });
+    }
+    this._tooltipManager.clear();
+    this._tooltipManager.setEnabled(true);
+
     // Rebuild info panel now that assetManager is available
     this._updateInfoPanel();
 
@@ -801,10 +845,12 @@ export default class CharacterSelectScene extends UIPanel {
     const input = sm._input;
     this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
     this._onMouseMove = (x, y) => this._handleMouseMove(x, y);
+    this._onMouseUp = (x, y) => this._handleMouseUp(x, y);
     this._onKeyDown = (e) => this._handleKeyDown(e);
 
     input.on('mousedown', this._onMouseDown);
     input.on('mousemove', this._onMouseMove);
+    input.on('mouseup', this._onMouseUp);
     input.canvas.addEventListener('keydown', this._onKeyDown);
     input.canvas.focus();
   }
@@ -825,6 +871,13 @@ export default class CharacterSelectScene extends UIPanel {
     if (this._onMouseMove) {
       input.off('mousemove', this._onMouseMove);
       this._onMouseMove = null;
+    }
+    if (this._onMouseUp) {
+      input.off('mouseup', this._onMouseUp);
+      this._onMouseUp = null;
+    }
+    if (this._tooltipManager) {
+      this._tooltipManager.clear();
     }
     if (this._onKeyDown) {
       input.canvas.removeEventListener('keydown', this._onKeyDown);
@@ -848,6 +901,8 @@ export default class CharacterSelectScene extends UIPanel {
 
   /** @param {number} x @param {number} y */
   _handleMouseDown(x, y) {
+    if (this._tooltipManager) this._tooltipManager.onMouseDown(x, y);
+
     const hit = this.hitTest(x, y);
     if (!hit) return;
 
@@ -867,7 +922,14 @@ export default class CharacterSelectScene extends UIPanel {
   }
 
   /** @param {number} x @param {number} y */
+  _handleMouseUp(x, y) {
+    if (this._tooltipManager) this._tooltipManager.onMouseUp(x, y);
+  }
+
+  /** @param {number} x @param {number} y */
   _handleMouseMove(x, y) {
+    if (this._tooltipManager) this._tooltipManager.onMouseMove(x, y);
+
     const hit = this.hitTest(x, y);
     const ud = hit ? hit.userData : null;
 
@@ -982,6 +1044,9 @@ export default class CharacterSelectScene extends UIPanel {
 
     // Advance aura animation
     this._auraEffect.update(dt);
+
+    // Advance tooltip hold-timer / state
+    if (this._tooltipManager) this._tooltipManager.update(dt);
 
     super.update(dt);
   }
@@ -1104,6 +1169,11 @@ export default class CharacterSelectScene extends UIPanel {
       ctx.lineWidth = 6;
       ctx.strokeRect(pr.x - margin - 2, pr.y - margin - 2, pr.w + margin * 2 + 4, pr.h + margin * 2 + 4);
       ctx.restore();
+    }
+
+    // ── Tooltips (drawn last so they sit above all UI) ──
+    if (this._tooltipManager) {
+      this._tooltipManager.render(ctx);
     }
 
     if (this.debug) {
