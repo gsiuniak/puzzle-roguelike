@@ -36,7 +36,7 @@ const ENEMY_RELIC_CATALOG = {
   cracked_fang: {
     id: 'cracked_fang',
     name: 'Cracked Fang',
-    description: 'Gain +2 Attack.',
+    description: 'Gain +2 [[Attack]].',
     icon: 'relic_claymore', // placeholder art — reuses an existing icon key
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -48,7 +48,7 @@ const ENEMY_RELIC_CATALOG = {
   goblin_totem: {
     id: 'goblin_totem',
     name: 'Goblin Totem',
-    description: 'Gain 1 Armor at the start of each turn.',
+    description: 'Gain 1 [[Armor]] at the start of each turn.',
     icon: 'relic_aegis', // placeholder art — reuses an existing icon key
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -60,7 +60,7 @@ const ENEMY_RELIC_CATALOG = {
   cursed_idol: {
     id: 'cursed_idol',
     name: 'Cursed Idol',
-    description: 'Deal 1 damage to the opponent when matching 4+ tiles.',
+    description: 'Deal 1 [[damage]] to the opponent when matching 4+ [[tiles]].',
     icon: 'relic_trebuchet', // placeholder art — reuses an existing icon key
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -74,7 +74,7 @@ const ENEMY_RELIC_CATALOG = {
   briarthorn: {
     id: 'briarthorn',
     name: 'Briarthorn',
-    description: 'At the start of turn, deal damage equal to attack.',
+    description: 'At the start of turn, deal [[damage]] equal to [[attack]].',
     icon: 'relic_briarthorn',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -87,7 +87,7 @@ const ENEMY_RELIC_CATALOG = {
   sulfur: {
     id: 'sulfur',
     name: 'Sulfur',
-    description: 'Drastically increase chance of Yellow appearing.',
+    description: 'Drastically increase chance of Yellow [[tiles]] appearing.',
     icon: 'relic_sulfur',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -101,7 +101,7 @@ const ENEMY_RELIC_CATALOG = {
   goresnout_collars: {
     id: 'goresnout_collars',
     name: 'Goresnout Collars',
-    description: 'When dealing damage, deal the same damage again.',
+    description: 'When dealing [[damage]], deal the same damage again.',
     icon: 'relic_goresnout_collars',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -117,7 +117,7 @@ const ENEMY_RELIC_CATALOG = {
   heart_of_usurper: {
     id: 'heart_of_usurper',
     name: 'Heart of the Usurper',
-    description: 'Gain 2 of every mana at the start of turn.',
+    description: 'Gain 2 of every [[mana]] at the start of turn.',
     icon: 'relic_heart_of_usurper',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -136,7 +136,7 @@ const ENEMY_RELIC_CATALOG = {
   infected_tooth: {
     id: 'infected_tooth',
     name: 'Infected Tooth',
-    description: 'Create a Disease tile after dealing damage.',
+    description: 'Create a Disease [[tile]] after dealing [[damage]].',
     icon: 'relic_infected_tooth',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -154,7 +154,7 @@ const ENEMY_RELIC_CATALOG = {
   severed_maxilla: {
     id: 'severed_maxilla',
     name: 'Severed Maxilla',
-    description: 'Whenever a Disease tile is created, gain +1 Attack.',
+    description: 'Whenever a Disease [[tile]] is created, gain +1 [[Attack]].',
     icon: 'relic_severed_maxilla',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -173,7 +173,7 @@ const ENEMY_RELIC_CATALOG = {
   chokeweed_sap: {
     id: 'chokeweed_sap',
     name: 'Chokeweed Sap',
-    description: 'At the start of turn, change 2 Skulls into Green.',
+    description: 'At the start of turn, change 2 [[Skulls]] into Green [[tiles]].',
     icon: 'relic_chokeweed_sap',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [

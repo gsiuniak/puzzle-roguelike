@@ -189,7 +189,7 @@ const RELIC_CATALOG = {
   bellows: {
     id: 'bellows',
     name: 'Bellows',
-    description: 'Increase the [[mana]] gained from [[matched]] Red [[tiles]] by 1.',
+    description: 'Increase the [[mana]] gained when [[matching]] Red [[tiles]] by 1.',
     icon: 'relic_bellows',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -200,7 +200,7 @@ const RELIC_CATALOG = {
   gourd_flask: {
     id: 'gourd_flask',
     name: 'Gourd Flask',
-    description: 'Increase the [[mana]] gained from [[matched]] Blue [[tiles]] by 1.',
+    description: 'Increase the [[mana]] gained when [[matching]] Blue [[tiles]] by 1.',
     icon: 'relic_gourd_flask',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -211,7 +211,7 @@ const RELIC_CATALOG = {
   pestle: {
     id: 'pestle',
     name: 'Pestle',
-    description: 'Increase the [[mana]] gained from [[matched]] Green [[tiles]] by 1.',
+    description: 'Increase the [[mana]] gained when [[matching]] Green [[tiles]] by 1.',
     icon: 'relic_pestle',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -222,7 +222,7 @@ const RELIC_CATALOG = {
   thimble: {
     id: 'thimble',
     name: 'Thimble',
-    description: 'Increase the [[mana]] gained from [[matched]] Yellow [[tiles]] by 1.',
+    description: 'Increase the [[mana]] gained when [[matching]] Yellow [[tiles]] by 1.',
     icon: 'relic_thimble',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -233,7 +233,7 @@ const RELIC_CATALOG = {
   astrolabe: {
     id: 'astrolabe',
     name: 'Astrolabe',
-    description: 'Increase the [[mana]] gained from matching Purple [[tiles]] by 1.',
+    description: 'Increase the [[mana]] gained when [[matching]] Purple [[tiles]] by 1.',
     icon: 'relic_astrolabe',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -256,7 +256,7 @@ const RELIC_CATALOG = {
   prism: {
     id: 'prism',
     name: 'Prism',
-    description: 'Gain 1 of each [[mana]] when matching 4+ [[tiles]].',
+    description: 'Gain 1 of each [[mana]] when [[matching]] 4+ [[tiles]].',
     icon: 'relic_prism',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -283,7 +283,7 @@ const RELIC_CATALOG = {
   trebuchet: {
     id: 'trebuchet',
     name: 'Trebuchet',
-    description: 'Deal 1 damage to the opponent when matching 4+ tiles.',
+    description: 'Deal 1 [[damage]] to the opponent when [[matching]] 4+ [[tiles]].',
     icon: 'relic_trebuchet',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -294,7 +294,7 @@ const RELIC_CATALOG = {
   claymore: {
     id: 'claymore',
     name: 'Claymore',
-    description: 'Gain +2 Attack.',
+    description: 'Gain +2 [[Attack]].',
     icon: 'relic_claymore',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -316,7 +316,7 @@ const RELIC_CATALOG = {
   thorned_rose: {
     id: 'thorned_rose',
     name: 'Thorned Rose',
-    description: 'Deal 1 damage to the enemy whenever you take damage.',
+    description: 'Deal 1 [[damage]] to the enemy whenever you take damage.',
     icon: 'relic_thorned_rose',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -342,7 +342,7 @@ const RELIC_CATALOG = {
   cestus: {
     id: 'cestus',
     name: 'Cestus',
-    description: 'Gain +1 Attack for every 3 unspent Red.',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Red [[mana]].',
     icon: 'relic_cestus',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -353,7 +353,7 @@ const RELIC_CATALOG = {
   harpoon: {
     id: 'harpoon',
     name: 'Harpoon',
-    description: 'Gain +1 Attack for every 3 unspent Blue.',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Blue [[mana]].',
     icon: 'relic_harpoon',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -364,7 +364,7 @@ const RELIC_CATALOG = {
   club: {
     id: 'club',
     name: 'Club',
-    description: 'Gain +1 Attack for every 3 unspent Green.',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Green [[mana]].',
     icon: 'relic_club',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -375,7 +375,7 @@ const RELIC_CATALOG = {
   stiletto: {
     id: 'stiletto',
     name: 'Stiletto',
-    description: 'Gain +1 Attack for every 3 unspent Yellow.',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Yellow [[mana]].',
     icon: 'relic_stiletto',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -386,7 +386,7 @@ const RELIC_CATALOG = {
   wand: {
     id: 'wand',
     name: 'Wand',
-    description: 'Gain +1 Attack for every 3 unspent Purple.',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Purple [[mana]].',
     icon: 'relic_wand',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -415,7 +415,7 @@ const RELIC_CATALOG = {
   tsunami: {
     id: 'tsunami',
     name: 'Tsunami',
-    description: 'Gain +2 Attack at the start of each turn.',
+    description: 'Gain +2 [[Attack]] at the start of each turn.',
     icon: 'relic_tsunami',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
@@ -426,7 +426,7 @@ const RELIC_CATALOG = {
   soul_eater: {
     id: 'soul_eater',
     name: 'Soul Eater',
-    description: 'Gain +3 life whenever you deal damage.',
+    description: '[[Heal]] +3 life whenever you deal [[damage]].',
     icon: 'relic_soul_eater',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
@@ -438,7 +438,7 @@ const RELIC_CATALOG = {
   reckoning: {
     id: 'reckoning',
     name: 'Reckoning',
-    description: 'Gain +1 Attack whenever you take damage.',
+    description: 'Gain +1 [[Attack]] whenever you take [[damage]].',
     icon: 'relic_reckoning',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
@@ -449,7 +449,7 @@ const RELIC_CATALOG = {
   gorepike: {
     id: 'gorepike',
     name: 'Gorepike',
-    description: 'Destroy a random row whenever you match 4+.',
+    description: '[[Destroy]] a random row whenever you match 4+ [[tiles]].',
     icon: 'relic_gorepike',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
@@ -462,7 +462,7 @@ const RELIC_CATALOG = {
   deathbringer: {
     id: 'deathbringer',
     name: 'Deathbringer',
-    description: 'Destroy up to 2 random skulls whenever you deal damage.',
+    description: '[[Destroy]] up to 2 random [[skulls]] whenever you deal [[damage]].',
     icon: 'relic_deathbringer',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
@@ -479,7 +479,7 @@ const RELIC_CATALOG = {
   red_potion: {
     id: 'red_potion',
     name: 'Red Potion',
-    description: 'Gain 5 red mana at the start of battle.',
+    description: 'Gain 5 red [[mana]] at the start of battle.',
     icon: 'relic_potion_red',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -490,7 +490,7 @@ const RELIC_CATALOG = {
   blue_potion: {
     id: 'blue_potion',
     name: 'Blue Potion',
-    description: 'Gain 5 blue mana at the start of battle.',
+    description: 'Gain 5 blue [[mana]] at the start of battle.',
     icon: 'relic_potion_blue',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -501,7 +501,7 @@ const RELIC_CATALOG = {
   green_potion: {
     id: 'green_potion',
     name: 'Green Potion',
-    description: 'Gain 5 green mana at the start of battle.',
+    description: 'Gain 5 green [[mana]] at the start of battle.',
     icon: 'relic_potion_green',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -512,7 +512,7 @@ const RELIC_CATALOG = {
   yellow_potion: {
     id: 'yellow_potion',
     name: 'Yellow Potion',
-    description: 'Gain 5 yellow mana at the start of battle.',
+    description: 'Gain 5 yellow [[mana]] at the start of battle.',
     icon: 'relic_potion_yellow',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -523,7 +523,7 @@ const RELIC_CATALOG = {
   purple_potion: {
     id: 'purple_potion',
     name: 'Purple Potion',
-    description: 'Gain 5 purple mana at the start of battle.',
+    description: 'Gain 5 purple [[mana]] at the start of battle.',
     icon: 'relic_potion_purple',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -538,7 +538,7 @@ const RELIC_CATALOG = {
   flaming_arrow: {
     id: 'flaming_arrow',
     name: 'Flaming Arrow',
-    description: 'Deal 1 damage whenever you gain red mana.',
+    description: 'Deal 1 [[damage]] whenever you gain red [[mana]].',
     icon: 'relic_flaming_arrow',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -549,7 +549,7 @@ const RELIC_CATALOG = {
   water_balloon: {
     id: 'water_balloon',
     name: 'Water Balloon',
-    description: 'Deal 1 damage whenever you gain blue mana.',
+    description: 'Deal 1 [[damage]] whenever you gain blue [[mana]].',
     icon: 'relic_water_balloon',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -560,7 +560,7 @@ const RELIC_CATALOG = {
   thorned_branch: {
     id: 'thorned_branch',
     name: 'Thorned Branch',
-    description: 'Deal 1 damage whenever you gain green mana.',
+    description: 'Deal 1 [[damage]] whenever you gain green [[mana]].',
     icon: 'relic_thorned_branch',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -571,7 +571,7 @@ const RELIC_CATALOG = {
   static_comb: {
     id: 'static_comb',
     name: 'Static Comb',
-    description: 'Deal 1 damage whenever you gain yellow mana.',
+    description: 'Deal 1 [[damage]] whenever you gain yellow [[mana]].',
     icon: 'relic_static_comb',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -582,7 +582,7 @@ const RELIC_CATALOG = {
   tuning_rod: {
     id: 'tuning_rod',
     name: 'Tuning Rod',
-    description: 'Deal 1 damage whenever you gain purple mana.',
+    description: 'Deal 1 [[damage]] whenever you gain purple [[mana]].',
     icon: 'relic_tuning_fork',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -597,7 +597,7 @@ const RELIC_CATALOG = {
   familiar_red: {
     id: 'familiar_red',
     name: 'Fire Familiar',
-    description: 'Gain 1 red mana whenever you match 3 or more tiles.',
+    description: 'Gain 1 red [[mana]] whenever you [[match]] 3 or more [[tiles]].',
     icon: 'relic_familiar_red',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -608,7 +608,7 @@ const RELIC_CATALOG = {
   familiar_blue: {
     id: 'familiar_blue',
     name: 'Water Familiar',
-    description: 'Gain 1 blue mana whenever you match 3 or more tiles.',
+    description: 'Gain 1 blue [[mana]] whenever you [[match]] 3 or more [[tiles]].',
     icon: 'relic_familiar_blue',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -619,7 +619,7 @@ const RELIC_CATALOG = {
   familiar_green: {
     id: 'familiar_green',
     name: 'Earth Familiar',
-    description: 'Gain 1 green mana whenever you match 3 or more tiles.',
+    description: 'Gain 1 green [[mana]] whenever you match 3 or more [[tiles]].',
     icon: 'relic_familiar_green',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -630,7 +630,7 @@ const RELIC_CATALOG = {
   familiar_yellow: {
     id: 'familiar_yellow',
     name: 'Energy Familiar',
-    description: 'Gain 1 yellow mana whenever you match 3 or more tiles.',
+    description: 'Gain 1 yellow [[mana]] whenever you [[match]] 3 or more [[tiles]].',
     icon: 'relic_familiar_yellow',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -641,7 +641,7 @@ const RELIC_CATALOG = {
   familiar_purple: {
     id: 'familiar_purple',
     name: 'Arcane Familiar',
-    description: 'Gain 1 purple mana whenever you match 3 or more tiles.',
+    description: 'Gain 1 purple [[mana]] whenever you match 3 or more [[tiles]].',
     icon: 'relic_familiar_purple',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
@@ -653,7 +653,7 @@ const RELIC_CATALOG = {
   slingshot: {
     id: 'slingshot',
     name: 'Slingshot',
-    description: 'Deal 1 damage at the start of your turn.',
+    description: 'Deal 1 [[damage]] at the start of your turn.',
     icon: 'relic_slingshot',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -664,14 +664,14 @@ const RELIC_CATALOG = {
   death_familiar: {
     id: 'death_familiar',
     name: 'Death Familiar',
-    description: 'Destroy a random [[skull]] whenever you [[match]] 3 or more [[tiles]].',
+    description: '[[Destroy]] a random [[skull]] whenever you [[match]] 4 or more [[tiles]].',
     icon: 'relic_familiar_skull',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       // Board-touching — queues a deferred skull destruction (same path as
       // Deathbringer) but on a match trigger; bypasses the once-per-action
       // recursion guard so it can fire per qualifying match.
-      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'destroy_random_skulls', destroySkulls: { amount: 1 } },
+      { trigger: 'onTileMatchType', condition: { minCount: 4 }, effectType: 'destroy_random_skulls', destroySkulls: { amount: 1 } },
     ],
   },
 };

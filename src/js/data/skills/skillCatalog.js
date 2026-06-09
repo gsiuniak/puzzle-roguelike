@@ -58,7 +58,7 @@ const SKILL_CATALOG = {
   fracture: {
     id: 'fracture',
     name: 'Fracture',
-    description: '[[Destroy]] 1 row\n[[Create]] 5 purple',
+    description: '[[Destroy]] 1 row\n[[Create]] 5 purple [[tiles]]',
     icon: 'skill_fracture',
     sound: 'skill_fracture',
     targeting: 'board_tile',
@@ -86,7 +86,7 @@ const SKILL_CATALOG = {
   arcane_inscription: {
     id: 'arcane_inscription',
     name: 'Arcane Inscription',
-    description: '[[Change]] 1 [[tile]] into Yellow',
+    description: '[[Change]] 1 [[tile]] into Yellow.',
     // Re-uses the explode icon/sound for now — swap to a dedicated
     // skill_arcane_inscription asset whenever new art is added.
     icon: 'skill_explode',
@@ -103,7 +103,7 @@ const SKILL_CATALOG = {
   summon_dead: {
     id: 'summon_dead',
     name: 'Summon Dead',
-    description: 'Change all Yellow into [[Skulls]]',
+    description: '[[Change]] all Yellow [[tiles]] into [[Skulls]]',
     icon: 'skill_summon_dead',
     sound: 'skill_create_skull',
     cost: { purple: 4 },
@@ -114,7 +114,7 @@ const SKILL_CATALOG = {
   oungan: {
     id: 'oungan',
     name: 'Oungan',
-    description: '[[Heal]] 6 HP\n[[Create]] 5 green',
+    description: '[[Heal]] 6 HP\n[[Create]] 5 green [[tiles]].',
     icon: 'skill_oungan',
     sound: 'skill_oungan',
     cost: { green: 6 },
@@ -133,7 +133,7 @@ const SKILL_CATALOG = {
   slash: {
     id: 'slash',
     name: 'Slash',
-    description: 'Deal 5 damage.',
+    description: 'Deal 5 [[damage]].',
     icon: 'skill_slash',
     sound: 'skill_slash',
     cost: { red: 5 },
@@ -146,19 +146,18 @@ const SKILL_CATALOG = {
   boom_baby: {
     id: 'boom_baby',
     name: 'Boom Baby!',
-    description: 'Deal 999 damage.\nDie',
+    description: 'Deal 999 [[damage]]',
     icon: 'skill_slash',
     sound: 'skill_boom_baby',
     cost: { red: 20 },
     effects: [
-      { effectType: 'damage', damage: { amount: 999 } },
-      { effectType: 'self_destruct' },
+      { effectType: 'damage', damage: { amount: 999 } }
     ],
   },
   ignition: {
     id: 'ignition',
     name: 'Ignition',
-    description: 'Create 20 Red',
+    description: '[[Create]] 20 Red [[tiles]]',
     icon: 'skill_slash',
     sound: 'skill_ignition',
     cost: { yellow: 10 },
@@ -171,7 +170,7 @@ const SKILL_CATALOG = {
   boulder_throw: {
     id: 'boulder_throw',
     name: 'Boulder Throw',
-    description: 'Deal 10 damage.\nCreate 6 Green',
+    description: 'Deal 10 [[damage]].\n[[Create]] 6 Green [[tiles]].',
     icon: 'skill_slash',
     sound: 'skill_boulder_throw',
     cost: { green: 6 },
@@ -183,7 +182,7 @@ const SKILL_CATALOG = {
   smash: {
     id: 'smash',
     name: 'Smash',
-    description: 'Deal 10 damage.\nGain a turn',
+    description: 'Deal 10 [[damage]].\nGain an [[extra turn]]',
     icon: 'skill_bash',
     sound: 'skill_smash',
     cost: { red: 6 },
@@ -197,7 +196,7 @@ const SKILL_CATALOG = {
   doomsong: {
     id: 'doomsong',
     name: 'Doomsong',
-    description: 'Create 10 skulls',
+    description: '[[Create]] 10 [[skulls]]',
     icon: 'skill_summon_dead',
     sound: 'skill_doomsong',
     cost: { purple: 7 },
@@ -210,7 +209,7 @@ const SKILL_CATALOG = {
   charge: {
     id: 'charge',
     name: 'Charge!',
-    description: 'Deal 10 damage.\nCreate 5 Red.\nGain a turn',
+    description: 'Deal 10 [[damage]].\n[[Create]] 5 Red [[tiles]].\nGain an [[extra turn]]',
     icon: 'skill_bash',
     sound: 'skill_charge',
     cost: { red: 8 },
@@ -223,7 +222,7 @@ const SKILL_CATALOG = {
   frenzy: {
     id: 'frenzy',
     name: 'Frenzy',
-    description: 'Gain 10 armor.\nCreate 5 Blue.',
+    description: 'Gain 10 [[armor]].\nCreate 5 Blue [[tiles]].',
     icon: 'skill_defend',
     sound: 'skill_frenzy',
     cost: { blue: 8 },
@@ -241,7 +240,7 @@ const SKILL_CATALOG = {
   encroach: {
     id: 'encroach',
     name: 'Encroach',
-    description: 'Gain +1 Attack.\nEnd turn.',
+    description: 'Gain +1 [[Attack]].\n[[End turn]].',
     icon: 'skill_encroach',
     sound: 'skill_encroach',
     cost: {},
@@ -259,7 +258,7 @@ const SKILL_CATALOG = {
   desecrate: {
     id: 'desecrate',
     name: 'Desecrate',
-    description: 'Turn Green into Skulls.',
+    description: '[[Convert]] Green [[tiles]] into [[Skulls]].',
     icon: 'skill_desecrate',
     sound: 'skill_desecrate',
     cost: { purple: 7 },
@@ -318,7 +317,7 @@ const SKILL_CATALOG = {
   infected_bite: {
     id: 'infected_bite',
     name: 'Infected Bite',
-    description: 'Deal 3 damage.\nGain a turn.',
+    description: 'Deal 3 [[damage]].\nGain an [[extra turn]].',
     icon: 'skill_infected_bite',
     sound: 'skill_infected_bite',
     cost: { red: 1 },
@@ -330,7 +329,7 @@ const SKILL_CATALOG = {
   cyst_burst: {
     id: 'cyst_burst',
     name: 'Cyst Burst',
-    description: 'Turn all Disease into Skulls.',
+    description: '[[Convert]] all Disease [[tiles]] into [[Skulls]].',
     icon: 'skill_cyst_burst',
     sound: 'skill_cyst_burst',
     cost: { green: 7 },
@@ -344,7 +343,7 @@ const SKILL_CATALOG = {
   hound: {
     id: 'hound',
     name: 'Hound',
-    description: 'Gain +1 Attack.\nDeal 2 damage.',
+    description: 'Gain +1 [[Attack]].\nDeal 2 [[damage]].',
     icon: 'skill_hound',
     sound: 'skill_hound',
     cost: { red: 3 },

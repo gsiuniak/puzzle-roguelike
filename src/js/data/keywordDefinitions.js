@@ -47,6 +47,11 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Change',
     description: 'Turns a specified [[Tile]] into a specific type.',
   },
+  convert: {
+    id: 'convert',
+    label: 'Convert',
+    description: 'Turns all specified [[Tile]] type into a specific type.',
+  },
   create: {
     id: 'create',
     label: 'Create',
@@ -57,10 +62,20 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Destroy',
     description: 'Remove [[tiles]] or [[skulls]] from the board and gain their effects.',
   },
+  destroying: {
+    id: 'destroying',
+    label: 'Destroying',
+    description: 'Remove [[tiles]] or [[skulls]] from the board and gain their effects.',
+  },
   drain: {
     id: 'drain',
     label: 'Drain',
     description: 'Subtract [[mana]] from the enemy totals.',
+  },
+  'end turn': {
+    id: 'end turn',
+    label: 'End Turn',
+    description: 'Immediately end your turn, foregoing further actions',
   },
   tile: {
     id: 'tile',
@@ -75,6 +90,16 @@ export const KEYWORD_DEFINITIONS = {
   match: {
     id: 'match',
     label: 'Match',
+    description: 'Line up 3 or more [[Tiles]] of the same type to clear them and gain rewards. A match of 4 or more grants an [[Extra Turn]].',
+  },
+  matched: {
+    id: 'matched',
+    label: 'Matched',
+    description: 'Line up 3 or more [[Tiles]] of the same type to clear them and gain rewards. A match of 4 or more grants an [[Extra Turn]].',
+  },
+  matching: {
+    id: 'matching',
+    label: 'Matching',
     description: 'Line up 3 or more [[Tiles]] of the same type to clear them and gain rewards. A match of 4 or more grants an [[Extra Turn]].',
   },
   skulls: {
@@ -105,13 +130,13 @@ export const KEYWORD_DEFINITIONS = {
   attack: {
     id: 'attack',
     label: 'Attack',
-    description: 'Added to the [[Damage]] dealt by matched [[Skulls]] and by some skills.',
+    description: 'Added to the [[Damage]] dealt by [[matching]] or [[destroying]] [[Skulls]] and by some skills.',
   },
   'extra turn': {
     id: 'extra turn',
     label: 'Extra Turn',
     description: 'Take another turn immediately after this one. Extra turns do not stack.',
-  },
+  }
 };
 
 /**
@@ -123,8 +148,6 @@ export const KEYWORD_ALIASES = {
   skull: 'skulls',
   gem: 'tile',
   gems: 'tiles',
-  matches: 'match',
-  matched: 'match',
   damages: 'damage',
   healing: 'heal',
   'extra-turn': 'extra turn',
