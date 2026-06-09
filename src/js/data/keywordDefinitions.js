@@ -29,7 +29,7 @@
  */
 
 /** Single shared color for ALL keywords. Change here to retint every keyword. */
-export const KEYWORD_COLOR = '#ffcf5c';
+export const KEYWORD_COLOR = '#ead431';
 
 /** Fallback color for keyword spans whose definition is missing. */
 export const KEYWORD_MISSING_COLOR = '#ff6b6b';

@@ -310,17 +310,46 @@ export default class TooltipManager {
       this._chainBuiltFor = this._activeAttachment;
     }
 
-    // Re-position every frame so the tooltip tracks any layout updates
-    // (e.g. an element shifting after a relic is added). The parent is placed
-    // relative to its source element; each chain link is placed relative to the
-    // previous tooltip panel, growing the chain toward the screen center.
+    // Place the PARENT beside its source element (toward screen center), then
+    // stack the keyword chain as a vertical column anchored to the parent's
+    // left edge, each link below the previous (a readable, non-overlapping
+    // cascade). The whole column is shifted vertically so it stays on screen.
+    //
+    // (The earlier "each link relative to the previous, re-pick side at center"
+    // scheme made links ping-pong between two columns and overdraw each other —
+    // you'd only see the last 1-2 tooltips. A single column avoids that.)
     const opts = this._activeAttachment.options || {};
-    let prevRect = this._positionTooltip(this._tooltip, this._activeAttachment.element.rect, opts);
-    this._tooltip.render(ctx);
+    const parentRect = this._positionTooltip(this._tooltip, this._activeAttachment.element.rect, opts);
 
+    if (this._chain.length === 0) {
+      this._tooltip.render(ctx);
+      return;
+    }
+
+    const margin = TOOLTIP_EDGE_MARGIN;
+    const gap = this._chainGap;
+    const designW = this._app ? this._app.width : 1920;
+    const designH = this._app ? this._app.height : 1080;
+
+    // Build the column (parent first, then each chain link below it).
+    const items = [{ tooltip: this._tooltip, x: parentRect.x, y: parentRect.y, w: parentRect.w, h: parentRect.h }];
+    let y = parentRect.y + parentRect.h + gap;
     for (const link of this._chain) {
-      prevRect = this._positionTooltip(link.tooltip, prevRect, { offset: this._chainGap });
-      link.tooltip.render(ctx);
+      const { width: w, height: h } = link.tooltip.getSize();
+      const x = Math.max(margin, Math.min(designW - w - margin, parentRect.x));
+      items.push({ tooltip: link.tooltip, x, y, w, h });
+      y += h + gap;
+    }
+
+    // Shift the whole column up if it runs past the bottom (and clamp the top).
+    const colBottom = items[items.length - 1].y + items[items.length - 1].h;
+    let shift = 0;
+    if (colBottom > designH - margin) shift = (designH - margin) - colBottom;
+    if (items[0].y + shift < margin) shift = margin - items[0].y;
+
+    for (const it of items) {
+      it.tooltip.setPosition(it.x, it.y + shift);
+      it.tooltip.render(ctx);
     }
   }
 
