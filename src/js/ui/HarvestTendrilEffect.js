@@ -42,7 +42,7 @@ export default class HarvestTendrilEffect {
     this.fadeDuration = config.fadeDuration || 220;
     this.spiralTurns = config.spiralTurns != null ? config.spiralTurns : 2.4;
     this.amplitude = config.amplitude != null ? config.amplitude : 46;
-    this.thickness = config.thickness || 4;
+    this.thickness = config.thickness || 15;
     this.tailFraction = config.tailFraction != null ? config.tailFraction : 0.45;
 
     this.elapsed = 0;
