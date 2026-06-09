@@ -1,4 +1,5 @@
 import Tooltip from '../ui/Tooltip.js';
+import { buildTooltipChain } from './keywordParser.js';
 
 /**
  * TooltipManager — reusable tooltip system attachable to any UI element.
@@ -45,6 +46,16 @@ import Tooltip from '../ui/Tooltip.js';
 export const TOOLTIP_TOUCH_HOLD_MS = 100;
 const TOOLTIP_EDGE_MARGIN          = 12;
 const TOOLTIP_DEFAULT_OFFSET       = 150;
+
+// ── Keyword tooltip chaining ──────────────────────────────
+// When a tooltip's text contains [[Keyword]] markup, child tooltips for each
+// keyword are spawned automatically, each positioned relative to the PREVIOUS
+// tooltip in the chain (parent → first keyword → next keyword …). This grows a
+// readable chain toward the screen center and is clamped to the viewport.
+/** Gap (design px) between one tooltip panel and the next in a chain. */
+export const KEYWORD_TOOLTIP_CHAIN_GAP = 20;
+/** Maximum number of child keyword tooltips in a single chain. */
+export const MAX_TOOLTIP_CHAIN_DEPTH = 3;
 // Movement (in design-space px) that cancels a pending touch-hold.
 // Real touchscreens emit jitter even on a "stationary" finger: at a typical
 // phone landscape scale (~0.4×), 10 design-px is only ~4 CSS px, which the
@@ -69,6 +80,18 @@ export default class TooltipManager {
     this._assetManager = assetManager;
 
     this._tooltip = new Tooltip({ assetManager });
+
+    // ── Keyword tooltip chain ──
+    /** Reusable Tooltip instances for chained keyword tooltips. */
+    this._chainPool = [];
+    /** Active chain links for the current attachment (subset of the pool). */
+    /** @type {Array<{ tooltip: Tooltip }>} */
+    this._chain = [];
+    /** Attachment the current chain was built for (rebuild when it changes). */
+    this._chainBuiltFor = null;
+    this._chainEnabled = true;
+    this._chainGap = KEYWORD_TOOLTIP_CHAIN_GAP;
+    this._maxChainDepth = MAX_TOOLTIP_CHAIN_DEPTH;
 
     /** @type {Array<{ element: import('../ui/UIElement.js').default, options: object }>} */
     this._attachments = [];
@@ -107,6 +130,7 @@ export default class TooltipManager {
       if (this._activeAttachment && this._activeAttachment.element === element) {
         this._activeAttachment.options = options;
         this._tooltip.setOptions(options);
+        this._chainBuiltFor = null; // options changed → rebuild chain on next render
       }
     } else {
       this._attachments.push({ element, options });
@@ -225,10 +249,30 @@ export default class TooltipManager {
     if (!this._enabled) return;
     if (!this._activeAttachment) return;
 
+    // Rebuild the keyword chain if the active attachment / its options changed.
+    if (this._chainBuiltFor !== this._activeAttachment) {
+      this._buildChain(this._activeAttachment);
+      this._chainBuiltFor = this._activeAttachment;
+    }
+
     // Re-position every frame so the tooltip tracks any layout updates
-    // (e.g. an element shifting after a relic is added).
-    this._repositionFor(this._activeAttachment);
+    // (e.g. an element shifting after a relic is added). The parent is placed
+    // relative to its source element; each chain link is placed relative to the
+    // previous tooltip panel, growing the chain toward the screen center.
+    const opts = this._activeAttachment.options || {};
+    let prevRect = this._positionTooltip(this._tooltip, this._activeAttachment.element.rect, opts);
     this._tooltip.render(ctx);
+
+    for (const link of this._chain) {
+      prevRect = this._positionTooltip(link.tooltip, prevRect, { offset: this._chainGap });
+      link.tooltip.render(ctx);
+    }
+  }
+
+  /** Enable/disable automatic keyword tooltip chaining. */
+  setKeywordChainEnabled(v) {
+    this._chainEnabled = !!v;
+    this._chainBuiltFor = null;
   }
 
   // ── Internals ─────────────────────────────────────────
@@ -237,11 +281,56 @@ export default class TooltipManager {
     if (!attachment) return;
     this._activeAttachment = attachment;
     this._tooltip.setOptions(attachment.options || {});
+    this._buildChain(attachment);
+    this._chainBuiltFor = attachment;
     this._repositionFor(attachment);
   }
 
   _hide() {
     this._activeAttachment = null;
+    // Children are rendered only while a parent is active, so clearing the
+    // active attachment here also hides the whole chain.
+    this._chain.length = 0;
+    this._chainBuiltFor = null;
+  }
+
+  /**
+   * Build the chain of child keyword tooltips for an attachment by scanning its
+   * title + body text for [[Keyword]] markup. Reuses pooled Tooltip instances.
+   * No-op (empty chain) when chaining is disabled, the attachment opts out
+   * (`options.keywordChain === false`), or no keywords are found.
+   */
+  _buildChain(attachment) {
+    this._chain.length = 0;
+    if (!this._chainEnabled) return;
+    const opts = attachment.options || {};
+    if (opts.keywordChain === false) return;
+
+    const rootText = `${opts.title || ''} ${opts.text || ''}`;
+    const maxDepth = opts.maxChainDepth != null ? opts.maxChainDepth : this._maxChainDepth;
+    const links = buildTooltipChain(rootText, maxDepth);
+
+    for (let i = 0; i < links.length; i++) {
+      const def = links[i];
+      const tt = this._acquireChainTooltip(i);
+      tt.setOptions({
+        title: def.label,
+        titleColor: def.color,
+        text: def.description || '',
+        scale: opts.scale,
+        width: opts.width,
+        padding: opts.padding,
+      });
+      this._chain.push({ tooltip: tt });
+    }
+  }
+
+  /** Lazily create / reuse a pooled Tooltip for chain index `i`. */
+  _acquireChainTooltip(i) {
+    if (!this._chainPool[i]) {
+      this._chainPool[i] = new Tooltip({ assetManager: this._assetManager });
+    }
+    return this._chainPool[i];
   }
 
   _cancelTouchHold() {
@@ -274,31 +363,39 @@ export default class TooltipManager {
     return null;
   }
 
-  /**
-   * Position the tooltip away from the parent toward screen center,
-   * clamped inside the design viewport.
-   *
-   * Strategy:
-   *   1. Prefer horizontal placement on the side opposite the parent
-   *      relative to center (parent on left → tooltip right; vice versa).
-   *   2. If the horizontal placement would clip the edge, fall back to
-   *      a vertical placement (above/below, chosen toward center) and
-   *      center the tooltip horizontally on the parent.
-   *   3. Final clamp keeps the tooltip inside [edgeMargin, viewport-edgeMargin].
-   */
+  /** Position the parent tooltip relative to its source element. */
   _repositionFor(attachment) {
     const el = attachment.element;
     if (!el || !el.rect) return;
+    this._positionTooltip(this._tooltip, el.rect, attachment.options || {});
+  }
 
-    const opts = attachment.options || {};
+  /**
+   * Place a tooltip away from `sourceRect` toward screen center, clamped inside
+   * the design viewport. Shared by the parent (source = element rect) and each
+   * chain link (source = previous tooltip's rect). Returns the placed rect so
+   * the next link can chain off it.
+   *
+   * Strategy:
+   *   1. Prefer horizontal placement on the side opposite the source relative
+   *      to center (source on left → tooltip right; vice versa).
+   *   2. If that would clip the edge, fall back to vertical placement
+   *      (above/below, toward center), centered horizontally on the source.
+   *   3. Final clamp keeps the tooltip inside [edgeMargin, viewport-edgeMargin].
+   * @param {Tooltip} tooltip
+   * @param {{x:number,y:number,w:number,h:number}} sourceRect
+   * @param {object} opts — { offset?, edgeMargin? }
+   * @returns {{x:number,y:number,w:number,h:number}}
+   */
+  _positionTooltip(tooltip, sourceRect, opts = {}) {
     const offset = opts.offset != null ? opts.offset : TOOLTIP_DEFAULT_OFFSET;
     const margin = opts.edgeMargin != null ? opts.edgeMargin : TOOLTIP_EDGE_MARGIN;
 
     const designW = this._app ? this._app.width : 1920;
     const designH = this._app ? this._app.height : 1080;
-    const { width: tw, height: th } = this._tooltip.getSize();
+    const { width: tw, height: th } = tooltip.getSize();
 
-    const r = el.rect;
+    const r = sourceRect;
     const pcx = r.x + r.w / 2;
     const pcy = r.y + r.h / 2;
     const cx = designW / 2;
@@ -334,6 +431,7 @@ export default class TooltipManager {
     tx = Math.max(margin, Math.min(designW - tw - margin, tx));
     ty = Math.max(margin, Math.min(designH - th - margin, ty));
 
-    this._tooltip.setPosition(tx, ty);
+    tooltip.setPosition(tx, ty);
+    return { x: tx, y: ty, w: tw, h: th };
   }
 }

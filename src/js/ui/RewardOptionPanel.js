@@ -32,6 +32,7 @@
 import UIPanel from './UIPanel.js';
 import UIImage from './UIImage.js';
 import UIText from './UIText.js';
+import KeywordText from './KeywordText.js';
 
 // ── Tunable layout constants ───────────────────────────────
 /** Icon size as a fraction of the card's WIDTH (square, contain-fit) */
@@ -151,7 +152,8 @@ export default class RewardOptionPanel extends UIPanel {
     this.addChild(this._divider);
 
     // ── Description (centered, wrapped). Height measured each layout pass. ──
-    this._descText = new UIText('');
+    // KeywordText so [[Keyword]] markup renders bracket-free and color-coded.
+    this._descText = new KeywordText('');
     this._descText.setStyle({
       fontSize: DESC_FONT_SIZE,
       color: DESC_COLOR,

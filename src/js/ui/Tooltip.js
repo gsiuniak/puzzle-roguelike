@@ -1,4 +1,5 @@
 import UIText from './UIText.js';
+import KeywordText from './KeywordText.js';
 
 /**
  * Tooltip — visual component that draws a single floating tooltip panel
@@ -63,7 +64,9 @@ export default class Tooltip {
     this._lineHeight = null;
     this._titleGap = TOOLTIP_DEFAULT_TITLE_GAP;
 
-    this._textElement = new UIText('');
+    // Body is a KeywordText so inline [[Keyword]] markup renders as colored,
+    // bracket-free spans. With no markup it behaves like a plain centered label.
+    this._textElement = new KeywordText('');
     this._textElement.setStyle({
       fontSize: this._fontSize,
       color: TOOLTIP_DEFAULT_COLOR,

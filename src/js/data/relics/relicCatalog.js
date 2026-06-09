@@ -66,7 +66,7 @@ const RELIC_CATALOG = {
   family_crest: {
     id: 'family_crest',
     name: 'Family Crest',
-    description: 'When you take damage, gain 2 red mana.',
+    description: 'When you take [[damage]], gain 2 red [[mana]].',
     icon: 'relic_family_crest',
     rarity: RELIC_RARITY.STARTER,
     effects: [
@@ -81,7 +81,7 @@ const RELIC_CATALOG = {
   unstable_catalyst: {
     id: 'unstable_catalyst',
     name: 'Unstable Catalyst',
-    description: 'Explode tiles in radius 1 when matching 4+ tiles.',
+    description: 'Explode [[tiles]] in radius 1 when matching 4+ [[tiles]].',
     icon: 'relic_unstable_catalyst',
     rarity: RELIC_RARITY.STARTER,
     effects: [
@@ -100,7 +100,7 @@ const RELIC_CATALOG = {
   evil_eye: {
     id: 'evil_eye',
     name: 'Evil Eye',
-    description: 'Reduce all damage taken by 1.',
+    description: 'Reduce all [[damage]] taken by 1.',
     icon: 'relic_evil_eye',
     rarity: RELIC_RARITY.STARTER,
     effects: [
@@ -244,7 +244,7 @@ const RELIC_CATALOG = {
   funerary_bell: {
     id: 'funerary_bell',
     name: 'Funerary Bell',
-    description: 'Increases damage dealt when matching skulls by 2.',
+    description: 'Increases [[damage]] dealt when matching [[skulls]] by 2.',
     icon: 'relic_funerary_bell',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -305,7 +305,7 @@ const RELIC_CATALOG = {
   aegis: {
     id: 'aegis',
     name: 'Aegis',
-    description: 'Gain 1 Armor at the start of each turn.',
+    description: 'Gain 1 [[Armor]] at the start of each turn.',
     icon: 'relic_aegis',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -327,7 +327,7 @@ const RELIC_CATALOG = {
   alabaster_flask: {
     id: 'alabaster_flask',
     name: 'Alabaster Flask',
-    description: 'Heal 2 HP at the start of each of your turns.',
+    description: '[[Heal]] 2 HP at the start of each of your turns.',
     icon: 'relic_alabaster_flask',
     rarity: RELIC_RARITY.COMMON,
     effects: [
@@ -398,7 +398,7 @@ const RELIC_CATALOG = {
   scythe: {
     id: 'scythe',
     name: 'Scythe',
-    description: 'Gain +1 Attack whenever you match 3+ skulls.',
+    description: 'Gain +1 [[Attack]] whenever you [[match]] 3+ [[skulls]].',
     icon: 'relic_scythe',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -664,7 +664,7 @@ const RELIC_CATALOG = {
   death_familiar: {
     id: 'death_familiar',
     name: 'Death Familiar',
-    description: 'Destroy a random skull whenever you match 3 or more tiles.',
+    description: 'Destroy a random [[skull]] whenever you [[match]] 3 or more [[tiles]].',
     icon: 'relic_familiar_skull',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
