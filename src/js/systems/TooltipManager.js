@@ -53,8 +53,13 @@ const TOOLTIP_DEFAULT_OFFSET       = 150;
 // keyword are spawned automatically, each positioned relative to the PREVIOUS
 // tooltip in the chain (parent → first keyword → next keyword …). This grows a
 // readable chain toward the screen center and is clamped to the viewport.
-/** Gap (design px) between one tooltip panel and the next in a chain. */
-export const KEYWORD_TOOLTIP_CHAIN_GAP = 20;
+/**
+ * Vertical gap (design px) between stacked tooltip panels in a chain. Lower =
+ * tighter stack; may be negative to overlap (the tooltip_panel art carries
+ * transparent margins, so a small/negative gap reads as "snug" rather than
+ * touching). Tune this single value to taste.
+ */
+export const KEYWORD_TOOLTIP_CHAIN_GAP = 4;
 /** Maximum number of child keyword tooltips in a single chain. */
 export const MAX_TOOLTIP_CHAIN_DEPTH = 3;
 // Movement (in design-space px) that cancels a pending touch-hold.
