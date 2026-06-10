@@ -233,6 +233,11 @@ const SOUNDS = {
     src: ['assets/audio/sfx/skills/lord_malakor/sfx_thrall_harvest.mp3'],
     category: AudioCategory.SFX,
   },
+  // Thrall-summon passive (Baron's Signet), played when Thralls are summoned.
+  sfx_thrall_summon: {
+    src: ['assets/audio/sfx/skills/lord_malakor/sfx_thrall_summon.mp3'],
+    category: AudioCategory.SFX,
+  },
   skill_exsanguinate: {
     src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_exsanguinate.mp3'],
     category: AudioCategory.SFX,

@@ -841,6 +841,11 @@ export default class BattleScene extends UIPanel {
       }
     }
 
+    // ── Thrall-summon SFX (Baron's Signet) ──
+    if (state.thrallSummoned && this._audioManager) {
+      this._audioManager.playSfx('sfx_thrall_summon');
+    }
+
     // ── Spawn combat-stat floating text over portraits ──
     // Damage (red "-x"), heal (green "+x"), armor (blue "+x"). Multiple events
     // for the same side this frame are stacked vertically so they don't overlap.

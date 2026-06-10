@@ -192,6 +192,14 @@ export default class BattleController {
     this._harvestEvents = [];
 
     /**
+     * One-shot flag: set when a `create_tiles` passive summons Thrall tiles
+     * (Baron's Signet) so BattleScene can play the Thrall-summon SFX exactly
+     * once. Read & cleared by getState().
+     * @type {boolean}
+     */
+    this._thrallSummoned = false;
+
+    /**
      * Extra delay (ms) added to the enemy's pre-action wait for the CURRENT
      * turn only, so a turn-START spectacle (the Usurper's Heart harvest
      * tendrils, fired on the boss's onTurnStart) can play out before the boss
@@ -571,6 +579,10 @@ export default class BattleController {
     const harvestEvents = this._harvestEvents;
     this._harvestEvents = [];
 
+    // One-shot Thrall-summon SFX flag (Baron's Signet), cleared on read.
+    const thrallSummoned = this._thrallSummoned;
+    this._thrallSummoned = false;
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -587,6 +599,7 @@ export default class BattleController {
       floatingStatEvents,
       relicTriggers,
       harvestEvents,
+      thrallSummoned,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -2346,6 +2359,9 @@ export default class BattleController {
     const created = placed.map((p) => ({ col: p.col, row: p.row, typeId: type }));
     this._convertedTilePositions = (this._convertedTilePositions || []).concat(created);
     this.log.add(`${count} ${type} tile(s) created.`);
+
+    // Flag Thrall summons (Baron's Signet) so the scene plays the summon SFX.
+    if (String(type).toLowerCase() === 'thrall') this._thrallSummoned = true;
 
     // Notify onTileCreated reactors — once per created tile so per-tile effects
     // (Severed Maxilla → +1 attack) accumulate correctly.
