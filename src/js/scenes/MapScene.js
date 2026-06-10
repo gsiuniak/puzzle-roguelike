@@ -181,6 +181,42 @@ export default class MapScene extends UIPanel {
     input.on('mousemove', this._onMouseMove);
     input.canvas.addEventListener('keydown', this._onKeyDown);
     input.canvas.focus();
+
+    // Begin buffering the boss intro video now, so its first frame is already
+    // decoded by the time the player reaches the boss (no black-screen stall).
+    this._maybePreloadBossIntro();
+  }
+
+  /**
+   * If this map has a boss node with an intro cutscene, tell the (singleton)
+   * BossIntroScene to start buffering its video ahead of time. Idempotent —
+   * BossIntroScene.preloadVideo ignores a repeat of the same src — so it's safe
+   * to call on every map entry (fresh run + each return from battle).
+   */
+  _maybePreloadBossIntro() {
+    const sm = this._sceneManager;
+    if (!sm || !this._graph) return;
+    const introScene = sm._scenes && sm._scenes['BossIntroScene'];
+    if (!introScene || typeof introScene.preloadVideo !== 'function') return;
+
+    const bossNode = this._graph.allNodes.find((n) => n.type === 'boss');
+    if (!bossNode) return;
+
+    let enemyDef = null;
+    try {
+      // Boss selection is deterministic (one boss per floor), so reading the
+      // intro video here matches the enemy the fight will actually use.
+      enemyDef = selectEnemyForNode({
+        depth: bossNode.depth,
+        nodeType: bossNode.type,
+        seenByAct: this._runState && this._runState.seenEnemiesByAct,
+      });
+    } catch (e) {
+      return;
+    }
+    if (enemyDef && enemyDef.introVideo) {
+      introScene.preloadVideo(enemyDef.introVideo);
+    }
   }
 
   /** Called by SceneManager when leaving this scene */

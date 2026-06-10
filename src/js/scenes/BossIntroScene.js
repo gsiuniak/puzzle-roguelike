@@ -52,6 +52,18 @@ export default class BossIntroScene extends UIPanel {
     // ── Video element + playback state ──
     /** @type {HTMLVideoElement|null} */
     this._video = null;
+    /**
+     * Src of the video element currently held in `_video`. Lets `preloadVideo`
+     * (called from the map) and `onEnter` reuse a buffered element instead of
+     * starting the download from scratch when the cutscene begins.
+     * @type {string|null}
+     */
+    this._preloadedSrc = null;
+    /** Bound element listeners, retained so they can be removed on teardown. */
+    this._onLoadedMeta = null;
+    this._onCanPlay = null;
+    this._onEnded = null;
+    this._onError = null;
     /** Set true once enough has buffered to start drawing frames. */
     this._videoReady = false;
     /** True once the boss music has been started (deferred to first frame). */
@@ -114,8 +126,9 @@ export default class BossIntroScene extends UIPanel {
     // the first video frame is ready to paint (_startMusic, driven from update())
     // so a slow-buffering video can't play music over a black screen.
 
-    // Create + play the (muted) video off-DOM; its frames are drawn to canvas.
-    this._createVideo();
+    // Play the (muted) video off-DOM; its frames are drawn to canvas. Reuses a
+    // video the map already buffered via preloadVideo() when one is available.
+    this._startPlayback();
 
     // Skip on any input (after a short grace period).
     const input = sm._input;
@@ -137,33 +150,90 @@ export default class BossIntroScene extends UIPanel {
     this._destroyVideo();
   }
 
+  // ── Preload (called from the map ahead of time) ───────
+
+  /**
+   * Buffer the cutscene video AHEAD of the cutscene — call from the map while
+   * the player roams so the first frame is already decoded by the time the
+   * scene is entered, eliminating the black-screen stall. The element is
+   * created and `.load()`ed but NOT played (it stays parked on its first frame
+   * until onEnter plays it). Idempotent: re-calling with the same src is a
+   * no-op; a different src replaces the buffered element.
+   * @param {string} videoSrc — video URL (relative to index.html)
+   */
+  preloadVideo(videoSrc) {
+    if (!videoSrc) return;
+    if (this._video && this._preloadedSrc === videoSrc) return; // already buffering this one
+    if (this._video) this._destroyVideo();                      // swap to a different video
+    this._video = this._buildVideoElement(videoSrc);
+    this._preloadedSrc = videoSrc;
+    // Kick off buffering now (preload='auto' + an explicit load()).
+    try { this._video.load(); } catch (e) { /* ignore */ }
+  }
+
   // ── Video setup / teardown ────────────────────────────
 
-  _createVideo() {
+  /**
+   * Create the off-DOM <video> for `videoSrc` and wire the metadata listener
+   * (needed during preload so the cover-fit size is ready before playback).
+   * Playback listeners are added later in _startPlayback().
+   */
+  _buildVideoElement(videoSrc) {
+    const video = document.createElement('video');
+    video.src = videoSrc;
+    video.muted = true;        // required for autoplay without a fresh gesture
+    video.playsInline = true;  // smooth inline playback on mobile
+    video.preload = 'auto';
+    video.loop = false;
+
+    this._onLoadedMeta = () => {
+      // CanvasApp.drawFullCanvasImage reads img.width/height — mirror the
+      // intrinsic video size so the cover-fit math works for the <video>.
+      video.width = video.videoWidth;
+      video.height = video.videoHeight;
+    };
+    video.addEventListener('loadedmetadata', this._onLoadedMeta);
+    return video;
+  }
+
+  /**
+   * Start playback when the scene is entered. Reuses a video the map already
+   * buffered via preloadVideo() when its src matches; otherwise builds + buffers
+   * a fresh one. Wires the playback listeners (canplay/ended/error) and plays.
+   */
+  _startPlayback() {
     if (!this._videoSrc) {
       // Nothing to play — go straight to the battle.
       this._requestFinish();
       return;
     }
 
-    const video = document.createElement('video');
-    video.src = this._videoSrc;
-    video.muted = true;        // required for autoplay without a fresh gesture
-    video.playsInline = true;  // smooth inline playback on mobile
-    video.preload = 'auto';
-    video.loop = false;
+    // Reuse a preloaded element if it matches; otherwise build fresh.
+    if (!this._video || this._preloadedSrc !== this._videoSrc) {
+      if (this._video) this._destroyVideo();
+      this._video = this._buildVideoElement(this._videoSrc);
+      this._preloadedSrc = this._videoSrc;
+      try { this._video.load(); } catch (e) { /* ignore */ }
+    }
 
-    video.addEventListener('loadedmetadata', () => {
-      // CanvasApp.drawFullCanvasImage reads img.width/height — mirror the
-      // intrinsic video size so the cover-fit math works for the <video>.
+    const video = this._video;
+
+    // Metadata may already have arrived during preload — mirror the size now in
+    // case the loadedmetadata listener fired before this scene was entered.
+    if (video.videoWidth && !video.width) {
       video.width = video.videoWidth;
       video.height = video.videoHeight;
-    });
-    video.addEventListener('canplay', () => { this._videoReady = true; });
-    video.addEventListener('ended', () => this._requestFinish());
-    video.addEventListener('error', () => this._requestFinish());
+    }
 
-    this._video = video;
+    this._onCanPlay = () => { this._videoReady = true; };
+    this._onEnded = () => this._requestFinish();
+    this._onError = () => this._requestFinish();
+    video.addEventListener('canplay', this._onCanPlay);
+    video.addEventListener('ended', this._onEnded);
+    video.addEventListener('error', this._onError);
+
+    // Always start from the top (a preloaded element was never played, but be safe).
+    try { video.currentTime = 0; } catch (e) { /* ignore */ }
 
     const playResult = video.play();
     if (playResult && typeof playResult.catch === 'function') {
@@ -175,11 +245,18 @@ export default class BossIntroScene extends UIPanel {
   }
 
   _destroyVideo() {
-    if (!this._video) return;
-    try { this._video.pause(); } catch (e) { /* ignore */ }
-    this._video.removeAttribute('src');
-    try { this._video.load(); } catch (e) { /* ignore */ }
+    const video = this._video;
+    if (!video) return;
+    if (this._onLoadedMeta) video.removeEventListener('loadedmetadata', this._onLoadedMeta);
+    if (this._onCanPlay) video.removeEventListener('canplay', this._onCanPlay);
+    if (this._onEnded) video.removeEventListener('ended', this._onEnded);
+    if (this._onError) video.removeEventListener('error', this._onError);
+    this._onLoadedMeta = this._onCanPlay = this._onEnded = this._onError = null;
+    try { video.pause(); } catch (e) { /* ignore */ }
+    video.removeAttribute('src');
+    try { video.load(); } catch (e) { /* ignore */ }
     this._video = null;
+    this._preloadedSrc = null;
   }
 
   // ── Music ─────────────────────────────────────────────
