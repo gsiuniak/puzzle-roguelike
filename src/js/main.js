@@ -20,6 +20,7 @@ import CharacterSelectScene from './scenes/CharacterSelectScene.js';
 import MapScene from './scenes/MapScene.js';
 import GameOverScene from './scenes/GameOverScene.js';
 import BossIntroScene from './scenes/BossIntroScene.js';
+import SkillWeaveScene from './scenes/SkillWeaveScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
 
@@ -221,6 +222,14 @@ const ASSET_MAP = {
   relic_barons_signet:       'assets/sprites/relics/relic_barons_signet.png',
   relic_infected_tooth:      'assets/sprites/relics/relic_infected_tooth.png',
   relic_severed_maxilla:     'assets/sprites/relics/relic_severed_maxilla.png',
+  // ── Skill Weave ("Weave a Power") screen assets ─────
+  skill_weave_background:               'assets/sprites/skill_weave/skill_weave_background.png',
+  ui_skill_weave_option_container:      'assets/sprites/skill_weave/ui_skill_weave_option_container.png',
+  ui_skill_weave_container:             'assets/sprites/skill_weave/ui_skill_weave_container.png',
+  ui_skill_weave_selection_container:   'assets/sprites/skill_weave/ui_skill_weave_selection_container.png',
+  ui_skill_weave_selection_blank_container: 'assets/sprites/skill_weave/ui_skill_weave_selection_blank_container.png',
+  ui_skill_weave_button:                'assets/sprites/skill_weave/ui_skill_weave_button.png',
+  skill_weave_tag_test:                 'assets/sprites/skill_weave/ui_skill_weave_tag_test.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };
@@ -280,6 +289,10 @@ async function init() {
   //     (configured on demand by MapScene._transitionToBattle).
   const bossIntroScene = new BossIntroScene();
 
+  // 9d. SkillWeaveScene — "Weave a Power" tag-draft skill reward screen
+  //     (configured on demand by MapScene when entering a training node).
+  const skillWeaveScene = new SkillWeaveScene();
+
   // 10. Register scenes
   sceneManager.registerScene('LoadingScene', loadingScene);
   sceneManager.registerScene('TitleScreen', titleScreen);
@@ -287,6 +300,7 @@ async function init() {
   sceneManager.registerScene('MapScene', mapScene);
   sceneManager.registerScene('GameOverScene', gameOverScene);
   sceneManager.registerScene('BossIntroScene', bossIntroScene);
+  sceneManager.registerScene('SkillWeaveScene', skillWeaveScene);
   // BattleScene is registered lazily by MapScene._transitionToBattle()
 
   // 11. Wire the fullscreen toggle button.

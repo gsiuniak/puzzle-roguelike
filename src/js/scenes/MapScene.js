@@ -368,12 +368,10 @@ export default class MapScene extends UIPanel {
         break;
 
       case 'training':
-        // Future: trigger training scene
-        console.log('[MapScene] Training node entered — upgrade (placeholder)');
-        if (window.__DEBUG_MODE) {
-          console.log('[MapScene] DEBUG: routing training node to Goblin battle for testing.');
-          this._transitionToBattle(node);
-        }
+        // Training nodes weave a new skill via the "Weave a Power" tag-draft
+        // screen (SkillWeaveScene). Skill resolution is a placeholder until
+        // skills are implemented, but the screen + node completion are wired.
+        this._transitionToSkillWeave(node);
         break;
 
       default:
@@ -491,6 +489,47 @@ export default class MapScene extends UIPanel {
     } else {
       sm.fadeToScene('BattleScene', 400);
     }
+  }
+
+  /**
+   * Transition to the SkillWeaveScene ("Weave a Power") for a training node.
+   *
+   * Mirrors the battle-transition contract: stash the traversal state, register
+   * an onComplete callback that marks the node complete (the same path battle
+   * uses via _handleBattleComplete), then fade to the configured scene. On
+   * return, MapScene.onEnter consumes _savedTraversalState and reveals the next
+   * depth.
+   * @param {import('../map/MapNode.js').default} node
+   */
+  _transitionToSkillWeave(node) {
+    if (this._transitioning) return;
+    this._transitioning = true;
+
+    const sm = this._sceneManager;
+    if (!sm) return;
+
+    // Save traversal state so we can restore + advance on return.
+    if (this._traversal) {
+      this._savedTraversalState = this._traversal.serialize();
+    }
+
+    const weaveScene = sm._scenes['SkillWeaveScene'];
+    if (!weaveScene || typeof weaveScene.configure !== 'function') {
+      console.warn('[MapScene] SkillWeaveScene unavailable — completing node directly.');
+      this._handleBattleComplete({ result: 'complete', nodeId: node.id });
+      sm.fadeToScene('MapScene', 400);
+      return;
+    }
+
+    weaveScene.configure({
+      returnScene: 'MapScene',
+      onComplete: ({ recipe }) => {
+        console.log(`[MapScene] Skill weave complete — recipe: [${(recipe || []).join(' + ')}], node: ${node.id}`);
+        this._handleBattleComplete({ result: 'complete', nodeId: node.id });
+      },
+    });
+
+    sm.fadeToScene('SkillWeaveScene', 400);
   }
 
   /**
