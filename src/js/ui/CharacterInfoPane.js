@@ -1,6 +1,7 @@
 import UIPanel from './UIPanel.js';
 import UIContainer from './UIContainer.js';
 import UIImage from './UIImage.js';
+import VideoPortrait from './VideoPortrait.js';
 import UIText from './UIText.js';
 import UIProgressBar from './UIProgressBar.js';
 import UIOrb from './UIOrb.js';
@@ -121,9 +122,22 @@ export default class CharacterInfoPane extends UIPanel {
 
   setCharacterData(data) {
     this._characterData = data;
+    this._destroyPortraitVideo();
     this.clearChildren();
     this._manaOrbs = { red: null, blue: null, green: null, yellow: null, purple: null };
     this.buildHierarchy();
+  }
+
+  /** Release a live video portrait (if any) so the <video> doesn't leak. */
+  _destroyPortraitVideo() {
+    if (this._portrait && typeof this._portrait.destroy === 'function') {
+      this._portrait.destroy();
+    }
+  }
+
+  /** Call when the owning scene exits, to stop/release any video portrait. */
+  destroy() {
+    this._destroyPortraitVideo();
   }
 
   setAssetManager(am) {
@@ -147,9 +161,16 @@ export default class CharacterInfoPane extends UIPanel {
     header.alignItems = 'stretch';
     header.height = HEADER_HEIGHT;
 
-    // Portrait
+    // Portrait — a live, white-keyed video when the data carries `portraitVideo`
+    // (data-driven, mirrors enemy `introVideo`), otherwise the static sprite.
+    // The video's near-white pixels are made transparent so the panel shows
+    // through. Falls back to the static portrait sprite until frames decode.
     const portraitKey = cd.portrait ? `portrait_${cd.portrait}` : 'placeholder';
-    this._portrait = new UIImage(portraitKey, this._assetManager);
+    if (cd.portraitVideo) {
+      this._portrait = new VideoPortrait(cd.portraitVideo, portraitKey, this._assetManager);
+    } else {
+      this._portrait = new UIImage(portraitKey, this._assetManager);
+    }
     this._portrait.setStyle({
       width: PORTRAIT_WIDTH,
       height: PORTRAIT_HEIGHT,

@@ -498,6 +498,11 @@ export default class BattleScene extends UIPanel {
       this._tooltipManager.clear();
     }
 
+    // Release any live video portraits (e.g. Lord Malakor) so the looping
+    // <video> elements don't keep decoding after the battle ends.
+    if (this._playerPane && this._playerPane.destroy) this._playerPane.destroy();
+    if (this._enemyPane && this._enemyPane.destroy) this._enemyPane.destroy();
+
     const input = this._sceneManager._input;
     if (!input) return;
 
