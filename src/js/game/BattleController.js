@@ -42,10 +42,11 @@ const SWAP_BASE_DURATION = 120;
 const TURN_INTRO_DURATION = 600;
 /**
  * How long (ms) the boss waits at turn start while the Usurper's Heart harvest
- * tendrils spiral to its portrait before it takes its action. Presentation
- * timing — keep roughly in sync with HarvestTendrilEffect's total duration.
+ * energy tendrils stay connected from each Thrall tile to its portrait before it
+ * takes its action. Presentation timing — keep roughly in sync with
+ * HarvestTendrilEffect's total duration (form + hold + fade).
  */
-const HARVEST_ANIM_DELAY = 700;
+const HARVEST_ANIM_DELAY = 900;
 
 export default class BattleController {
   constructor(playerData, enemyData) {
