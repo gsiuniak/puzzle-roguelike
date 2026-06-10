@@ -1,4 +1,44 @@
 import UIElement from './UIElement.js';
+import { isWild } from '../game/TileTypes.js';
+
+/**
+ * Wild-tile (Thrall) animated rainbow border.
+ *
+ * A thin multicolor frame drawn ON TOP of the wild tile's edge (the base tile
+ * art is untouched) so wild tiles read instantly as "match-anything". The five
+ * mana colors are expressed as HSL hues so saturation/brightness are tunable in
+ * one place. All numeric sizes are fractions of the cell size, so the border
+ * scales with the board without changing tile size or layout.
+ *
+ * Tweak everything here — nothing else needs to change to retune the look.
+ */
+const WILD_BORDER_CONFIG = {
+  enabled: true,
+  // 'cycle'  → colors rotate smoothly around the frame (conic gradient).
+  // 'scroll' → a multicolor gradient flows diagonally across the frame.
+  mode: 'cycle',
+  thicknessFrac: 0.055,     // border line thickness, fraction of cell size
+  minThickness: 1.5,        // px floor so it stays visible on small boards
+  insetFrac: 0.015,         // gap from the cell edge (keeps the line on the tile edge)
+  cornerRadiusFrac: 0.17,   // rounded-corner radius, fraction of cell size
+  opacity: 0.95,            // overall border opacity (0–1)
+  saturation: 95,           // HSL saturation % of the rainbow colors
+  lightness: 58,            // HSL lightness % of the rainbow colors
+  cycleSpeedDeg: 55,        // 'cycle': degrees/sec the colors rotate (loops continuously)
+  scrollSpeed: 0.18,        // 'scroll': gradient offsets/sec (loops at 1.0)
+  glowIntensity: 1.0,       // bloom strength multiplier (0 = no glow)
+  glowBlurFrac: 0.07,       // bloom spread, fraction of cell size
+  glowLayers: 2,            // # of additive bloom strokes (more = softer/heavier)
+  pulseSpeed: 0.5,          // glow "breathing" cycles/sec
+  pulseAmount: 0.5,         // 0 = steady glow, 1 = full breathing range
+};
+
+/**
+ * The five mana colors as HSL hues, in spectral order so the rotation reads as
+ * a smooth rainbow: red → yellow → green → blue → purple. Saturation/lightness
+ * come from WILD_BORDER_CONFIG.
+ */
+const WILD_BORDER_HUES = [0, 55, 120, 220, 285];
 
 /**
  * BoardRenderer — renders the 8×8 match-3 grid from a BoardModel.
@@ -7,6 +47,9 @@ import UIElement from './UIElement.js';
  *   - highlightCells: matched tiles glow yellow (SHOW_MATCH phase)
  *   - emptyCells: dark overlay where tiles were removed (REMOVE phase)
  *   - fallCells: tiles animate from startRow to current row (FALL phase)
+ *
+ * Wild (Thrall) tiles additionally get an animated rainbow border overlay
+ * (see _drawWildBorder + WILD_BORDER_CONFIG) drawn on top of the tile art.
  */
 export default class BoardPlaceholder extends UIElement {
   constructor(assetManager = null, boardModel = null) {
@@ -239,6 +282,12 @@ export default class BoardPlaceholder extends UIElement {
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.lineWidth = 0.5;
         ctx.strokeRect(displayX, displayY, cs, cs);
+
+        // Wild (Thrall) tiles: animated rainbow border overlay on the tile edge.
+        // Follows the tile (incl. fall animation) since it uses displayX/displayY.
+        if (isWild(colorKey)) {
+          this._drawWildBorder(ctx, displayX, displayY, cs);
+        }
       }
     }
 
@@ -340,6 +389,8 @@ export default class BoardPlaceholder extends UIElement {
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.lineWidth = 0.5;
         ctx.strokeRect(x, y, cs, cs);
+        // Keep the wild rainbow border on Thrall tiles while they swap.
+        if (isWild(typeKey)) this._drawWildBorder(ctx, x, y, cs);
       };
 
       ctx.save();
@@ -352,6 +403,129 @@ export default class BoardPlaceholder extends UIElement {
 
     // Restore smoothing to previous state
     ctx.imageSmoothingEnabled = prevSmoothing;
+  }
+
+  // ── Wild (Thrall) rainbow border ──────────────────────
+
+  /**
+   * Draw the animated multicolor border for a wild (Thrall) tile, on top of
+   * the existing tile art at (x, y) with side length `size`. Tunable entirely
+   * via WILD_BORDER_CONFIG. Self-contained (own save/restore); never mutates
+   * tile size or position. Animation is time-driven (Date.now()), matching the
+   * other pulsing overlays in this renderer.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x - tile top-left X (design space)
+   * @param {number} y - tile top-left Y (design space)
+   * @param {number} size - tile side length (px)
+   */
+  _drawWildBorder(ctx, x, y, size) {
+    const cfg = WILD_BORDER_CONFIG;
+    if (!cfg.enabled || size <= 0) return;
+
+    const tSec = Date.now() / 1000;
+
+    const thickness = Math.max(cfg.minThickness, cfg.thicknessFrac * size);
+    const inset = cfg.insetFrac * size;
+    const half = thickness / 2;
+
+    // Border rect, inset so the stroke sits on the tile's outer edge.
+    const bx = x + inset + half;
+    const by = y + inset + half;
+    const bw = size - 2 * (inset + half);
+    if (bw <= 0) return;
+    const r = Math.min(cfg.cornerRadiusFrac * size, bw / 2);
+    const cx = x + size / 2;
+    const cy = y + size / 2;
+
+    const grad = this._makeWildGradient(ctx, cx, cy, bx, by, bw, tSec, cfg);
+
+    // Soft "breathing" glow factor (0..1) → bloom spread.
+    const pulse = 0.5 + 0.5 * Math.sin(tSec * cfg.pulseSpeed * Math.PI * 2);
+    const pulseScale = 1 - cfg.pulseAmount * 0.5 + cfg.pulseAmount * pulse;
+    const glow = cfg.glowBlurFrac * size * pulseScale;
+
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 0;               // don't inherit any outer shadow (e.g. swap)
+    ctx.shadowColor = 'transparent';
+
+    // Additive bloom: a few faint, widening strokes that follow the gradient,
+    // producing a colored halo without a single flat glow color.
+    if (cfg.glowIntensity > 0 && cfg.glowLayers > 0) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = cfg.glowLayers; i >= 1; i--) {
+        const f = i / cfg.glowLayers;
+        this._roundRectPath(ctx, bx, by, bw, bw, r);
+        ctx.strokeStyle = grad;
+        ctx.globalAlpha = cfg.opacity * cfg.glowIntensity * 0.18 * f;
+        ctx.lineWidth = thickness + glow * f;
+        ctx.stroke();
+      }
+    }
+
+    // Crisp core line on top.
+    ctx.globalCompositeOperation = 'source-over';
+    this._roundRectPath(ctx, bx, by, bw, bw, r);
+    ctx.strokeStyle = grad;
+    ctx.globalAlpha = cfg.opacity;
+    ctx.lineWidth = thickness;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Build the rotating/scrolling rainbow gradient used by the wild border.
+   * 'cycle' uses a conic gradient centered on the tile (colors rotate around
+   * the frame); 'scroll' (and the conic-gradient fallback) uses a diagonal
+   * linear gradient whose stops flow over time.
+   * @private
+   */
+  _makeWildGradient(ctx, cx, cy, bx, by, bw, tSec, cfg) {
+    const hues = WILD_BORDER_HUES;
+    const n = hues.length;
+    const color = (h) => `hsl(${h}, ${cfg.saturation}%, ${cfg.lightness}%)`;
+
+    if (cfg.mode === 'cycle' && typeof ctx.createConicGradient === 'function') {
+      const angle = tSec * cfg.cycleSpeedDeg * Math.PI / 180;
+      const g = ctx.createConicGradient(angle, cx, cy);
+      for (let i = 0; i <= n; i++) g.addColorStop(i / n, color(hues[i % n]));
+      return g;
+    }
+
+    // 'scroll' mode (and fallback): diagonal linear gradient, stops shifted by
+    // time. Two repeats of the hue cycle so it tiles seamlessly as it flows.
+    const g = ctx.createLinearGradient(bx, by, bx + bw, by + bw);
+    const offset = (tSec * cfg.scrollSpeed) % 1;
+    const reps = 2;
+    const total = n * reps;
+    for (let i = 0; i <= total; i++) {
+      const stop = i / total;
+      const hue = hues[((i % n) + Math.round(offset * n)) % n];
+      g.addColorStop(stop, color(hue));
+    }
+    return g;
+  }
+
+  /**
+   * Trace a rounded-rectangle path (uses native ctx.roundRect when available,
+   * else an arcTo fallback). Caller sets stroke/fill state and strokes/fills.
+   * @private
+   */
+  _roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(x, y, w, h, r);
+      return;
+    }
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
   }
 
   // ── Asset ─────────────────────────────────────────────
