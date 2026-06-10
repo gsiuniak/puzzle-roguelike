@@ -7,11 +7,14 @@ import AudioManager from '../audio/AudioManager.js';
  * game canvas (an off-DOM <video> element is drawn each frame), NOT via a DOM
  * video player.
  *
- * Music: the boss battle track is started as the video starts (via the
- * AudioManager battle-music lifecycle). Because it is routed through
- * `startBattleMusic`, the BattleScene that follows treats the same track as
- * already-playing and does NOT restart it — so the music plays continuously
- * through the scene cross-fade into the fight.
+ * Music: the boss battle track is started the moment the FIRST video frame is
+ * ready to paint (not on entry), so a slow-buffering video can't play music
+ * over a black screen — picture and music begin together. It still routes
+ * through the AudioManager battle-music lifecycle, so the BattleScene that
+ * follows treats the same track as already-playing and does NOT restart it —
+ * the music plays continuously through the scene cross-fade into the fight. If
+ * the video never renders (autoplay block / error / immediate skip / timeout),
+ * the music is started on the finish path so the battle still has its track.
  *
  * When the video ends (~15s), or on error / autoplay-block / skip / safety
  * timeout, the scene cross-fades (SceneManager fade) to the configured battle
@@ -51,6 +54,8 @@ export default class BossIntroScene extends UIPanel {
     this._video = null;
     /** Set true once enough has buffered to start drawing frames. */
     this._videoReady = false;
+    /** True once the boss music has been started (deferred to first frame). */
+    this._musicStarted = false;
     /** True once the transition to the next scene has been kicked off. */
     this._finished = false;
     /** Set by the various end conditions; consumed in update() to start the fade. */
@@ -98,18 +103,16 @@ export default class BossIntroScene extends UIPanel {
     this._finished = false;
     this._pendingFinish = false;
     this._videoReady = false;
+    this._musicStarted = false;
 
     // No bar-fill image — the cutscene paints the video itself over black.
     if (sm._app && sm._app.setBackgroundImage) {
       sm._app.setBackgroundImage(null);
     }
 
-    // Start the boss music as the video starts. Routed through the battle-music
-    // lifecycle so the BattleScene that follows sees it as already-active and
-    // does NOT restart it — the track plays continuously into the fight.
-    if (this._musicKey) {
-      AudioManager.startBattleMusic(this._musicKey, this._isSpecialTrack);
-    }
+    // NOTE: the boss music is deliberately NOT started here. It starts the moment
+    // the first video frame is ready to paint (_startMusic, driven from update())
+    // so a slow-buffering video can't play music over a black screen.
 
     // Create + play the (muted) video off-DOM; its frames are drawn to canvas.
     this._createVideo();
@@ -179,6 +182,23 @@ export default class BossIntroScene extends UIPanel {
     this._video = null;
   }
 
+  // ── Music ─────────────────────────────────────────────
+
+  /**
+   * Start the boss music (once). Routed through the battle-music lifecycle so
+   * the BattleScene that follows sees it as already-active and does NOT restart
+   * it. Called the moment the first video frame is ready (so picture + music
+   * start together) and, as a fallback, from _requestFinish so the non-rendering
+   * end paths still hand a playing track to the battle.
+   */
+  _startMusic() {
+    if (this._musicStarted) return;
+    this._musicStarted = true;
+    if (this._musicKey) {
+      AudioManager.startBattleMusic(this._musicKey, this._isSpecialTrack);
+    }
+  }
+
   // ── Input / finish ────────────────────────────────────
 
   _onSkip() {
@@ -193,6 +213,10 @@ export default class BossIntroScene extends UIPanel {
    * stuck if an end condition fires during the entry fade-in).
    */
   _requestFinish() {
+    // If we're bailing out before the video ever rendered (autoplay block,
+    // error, immediate skip, safety timeout), make sure the music is going so
+    // the battle still has its track. No-op if it already started on first frame.
+    this._startMusic();
     this._pendingFinish = true;
   }
 
@@ -200,6 +224,12 @@ export default class BossIntroScene extends UIPanel {
 
   update(dt) {
     this._elapsed += dt;
+
+    // Start the music the moment the first frame is ready to paint (same
+    // readyState gate renderBackground uses), so picture + music begin together.
+    if (!this._musicStarted && this._video && this._video.readyState >= 2) {
+      this._startMusic();
+    }
 
     // Safety bail-out if the video never reports 'ended'.
     if (!this._pendingFinish && this._elapsed >= this._maxDuration) {
