@@ -52,6 +52,17 @@ const WILD_BORDER_HUES = [0, 55, 120, 220, 285];
 const WILD_TILE_BORDER_SCALE = 1.22;
 
 /**
+ * Subtle "flex" (breathing) animation for the wild-tile border: the frame's
+ * scale gently oscillates around WILD_TILE_BORDER_SCALE so the overlay feels
+ * alive. amplitude is a FRACTION of the base scale (0.04 = ±4%); speedHz is
+ * full pulse cycles per second. Set amplitude to 0 to disable.
+ */
+const WILD_TILE_BORDER_FLEX = {
+  amplitude: 0, // 0.045,
+  speedHz: 0.7,
+};
+
+/**
  * BoardRenderer — renders the 8×8 match-3 grid from a BoardModel.
  *
  * Visual cascade states (set externally from BattleController):
@@ -451,16 +462,27 @@ export default class BoardPlaceholder extends UIElement {
       this._drawWildBorder(ctx, x, y, size);
       return;
     }
+    // Subtle "flex" (breathing) pulse around the base scale. Uses a RELATIVE
+    // time base — feeding raw Date.now() (~1.7e9) into sin() wrecks float
+    // precision and makes the motion stutter, so anchor the clock at first draw.
+    if (this._wildAnimT0 == null) this._wildAnimT0 = Date.now();
+    const tSec = (Date.now() - this._wildAnimT0) / 1000;
+    const flex = WILD_TILE_BORDER_FLEX;
+    const pulse = flex.amplitude
+      ? Math.sin(tSec * flex.speedHz * Math.PI * 2) * flex.amplitude
+      : 0;
+    const scale = WILD_TILE_BORDER_SCALE * (1 + pulse);
+
     // The board renders with imageSmoothingEnabled=false so the pixel-aligned
     // tile sprites stay crisp. The wild frame, however, is a DETAILED ornate
     // image drawn at a SCALED (fractional) size — nearest-neighbour resampling
-    // of that into a non-integer rect is what makes it look fuzzy/aliased. So:
-    //   1) round the destination to whole pixels so it's pixel-aligned, and
-    //   2) enable high-quality smoothing just for this draw (then restore).
-    const drawSize = Math.round(size * WILD_TILE_BORDER_SCALE);
-    const offset = Math.round((drawSize - size) / 2); // center over the tile
-    const dx = Math.round(x) - offset;
-    const dy = Math.round(y) - offset;
+    // of that into a non-integer rect is what makes it look fuzzy/aliased. So
+    // enable high-quality smoothing just for this draw (then restore). The
+    // top-left is pixel-aligned; drawSize stays fractional so the flex is smooth.
+    const drawSize = size * scale;
+    const offset = (drawSize - size) / 2; // center the larger frame over the tile
+    const dx = Math.round(x - offset);
+    const dy = Math.round(y - offset);
 
     ctx.save();
     ctx.imageSmoothingEnabled = true;
