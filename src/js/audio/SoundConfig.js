@@ -228,6 +228,11 @@ const SOUNDS = {
     src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_harvest.mp3'],
     category: AudioCategory.SFX,
   },
+  // Thrall-harvest passive (Usurper's Heart), played when Thralls are reaped.
+  sfx_thrall_harvest: {
+    src: ['assets/audio/sfx/skills/lord_malakor/sfx_thrall_harvest.mp3'],
+    category: AudioCategory.SFX,
+  },
   skill_exsanguinate: {
     src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_exsanguinate.mp3'],
     category: AudioCategory.SFX,

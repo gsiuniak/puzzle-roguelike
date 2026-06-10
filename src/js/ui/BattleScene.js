@@ -11,6 +11,7 @@ import FloatingImageEffect from './FloatingImageEffect.js';
 import FloatingTextEffect from './FloatingTextEffect.js';
 import TileParticleEffect from './TileParticleEffect.js';
 import HarvestTendrilEffect from './HarvestTendrilEffect.js';
+import BloodSplashEffect from './BloodSplashEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
 import TooltipManager from '../systems/TooltipManager.js';
@@ -1077,6 +1078,18 @@ export default class BattleScene extends UIPanel {
       .map((p) => this._cellToScreen(p))
       .filter(Boolean);
     if (sources.length === 0) return;
+
+    // Harvest sound effect — once per harvest event.
+    if (this._audioManager) this._audioManager.playSfx('sfx_thrall_harvest');
+
+    // Dramatic liquid-blood splash from each harvested Thrall's location.
+    const cellSize = this._board.getCellMetrics().cellSize;
+    const bloodScale = Math.max(0.5, cellSize / 80);
+    for (const src of sources) {
+      this._floatingEffects.push(
+        new BloodSplashEffect(src.x, src.y, { scale: bloodScale })
+      );
+    }
 
     this._floatingEffects.push(
       new HarvestTendrilEffect(sources, target, { color: ev.color || '#d22a2a' })
