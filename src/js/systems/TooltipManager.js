@@ -145,6 +145,9 @@ export default class TooltipManager {
       this._attachments[idx].options = options;
       if (this._activeAttachment && this._activeAttachment.element === element) {
         this._activeAttachment.options = options;
+        // Reset overrides first (see _show) so omitted color keys fall back to
+        // defaults instead of inheriting a previous source's values.
+        this._tooltip.resetStyleDefaults();
         this._tooltip.setOptions(options);
         this._chainBuiltFor = null; // options changed → rebuild chain on next render
       }
@@ -369,6 +372,10 @@ export default class TooltipManager {
   _show(attachment) {
     if (!attachment) return;
     this._activeAttachment = attachment;
+    // Reset per-show style overrides first so a previous source (e.g. a hovered
+    // keyword span, which sets titleColor to the keyword color) doesn't bleed
+    // into this one when its options omit those keys.
+    this._tooltip.resetStyleDefaults();
     this._tooltip.setOptions(attachment.options || {});
     this._buildChain(attachment);
     this._chainBuiltFor = attachment;
@@ -406,6 +413,7 @@ export default class TooltipManager {
     for (let i = 0; i < links.length; i++) {
       const def = links[i];
       const tt = this._acquireChainTooltip(i);
+      tt.resetStyleDefaults(); // clean baseline before applying overrides
       tt.setOptions({
         title: def.label,
         titleColor: KEYWORD_COLOR,

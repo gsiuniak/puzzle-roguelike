@@ -151,6 +151,21 @@ export default class Tooltip {
     }
   }
 
+  /**
+   * Reset the per-show style overrides (body + title color) to their defaults.
+   *
+   * This Tooltip instance is reused for many different sources (e.g. the same
+   * parent tooltip shows relic descriptions AND hovered-keyword definitions).
+   * Since setOptions() does PARTIAL updates, a source that sets `titleColor`
+   * (keyword spans use KEYWORD_COLOR) would otherwise bleed into the next source
+   * that omits it. TooltipManager calls this before applying a new source's
+   * options so each show starts from a clean baseline.
+   */
+  resetStyleDefaults() {
+    this._textElement.setStyle({ color: TOOLTIP_DEFAULT_COLOR });
+    this._titleElement.setStyle({ color: TOOLTIP_DEFAULT_TITLE_COLOR });
+  }
+
   setPosition(x, y) {
     this._x = x;
     this._y = y;
