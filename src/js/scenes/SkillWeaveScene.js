@@ -50,10 +50,10 @@ const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
 // ── Title / subtitle ──
 const TITLE_TEXT = 'Weave a Power';
-const TITLE_Y = 78;
+const TITLE_Y = 108;
 const TITLE_SIZE = 70;
 const TITLE_COLOR = '#e7c878';
-const SUBTITLE_Y = 150;
+const SUBTITLE_Y = 156;
 const SUBTITLE_SIZE = 30;
 const SUBTITLE_COLOR = '#9a86b8';
 const SUBTITLE_CHOOSE = 'Choose a Tag';
@@ -66,7 +66,7 @@ const OPTION_ICON_CENTER_FRAC = 0.36; // icon vertical center within the plaque
 const OPTION_LABEL_CENTER_FRAC = 0.66;// label vertical center within the plaque
 const OPTION_LABEL_SIZE = 33;
 const OPTION_LABEL_COLOR = '#e2cd92';
-const OPTION_SELECTED_SCALE = 1.05;
+const OPTION_HOVER_SCALE = 1.05;
 const OPTION_GLOW_COLOR = 'rgba(185, 120, 255, 0.95)';
 
 // ── Recipe container + slots ──
@@ -75,7 +75,7 @@ const RECIPE_TOP_Y = 560;
 const RECIPE_HEADER_TEXT = 'Recipe';
 const RECIPE_HEADER_SIZE = 31;
 const RECIPE_HEADER_COLOR = '#d9c389';
-const RECIPE_HEADER_CENTER_FRAC = 0.21; // header vertical center within container
+const RECIPE_HEADER_CENTER_FRAC = 0.31; // header vertical center within container
 const SLOT_W = 196;                   // height derives from the slot art aspect
 const SLOT_GAP = 66;                  // gap between slots (a gold "+" sits here)
 const SLOT_CENTER_FRAC = 0.63;        // slots vertical center within container
@@ -119,9 +119,9 @@ export default class SkillWeaveScene extends UIPanel {
     this._recipe = [];
     /**
      * Per-step option state, indexed by step (= _recipe.length while drafting).
-     * Each entry: { options: string[], selected: number }. Kept across Back so
-     * the previous step's exact options + selection are restored.
-     * @type {Array<{options:string[], selected:number}>}
+     * Each entry: { options: string[] }. Kept across Back so the previous step's
+     * exact options are restored (not re-sampled).
+     * @type {Array<{options:string[]}>}
      */
     this._steps = [];
 
@@ -211,10 +211,10 @@ export default class SkillWeaveScene extends UIPanel {
     if (isRecipeComplete(this._recipe)) return;
     const pool = getValidTagsForStep(this._recipe);
     const options = sampleTags(pool, 3);
-    this._steps[this._recipe.length] = { options, selected: -1 };
+    this._steps[this._recipe.length] = { options };
   }
 
-  /** @returns {{options:string[], selected:number}|null} current step state */
+  /** @returns {{options:string[]}|null} current step state */
   _currentStep() {
     if (isRecipeComplete(this._recipe)) return null;
     return this._steps[this._recipe.length] || null;
@@ -228,43 +228,32 @@ export default class SkillWeaveScene extends UIPanel {
     return this._recipe.length > 0 && !this._finishing;
   }
 
+  /** Confirm is only the final "create the skill" action — active once full. */
   get _confirmEnabled() {
-    if (this._finishing) return false;
-    if (this._complete) return true;
-    const step = this._currentStep();
-    return !!step && step.selected >= 0;
-  }
-
-  /** Select one of the current step's options (highlights it). */
-  _selectOption(index) {
-    const step = this._currentStep();
-    if (!step || index < 0 || index >= step.options.length) return;
-    if (step.selected === index) return;
-    step.selected = index;
-    AudioManager.playSfx('sfx_map_click_node');
+    return this._complete && !this._finishing;
   }
 
   /**
-   * Commit the selected option into the recipe (or finish if complete).
-   * Mirrors a "Confirm" press.
+   * Pick an option — commits it straight into the next recipe slot and advances
+   * to the next step. Tags are chosen by clicking; only the final CONFIRM
+   * (once the recipe is full) resolves the skill.
    */
-  _confirm() {
-    if (!this._confirmEnabled) return;
-
-    if (this._complete) {
-      this._finishWeave();
-      return;
-    }
-
+  _pickOption(index) {
+    if (this._finishing || this._complete) return;
     const step = this._currentStep();
-    const tagId = step.options[step.selected];
-    this._recipe.push(tagId);
+    if (!step || index < 0 || index >= step.options.length) return;
+
+    this._recipe.push(step.options[index]);
     AudioManager.playSfx('sfx_map_click_node');
 
-    if (!this._complete) {
-      this._buildStep();
-    }
+    if (!this._complete) this._buildStep();
     this._hoverOption = -1;
+  }
+
+  /** Confirm = resolve the completed recipe (no-op until full). */
+  _confirm() {
+    if (!this._confirmEnabled) return;
+    this._finishWeave();
   }
 
   /** Remove the most recent tag, restoring the previous step's options. */
@@ -311,10 +300,10 @@ export default class SkillWeaveScene extends UIPanel {
     if (!this._inputReady()) return;
     const layout = this._computeLayout();
 
-    // Tag options
+    // Tag options — clicking commits the tag straight into the recipe.
     for (let i = 0; i < layout.options.length; i++) {
       if (this._inRect(x, y, layout.options[i])) {
-        this._selectOption(i);
+        this._pickOption(i);
         return;
       }
     }
@@ -528,10 +517,10 @@ export default class SkillWeaveScene extends UIPanel {
     const pulse = 0.5 + 0.5 * Math.sin(this._pulseTime * PULSE_SPEED);
 
     for (const opt of layout.options) {
-      const step = this._currentStep();
-      const selected = !!step && step.selected === opt.index;
+      // Hovering a tag grows it slightly + adds a breathing glow (the cue that
+      // it's the one a click will commit).
       const hovered = this._hoverOption === opt.index;
-      const scale = selected ? OPTION_SELECTED_SCALE : (hovered ? 1.025 : 1);
+      const scale = hovered ? OPTION_HOVER_SCALE : 1;
 
       const cx = opt.x + opt.w / 2;
       const cy = opt.y + opt.h / 2;
@@ -541,8 +530,8 @@ export default class SkillWeaveScene extends UIPanel {
       ctx.scale(scale, scale);
       ctx.translate(-cx, -cy);
 
-      // Selection glow (breathing purple aura behind the plaque).
-      if (selected) {
+      // Hover glow (breathing purple aura behind the plaque).
+      if (hovered) {
         ctx.save();
         ctx.shadowColor = OPTION_GLOW_COLOR;
         ctx.shadowBlur = 26 + pulse * 16;
@@ -562,16 +551,10 @@ export default class SkillWeaveScene extends UIPanel {
       // Label — lower portion, centered.
       this._drawText(ctx, getTagLabel(opt.tagId), cx, opt.y + opt.h * OPTION_LABEL_CENTER_FRAC, {
         size: OPTION_LABEL_SIZE,
-        color: selected ? '#f4e6b8' : OPTION_LABEL_COLOR,
+        color: hovered ? '#f4e6b8' : OPTION_LABEL_COLOR,
         baseline: 'middle',
         shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.65)',
       });
-
-      // Hover outline (when not already selection-glowing).
-      if (hovered && !selected) {
-        this._strokeRoundedRect(ctx, opt.x + 3, opt.y + 3, opt.w - 6, opt.h - 6,
-          14, 'rgba(220,190,255,0.5)', 2);
-      }
 
       ctx.restore();
     }
@@ -661,47 +644,24 @@ export default class SkillWeaveScene extends UIPanel {
   }
 
   /**
-   * Draw a bottom button. The single button art is reused for both; the
-   * Confirm variant overlays a purple gradient + glow to read as the active
-   * primary action, while Back / disabled states are dimmed.
+   * Draw a bottom button. Both buttons share the same plaque art; enabled
+   * buttons brighten on hover, disabled buttons are dimmed. (The Confirm button
+   * is just brighter gold text when active — no color tint.)
    */
   _drawButton(ctx, rect, label, { variant, enabled, hovered }) {
     const img = this._asset('ui_skill_weave_button');
-    const pulse = 0.5 + 0.5 * Math.sin(this._pulseTime * PULSE_SPEED);
 
     ctx.save();
 
     const baseAlpha = enabled ? (hovered ? 1 : 0.92) : 0.42;
     ctx.globalAlpha *= baseAlpha;
 
-    // Confirm: purple glow behind the plaque when active.
-    if (variant === 'confirm' && enabled) {
-      ctx.save();
-      ctx.shadowColor = 'rgba(150, 80, 230, 0.85)';
-      ctx.shadowBlur = (hovered ? 30 : 18) + pulse * 10;
-      if (img) this._drawImageRect(ctx, img, rect);
-      ctx.restore();
-    }
-
     if (img) this._drawImageRect(ctx, img, rect);
     else this._drawFallbackPlaque(ctx, rect);
 
-    // Confirm: inset purple gradient fill over the dark interior.
-    if (variant === 'confirm' && enabled) {
-      const ix = rect.x + rect.w * 0.07;
-      const iy = rect.y + rect.h * 0.24;
-      const iw = rect.w * 0.86;
-      const ih = rect.h * 0.52;
-      const grad = ctx.createLinearGradient(0, iy, 0, iy + ih);
-      const topA = hovered ? 0.66 : 0.52;
-      grad.addColorStop(0, `rgba(176, 96, 240, ${topA})`);
-      grad.addColorStop(1, `rgba(92, 36, 162, ${topA * 0.7})`);
-      this._fillRoundedRect(ctx, ix, iy, iw, ih, 10, grad);
-    }
-
-    // Label.
+    // Label — Confirm reads a touch brighter when it's the active final action.
     let labelColor;
-    if (variant === 'confirm') labelColor = enabled ? '#f4e8c4' : '#7a7060';
+    if (variant === 'confirm') labelColor = enabled ? '#f4e8c4' : '#6b6450';
     else labelColor = enabled ? '#d7c290' : '#6b6450';
     this._drawText(ctx, label, rect.x + rect.w / 2, rect.y + rect.h / 2, {
       size: BUTTON_LABEL_SIZE, color: labelColor, baseline: 'middle',
