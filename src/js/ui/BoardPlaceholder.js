@@ -462,16 +462,18 @@ export default class BoardPlaceholder extends UIElement {
       this._drawWildBorder(ctx, x, y, size);
       return;
     }
-    // Subtle "flex" (breathing) pulse around the base scale. Uses a RELATIVE
-    // time base — feeding raw Date.now() (~1.7e9) into sin() wrecks float
-    // precision and makes the motion stutter, so anchor the clock at first draw.
-    if (this._wildAnimT0 == null) this._wildAnimT0 = Date.now();
-    const tSec = (Date.now() - this._wildAnimT0) / 1000;
+    // Optional subtle "flex" (breathing) pulse around the base scale. When the
+    // amplitude is 0 (disabled) the ENTIRE block is skipped — no time sampling,
+    // no trig — so a disabled flex costs nothing beyond the static draw.
+    let scale = WILD_TILE_BORDER_SCALE;
     const flex = WILD_TILE_BORDER_FLEX;
-    const pulse = flex.amplitude
-      ? Math.sin(tSec * flex.speedHz * Math.PI * 2) * flex.amplitude
-      : 0;
-    const scale = WILD_TILE_BORDER_SCALE * (1 + pulse);
+    if (flex.amplitude) {
+      // RELATIVE time base — feeding raw Date.now() (~1.7e9) into sin() wrecks
+      // float precision and makes the motion stutter, so anchor at first draw.
+      if (this._wildAnimT0 == null) this._wildAnimT0 = Date.now();
+      const tSec = (Date.now() - this._wildAnimT0) / 1000;
+      scale *= 1 + Math.sin(tSec * flex.speedHz * Math.PI * 2) * flex.amplitude;
+    }
 
     // The board renders with imageSmoothingEnabled=false so the pixel-aligned
     // tile sprites stay crisp. The wild frame, however, is a DETAILED ornate
