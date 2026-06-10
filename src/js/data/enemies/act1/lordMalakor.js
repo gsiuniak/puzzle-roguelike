@@ -35,11 +35,13 @@ const lordMalakor = {
   armor: 0,
   // No starting mana — he must match to fuel his 7-cost skills.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
-  portrait: 'malakor', // maps to 'portrait_malakor' asset key (static fallback)
-  // Live character-pane portrait: a video whose near-white pixels are keyed to
+  portrait: 'malakor', // maps to 'portrait_malakor' asset key
+  // Live character-pane portrait: a video whose chroma-key backdrop is made
   // transparent (see CharacterInfoPane → VideoPortrait). URL relative to
   // index.html. Falls back to the static `portrait` sprite until frames decode.
-  portraitVideo: 'assets/audio/video/video_malakor_portrait.mp4',
+  // DISABLED — reverted to the static portrait. Uncomment to re-enable the
+  // video portrait (this field is the only thing that loads the video).
+  // portraitVideo: 'assets/audio/video/video_malakor_portrait.mp4',
   // Battle background asset key (registered in main.js ASSET_MAP). When absent
   // the BattleScene falls back to 'battle_background_default'.
   background: 'battle_background_malakor',
