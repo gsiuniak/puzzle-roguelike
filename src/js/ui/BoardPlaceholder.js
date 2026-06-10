@@ -451,9 +451,22 @@ export default class BoardPlaceholder extends UIElement {
       this._drawWildBorder(ctx, x, y, size);
       return;
     }
-    const drawSize = size * WILD_TILE_BORDER_SCALE;
-    const offset = (drawSize - size) / 2; // center the larger frame over the tile
-    ctx.drawImage(img, 0, 0, img.width, img.height, x - offset, y - offset, drawSize, drawSize);
+    // The board renders with imageSmoothingEnabled=false so the pixel-aligned
+    // tile sprites stay crisp. The wild frame, however, is a DETAILED ornate
+    // image drawn at a SCALED (fractional) size — nearest-neighbour resampling
+    // of that into a non-integer rect is what makes it look fuzzy/aliased. So:
+    //   1) round the destination to whole pixels so it's pixel-aligned, and
+    //   2) enable high-quality smoothing just for this draw (then restore).
+    const drawSize = Math.round(size * WILD_TILE_BORDER_SCALE);
+    const offset = Math.round((drawSize - size) / 2); // center over the tile
+    const dx = Math.round(x) - offset;
+    const dy = Math.round(y) - offset;
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, drawSize, drawSize);
+    ctx.restore();
   }
 
   // ── Wild (Thrall) rainbow border (DISABLED — retained for reference) ──
