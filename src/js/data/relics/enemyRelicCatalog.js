@@ -145,14 +145,14 @@ const ENEMY_RELIC_CATALOG = {
   barons_signet: {
     id: 'barons_signet',
     name: "Baron's Signet",
-    description: '[[Create]] 2 [[Thrall]] tiles at the end of turn.',
+    description: '[[Create]] 3 [[Thrall]] tiles at the end of turn.',
     icon: 'relic_barons_signet',
     rarity: RELIC_RARITY.RARE,
     effects: [
       {
         trigger: 'onTurnEnd',
         effectType: 'create_tiles',
-        createTiles: { type: 'thrall', amount: 2, avoidMatches: true },
+        createTiles: { type: 'thrall', amount: 3, avoidMatches: true },
       },
     ],
   },
