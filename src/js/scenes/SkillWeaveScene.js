@@ -19,9 +19,12 @@ import {
  * combo). When the recipe is full, Confirm resolves the final skill.
  *
  * Full-screen ritual scene (NOT a modal), modeled on TitleScreen/GameOverScene:
- * the wide `skill_weave_background` (gothic void + arcane circle + purple vortex
- * + gold frame) is painted full-canvas in renderBackground; all interactive UI
- * is drawn + hit-tested manually in design space from render()/_computeLayout().
+ * a looping background VIDEO (`video_skill_select_screen_bg`, an off-DOM muted
+ * <video> drawn full-canvas each frame in renderBackground, same approach as
+ * BossIntroScene/VideoPortrait) sits behind everything, falling back to the
+ * static `skill_weave_background` image until the first frame decodes (or if
+ * autoplay is blocked). All interactive UI is drawn + hit-tested manually in
+ * design space from render()/_computeLayout().
  *
  * ── Animation system ───────────────────────────────────────────────────────
  * A lightweight animation layer (`_anim`) sits over the draft state. Input is
@@ -50,6 +53,14 @@ import {
 
 const DESIGN_W = 1920;
 const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
+
+/**
+ * Looping background video (rendered to canvas each frame). Path is relative to
+ * index.html. NOT an AssetManager entry — the scene owns its own <video> (same
+ * approach as BossIntroScene / VideoPortrait). The static `skill_weave_background`
+ * image is the fallback until the first video frame decodes / if autoplay is blocked.
+ */
+const BACKGROUND_VIDEO_SRC = 'assets/audio/video/video_skill_select_screen_bg.mp4';
 
 // ── Title / subtitle ──
 const TITLE_TEXT = 'Weave a Power';
@@ -128,8 +139,12 @@ export default class SkillWeaveScene extends UIPanel {
     this.gap = 0;
     this.padding = 0;
 
-    this.backgroundAssetKey = 'skill_weave_background';
+    this.backgroundAssetKey = 'skill_weave_background'; // static fallback for the video
     this.smoothing = true;
+
+    // ── Background video (drawn full-canvas; falls back to the static image) ──
+    /** @type {HTMLVideoElement|null} off-DOM looping video, painted each frame */
+    this._bgVideo = null;
 
     // ── Fade-in / input grace ──
     this._elapsed = 0;
@@ -223,6 +238,9 @@ export default class SkillWeaveScene extends UIPanel {
     const app = this._sceneManager && this._sceneManager._app;
     if (app && app.setBackgroundImage) app.setBackgroundImage(null);
 
+    // Spin up the looping background video (muted, off-DOM, drawn to canvas).
+    this._createBackgroundVideo();
+
     AudioManager.playSfx('sfx_rewards_open');
 
     const input = this._sceneManager._input;
@@ -237,6 +255,48 @@ export default class SkillWeaveScene extends UIPanel {
     input.off('mousedown', this._handleMouseDown);
     input.off('mousemove', this._handleMouseMove);
     input.off('keydown', this._handleKeyDown);
+    this._destroyBackgroundVideo();
+  }
+
+  // ── Background video setup / teardown ──────────────────────
+
+  /**
+   * Create + play the looping, muted, off-DOM background video. Its frames are
+   * drawn full-canvas in renderBackground. The static image fallback stays up
+   * until the first frame decodes (or permanently if autoplay is blocked).
+   */
+  _createBackgroundVideo() {
+    this._destroyBackgroundVideo();
+
+    const video = document.createElement('video');
+    video.src = BACKGROUND_VIDEO_SRC;
+    video.muted = true;        // required for autoplay without a fresh gesture
+    video.playsInline = true;  // smooth inline playback on mobile
+    video.preload = 'auto';
+    video.loop = true;         // background loops for as long as the scene is up
+
+    // CanvasApp.drawFullCanvasImage reads img.width/height — mirror the video's
+    // intrinsic size so the cover-fit math works for the <video>.
+    video.addEventListener('loadedmetadata', () => {
+      video.width = video.videoWidth;
+      video.height = video.videoHeight;
+    });
+
+    this._bgVideo = video;
+
+    const playResult = video.play();
+    if (playResult && typeof playResult.catch === 'function') {
+      // Autoplay blocked / load failure — the static image fallback remains.
+      playResult.catch(() => {});
+    }
+  }
+
+  _destroyBackgroundVideo() {
+    if (!this._bgVideo) return;
+    try { this._bgVideo.pause(); } catch (e) { /* ignore */ }
+    this._bgVideo.removeAttribute('src');
+    try { this._bgVideo.load(); } catch (e) { /* ignore */ }
+    this._bgVideo = null;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -645,12 +705,25 @@ export default class SkillWeaveScene extends UIPanel {
   // Render
   // ═══════════════════════════════════════════════════════════
 
-  /** Full-canvas cover-fit background (covers letterbox bars), with fade-in. */
+  /**
+   * Full-canvas cover-fit background (covers letterbox bars), with fade-in.
+   * Draws the looping background video once its first frame is decodable;
+   * falls back to the static `skill_weave_background` image until then (or
+   * permanently if autoplay was blocked / the video errored).
+   */
   renderBackground(ctx) {
-    const img = this._asset(this.backgroundAssetKey);
-    if (!img || !this._sceneManager) return;
+    const sm = this._sceneManager;
+    if (!sm) return;
     const alpha = this._fadeInDone ? 1 : Math.min(1, this._elapsed / FADE_IN_DURATION);
-    this._sceneManager._app.drawFullCanvasImage(img, alpha);
+
+    const video = this._bgVideo;
+    if (video && video.readyState >= 2) { // 2 = HAVE_CURRENT_DATA
+      sm._app.drawFullCanvasImage(video, alpha);
+      return;
+    }
+
+    const img = this._asset(this.backgroundAssetKey);
+    if (img) sm._app.drawFullCanvasImage(img, alpha);
   }
 
   render(ctx) {
