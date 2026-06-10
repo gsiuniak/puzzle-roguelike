@@ -13,7 +13,11 @@ import { isWild } from '../game/TileTypes.js';
  * Tweak everything here — nothing else needs to change to retune the look.
  */
 const WILD_BORDER_CONFIG = {
-  enabled: true,
+  // DISABLED: superseded by the `wild_tile_border` image overlay
+  // (_drawWildTileBorder). The animated rainbow-border code below is retained
+  // (inert) for reference / future re-enable — flip this back to `true` AND
+  // re-point the wild-tile call sites to `_drawWildBorder` to restore it.
+  enabled: false,
   // 'cycle'  → colors rotate smoothly around the frame (conic gradient).
   // 'scroll' → a multicolor gradient flows diagonally across the frame.
   mode: 'cycle',
@@ -39,6 +43,13 @@ const WILD_BORDER_CONFIG = {
  * come from WILD_BORDER_CONFIG.
  */
 const WILD_BORDER_HUES = [0, 55, 120, 220, 285];
+
+/**
+ * Wild (Thrall) tile overlay: the `wild_tile_border` frame image is drawn
+ * centered over the tile, scaled slightly LARGER than the cell so it encompasses
+ * the tile art (matches the reference mock). 1.0 = exact cell size.
+ */
+const WILD_TILE_BORDER_SCALE = 1.22;
 
 /**
  * BoardRenderer — renders the 8×8 match-3 grid from a BoardModel.
@@ -237,6 +248,10 @@ export default class BoardPlaceholder extends UIElement {
     // ═══════════════════════════════════════════════════════
     // PASS 3: TILES + BORDERS + OVERLAYS
     // ═══════════════════════════════════════════════════════
+    // Wild (Thrall) borders are deferred to a pass AFTER all tiles are drawn —
+    // the frame overhangs the cell, so drawing it inline would let later-drawn
+    // neighbor tiles clip its right/bottom edge.
+    const wildBorders = [];
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         const key = `${col},${row}`;
@@ -283,12 +298,19 @@ export default class BoardPlaceholder extends UIElement {
         ctx.lineWidth = 0.5;
         ctx.strokeRect(displayX, displayY, cs, cs);
 
-        // Wild (Thrall) tiles: animated rainbow border overlay on the tile edge.
-        // Follows the tile (incl. fall animation) since it uses displayX/displayY.
+        // Wild (Thrall) tiles: `wild_tile_border` frame overlay (slightly larger
+        // than the tile). Deferred to after the tile loop (see wildBorders).
+        // Follows the tile (incl. fall animation) via displayX/displayY.
         if (isWild(colorKey)) {
-          this._drawWildBorder(ctx, displayX, displayY, cs);
+          wildBorders.push({ x: displayX, y: displayY });
         }
       }
+    }
+
+    // Wild-tile border pass — on top of all tiles so the overhanging frame
+    // isn't clipped by neighbors.
+    for (const b of wildBorders) {
+      this._drawWildTileBorder(ctx, b.x, b.y, cs);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -389,8 +411,8 @@ export default class BoardPlaceholder extends UIElement {
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.lineWidth = 0.5;
         ctx.strokeRect(x, y, cs, cs);
-        // Keep the wild rainbow border on Thrall tiles while they swap.
-        if (isWild(typeKey)) this._drawWildBorder(ctx, x, y, cs);
+        // Keep the wild tile border on Thrall tiles while they swap.
+        if (isWild(typeKey)) this._drawWildTileBorder(ctx, x, y, cs);
       };
 
       ctx.save();
@@ -405,7 +427,36 @@ export default class BoardPlaceholder extends UIElement {
     ctx.imageSmoothingEnabled = prevSmoothing;
   }
 
-  // ── Wild (Thrall) rainbow border ──────────────────────
+  // ── Wild (Thrall) tile border overlay ─────────────────
+
+  /**
+   * Draw the `wild_tile_border` frame image over a wild (Thrall) tile, centered
+   * on the tile at (x, y) with side length `size` and scaled slightly larger
+   * (WILD_TILE_BORDER_SCALE) so it encompasses the tile art. Self-contained;
+   * never mutates tile size/position. Follows fall + swap animation since it
+   * uses the same display coords as the tile. Falls back to the legacy rainbow
+   * border only if the image asset is missing.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x - tile top-left X (design space)
+   * @param {number} y - tile top-left Y (design space)
+   * @param {number} size - tile side length (px)
+   */
+  _drawWildTileBorder(ctx, x, y, size) {
+    if (size <= 0) return;
+    const img = this._assetManager ? this._assetManager.get('wild_tile_border') : null;
+    if (!img) {
+      // Image missing — fall back to the retained rainbow border so wild tiles
+      // still read as "match-anything".
+      this._drawWildBorder(ctx, x, y, size);
+      return;
+    }
+    const drawSize = size * WILD_TILE_BORDER_SCALE;
+    const offset = (drawSize - size) / 2; // center the larger frame over the tile
+    ctx.drawImage(img, 0, 0, img.width, img.height, x - offset, y - offset, drawSize, drawSize);
+  }
+
+  // ── Wild (Thrall) rainbow border (DISABLED — retained for reference) ──
 
   /**
    * Draw the animated multicolor border for a wild (Thrall) tile, on top of

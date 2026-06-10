@@ -100,6 +100,7 @@ const ASSET_MAP = {
   tile_skull:                'assets/sprites/battle/board/tiles/skull_tile.png',
   tile_disease:              'assets/sprites/battle/board/tiles/diseased_tile.png',
   tile_thrall:               'assets/sprites/battle/board/tiles/thrall_tile.png',
+  wild_tile_border:          'assets/sprites/battle/board/tiles/wild_tile_border.png',
   // ── Character select scene assets ───────────────────
   character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.png',
   character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.png',
