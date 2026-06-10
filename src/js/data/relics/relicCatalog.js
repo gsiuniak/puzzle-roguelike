@@ -132,7 +132,7 @@ const RELIC_CATALOG = {
   dewstone: {
     id: 'dewstone',
     name: 'Dewstone',
-    description: 'Increase the chance of Blue [[tiles] appearing.',
+    description: 'Increase the chance of Blue [[tiles]] appearing.',
     icon: 'relic_dewstone',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [

@@ -423,7 +423,12 @@ export default class BoardPlaceholder extends UIElement {
     const cfg = WILD_BORDER_CONFIG;
     if (!cfg.enabled || size <= 0) return;
 
-    const tSec = Date.now() / 1000;
+    // Use a RELATIVE time base. Date.now()/1000 is ~1.75e9, and feeding numbers
+    // that large into the gradient/angle math wrecks float precision, making the
+    // motion snap/stutter instead of flowing. Anchoring the clock at first draw
+    // keeps tSec small (seconds since start) so the animation stays smooth.
+    if (this._wildAnimT0 == null) this._wildAnimT0 = Date.now();
+    const tSec = (Date.now() - this._wildAnimT0) / 1000;
 
     const thickness = Math.max(cfg.minThickness, cfg.thicknessFrac * size);
     const inset = cfg.insetFrac * size;
@@ -480,33 +485,55 @@ export default class BoardPlaceholder extends UIElement {
    * Build the rotating/scrolling rainbow gradient used by the wild border.
    * 'cycle' uses a conic gradient centered on the tile (colors rotate around
    * the frame); 'scroll' (and the conic-gradient fallback) uses a diagonal
-   * linear gradient whose stops flow over time.
+   * linear gradient whose colors flow continuously over time.
    * @private
    */
   _makeWildGradient(ctx, cx, cy, bx, by, bw, tSec, cfg) {
     const hues = WILD_BORDER_HUES;
     const n = hues.length;
-    const color = (h) => `hsl(${h}, ${cfg.saturation}%, ${cfg.lightness}%)`;
+    const color = (h) => `hsl(${((h % 360) + 360) % 360}, ${cfg.saturation}%, ${cfg.lightness}%)`;
 
     if (cfg.mode === 'cycle' && typeof ctx.createConicGradient === 'function') {
-      const angle = tSec * cfg.cycleSpeedDeg * Math.PI / 180;
+      // Normalize the angle to one revolution so the value stays small/precise.
+      const period = 360 / Math.max(0.0001, cfg.cycleSpeedDeg); // sec per revolution
+      const angle = ((tSec / period) % 1) * Math.PI * 2;
       const g = ctx.createConicGradient(angle, cx, cy);
       for (let i = 0; i <= n; i++) g.addColorStop(i / n, color(hues[i % n]));
       return g;
     }
 
-    // 'scroll' mode (and fallback): diagonal linear gradient, stops shifted by
-    // time. Two repeats of the hue cycle so it tiles seamlessly as it flows.
+    // 'scroll' mode (and conic fallback): a smoothly flowing linear gradient.
+    // Colors are sampled by CONTINUOUS interpolation around the hue ring (no
+    // discrete stepping), and the whole ring is offset over time so it flows.
     const g = ctx.createLinearGradient(bx, by, bx + bw, by + bw);
+    const reps = 2;     // hue cycles across the diagonal
+    const STOPS = 24;   // sampling resolution (higher = smoother)
     const offset = (tSec * cfg.scrollSpeed) % 1;
-    const reps = 2;
-    const total = n * reps;
-    for (let i = 0; i <= total; i++) {
-      const stop = i / total;
-      const hue = hues[((i % n) + Math.round(offset * n)) % n];
-      g.addColorStop(stop, color(hue));
+    for (let i = 0; i <= STOPS; i++) {
+      const p = i / STOPS;
+      const ringPos = (p * reps + offset) % 1; // continuous position around the ring
+      g.addColorStop(p, color(this._ringHue(ringPos)));
     }
     return g;
+  }
+
+  /**
+   * Interpolated hue (degrees) at a continuous position t in [0,1) around the
+   * 5-color ring, taking the short "forward" path across the red↔purple wrap so
+   * the rainbow flows smoothly rather than jumping.
+   * @private
+   */
+  _ringHue(t) {
+    const hues = WILD_BORDER_HUES;
+    const n = hues.length;
+    const x = (((t % 1) + 1) % 1) * n; // [0, n)
+    const i0 = Math.floor(x) % n;
+    const i1 = (i0 + 1) % n;
+    const frac = x - Math.floor(x);
+    let h0 = hues[i0];
+    let h1 = hues[i1];
+    if (h1 < h0) h1 += 360; // forward direction around the wheel
+    return h0 + (h1 - h0) * frac;
   }
 
   /**
