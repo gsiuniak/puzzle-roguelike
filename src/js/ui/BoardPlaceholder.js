@@ -21,16 +21,16 @@ const WILD_BORDER_CONFIG = {
   minThickness: 1.5,        // px floor so it stays visible on small boards
   insetFrac: 0.015,         // gap from the cell edge (keeps the line on the tile edge)
   cornerRadiusFrac: 0.17,   // rounded-corner radius, fraction of cell size
-  opacity: 0.95,            // overall border opacity (0–1)
+  opacity: 0.8,            // overall border opacity (0–1)
   saturation: 95,           // HSL saturation % of the rainbow colors
   lightness: 58,            // HSL lightness % of the rainbow colors
-  cycleSpeedDeg: 55,        // 'cycle': degrees/sec the colors rotate (loops continuously)
-  scrollSpeed: 0.18,        // 'scroll': gradient offsets/sec (loops at 1.0)
+  cycleSpeedDeg: 75,        // 'cycle': degrees/sec the colors rotate (loops continuously)
+  scrollSpeed: 0.2,        // 'scroll': gradient offsets/sec (loops at 1.0)
   glowIntensity: 1.0,       // bloom strength multiplier (0 = no glow)
   glowBlurFrac: 0.07,       // bloom spread, fraction of cell size
   glowLayers: 2,            // # of additive bloom strokes (more = softer/heavier)
-  pulseSpeed: 0.5,          // glow "breathing" cycles/sec
-  pulseAmount: 0.5,         // 0 = steady glow, 1 = full breathing range
+  pulseSpeed: 1,          // glow "breathing" cycles/sec
+  pulseAmount: 1,         // 0 = steady glow, 1 = full breathing range
 };
 
 /**
