@@ -14,6 +14,7 @@ import GameLoop from './engine/GameLoop.js';
 import AssetManager from './engine/AssetManager.js';
 import InputManager from './engine/InputManager.js';
 import SceneManager from './scenes/SceneManager.js';
+import LoadingScene from './scenes/LoadingScene.js';
 import TitleScreen from './scenes/TitleScreen.js';
 import CharacterSelectScene from './scenes/CharacterSelectScene.js';
 import MapScene from './scenes/MapScene.js';
@@ -233,36 +234,34 @@ const DESIGN_HEIGHT = 1080;
 
 // ── Initialize ─────────────────────────────────────────
 async function init() {
-  // 1. AssetManager
+  // 1. AssetManager — register every asset, but do NOT block on loading yet.
+  //    The loading screen below appears immediately and the assets stream in
+  //    behind it (see step 12).
   const assetManager = new AssetManager();
   for (const [key, path] of Object.entries(ASSET_MAP)) {
     assetManager.add(key, path);
   }
 
-  console.log('Loading assets...');
-  const loadedCount = await assetManager.loadAll();
-  console.log(`Assets loaded: ${loadedCount} / ${assetManager.count}`);
-
-  // 2. AudioManager — initialize with sound config
-  AudioManager.init(SoundConfig);
-  console.log('[AudioManager] Sound system ready.');
-
-  // 3. CanvasApp
+  // 2. CanvasApp
   const app = new CanvasApp(null, {
     autoResize: true,
     designWidth: DESIGN_WIDTH,
     designHeight: DESIGN_HEIGHT,
   });
 
-  // 4. InputManager — receives `app` so pointer events convert to design space
+  // 3. InputManager — receives `app` so pointer events convert to design space
   const input = new InputManager(app.canvas, app);
 
-  // 5. GameLoop
+  // 4. GameLoop
   const loop = new GameLoop();
 
-  // 6. SceneManager — owns all shared services
+  // 5. SceneManager — owns all shared services
   const sceneManager = new SceneManager(app, loop, input, assetManager);
   sceneManager.setAudioManager(AudioManager);
+
+  // 6. LoadingScene — shown first, polls AssetManager progress, fades to Title
+  const loadingScene = new LoadingScene();
+  loadingScene.setAssetManager(assetManager);
 
   // 7. TitleScreen
   const titleScreen = new TitleScreen();
@@ -282,6 +281,7 @@ async function init() {
   const bossIntroScene = new BossIntroScene();
 
   // 10. Register scenes
+  sceneManager.registerScene('LoadingScene', loadingScene);
   sceneManager.registerScene('TitleScreen', titleScreen);
   sceneManager.registerScene('CharacterSelectScene', characterSelectScene);
   sceneManager.registerScene('MapScene', mapScene);
@@ -296,11 +296,22 @@ async function init() {
   // index.html makes "Add to Home Screen" launch the app fullscreen.
   setupFullscreenButton();
 
-  // 12. Boot into title screen
-  sceneManager.switchTo('TitleScreen');
-
-  // 13. Start the game loop
+  // 12. Boot into the loading screen and start the loop immediately so the
+  //     screen is visible while assets load.
+  sceneManager.switchTo('LoadingScene');
   sceneManager.start();
+
+  // 13. Kick off asset + audio loading in the background. The LoadingScene
+  //     polls `assetManager.progress` each frame and fades to TitleScreen when
+  //     loading completes — we never block the loop on it.
+  console.log('Loading assets...');
+  assetManager.loadAll().then((loadedCount) => {
+    console.log(`Assets loaded: ${loadedCount} / ${assetManager.count}`);
+  });
+
+  // AudioManager initialization runs in parallel (Howler lazily streams audio).
+  AudioManager.init(SoundConfig);
+  console.log('[AudioManager] Sound system ready.');
 
   // Attach debug flags to window for runtime access across modules
   window.__DEBUG_MODE = DEBUG_MODE;

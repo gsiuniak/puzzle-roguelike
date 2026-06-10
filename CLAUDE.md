@@ -58,13 +58,17 @@ src/
 ### Scene Flow
 
 ```
-TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
-                       ↑                   (roam)  │    (combat)
+LoadingScene  →  TitleScreen  →  CharacterSelectScene  →  MapScene  ⇄  BattleScene
+(preload)              ↑                   (roam)  │    (combat)
                        │                           │        ↓
                        │              (boss only)  │  victory: RewardOverlay → MapScene
                        │            BossIntroScene─┘  defeat:  GameOverScene
                        └─────────(any input)─────────────────┘
 ```
+On boot the game shows **LoadingScene** (a minimal dark/gold preload screen) FIRST
+while assets stream in, then fades to TitleScreen once `AssetManager.progress`
+reaches 1. The game loop starts immediately on LoadingScene — asset loading is
+NOT awaited before boot (see [`main.js`](src/js/main.js) `init`).
 On **victory** the post-battle RewardOverlay drives the return to MapScene. On
 **defeat** the player is routed to the full-screen **GameOverScene**; any input
 there returns to CharacterSelectScene to start a fresh run. When an enemy def
@@ -117,6 +121,7 @@ music — before cross-fading into the BattleScene.
 | File | Class | Responsibility |
 |------|-------|----------------|
 | [`src/js/scenes/SceneManager.js`](src/js/scenes/SceneManager.js) | `SceneManager` | Scene registry, switchTo/fadeToScene, game loop tick, layout |
+| [`src/js/scenes/LoadingScene.js`](src/js/scenes/LoadingScene.js) | `LoadingScene` | **Boot preload screen** (shown before TitleScreen). Minimal dark-fantasy look drawn entirely with canvas primitives (no asset dependency, so it appears on frame 1): full-canvas near-black base (`renderBackground`), radial vignette, centered "LOADING" text, and a thin **gold** glowing progress bar with end-cap flourishes. Polls `assetManager.progress` each frame (eased via `PROGRESS_LERP`) to fill the bar; falls back to a looping shimmer sweep if no progress is known. Fades to `TitleScreen` (`fadeToScene`, `FADE_DURATION`) once progress hits 1 AND `MIN_DISPLAY_MS` has elapsed (a small floor so it never just flashes — loading runs in parallel so this never delays loading). `setAssetManager(am)` is wired in [`main.js`](src/js/main.js). All visual/behavior tunables are named constants at the top of the file (`LOADING_TEXT_Y`, `BAR_Y`, `BAR_WIDTH`, `BAR_HEIGHT`, gold fill/glow colors, `FADE_DURATION`, `MIN_DISPLAY_MS`). Modeled on `TitleScreen`. |
 | [`src/js/scenes/TitleScreen.js`](src/js/scenes/TitleScreen.js) | `TitleScreen` | Cover-fit title image, fade-in, any-input → CharacterSelectScene |
 | [`src/js/scenes/CharacterSelectScene.js`](src/js/scenes/CharacterSelectScene.js) | `CharacterSelectScene` | Character selection, splash cross-fade, info panel, aura effect, → MapScene |
 | [`src/js/scenes/MapScene.js`](src/js/scenes/MapScene.js) | `MapScene` | Map traversal, node clicking, battle transition, battle result handling |
@@ -533,7 +538,7 @@ Player clicks skill → CharacterPane.onSkillClick → BattleController.tryPlaye
 | `AudioCategory` | [`SoundConfig.js:15`](src/js/audio/SoundConfig.js:15) | MASTER, MUSIC, SFX, UI, AMBIENT |
 | `MANA_COLORS` | [`TileTypes.js:21`](src/js/game/TileTypes.js:21) | ['red', 'blue', 'green', 'yellow', 'purple'] |
 | `DEBUG_MODE` | [`main.js:32`](src/js/main.js:32) | `true` — press 'K' in battle for instant win |
-| Scene names | [`main.js:150`](src/js/main.js:150) | 'TitleScreen', 'CharacterSelectScene', 'MapScene', 'GameOverScene', 'BattleScene' |
+| Scene names | [`main.js:150`](src/js/main.js:150) | 'LoadingScene', 'TitleScreen', 'CharacterSelectScene', 'MapScene', 'GameOverScene', 'BattleScene' |
 | `RewardOverlay` state | [`RewardOverlay.js:49`](src/js/ui/RewardOverlay.js:49) | INACTIVE, ACTIVE |
 
 ---

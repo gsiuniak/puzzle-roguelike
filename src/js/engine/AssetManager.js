@@ -155,6 +155,18 @@ export default class AssetManager {
   /** Number of registered assets */
   get count() { return this._count; }
 
-  /** Number of successfully loaded assets */
+  /** Number of successfully loaded (or failed) assets */
   get loaded() { return this._loaded; }
+
+  /**
+   * Loading progress in the range [0, 1]. Increments as each asset finishes
+   * (success OR failure — both resolve `_loadOne`). Returns 1 when nothing is
+   * registered so a poller never stalls. Safe to poll every frame (e.g. by a
+   * loading scene driving a progress bar).
+   * @returns {number}
+   */
+  get progress() {
+    if (this._count === 0) return 1;
+    return Math.min(1, this._loaded / this._count);
+  }
 }
