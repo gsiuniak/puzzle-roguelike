@@ -18,13 +18,14 @@ import {
  * skillWeaveTags.js — the pool is grammar-derived so every path leads to a real
  * combo). When the recipe is full, Confirm resolves the final skill.
  *
- * Full-screen ritual scene (NOT a modal), modeled on TitleScreen/GameOverScene:
- * a looping background VIDEO (`video_skill_select_screen_bg`, an off-DOM muted
- * <video> drawn full-canvas each frame in renderBackground, same approach as
- * BossIntroScene/VideoPortrait) sits behind everything, falling back to the
- * static `skill_weave_background` image until the first frame decodes (or if
- * autoplay is blocked). All interactive UI is drawn + hit-tested manually in
- * design space from render()/_computeLayout().
+ * Full-screen ritual scene (NOT a modal), modeled on TitleScreen/GameOverScene.
+ * The background is toggleable via USE_BACKGROUND_VIDEO: currently the static
+ * `skill_weave_background` image (default), or a looping VIDEO
+ * (`video_skill_select_screen_bg`, an off-DOM muted <video> drawn full-canvas
+ * each frame in renderBackground, same approach as BossIntroScene/VideoPortrait,
+ * with the static image as the until-decoded / autoplay-blocked fallback). All
+ * interactive UI is drawn + hit-tested manually in design space from
+ * render()/_computeLayout().
  *
  * ── Animation system ───────────────────────────────────────────────────────
  * A lightweight animation layer (`_anim`) sits over the draft state. Input is
@@ -53,6 +54,13 @@ import {
 
 const DESIGN_W = 1920;
 const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
+
+/**
+ * Background mode toggle. When false (current default) the static
+ * `skill_weave_background` image is used. Flip to true to play the looping
+ * video background instead — all the video machinery stays wired either way.
+ */
+const USE_BACKGROUND_VIDEO = false;
 
 /**
  * Looping background video (rendered to canvas each frame). Path is relative to
@@ -241,6 +249,9 @@ export default class SkillWeaveScene extends UIPanel {
     // Spin up the looping background video (muted, off-DOM, drawn to canvas).
     this._createBackgroundVideo();
 
+    // Cross-fade to the skill-weave theme (fades the outgoing map/battle track
+    // out as this fades in). MapScene restores its own music on return.
+    AudioManager.playMusic('skill_weave_theme', { fadeIn: 800 });
     AudioManager.playSfx('sfx_rewards_open');
 
     const input = this._sceneManager._input;
@@ -267,6 +278,7 @@ export default class SkillWeaveScene extends UIPanel {
    */
   _createBackgroundVideo() {
     this._destroyBackgroundVideo();
+    if (!USE_BACKGROUND_VIDEO) return; // static-image mode — see USE_BACKGROUND_VIDEO
 
     const video = document.createElement('video');
     video.src = BACKGROUND_VIDEO_SRC;
@@ -363,7 +375,7 @@ export default class SkillWeaveScene extends UIPanel {
     const nextIntro = !this._complete;
     if (nextIntro) this._buildStep();
 
-    AudioManager.playSfx('sfx_map_click_node');
+    AudioManager.playSfx('sfx_choose_tag');
     this._hoverOption = -1;
     this._hoverButton = null;
 
@@ -427,7 +439,7 @@ export default class SkillWeaveScene extends UIPanel {
     this._steps.length = leavingStepIndex;   // drop the leaving step
     delete prevStep.picked;
 
-    AudioManager.playSfx('sfx_map_overlay_close');
+    AudioManager.playSfx('sfx_choose_tag_back');
     this._hoverOption = -1;
     this._hoverButton = null;
 

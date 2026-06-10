@@ -77,6 +77,15 @@ const SOUNDS = {
       preload: true,
     },
   },
+  skill_weave_theme: {
+    src: ['assets/audio/music/skill_weave_theme.mp3'],
+    category: AudioCategory.MUSIC,
+    options: {
+      loop: true,
+      volume: 0.35,
+      preload: true,
+    },
+  },
   victory_theme: {
     src: ['assets/audio/music/victory_theme.mp3'],
     category: AudioCategory.MUSIC,
@@ -270,6 +279,16 @@ const SOUNDS = {
   // ── Rewards ─────────────────────────────────────────────
   sfx_rewards_open: {
     src: ['assets/audio/sfx/rewards/sfx_rewards_open.mp3'],
+    category: AudioCategory.SFX,
+  },
+
+  // ── Skill Weave ("Weave a Power") ──────────────────────
+  sfx_choose_tag: {
+    src: ['assets/audio/sfx/skill_weave/sfx_choose_tag.mp3'],
+    category: AudioCategory.SFX,
+  },
+  sfx_choose_tag_back: {
+    src: ['assets/audio/sfx/skill_weave/sfx_choose_tag_back.mp3'],
     category: AudioCategory.SFX,
   },
 
