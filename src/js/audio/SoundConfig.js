@@ -291,6 +291,10 @@ const SOUNDS = {
     src: ['assets/audio/sfx/skill_weave/sfx_choose_tag_back.mp3'],
     category: AudioCategory.SFX,
   },
+  sfx_choose_tags_confirm: {
+    src: ['assets/audio/sfx/skill_weave/sfx_choose_tags_confirm.mp3'],
+    category: AudioCategory.SFX,
+  },
 
   // ── UI ──────────────────────────────────────────────────
   ui_button_hover: {

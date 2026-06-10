@@ -392,6 +392,7 @@ export default class SkillWeaveScene extends UIPanel {
   /** Confirm = resolve the completed recipe (no-op until full). */
   _confirm() {
     if (!this._confirmEnabled) return;
+    AudioManager.playSfx('sfx_choose_tags_confirm');
     this._finishWeave();
   }
 
@@ -469,7 +470,6 @@ export default class SkillWeaveScene extends UIPanel {
 
     const recipe = this._recipe.slice();
     console.log(`[SkillWeave] Recipe woven: [${recipe.join(' + ')}] — skill resolution is a placeholder.`);
-    AudioManager.playSfx('sfx_extra_turn');
 
     if (this._onComplete) {
       this._onComplete({ recipe });
