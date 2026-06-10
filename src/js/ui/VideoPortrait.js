@@ -1,11 +1,14 @@
 import UIImage from './UIImage.js';
 
 // ── Tunables ─────────────────────────────────────────────
-// A pixel counts as "white" (and is keyed to transparent) when every RGB
-// channel is >= WHITE_THRESHOLD. mp4 compression rarely produces exact #FFF
-// in flat white regions, so a slightly tolerant threshold keys them cleanly.
-// Raise toward 255 to only remove near-pure white; lower to be more aggressive.
-const WHITE_THRESHOLD = 245;
+// The chroma key color — pixels close to this are made transparent. The video's
+// background was authored to this flat green (#a4f885). mp4 compression spreads
+// the flat fill across nearby values, so a pixel is keyed when its squared RGB
+// distance to KEY_COLOR is within KEY_TOLERANCE². Raise the tolerance to key
+// more aggressively (risks eating green-tinted edges); lower it to be stricter.
+const KEY_COLOR = { r: 164, g: 248, b: 133 };
+const KEY_TOLERANCE = 80;
+const KEY_TOLERANCE_SQ = KEY_TOLERANCE * KEY_TOLERANCE;
 // Cap the per-frame processing resolution. The portrait displays small
 // (~150px), so processing the full native video frame each frame is wasteful;
 // the offscreen canvas is sized to fit within this box (aspect preserved),
@@ -13,14 +16,14 @@ const WHITE_THRESHOLD = 245;
 const PROCESS_MAX_DIM = 256;
 
 /**
- * VideoPortrait — a UIImage whose "image" is a live video frame with all
- * (near-)white pixels chroma-keyed to transparent.
+ * VideoPortrait — a UIImage whose "image" is a live video frame with the chroma
+ * key color (KEY_COLOR, default the green #a4f885 backdrop) keyed to transparent.
  *
  * It plays a muted, looping <video> off-DOM. Each render it draws the current
- * frame into an offscreen canvas, walks the pixels turning white → transparent
- * (alpha 0), and hands that canvas to UIImage.renderSelf, which cover-fits it
- * into the portrait rect exactly like a normal sprite. The keyed-out white
- * becomes transparent so the panel background shows through.
+ * frame into an offscreen canvas, walks the pixels turning backdrop-colored
+ * pixels → transparent (alpha 0), and hands that canvas to UIImage.renderSelf,
+ * which cover-fits it into the portrait rect exactly like a normal sprite. The
+ * keyed-out backdrop becomes transparent so the panel background shows through.
  *
  * Until the first frame is decodable it falls back to the static portrait
  * sprite (fallbackAssetKey), so the pane never shows an empty box.
@@ -41,8 +44,10 @@ export default class VideoPortrait extends UIImage {
     super(fallbackAssetKey, assetManager);
     this.smoothing = true;
 
-    /** Pixels with all channels >= this become transparent. Tunable. */
-    this.whiteThreshold = WHITE_THRESHOLD;
+    /** Chroma key color — pixels near this become transparent. Tunable. */
+    this.keyColor = { ...KEY_COLOR };
+    /** Squared RGB distance within which a pixel is keyed out. Tunable. */
+    this.keyToleranceSq = KEY_TOLERANCE_SQ;
 
     this._videoSrc = videoSrc;
     /** @type {HTMLVideoElement|null} */
@@ -123,9 +128,13 @@ export default class VideoPortrait extends UIImage {
     }
 
     const px = frame.data;
-    const t = this.whiteThreshold;
+    const { r: kr, g: kg, b: kb } = this.keyColor;
+    const tolSq = this.keyToleranceSq;
     for (let i = 0; i < px.length; i += 4) {
-      if (px[i] >= t && px[i + 1] >= t && px[i + 2] >= t) {
+      const dr = px[i] - kr;
+      const dg = px[i + 1] - kg;
+      const db = px[i + 2] - kb;
+      if (dr * dr + dg * dg + db * db <= tolSq) {
         px[i + 3] = 0; // fully transparent
       }
     }
