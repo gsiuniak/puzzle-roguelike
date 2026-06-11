@@ -140,7 +140,6 @@ const BUTTON_GAP = 44;
 const BUTTON_Y = 930;                 // top of the Back button (the row baseline)
 const BUTTON_LABEL_SIZE = 32;
 const BACK_LABEL = 'Back';
-const CONFIRM_LABEL = 'Confirm';
 const WEAVE_LABEL = 'Weave Power';
 /**
  * The Confirm button uses its own art (`ui_skill_weave_button_confirm`) which is
@@ -1153,8 +1152,7 @@ export default class SkillWeaveScene extends UIPanel {
       textCenterFrac: 0.5,
     });
 
-    this._drawButton(ctx, layout.confirmButton,
-      this._complete ? WEAVE_LABEL : CONFIRM_LABEL, {
+    this._drawButton(ctx, layout.confirmButton, WEAVE_LABEL, {
         variant: 'confirm',
         enabled: confirmVisualEnabled,
         hovered: this._hoverButton === 'confirm',
