@@ -184,16 +184,10 @@ const ASSET_MAP = {
   relic_severed_maxilla:     'assets/sprites/relics/relic_severed_maxilla.png',
   // ── Skill Weave ("Weave a Power") screen assets ─────
   skill_weave_background:               'assets/sprites/skill_weave/skill_weave_background.png',
-  ui_skill_weave_option_container:      'assets/sprites/skill_weave/ui_skill_weave_option_container.png',
-  ui_skill_weave_option_container_uncommon:  'assets/sprites/skill_weave/ui_skill_weave_option_container_uncommon.png',
-  ui_skill_weave_option_container_rare:      'assets/sprites/skill_weave/ui_skill_weave_option_container_rare.png',
-  ui_skill_weave_option_container_legendary: 'assets/sprites/skill_weave/ui_skill_weave_option_container_legendary.png',
-  ui_skill_weave_container:             'assets/sprites/skill_weave/ui_skill_weave_container.png',
-  ui_skill_weave_container_wide:        'assets/sprites/skill_weave/ui_skill_weave_container_wide.png',
-  ui_skill_weave_selection_container:   'assets/sprites/skill_weave/ui_skill_weave_selection_container.png',
-  ui_skill_weave_selection_blank_container: 'assets/sprites/skill_weave/ui_skill_weave_selection_blank_container.png',
-  ui_skill_weave_button:                'assets/sprites/skill_weave/ui_skill_weave_button.png',
-  ui_skill_weave_button_confirm:        'assets/sprites/skill_weave/ui_skill_weave_button_confirm.png',
+  // The ui_skill_weave_* container/button/selection elements now come from the
+  // `ui_spritesheet_skill_weave_elements` spritesheet (sprite names match these
+  // keys directly — see SPRITESHEET_MAP). skill_weave_background and
+  // skill_weave_tag_test are NOT in the sheet and stay standalone PNGs.
   skill_weave_tag_test:                 'assets/sprites/skill_weave/ui_skill_weave_tag_test.png',
   // ── General UI ──────────────────────────────────────
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
@@ -248,6 +242,11 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/battle/animated_text/ui_spritesheet_animated_text.png',
     json:  'assets/sprites/battle/animated_text/ui_spritesheet_animated_text.json',
     trim:  false, // sprite names match the `animated_text_*` keys directly (no aliases)
+  },
+  ui_spritesheet_skill_weave_elements: {
+    image: 'assets/sprites/skill_weave/ui_spritesheet_skill_weave_elements.png',
+    json:  'assets/sprites/skill_weave/ui_spritesheet_skill_weave_elements.json',
+    trim:  false, // sprite names match the `ui_skill_weave_*` keys directly (no aliases)
   },
 };
 

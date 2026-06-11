@@ -1,0 +1,121 @@
+{
+  "meta": {
+    "sheet_w": 2761,
+    "sheet_h": 2670,
+    "sprite_count": 10,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "ui_skill_weave_container_wide": {
+      "x": 4,
+      "y": 1525,
+      "w": 1660,
+      "h": 425,
+      "index": 0,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container_legendary": {
+      "x": 1149,
+      "y": 4,
+      "w": 1139,
+      "h": 757,
+      "index": 1,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container": {
+      "x": 4,
+      "y": 4,
+      "w": 1141,
+      "h": 758,
+      "index": 2,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container_uncommon": {
+      "x": 1124,
+      "y": 766,
+      "w": 1145,
+      "h": 698,
+      "index": 3,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_container": {
+      "x": 1668,
+      "y": 1525,
+      "w": 1089,
+      "h": 413,
+      "index": 4,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container_rare": {
+      "x": 4,
+      "y": 766,
+      "w": 1116,
+      "h": 755,
+      "index": 5,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_button_confirm": {
+      "x": 1598,
+      "y": 1954,
+      "w": 1106,
+      "h": 313,
+      "index": 6,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_button": {
+      "x": 4,
+      "y": 2434,
+      "w": 1081,
+      "h": 232,
+      "index": 7,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_selection_container": {
+      "x": 4,
+      "y": 1954,
+      "w": 793,
+      "h": 476,
+      "index": 8,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_selection_blank_container": {
+      "x": 801,
+      "y": 1954,
+      "w": 793,
+      "h": 476,
+      "index": 9,
+      "source_w": 1660,
+      "source_h": 758,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}
