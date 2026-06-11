@@ -65,19 +65,15 @@ const ASSET_MAP = {
   // keys; those are aliased onto the packed sprite names in init() (TILE_ALIASES).
   // `wild_tile_border` matches the sprite name directly, so it needs no alias.
   // ── Character select scene assets ───────────────────
-  character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.png',
-  character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.png',
-  character_select_splash_witch_doctor:        'assets/sprites/character_select/character_select_splash_witch_doctor.png',
-  character_select_portrait_warrior:           'assets/sprites/character_select/character_select_portrait_warrior.png',
-  character_select_portrait_mage:              'assets/sprites/character_select/character_select_portrait_mage.png',
-  character_select_portrait_witch_doctor:      'assets/sprites/character_select/character_select_portrait_witch_doctor.png',
-  character_select_info_panel:                 'assets/sprites/character_select/character_select_info_panel.png',
-  character_select_heart:                      'assets/sprites/character_select/character_select_heart.png',
-  character_select_flair_left:                 'assets/sprites/character_select/character_select_flair_left.png',
-  character_select_flair_right:                'assets/sprites/character_select/character_select_flair_right.png',
-  character_select_choose_hero_button:         'assets/sprites/character_select/character_select_chooe_hero_button.png',
-  character_select_choose_hero_button_hover:   'assets/sprites/character_select/character_select_chooe_hero_button_hover.png',
-  character_select_divider:                    'assets/sprites/character_select/character_select_divider.png',
+  character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.jpg',
+  character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.jpg',
+  character_select_splash_witch_doctor:        'assets/sprites/character_select/character_select_splash_witch_doctor.jpg',
+  // character_select_portrait_<id> now come from the
+  // `ui_spritesheet_character_select_portraits` spritesheet, and
+  // character_select_info_panel / _heart / _flair_left / _flair_right /
+  // _choose_hero_button(_hover) / _divider from the
+  // `ui_spritesheet_character_select_elements` spritesheet (sprite names match
+  // these keys directly — see SPRITESHEET_MAP).
   // ── Map scene assets ────────────────────────────────
   map_splash:       'assets/sprites/map/map_splash.jpg',
   // map_icon_battle / _elite / _chest / _train / _rest / _boss now come from the
@@ -250,6 +246,16 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/map/ui_spritesheet_map_elements.png',
     json:  'assets/sprites/map/ui_spritesheet_map_elements.json',
     trim:  false, // sprite names match the `map_icon_*` keys directly (no aliases)
+  },
+  ui_spritesheet_character_select_elements: {
+    image: 'assets/sprites/character_select/ui_spritesheet_character_select_elements.png',
+    json:  'assets/sprites/character_select/ui_spritesheet_character_select_elements.json',
+    trim:  false, // sprite names match the `character_select_*` keys directly (no aliases)
+  },
+  ui_spritesheet_character_select_portraits: {
+    image: 'assets/sprites/character_select/ui_spritesheet_character_select_portraits.png',
+    json:  'assets/sprites/character_select/ui_spritesheet_character_select_portraits.json',
+    trim:  false, // sprite names match the `character_select_portrait_<id>` keys directly
   },
 };
 
