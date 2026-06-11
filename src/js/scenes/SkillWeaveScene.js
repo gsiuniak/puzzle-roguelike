@@ -89,10 +89,10 @@ const OPTION_W = 296;                 // base plaque width (label scaling refere
 const OPTION_W_BY_COUNT = { 1: 296, 2: 296, 3: 296, 4: 250 };
 /** Per-rarity hover-glow tint for the option plaques. */
 const OPTION_GLOW_BY_RARITY = {
-  [TAG_RARITY.COMMON]:    'rgba(185, 120, 255, 0.95)',
-  [TAG_RARITY.UNCOMMON]:  'rgba(120, 210, 255, 0.95)',
-  [TAG_RARITY.RARE]:      'rgba(255, 200, 110, 0.95)',
-  [TAG_RARITY.LEGENDARY]: 'rgba(255, 130, 235, 0.98)',
+  [TAG_RARITY.COMMON]:    'rgba(160, 160, 168, 0.85)',  // dull grey
+  [TAG_RARITY.UNCOMMON]:  'rgba(110, 220, 130, 0.95)',  // green
+  [TAG_RARITY.RARE]:      'rgba(185, 120, 255, 0.95)',  // purple
+  [TAG_RARITY.LEGENDARY]: 'rgba(255, 160, 70, 0.98)',   // orange
 };
 const OPTION_ICON_HEIGHT_FRAC = 0.34; // icon height as a fraction of plaque height
 const OPTION_ICON_CENTER_FRAC = 0.36; // icon vertical center within the plaque
@@ -194,11 +194,15 @@ export default class SkillWeaveScene extends UIPanel {
     /** @type {string[]} committed tag ids (length 0.._plan.rounds) */
     this._recipe = [];
     /**
-     * Per-step option state, indexed by step (= _recipe.length while drafting).
-     * Each entry: { options: string[], picked?: number }. `picked` records which
-     * option index was committed at that step (set on commit) so Back can fly
-     * the tag back to the right plaque. Kept across Back so the previous step's
-     * exact options are restored (not re-sampled).
+     * Per-round option state, indexed by round. Each entry:
+     * { options: string[], picked?: number }. `picked` records which option index
+     * was committed at that round (set on commit, cleared on Back) so Back can fly
+     * the tag back to the right plaque.
+     *
+     * ALL rounds' options are rolled ONCE at scene entry (`_rollAllSteps`) and
+     * never re-drawn — so the draft is deterministic: picking a tag, going Back,
+     * and re-picking it yields the SAME subsequent rounds. Each round excludes
+     * tags shown in earlier rounds, so no tag appears twice across the whole draft.
      * @type {Array<{options:string[], picked?:number}>}
      */
     this._steps = [];
@@ -263,15 +267,15 @@ export default class SkillWeaveScene extends UIPanel {
     this._fadeInDone = false;
     this._pulseTime = 0;
 
-    // Fresh draft each entry — roll the weave shape, then build round 0.
+    // Fresh draft each entry — roll the weave shape AND every round's options
+    // up front so the draft is deterministic (Back + re-pick → same options).
     this._plan = this._rollWeavePlan();
     this._recipe = [];
-    this._steps = [];
     this._finishing = false;
     this._anim = null;
     this._hoverOption = -1;
     this._hoverButton = null;
-    this._buildStep();
+    this._rollAllSteps();
     this._startIntro();   // fan the first step's tags out on load
 
     // The skill-weave background is drawn full-canvas in renderBackground;
@@ -361,13 +365,27 @@ export default class SkillWeaveScene extends UIPanel {
     return this._plan ? this._plan.rounds : 0;
   }
 
-  /** Build the option set for the current round (rarity-weighted draw). */
-  _buildStep() {
-    if (this._complete) return;
-    const round = this._recipe.length;
-    const count = (this._plan && this._plan.tagCounts[round]) || 2;
-    const options = drawTagsForRound({ roundIndex: round, chosen: this._recipe, count });
-    this._steps[round] = { options };
+  /**
+   * Roll the options for EVERY round up front (deterministic draft). Each round
+   * is drawn rarity-weighted excluding every tag shown in earlier rounds, so a
+   * tag never appears twice across the draft and re-walking the draft (Back +
+   * re-pick) always shows the same options. Round 0 keeps the soft action guarantee.
+   */
+  _rollAllSteps() {
+    this._steps = [];
+    if (!this._plan) return;
+    const shown = [];
+    for (let round = 0; round < this._plan.rounds; round++) {
+      const count = this._plan.tagCounts[round] || 2;
+      const options = drawTagsForRound({
+        roundIndex: round,
+        chosen: shown,             // exclude tags already shown in earlier rounds
+        count,
+        guaranteeAction: round === 0,
+      });
+      this._steps[round] = { options };
+      shown.push(...options);
+    }
   }
 
   /** @returns {{options:string[], picked?:number}|null} current step state */
@@ -416,11 +434,10 @@ export default class SkillWeaveScene extends UIPanel {
       fading.push({ tagId: step.options[j], rect: restRects[j] });
     }
 
-    // ── Mutate the model up-front ──
+    // ── Mutate the model up-front ── (options are pre-rolled; never re-drawn)
     step.picked = index;
     this._recipe.push(tagId);
     const nextIntro = !this._complete;
-    if (nextIntro) this._buildStep();
 
     AudioManager.playSfx('sfx_choose_tag');
     this._hoverOption = -1;
@@ -482,9 +499,9 @@ export default class SkillWeaveScene extends UIPanel {
       fadingIn.push({ tagId: prevStep.options[j], rect: prevRects[j] });
     }
 
-    // ── Mutate the model up-front ──
+    // ── Mutate the model up-front ── (pre-rolled steps are kept, never dropped,
+    // so re-advancing into this round shows the exact same options)
     this._recipe.pop();
-    this._steps.length = leavingStepIndex;   // drop the leaving step
     delete prevStep.picked;
 
     AudioManager.playSfx('sfx_choose_tag_back');
