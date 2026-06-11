@@ -716,10 +716,11 @@ export default class SkillWeaveScene extends UIPanel {
         { cx: cx + 250, cy: 472 },
       ];
     }
-    // 4-up: a 2×2 grid at full plaque size (rows spread to clear each other + the recipe).
+    // 4-up: a 2×2 grid at full plaque size (columns widened + rows spread so the
+    // flair tips clear each other vertically and the bottom row clears the recipe).
     return [
-      { cx: cx - 240, cy: 286 }, { cx: cx + 240, cy: 286 },
-      { cx: cx - 240, cy: 478 }, { cx: cx + 240, cy: 478 },
+      { cx: cx - 262, cy: 274 }, { cx: cx + 262, cy: 274 },
+      { cx: cx - 262, cy: 482 }, { cx: cx + 262, cy: 482 },
     ];
   }
 
