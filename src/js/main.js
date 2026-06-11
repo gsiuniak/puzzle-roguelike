@@ -37,10 +37,10 @@ const DEBUG_MODE = true;
 
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
-  title_screen:               'assets/sprites/title/title_screen.png',
-  battle_background_default:  'assets/sprites/battle/backgrounds/battle_background_default.png',
-  battle_background_malakor:  'assets/sprites/battle/backgrounds/battle_background_malakor.png',
-  battle_background_game_over: 'assets/sprites/battle/backgrounds/battle_background_game_over.png',
+  title_screen:               'assets/sprites/title/title_screen.jpg',
+  battle_background_default:  'assets/sprites/battle/backgrounds/battle_background_default.jpg',
+  battle_background_malakor:  'assets/sprites/battle/backgrounds/battle_background_malakor.jpg',
+  battle_background_game_over: 'assets/sprites/battle/backgrounds/battle_background_game_over.jpg',
   placeholder:               'assets/sprites/placeholder.png',
   // Battle portraits (player + enemy) now come from the
   // `ui_spritesheet_player_portraits` / `ui_spritesheet_enemy_portraits`
@@ -87,22 +87,17 @@ const ASSET_MAP = {
   map_icon_rest:    'assets/sprites/map/map_icon_rest.png',
   map_icon_boss:    'assets/sprites/map/map_icon_boss.png',
   // ── Reward screen assets ────────────────────────────
-  reward_screen_panel: 'assets/sprites/reward_screen/rewards_panel.png',
-  reward_victory_text:      'assets/sprites/reward_screen/rewards_victory_text.png',
-  rewards_option_panel:     'assets/sprites/reward_screen/rewards_option_panel.png',
-  rewards_option_panel_vertical: 'assets/sprites/reward_screen/rewards_option_panel_vertical.png',
-  rewards_title_panel:      'assets/sprites/reward_screen/rewards_title_panel.png',
-  reward_divider_common:    'assets/sprites/reward_screen/reward_divider_common.png',
-  reward_divider_uncommon:  'assets/sprites/reward_screen/reward_divider_uncommon.png',
-  reward_divider_rare:      'assets/sprites/reward_screen/reward_divider_rare.png',
-  reward_divider_legendary: 'assets/sprites/reward_screen/reward_divider_legendary.png',
-  rewards_button_confirm:        'assets/sprites/reward_screen/rewards_button_confirm.png',
-  rewards_button_confirm_hover:  'assets/sprites/reward_screen/rewards_button_confirm_hover.png',
-  rewards_button_skip:           'assets/sprites/reward_screen/rewards_button_skip.png',
-  rewards_button_skip_hover:     'assets/sprites/reward_screen/rewards_button_skip_hover.png',
+  // reward_screen_panel: 'assets/sprites/reward_screen/rewards_panel.png',
+  // reward_victory_text:      'assets/sprites/reward_screen/rewards_victory_text.png',
+  // rewards_option_panel:     'assets/sprites/reward_screen/rewards_option_panel.png',
+  // rewards_option_panel_vertical, rewards_title_panel, reward_divider_<rarity>
+  // (common/uncommon/rare/legendary), and rewards_button_confirm(_hover) /
+  // rewards_button_skip(_hover) now come from the
+  // `ui_spritesheet_reward_screen_elements` spritesheet (sprite names match
+  // these keys directly — see SPRITESHEET_MAP).
   battle_button_skip:            'assets/sprites/temp/skip_button.png',
   battle_button_map:             'assets/sprites/temp/map_button.png',
-  rewards_background_splash:     'assets/sprites/reward_screen/rewards_background_splash.png',
+  // rewards_background_splash:     'assets/sprites/reward_screen/rewards_background_splash.png',
   // ── New battle screen panel assets ──────────────────
   battle_board_panel:        'assets/sprites/battle/board/battle_board_panel.png',
   // combat_log_panel:          'assets/sprites/battle/log/combat_log_panel.png',
@@ -247,6 +242,11 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/skill_weave/ui_spritesheet_skill_weave_elements.png',
     json:  'assets/sprites/skill_weave/ui_spritesheet_skill_weave_elements.json',
     trim:  false, // sprite names match the `ui_skill_weave_*` keys directly (no aliases)
+  },
+  ui_spritesheet_reward_screen_elements: {
+    image: 'assets/sprites/reward_screen/ui_spritesheet_reward_screen_elements.png',
+    json:  'assets/sprites/reward_screen/ui_spritesheet_reward_screen_elements.json',
+    trim:  false, // sprite names match the reward-screen keys directly (no aliases)
   },
 };
 
