@@ -239,6 +239,23 @@ const ASSET_MAP = {
   tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
 };
 
+// ── Spritesheet key → { image, json } mapping ──────────
+// A spritesheet is one packed PNG + a JSON sidecar describing each sprite's
+// frame. AssetManager.addSpriteSheet loads both and slices every named sprite
+// into its own retrievable asset (by the sprite name in the JSON's `sprites`),
+// so individual sprites are used exactly like standalone images.
+//   trim: true → AssetManager crops each sprite to its non-transparent bounds.
+//   Only needed when the SHEET isn't already alpha-trimmed. The weave-icon sheet
+//   is packed tight by the upstream packer (each frame's w/h is the glyph's
+//   content box), so trimming is left OFF and the packed bounds are honored.
+const SPRITESHEET_MAP = {
+  ui_spritesheet_skill_weave_icons: {
+    image: 'assets/sprites/skill_weave/ui_spritesheet_skill_weave_icons.png',
+    json:  'assets/sprites/skill_weave/ui_spritesheet_skill_weave_icons.json',
+    trim:  false,
+  },
+};
+
 // ── Game viewport configuration ─────────────────────────
 // The game renders against a fixed design resolution and is uniformly
 // scaled to fit the device window. Black bars (letterbox/pillarbox) fill
@@ -254,6 +271,9 @@ async function init() {
   const assetManager = new AssetManager();
   for (const [key, path] of Object.entries(ASSET_MAP)) {
     assetManager.add(key, path);
+  }
+  for (const [key, paths] of Object.entries(SPRITESHEET_MAP)) {
+    assetManager.addSpriteSheet(key, paths.image, paths.json, { trim: paths.trim });
   }
 
   // 2. CanvasApp

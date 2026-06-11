@@ -54,44 +54,46 @@ export const TAG_CATEGORY = Object.freeze({
  * common, board-warping and status tags are rarer. Adjust freely; the draw and
  * the rarity-suffixed option art both read straight from `rarity`.
  *
- * Icons: only a single placeholder tag icon ships today (`skill_weave_tag_test`,
- * the gold flame). Until per-tag art exists every tag falls back to it via
- * getTagIcon(); the gold LABEL carries the tag's identity. Wire real icon keys
- * here as art lands.
+ * Icons: tags with art in the `ui_spritesheet_skill_weave_icons` spritesheet
+ * point their `icon` at the matching sliced-sprite key (`weave_icon_<id>`,
+ * sliced out by AssetManager.addSpriteSheet — see main.js SPRITESHEET_MAP). Tags
+ * with NO equivalent sprite keep `icon: null` and fall back to the shared gold-
+ * flame placeholder (`skill_weave_tag_test`) via getTagIcon(). Wire more icon
+ * keys here as art lands.
  *
  * Hidden value rolls (e.g. `create` → 3..12) are NOT here — they live in
  * weaveConfig.TAG_VALUE_TABLES, keyed by the same id.
  */
 export const SKILL_WEAVE_TAGS = Object.freeze({
   // ── Elements (the match-3 colors + skull) ──
-  red:    { id: 'red',    label: 'Red',    category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: null },
+  red:    { id: 'red',    label: 'Red',    category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_red' },
   blue:   { id: 'blue',   label: 'Water',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: null },
-  green:  { id: 'green',  label: 'Green',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: null },
-  yellow: { id: 'yellow', label: 'Yellow', category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: null },
-  purple: { id: 'purple', label: 'Purple', category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: null },
-  skull:  { id: 'skull',  label: 'Skull',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.UNCOMMON, icon: null },
+  green:  { id: 'green',  label: 'Green',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_green' },
+  yellow: { id: 'yellow', label: 'Yellow', category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_yellow' },
+  purple: { id: 'purple', label: 'Purple', category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_purple' },
+  skull:  { id: 'skull',  label: 'Skull',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_skull' },
 
   // ── Actions (the verb the skill performs) ──
-  damage:  { id: 'damage',  label: 'Damage',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: null },
-  armor:   { id: 'armor',   label: 'Armor',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: null },
-  create:  { id: 'create',  label: 'Create',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: null },
+  damage:  { id: 'damage',  label: 'Damage',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_damage' },
+  armor:   { id: 'armor',   label: 'Armor',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_armor' },
+  create:  { id: 'create',  label: 'Create',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_create' },
   destroy: { id: 'destroy', label: 'Destroy', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
-  convert: { id: 'convert', label: 'Convert', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: null },
-  gain:    { id: 'gain',    label: 'Gain',    category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: null },
+  convert: { id: 'convert', label: 'Convert', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: 'weave_icon_convert' },
+  gain:    { id: 'gain',    label: 'Gain',    category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_gain' },
   heal:    { id: 'heal',    label: 'Heal',    category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   drain:   { id: 'drain',   label: 'Drain',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: null },
-  attack:  { id: 'attack',  label: 'Attack',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
-  explode: { id: 'explode', label: 'Explode', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: null },
+  attack:  { id: 'attack',  label: 'Attack',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_attack' },
+  explode: { id: 'explode', label: 'Explode', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: 'weave_icon_explode' },
 
   // ── Shapes / targets (where the action lands) ──
-  row:    { id: 'row',    label: 'Row',    category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: null },
-  column: { id: 'column', label: 'Column', category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: null },
-  area:   { id: 'area',   label: 'Area',   category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.RARE,     icon: null },
-  tile:   { id: 'tile',   label: 'Tile',   category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.COMMON,   icon: null },
-  random: { id: 'random', label: 'Random', category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.COMMON,   icon: null },
+  row:    { id: 'row',    label: 'Row',    category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_row' },
+  column: { id: 'column', label: 'Column', category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_column' },
+  area:   { id: 'area',   label: 'Area',   category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.RARE,     icon: 'weave_icon_area' },
+  tile:   { id: 'tile',   label: 'Tile',   category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_tile' },
+  random: { id: 'random', label: 'Random', category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_random' },
 
   // ── Modifiers (alter the spell as a whole) ──
-  extra_turn: { id: 'extra_turn', label: 'Extra Turn', category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.LEGENDARY, icon: null },
+  extra_turn: { id: 'extra_turn', label: 'Extra Turn', category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.LEGENDARY, icon: 'weave_icon_extra_turn' },
   wild:       { id: 'wild',       label: 'Wild',       category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.LEGENDARY, icon: null },
   lock:       { id: 'lock',       label: 'Lock',       category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.RARE,      icon: null },
 

@@ -5,6 +5,7 @@ import {
   getTagLabel,
   getTagIcon,
   getTagRarity,
+  DEFAULT_TAG_ICON,
 } from '../data/skillWeaveTags.js';
 import { TAG_RARITY, rollRoundsPerWeave, rollTagsPerRound } from '../data/weaveConfig.js';
 import { synthesize } from '../data/skillSynthesizer.js';
@@ -1026,7 +1027,9 @@ export default class SkillWeaveScene extends UIPanel {
 
   /** Draw the tag icon centered horizontally, with its center at `centerY`. */
   _paintIcon(ctx, rect, tagId, centerY) {
-    const img = this._asset(getTagIcon(tagId));
+    // Prefer the tag's wired icon (spritesheet sprite or standalone); if that
+    // isn't available, fall back to the shared gold-flame placeholder.
+    const img = this._asset(getTagIcon(tagId)) || this._asset(DEFAULT_TAG_ICON);
     const iconH = rect.h * OPTION_ICON_HEIGHT_FRAC;
     const aspect = (img && img.width && img.height) ? img.width / img.height : (138 / 196);
     const iconW = iconH * aspect;
