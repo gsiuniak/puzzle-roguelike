@@ -38,12 +38,10 @@ const DEBUG_MODE = true;
 // ── Asset key → path mapping ───────────────────────────
 const ASSET_MAP = {
   title_screen:               'assets/sprites/title/title_screen.png',
-  battle_background_default:  'assets/sprites/battle/battle_background_default.png',
-  battle_background_malakor:  'assets/sprites/battle/battle_background_malakor.png',
-  battle_background_game_over: 'assets/sprites/battle/battle_background_game_over.png',
+  battle_background_default:  'assets/sprites/battle/backgrounds/battle_background_default.png',
+  battle_background_malakor:  'assets/sprites/battle/backgrounds/battle_background_malakor.png',
+  battle_background_game_over: 'assets/sprites/battle/backgrounds/battle_background_game_over.png',
   placeholder:               'assets/sprites/placeholder.png',
-  character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
-  character_pane_skill_row:  'assets/sprites/character_pane/background/character_pane_skill_row.png',
   // Battle portraits (player + enemy) now come from the
   // `ui_spritesheet_player_portraits` / `ui_spritesheet_enemy_portraits`
   // spritesheets (sprite names match the `portrait_<id>` keys directly — see
@@ -57,13 +55,11 @@ const ASSET_MAP = {
   // `icon` keys in skillCatalog.js directly — see SPRITESHEET_MAP). The sheets
   // also add icons for skills that had no art before (charge, frenzy,
   // boulder_throw, smash, ignition, boom_baby, doomsong).
-  skill_flair_left:          'assets/sprites/character_pane/flair/skill_flair_left.png',
-  skill_flair_right:         'assets/sprites/character_pane/flair/skill_flair_right.png',
   // grid_dark / grid_light (board background tiles) now come from the
   // `ui_spritesheet_tiles` spritesheet (sprite names match the keys directly).
-  animated_text_extra_turn:  'assets/sprites/animated_text/animated_text_extra_turn.png',
-  animated_text_player_turn: 'assets/sprites/animated_text/animated_text_player_turn.png',
-  animated_text_enemy_turn:  'assets/sprites/animated_text/animated_text_enemy_turn.png',
+  // animated_text_extra_turn / animated_text_player_turn / animated_text_enemy_turn
+  // now come from the `ui_spritesheet_animated_text` spritesheet (sprite names
+  // match these keys directly — see SPRITESHEET_MAP).
   // Board tiles + wild border now come from the `ui_spritesheet_tiles`
   // spritesheet (see SPRITESHEET_MAP). The board still requests `tile_<type>`
   // keys; those are aliased onto the packed sprite names in init() (TILE_ALIASES).
@@ -113,7 +109,7 @@ const ASSET_MAP = {
   // character_pane_panel / skill_pane_panel / skills_button / skills_locked_icon
   // now come from the `ui_spritesheet_character_pane` spritesheet (names match
   // directly — see SPRITESHEET_MAP). skills_locked_button is NOT in the sheet.
-  skills_locked_button:      'assets/sprites/battle/skills_pane/skills_locked_button.png',
+  // skills_locked_button:      'assets/sprites/battle/skills_pane/skills_locked_button.png',
   // ── Relic icons (placeholder until per-relic art is added) ──
   // Relic definitions in data/relics/relicCatalog.js reference these
   // asset keys via their `icon` field. New relics should add their
@@ -247,6 +243,11 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/skills/enemy/ui_spritesheet_enemy_skills.png',
     json:  'assets/sprites/skills/enemy/ui_spritesheet_enemy_skills.json',
     trim:  false, // sprite names match the skill `icon` keys directly (no aliases)
+  },
+  ui_spritesheet_animated_text: {
+    image: 'assets/sprites/battle/animated_text/ui_spritesheet_animated_text.png',
+    json:  'assets/sprites/battle/animated_text/ui_spritesheet_animated_text.json',
+    trim:  false, // sprite names match the `animated_text_*` keys directly (no aliases)
   },
 };
 

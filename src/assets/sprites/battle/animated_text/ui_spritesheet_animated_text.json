@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "sheet_w": 557,
+    "sheet_h": 916,
+    "sprite_count": 3,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "animated_text_enemy_turn": {
+      "x": 4,
+      "y": 355,
+      "w": 505,
+      "h": 343,
+      "index": 0,
+      "source_w": 549,
+      "source_h": 358,
+      "trim_x": 0,
+      "trim_y": 10
+    },
+    "animated_text_player_turn": {
+      "x": 4,
+      "y": 4,
+      "w": 503,
+      "h": 347,
+      "index": 1,
+      "source_w": 549,
+      "source_h": 358,
+      "trim_x": 0,
+      "trim_y": 10
+    },
+    "animated_text_extra_turn": {
+      "x": 4,
+      "y": 702,
+      "w": 549,
+      "h": 210,
+      "index": 2,
+      "source_w": 549,
+      "source_h": 358,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}
