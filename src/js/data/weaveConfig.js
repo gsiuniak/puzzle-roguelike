@@ -43,7 +43,7 @@ export const RARITY_WEIGHTS = Object.freeze({
   [TAG_RARITY.COMMON]: 60,
   [TAG_RARITY.UNCOMMON]: 25,
   [TAG_RARITY.RARE]: 10,
-  [TAG_RARITY.LEGENDARY]: 5,
+  [TAG_RARITY.LEGENDARY]: 80,
 });
 
 // ═══════════════════════════════════════════════════════════

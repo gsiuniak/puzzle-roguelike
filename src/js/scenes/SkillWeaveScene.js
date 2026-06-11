@@ -85,8 +85,8 @@ const SUBTITLE_COMPLETE = 'Recipe Complete';
 
 // ── Tag option plaques ──
 const OPTION_W = 296;                 // base plaque width (label scaling reference)
-/** Plaque width by visible option count (4-up shrinks to fit two rows). */
-const OPTION_W_BY_COUNT = { 1: 296, 2: 296, 3: 296, 4: 250 };
+/** Plaque width by visible option count (full size across all counts). */
+const OPTION_W_BY_COUNT = { 1: 296, 2: 296, 3: 296, 4: 296 };
 /** Per-rarity hover-glow tint for the option plaques. */
 const OPTION_GLOW_BY_RARITY = {
   [TAG_RARITY.COMMON]:    'rgba(160, 160, 168, 0.85)',  // dull grey
@@ -94,10 +94,25 @@ const OPTION_GLOW_BY_RARITY = {
   [TAG_RARITY.RARE]:      'rgba(185, 120, 255, 0.95)',  // purple
   [TAG_RARITY.LEGENDARY]: 'rgba(255, 160, 70, 0.98)',   // orange
 };
-const OPTION_ICON_HEIGHT_FRAC = 0.34; // icon height as a fraction of plaque height
-const OPTION_ICON_CENTER_FRAC = 0.36; // icon vertical center within the plaque
-const OPTION_LABEL_CENTER_FRAC = 0.66;// label vertical center within the plaque
-const OPTION_LABEL_SIZE = 33;
+/**
+ * Per-rarity art scale (applied to the container IMAGE only — not the hit-rect
+ * or the icon/label layout). The rarity frames bake in different amounts of
+ * flair/padding, so they read as slightly different sizes when drawn into the
+ * same rect; nudge these so every rarity's visible body matches the common one.
+ * 1.0 = draw at the logical rect; >1 enlarges the art, <1 shrinks it.
+ */
+const OPTION_CONTAINER_SCALE_BY_RARITY = {
+  [TAG_RARITY.COMMON]:    1.0,
+  [TAG_RARITY.UNCOMMON]:  0.98,
+  [TAG_RARITY.RARE]:      1.1,
+  [TAG_RARITY.LEGENDARY]: 1.04,
+};
+const OPTION_ICON_HEIGHT_FRAC = 0.12; // icon height as a fraction of plaque height
+// Icon + label are stacked as one block and centered vertically, then nudged UP
+// by (icon height × OPTION_STACK_TOP_BIAS) so the label lands nearer plaque center.
+const OPTION_STACK_GAP_FRAC = 0.02;   // gap between icon and label (frac of plaque height)
+const OPTION_STACK_TOP_BIAS = 0.5;    // upward shift of the stack, as a multiple of icon height
+const OPTION_LABEL_SIZE = 36;
 const OPTION_LABEL_COLOR = '#e2cd92';
 const OPTION_HOVER_SCALE = 1.05;
 const OPTION_GLOW_COLOR = 'rgba(185, 120, 255, 0.95)';
@@ -701,10 +716,10 @@ export default class SkillWeaveScene extends UIPanel {
         { cx: cx + 250, cy: 472 },
       ];
     }
-    // 4-up: a 2×2 grid (plaques are narrower — see OPTION_W_BY_COUNT).
+    // 4-up: a 2×2 grid at full plaque size (rows spread to clear each other + the recipe).
     return [
-      { cx: cx - 240, cy: 300 }, { cx: cx + 240, cy: 300 },
-      { cx: cx - 240, cy: 470 }, { cx: cx + 240, cy: 470 },
+      { cx: cx - 240, cy: 286 }, { cx: cx + 240, cy: 286 },
+      { cx: cx - 240, cy: 478 }, { cx: cx + 240, cy: 478 },
     ];
   }
 
@@ -966,37 +981,50 @@ export default class SkillWeaveScene extends UIPanel {
 
   /** Paint an option plaque at `rect` (no transform/alpha — caller owns those). */
   _paintOption(ctx, rect, tagId, { glow = 0, bright = false } = {}) {
+    const rarity = getTagRarity(tagId);
     const img = this._asset(this._optionAssetForTag(tagId));
+    // Art-only scale so each rarity's flair/padding reads at a consistent size;
+    // the logical `rect` (icon/label layout, hit-test) is unchanged.
+    const imgRect = this._scaledRect(rect, OPTION_CONTAINER_SCALE_BY_RARITY[rarity] || 1);
 
     if (glow > 0 && img) {
       ctx.save();
-      ctx.shadowColor = OPTION_GLOW_BY_RARITY[getTagRarity(tagId)] || OPTION_GLOW_COLOR;
+      ctx.shadowColor = OPTION_GLOW_BY_RARITY[rarity] || OPTION_GLOW_COLOR;
       ctx.shadowBlur = glow;
-      this._drawImageRect(ctx, img, rect);
+      this._drawImageRect(ctx, img, imgRect);
       ctx.restore();
     }
 
-    if (img) this._drawImageRect(ctx, img, rect);
+    if (img) this._drawImageRect(ctx, img, imgRect);
     else this._drawFallbackPlaque(ctx, rect);
 
-    this._paintIcon(ctx, rect, tagId);
+    // Stack icon + label as one block, center it vertically, then bias upward by
+    // (icon height × OPTION_STACK_TOP_BIAS) so the label sits nearer plaque center.
+    const iconH = rect.h * OPTION_ICON_HEIGHT_FRAC;
+    const labelSize = OPTION_LABEL_SIZE * (rect.w / OPTION_W);
+    const gap = rect.h * OPTION_STACK_GAP_FRAC;
+    const blockH = iconH + gap + labelSize;
+    const blockTop = rect.y + (rect.h - blockH) / 2 - iconH * OPTION_STACK_TOP_BIAS;
+
+    this._paintIcon(ctx, rect, tagId, blockTop + iconH / 2);
 
     this._drawText(ctx, getTagLabel(tagId),
-      rect.x + rect.w / 2, rect.y + rect.h * OPTION_LABEL_CENTER_FRAC, {
-        size: OPTION_LABEL_SIZE * (rect.w / OPTION_W),
+      rect.x + rect.w / 2, blockTop + iconH + gap + labelSize / 2, {
+        size: labelSize,
         color: bright ? '#f4e6b8' : OPTION_LABEL_COLOR,
         baseline: 'middle',
         shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.65)',
       });
   }
 
-  _paintIcon(ctx, rect, tagId) {
+  /** Draw the tag icon centered horizontally, with its center at `centerY`. */
+  _paintIcon(ctx, rect, tagId, centerY) {
     const img = this._asset(getTagIcon(tagId));
     const iconH = rect.h * OPTION_ICON_HEIGHT_FRAC;
     const aspect = (img && img.width && img.height) ? img.width / img.height : (138 / 196);
     const iconW = iconH * aspect;
     const ix = rect.x + rect.w / 2 - iconW / 2;
-    const iy = rect.y + rect.h * OPTION_ICON_CENTER_FRAC - iconH / 2;
+    const iy = centerY - iconH / 2;
     if (img) {
       const prev = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = true;
@@ -1161,6 +1189,14 @@ export default class SkillWeaveScene extends UIPanel {
 
   _center(r) {
     return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  }
+
+  /** A copy of `r` scaled about its center by `s` (1 = unchanged). */
+  _scaledRect(r, s) {
+    if (s === 1) return r;
+    const w = r.w * s;
+    const h = r.h * s;
+    return { x: r.x + (r.w - w) / 2, y: r.y + (r.h - h) / 2, w, h };
   }
 
   _clamp01(t) { return t < 0 ? 0 : t > 1 ? 1 : t; }
