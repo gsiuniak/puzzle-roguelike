@@ -229,6 +229,7 @@ const ASSET_MAP = {
   ui_skill_weave_option_container_rare:      'assets/sprites/skill_weave/ui_skill_weave_option_container_rare.png',
   ui_skill_weave_option_container_legendary: 'assets/sprites/skill_weave/ui_skill_weave_option_container_legendary.png',
   ui_skill_weave_container:             'assets/sprites/skill_weave/ui_skill_weave_container.png',
+  ui_skill_weave_container_wide:        'assets/sprites/skill_weave/ui_skill_weave_container_wide.png',
   ui_skill_weave_selection_container:   'assets/sprites/skill_weave/ui_skill_weave_selection_container.png',
   ui_skill_weave_selection_blank_container: 'assets/sprites/skill_weave/ui_skill_weave_selection_blank_container.png',
   ui_skill_weave_button:                'assets/sprites/skill_weave/ui_skill_weave_button.png',

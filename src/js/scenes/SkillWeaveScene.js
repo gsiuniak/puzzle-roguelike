@@ -747,13 +747,20 @@ export default class SkillWeaveScene extends UIPanel {
     return { x: sx / rects.length, y: sy / rects.length };
   }
 
+  /** Recipe container art key — the WIDE variant for a 4-slot (4-round) recipe. */
+  _recipeContainerKey() {
+    return this._recipeLength() >= 4 ? 'ui_skill_weave_container_wide' : 'ui_skill_weave_container';
+  }
+
   /**
    * Recipe container rect. Height-budgeted: the container grows toward RECIPE_W
    * wide but never taller than RECIPE_MAX_H, so it can't run into the buttons
-   * regardless of the (now wider) container art's real aspect.
+   * regardless of the container art's real aspect. A 4-slot recipe uses the wide
+   * art (larger aspect → renders wider at the same height cap), giving the 4 slots
+   * more room.
    */
   _recipeRect() {
-    const recipeAspect = this._aspect('ui_skill_weave_container', 1376 / 570);
+    const recipeAspect = this._aspect(this._recipeContainerKey(), 1376 / 570);
     const recW = Math.min(RECIPE_W, RECIPE_MAX_H * recipeAspect);
     const recH = recW / recipeAspect;
     return { x: (DESIGN_W - recW) / 2, y: RECIPE_TOP_Y, w: recW, h: recH };
@@ -1037,7 +1044,7 @@ export default class SkillWeaveScene extends UIPanel {
   // ── Render: recipe (anim-aware slot content) ───────────────
 
   _renderRecipe(ctx, layout) {
-    const containerImg = this._asset('ui_skill_weave_container');
+    const containerImg = this._asset(this._recipeContainerKey());
     if (containerImg) this._drawImageRect(ctx, containerImg, layout.recipe);
     else this._drawFallbackPlaque(ctx, layout.recipe);
 
