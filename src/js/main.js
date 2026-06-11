@@ -44,21 +44,11 @@ const ASSET_MAP = {
   placeholder:               'assets/sprites/placeholder.png',
   character_pane_background: 'assets/sprites/character_pane/background/character_pane_background.png',
   character_pane_skill_row:  'assets/sprites/character_pane/background/character_pane_skill_row.png',
-  portrait_warrior:          'assets/sprites/character_pane/portraits/portrait_warrior.png',
-  portrait_mage:             'assets/sprites/character_pane/portraits/portrait_mage.png',
-  portrait_witch_doctor:     'assets/sprites/character_pane/portraits/portrait_witch_doctor.png',
-  portrait_goblin:           'assets/sprites/character_pane/portraits/portrait_goblin.png',
-  portrait_orc:              'assets/sprites/character_pane/portraits/portrait_orc.png',
-  portrait_goblin_sapper:    'assets/sprites/character_pane/portraits/portrait_goblin_sapper.png',
-  portrait_acolyte:          'assets/sprites/character_pane/portraits/portrait_acolyte.png',
-  portrait_shadow_weaver:    'assets/sprites/character_pane/portraits/portrait_shadow_weaver.png',
-  portrait_cyclops:          'assets/sprites/character_pane/portraits/portrait_cyclops.png',
-  portrait_stone_gargoyle:   'assets/sprites/character_pane/portraits/portrait_stone_gargoyle.png',
-  portrait_orc_taskmaster:   'assets/sprites/character_pane/portraits/portrait_orc_taskmaster.png',
-  portrait_chokeweed:        'assets/sprites/character_pane/portraits/portrait_chokeweed.png',
-  portrait_goresnout_trackers: 'assets/sprites/character_pane/portraits/portrait_goresnout_trackers.png',
-  portrait_malakor:          'assets/sprites/character_pane/portraits/portrait_malakor.png',
-  portrait_abomination:      'assets/sprites/character_pane/portraits/portrait_abomination.png',
+  // Battle portraits (player + enemy) now come from the
+  // `ui_spritesheet_player_portraits` / `ui_spritesheet_enemy_portraits`
+  // spritesheets (sprite names match the `portrait_<id>` keys directly — see
+  // SPRITESHEET_MAP). NOTE: the CharacterSelect scene uses its own separate
+  // `character_select_portrait_*` / `character_select_splash_*` keys (unaffected).
   // icon_attack / icon_block, mana_<color>, mana_<color>_simple, and mana_amount
   // now come from the `ui_spritesheet_character_pane` spritesheet (sprite names
   // match these keys directly — see SPRITESHEET_MAP).
@@ -247,6 +237,16 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/battle/character_pane/ui_spritesheet_character_pane.png',
     json:  'assets/sprites/battle/character_pane/ui_spritesheet_character_pane.json',
     trim:  false, // sprite names match the existing keys directly (no aliases)
+  },
+  ui_spritesheet_player_portraits: {
+    image: 'assets/sprites/battle/portraits/ui_spritesheet_player_portraits.png',
+    json:  'assets/sprites/battle/portraits/ui_spritesheet_player_portraits.json',
+    trim:  false, // sprite names match the `portrait_<id>` keys directly (no aliases)
+  },
+  ui_spritesheet_enemy_portraits: {
+    image: 'assets/sprites/battle/portraits/ui_spritesheet_enemy_portraits.png',
+    json:  'assets/sprites/battle/portraits/ui_spritesheet_enemy_portraits.json',
+    trim:  false, // sprite names match the `portrait_<id>` keys directly (no aliases)
   },
 };
 
