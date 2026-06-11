@@ -1,22 +1,24 @@
 import UIPanel from '../ui/UIPanel.js';
 import AudioManager from '../audio/AudioManager.js';
 import {
-  RECIPE_LENGTH,
-  getValidTagsForStep,
-  isRecipeComplete,
-  sampleTags,
+  drawTagsForRound,
   getTagLabel,
   getTagIcon,
+  getTagRarity,
 } from '../data/skillWeaveTags.js';
+import { TAG_RARITY, rollRoundsPerWeave, rollTagsPerRound } from '../data/weaveConfig.js';
+import { synthesize } from '../data/skillSynthesizer.js';
 
 /**
  * SkillWeaveScene — the "Weave a Power" skill reward screen.
  *
  * Staged TAG DRAFT: the player shapes a new skill by clicking one keyword tag
- * per step, filling a fixed-length recipe ([action, element, shape] today).
- * Each step shows up to 3 tags sampled from the valid pool for that slot (see
- * skillWeaveTags.js — the pool is grammar-derived so every path leads to a real
- * combo). When the recipe is full, Confirm resolves the final skill.
+ * per ROUND, filling a recipe whose length is the number of rounds. The weave
+ * shape is rolled per entry (see weaveConfig): 2–4 ROUNDS, and each round shows
+ * 2–4 tag options drawn rarity-weighted from one global pool (round 0 soft-
+ * guarantees an action). When the recipe is full, Confirm SYNTHESIZES the bag
+ * into a skill (skillSynthesizer — a stub today). Option plaque art is rarity-
+ * suffixed (`ui_skill_weave_option_container_<rarity>`; common uses the base).
  *
  * Full-screen ritual scene (NOT a modal), modeled on TitleScreen/GameOverScene.
  * The background is toggleable via USE_BACKGROUND_VIDEO: currently the static
@@ -82,7 +84,16 @@ const SUBTITLE_CHOOSE = 'Choose a Tag';
 const SUBTITLE_COMPLETE = 'Recipe Complete';
 
 // ── Tag option plaques ──
-const OPTION_W = 296;                 // height derives from the plaque art aspect
+const OPTION_W = 296;                 // base plaque width (label scaling reference)
+/** Plaque width by visible option count (4-up shrinks to fit two rows). */
+const OPTION_W_BY_COUNT = { 1: 296, 2: 296, 3: 296, 4: 250 };
+/** Per-rarity hover-glow tint for the option plaques. */
+const OPTION_GLOW_BY_RARITY = {
+  [TAG_RARITY.COMMON]:    'rgba(185, 120, 255, 0.95)',
+  [TAG_RARITY.UNCOMMON]:  'rgba(120, 210, 255, 0.95)',
+  [TAG_RARITY.RARE]:      'rgba(255, 200, 110, 0.95)',
+  [TAG_RARITY.LEGENDARY]: 'rgba(255, 130, 235, 0.98)',
+};
 const OPTION_ICON_HEIGHT_FRAC = 0.34; // icon height as a fraction of plaque height
 const OPTION_ICON_CENTER_FRAC = 0.36; // icon vertical center within the plaque
 const OPTION_LABEL_CENTER_FRAC = 0.66;// label vertical center within the plaque
@@ -92,14 +103,16 @@ const OPTION_HOVER_SCALE = 1.05;
 const OPTION_GLOW_COLOR = 'rgba(185, 120, 255, 0.95)';
 
 // ── Recipe container + slots ──
-const RECIPE_W = 840;                 // height derives from the container art aspect
-const RECIPE_TOP_Y = 560;
+const RECIPE_W = 1040;                // max container width (fits up to 4 slots)
+const RECIPE_MAX_H = 300;             // height cap (keeps clear of the buttons)
+const RECIPE_TOP_Y = 580;
 const RECIPE_HEADER_TEXT = 'Recipe';
 const RECIPE_HEADER_SIZE = 31;
 const RECIPE_HEADER_COLOR = '#d9c389';
 const RECIPE_HEADER_CENTER_FRAC = 0.31; // header vertical center within container
-const SLOT_W = 196;                   // height derives from the slot art aspect
-const SLOT_GAP = 66;                  // gap between slots (a gold "+" sits here)
+const SLOT_W_MAX = 196;               // slot width cap (slots shrink to fit count)
+const SLOT_GAP = 48;                  // gap between slots (a gold "+" sits here)
+const SLOT_AREA_WIDTH_FRAC = 0.86;    // fraction of container width the slots span
 const SLOT_CENTER_FRAC = 0.63;        // slots vertical center within container
 const SLOT_LABEL_SIZE = 31;
 const SLOT_LABEL_COLOR = '#e2cd92';
@@ -109,11 +122,22 @@ const SLOT_PLUS_COLOR = '#c0a868';
 // ── Bottom buttons ──
 const BUTTON_W = 366;                 // height derives from the button art aspect
 const BUTTON_GAP = 44;
-const BUTTON_Y = 930;
+const BUTTON_Y = 930;                 // top of the Back button (the row baseline)
 const BUTTON_LABEL_SIZE = 32;
 const BACK_LABEL = 'Back';
 const CONFIRM_LABEL = 'Confirm';
 const WEAVE_LABEL = 'Weave Power';
+/**
+ * The Confirm button uses its own art (`ui_skill_weave_button_confirm`) which is
+ * TALLER than the plain button because of the gem flair on top. The flair sits
+ * in the upper portion of the art, so the purple BODY (where the label goes) is
+ * centered BELOW the image's geometric center — this frac is that body center.
+ * The button is anchored by this body-center onto the Back button's center line
+ * (see _computeLayout) so the two labels line up AND the label stays centered in
+ * the body. Label is also a touch smaller to clear the ornate inner border.
+ */
+const CONFIRM_BUTTON_TEXT_CENTER_FRAC = 0.57; // body (label) vertical center within the confirm art
+const CONFIRM_BUTTON_LABEL_SIZE = 30;
 
 // ── Scene fade-in ──
 const FADE_IN_DURATION = 420;         // ms
@@ -159,7 +183,15 @@ export default class SkillWeaveScene extends UIPanel {
     this._fadeInDone = false;
 
     // ── Draft state ──
-    /** @type {string[]} committed tag ids (length 0..RECIPE_LENGTH) */
+    /**
+     * Rolled weave shape for this entry: { rounds, tagCounts }. `rounds` is the
+     * recipe length (number of slots); `tagCounts[i]` is how many options round
+     * i offers. Rolled in onEnter; null before the scene is entered.
+     * @type {{rounds:number, tagCounts:number[]}|null}
+     */
+    this._plan = null;
+
+    /** @type {string[]} committed tag ids (length 0.._plan.rounds) */
     this._recipe = [];
     /**
      * Per-step option state, indexed by step (= _recipe.length while drafting).
@@ -231,7 +263,8 @@ export default class SkillWeaveScene extends UIPanel {
     this._fadeInDone = false;
     this._pulseTime = 0;
 
-    // Fresh draft each entry.
+    // Fresh draft each entry — roll the weave shape, then build round 0.
+    this._plan = this._rollWeavePlan();
     this._recipe = [];
     this._steps = [];
     this._finishing = false;
@@ -315,22 +348,36 @@ export default class SkillWeaveScene extends UIPanel {
   // Draft state machine
   // ═══════════════════════════════════════════════════════════
 
-  /** Build the option set for the current step (samples up to 3 valid tags). */
+  /** Roll the weave shape for this entry: rounds (2–4) + per-round tag counts. */
+  _rollWeavePlan() {
+    const rounds = rollRoundsPerWeave();
+    const tagCounts = [];
+    for (let i = 0; i < rounds; i++) tagCounts.push(rollTagsPerRound());
+    return { rounds, tagCounts };
+  }
+
+  /** Number of recipe slots = number of rounds (0 before the plan is rolled). */
+  _recipeLength() {
+    return this._plan ? this._plan.rounds : 0;
+  }
+
+  /** Build the option set for the current round (rarity-weighted draw). */
   _buildStep() {
-    if (isRecipeComplete(this._recipe)) return;
-    const pool = getValidTagsForStep(this._recipe);
-    const options = sampleTags(pool, 3);
-    this._steps[this._recipe.length] = { options };
+    if (this._complete) return;
+    const round = this._recipe.length;
+    const count = (this._plan && this._plan.tagCounts[round]) || 2;
+    const options = drawTagsForRound({ roundIndex: round, chosen: this._recipe, count });
+    this._steps[round] = { options };
   }
 
   /** @returns {{options:string[], picked?:number}|null} current step state */
   _currentStep() {
-    if (isRecipeComplete(this._recipe)) return null;
+    if (this._complete) return null;
     return this._steps[this._recipe.length] || null;
   }
 
   get _complete() {
-    return isRecipeComplete(this._recipe);
+    return this._recipe.length >= this._recipeLength();
   }
 
   get _animBusy() {
@@ -469,10 +516,12 @@ export default class SkillWeaveScene extends UIPanel {
     this._finishing = true;
 
     const recipe = this._recipe.slice();
-    console.log(`[SkillWeave] Recipe woven: [${recipe.join(' + ')}] — skill resolution is a placeholder.`);
+    // Synthesize the bag into a skill (stub: rolls hidden values + records the
+    // bag; no real skill emitted until skills are wired into battle).
+    const synthesis = synthesize(recipe);
 
     if (this._onComplete) {
-      this._onComplete({ recipe });
+      this._onComplete({ recipe, synthesis });
     }
 
     const sm = this._sceneManager;
@@ -623,22 +672,29 @@ export default class SkillWeaveScene extends UIPanel {
     return (img && img.width && img.height) ? img.width / img.height : fallback;
   }
 
-  /** Triangle / row anchors for the option plaques, by visible count. */
+  /** Triangle / grid anchors for the option plaques, by visible count (1–4). */
   _optionAnchors(count) {
     const cx = DESIGN_W / 2;
     if (count <= 1) return [{ cx, cy: 360 }];
     if (count === 2) return [{ cx: cx - 226, cy: 398 }, { cx: cx + 226, cy: 398 }];
+    if (count === 3) {
+      return [
+        { cx, cy: 296 },
+        { cx: cx - 250, cy: 472 },
+        { cx: cx + 250, cy: 472 },
+      ];
+    }
+    // 4-up: a 2×2 grid (plaques are narrower — see OPTION_W_BY_COUNT).
     return [
-      { cx, cy: 296 },
-      { cx: cx - 250, cy: 472 },
-      { cx: cx + 250, cy: 472 },
+      { cx: cx - 240, cy: 300 }, { cx: cx + 240, cy: 300 },
+      { cx: cx - 240, cy: 470 }, { cx: cx + 240, cy: 470 },
     ];
   }
 
   /** Rest rects for `count` option plaques (no tag/index — pure geometry). */
   _optionRestRects(count) {
     const optionAspect = this._aspect('ui_skill_weave_option_container', 1121 / 680);
-    const optW = OPTION_W;
+    const optW = OPTION_W_BY_COUNT[count] || OPTION_W;
     const optH = optW / optionAspect;
     const anchors = this._optionAnchors(count);
     const rects = [];
@@ -658,25 +714,35 @@ export default class SkillWeaveScene extends UIPanel {
     return { x: sx / rects.length, y: sy / rects.length };
   }
 
-  /** Recipe container rect. */
+  /**
+   * Recipe container rect. Height-budgeted: the container grows toward RECIPE_W
+   * wide but never taller than RECIPE_MAX_H, so it can't run into the buttons
+   * regardless of the (now wider) container art's real aspect.
+   */
   _recipeRect() {
     const recipeAspect = this._aspect('ui_skill_weave_container', 1376 / 570);
-    const recW = RECIPE_W;
+    const recW = Math.min(RECIPE_W, RECIPE_MAX_H * recipeAspect);
     const recH = recW / recipeAspect;
     return { x: (DESIGN_W - recW) / 2, y: RECIPE_TOP_Y, w: recW, h: recH };
   }
 
-  /** The RECIPE_LENGTH slot rects centered in the recipe container. */
+  /**
+   * The recipe slot rects (one per round) centered in the recipe container.
+   * Slot width shrinks to fit the rolled round count, capped at SLOT_W_MAX.
+   */
   _slotRects() {
     const recipe = this._recipeRect();
     const slotAspect = this._aspect('ui_skill_weave_selection_blank_container', 989 / 593);
-    const slotW = SLOT_W;
+    const count = Math.max(1, this._recipeLength());
+    const availW = recipe.w * SLOT_AREA_WIDTH_FRAC;
+    const fitW = (availW - (count - 1) * SLOT_GAP) / count;
+    const slotW = Math.min(SLOT_W_MAX, fitW);
     const slotH = slotW / slotAspect;
-    const slotsTotalW = RECIPE_LENGTH * slotW + (RECIPE_LENGTH - 1) * SLOT_GAP;
+    const slotsTotalW = count * slotW + (count - 1) * SLOT_GAP;
     const slotsStartX = recipe.x + (recipe.w - slotsTotalW) / 2;
     const slotsCenterY = recipe.y + recipe.h * SLOT_CENTER_FRAC;
     const slots = [];
-    for (let i = 0; i < RECIPE_LENGTH; i++) {
+    for (let i = 0; i < count; i++) {
       slots.push({
         x: slotsStartX + i * (slotW + SLOT_GAP),
         y: slotsCenterY - slotH / 2,
@@ -702,13 +768,25 @@ export default class SkillWeaveScene extends UIPanel {
     const recipe = this._recipeRect();
     const slots = this._slotRects();
 
-    const btnAspect = this._aspect('ui_skill_weave_button', 1349 / 288);
     const btnW = BUTTON_W;
-    const btnH = btnW / btnAspect;
+    const backAspect = this._aspect('ui_skill_weave_button', 1349 / 288);
+    const backH = btnW / backAspect;
     const pairW = btnW * 2 + BUTTON_GAP;
     const pairStartX = (DESIGN_W - pairW) / 2;
-    const backButton = { x: pairStartX, y: BUTTON_Y, w: btnW, h: btnH };
-    const confirmButton = { x: pairStartX + btnW + BUTTON_GAP, y: BUTTON_Y, w: btnW, h: btnH };
+    const backButton = { x: pairStartX, y: BUTTON_Y, w: btnW, h: backH };
+
+    // Confirm uses its own flaired art (taller, gem flair on top). Anchor it by
+    // its BODY center (CONFIRM_BUTTON_TEXT_CENTER_FRAC) onto the Back button's
+    // center line so the two labels align and the flair pokes up above the row.
+    const confirmAspect = this._aspect('ui_skill_weave_button_confirm', 1381 / 390);
+    const confirmH = btnW / confirmAspect;
+    const backCenterY = BUTTON_Y + backH / 2;
+    const confirmButton = {
+      x: pairStartX + btnW + BUTTON_GAP,
+      y: backCenterY - confirmH * CONFIRM_BUTTON_TEXT_CENTER_FRAC,
+      w: btnW,
+      h: confirmH,
+    };
 
     return { options, recipe, slots, backButton, confirmButton };
   }
@@ -765,7 +843,10 @@ export default class SkillWeaveScene extends UIPanel {
       size: TITLE_SIZE, color: TITLE_COLOR, bold: false,
       letterSpacing: 4, shadowBlur: 12, shadowColor: 'rgba(0,0,0,0.7)',
     });
-    const subtitle = this._complete ? SUBTITLE_COMPLETE : SUBTITLE_CHOOSE;
+    const total = this._recipeLength();
+    const subtitle = this._complete
+      ? SUBTITLE_COMPLETE
+      : `${SUBTITLE_CHOOSE} — Round ${Math.min(this._recipe.length + 1, total)} / ${total}`;
     this._drawText(ctx, subtitle, cx, SUBTITLE_Y, {
       size: SUBTITLE_SIZE, color: SUBTITLE_COLOR, letterSpacing: 3,
       shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.6)',
@@ -856,13 +937,23 @@ export default class SkillWeaveScene extends UIPanel {
     ctx.restore();
   }
 
+  /** Rarity-suffixed option plaque art key (common → base; missing → base). */
+  _optionAssetForTag(tagId) {
+    const rarity = getTagRarity(tagId);
+    if (rarity && rarity !== TAG_RARITY.COMMON) {
+      const key = `ui_skill_weave_option_container_${rarity}`;
+      if (this._asset(key)) return key;
+    }
+    return 'ui_skill_weave_option_container';
+  }
+
   /** Paint an option plaque at `rect` (no transform/alpha — caller owns those). */
   _paintOption(ctx, rect, tagId, { glow = 0, bright = false } = {}) {
-    const img = this._asset('ui_skill_weave_option_container');
+    const img = this._asset(this._optionAssetForTag(tagId));
 
     if (glow > 0 && img) {
       ctx.save();
-      ctx.shadowColor = OPTION_GLOW_COLOR;
+      ctx.shadowColor = OPTION_GLOW_BY_RARITY[getTagRarity(tagId)] || OPTION_GLOW_COLOR;
       ctx.shadowBlur = glow;
       this._drawImageRect(ctx, img, rect);
       ctx.restore();
@@ -1004,6 +1095,9 @@ export default class SkillWeaveScene extends UIPanel {
       variant: 'back',
       enabled: backVisualEnabled,
       hovered: this._hoverButton === 'back',
+      assetKey: 'ui_skill_weave_button',
+      labelSize: BUTTON_LABEL_SIZE,
+      textCenterFrac: 0.5,
     });
 
     this._drawButton(ctx, layout.confirmButton,
@@ -1011,16 +1105,22 @@ export default class SkillWeaveScene extends UIPanel {
         variant: 'confirm',
         enabled: confirmVisualEnabled,
         hovered: this._hoverButton === 'confirm',
+        // Confirm uses the flaired art; its label sits lower (the flair occupies
+        // the top of the image) and a touch smaller — see the CONFIRM_BUTTON_* consts.
+        assetKey: 'ui_skill_weave_button_confirm',
+        labelSize: CONFIRM_BUTTON_LABEL_SIZE,
+        textCenterFrac: CONFIRM_BUTTON_TEXT_CENTER_FRAC,
       });
   }
 
   /**
-   * Draw a bottom button. Both buttons share the same plaque art; enabled
-   * buttons brighten on hover, disabled buttons are dimmed. (Confirm just reads
-   * a touch brighter gold when it's the active final action — no color tint.)
+   * Draw a bottom button. Enabled buttons brighten on hover, disabled buttons
+   * are dimmed. The plaque art, label size, and label vertical center are passed
+   * in so the flaired Confirm art can place its label below the gem flair.
+   * (Confirm just reads a touch brighter gold when active — no color tint.)
    */
-  _drawButton(ctx, rect, label, { variant, enabled, hovered }) {
-    const img = this._asset('ui_skill_weave_button');
+  _drawButton(ctx, rect, label, { variant, enabled, hovered, assetKey, labelSize = BUTTON_LABEL_SIZE, textCenterFrac = 0.5 }) {
+    const img = this._asset(assetKey || 'ui_skill_weave_button');
 
     ctx.save();
     const baseAlpha = enabled ? (hovered ? 1 : 0.92) : 0.42;
@@ -1032,8 +1132,8 @@ export default class SkillWeaveScene extends UIPanel {
     let labelColor;
     if (variant === 'confirm') labelColor = enabled ? '#f4e8c4' : '#6b6450';
     else labelColor = enabled ? '#d7c290' : '#6b6450';
-    this._drawText(ctx, label, rect.x + rect.w / 2, rect.y + rect.h / 2, {
-      size: BUTTON_LABEL_SIZE, color: labelColor, baseline: 'middle',
+    this._drawText(ctx, label, rect.x + rect.w / 2, rect.y + rect.h * textCenterFrac, {
+      size: labelSize, color: labelColor, baseline: 'middle',
       letterSpacing: 2, shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.7)',
     });
 
