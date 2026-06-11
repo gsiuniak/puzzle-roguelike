@@ -1,0 +1,198 @@
+{
+  "meta": {
+    "sheet_w": 2258,
+    "sheet_h": 2292,
+    "sprite_count": 17,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "character_pane_panel": {
+      "x": 754,
+      "y": 4,
+      "w": 961,
+      "h": 651,
+      "index": 0,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skills_locked_icon": {
+      "x": 735,
+      "y": 1525,
+      "w": 150,
+      "h": 213,
+      "index": 1,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skills_button": {
+      "x": 754,
+      "y": 659,
+      "w": 1300,
+      "h": 440,
+      "index": 2,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skill_pane_panel": {
+      "x": 4,
+      "y": 4,
+      "w": 746,
+      "h": 1328,
+      "index": 3,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "icon_block": {
+      "x": 4,
+      "y": 1810,
+      "w": 379,
+      "h": 478,
+      "index": 4,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 53,
+      "trim_y": 3
+    },
+    "icon_attack": {
+      "x": 1719,
+      "y": 4,
+      "w": 442,
+      "h": 471,
+      "index": 5,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 21,
+      "trim_y": 9
+    },
+    "mana_purple_simple": {
+      "x": 1348,
+      "y": 1103,
+      "w": 187,
+      "h": 187,
+      "index": 6,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 7,
+      "trim_y": 6
+    },
+    "mana_yellow_simple": {
+      "x": 1539,
+      "y": 1103,
+      "w": 187,
+      "h": 187,
+      "index": 7,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 7,
+      "trim_y": 6
+    },
+    "mana_green_simple": {
+      "x": 1730,
+      "y": 1103,
+      "w": 187,
+      "h": 186,
+      "index": 8,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 7,
+      "trim_y": 6
+    },
+    "mana_blue_simple": {
+      "x": 1921,
+      "y": 1103,
+      "w": 187,
+      "h": 185,
+      "index": 9,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 7,
+      "trim_y": 7
+    },
+    "mana_red_simple": {
+      "x": 735,
+      "y": 1336,
+      "w": 186,
+      "h": 185,
+      "index": 10,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 7,
+      "trim_y": 7
+    },
+    "mana_amount": {
+      "x": 4,
+      "y": 1336,
+      "w": 727,
+      "h": 470,
+      "index": 11,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "mana_purple": {
+      "x": 1150,
+      "y": 1103,
+      "w": 194,
+      "h": 194,
+      "index": 12,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "mana_yellow": {
+      "x": 2058,
+      "y": 659,
+      "w": 196,
+      "h": 195,
+      "index": 13,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "mana_green": {
+      "x": 952,
+      "y": 1103,
+      "w": 194,
+      "h": 195,
+      "index": 14,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "mana_blue": {
+      "x": 2058,
+      "y": 858,
+      "w": 196,
+      "h": 195,
+      "index": 15,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "mana_red": {
+      "x": 754,
+      "y": 1103,
+      "w": 194,
+      "h": 197,
+      "index": 16,
+      "source_w": 1300,
+      "source_h": 1328,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}

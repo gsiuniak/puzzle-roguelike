@@ -59,19 +59,9 @@ const ASSET_MAP = {
   portrait_goresnout_trackers: 'assets/sprites/character_pane/portraits/portrait_goresnout_trackers.png',
   portrait_malakor:          'assets/sprites/character_pane/portraits/portrait_malakor.png',
   portrait_abomination:      'assets/sprites/character_pane/portraits/portrait_abomination.png',
-  icon_attack:               'assets/sprites/character_pane/icons/icon_attack.png',
-  icon_block:                'assets/sprites/character_pane/icons/icon_block.png',
-  mana_red:                  'assets/sprites/character_pane/mana/mana_red.png',
-  mana_blue:                 'assets/sprites/character_pane/mana/mana_blue.png',
-  mana_green:                'assets/sprites/character_pane/mana/mana_green.png',
-  mana_yellow:               'assets/sprites/character_pane/mana/mana_yellow.png',
-  mana_purple:               'assets/sprites/character_pane/mana/mana_purple.png',
-  mana_red_simple:           'assets/sprites/character_pane/mana/mana_red_simple.png',
-  mana_blue_simple:          'assets/sprites/character_pane/mana/mana_blue_simple.png',
-  mana_green_simple:         'assets/sprites/character_pane/mana/mana_green_simple.png',
-  mana_yellow_simple:        'assets/sprites/character_pane/mana/mana_yellow_simple.png',
-  mana_purple_simple:        'assets/sprites/character_pane/mana/mana_purple_simple.png',
-  mana_amount:               'assets/sprites/character_pane/mana/mana_amount.png',
+  // icon_attack / icon_block, mana_<color>, mana_<color>_simple, and mana_amount
+  // now come from the `ui_spritesheet_character_pane` spritesheet (sprite names
+  // match these keys directly — see SPRITESHEET_MAP).
   skill_slash:               'assets/sprites/character_pane/skills/skill_slash.png',
   skill_bash:                'assets/sprites/character_pane/skills/skill_bash.png',
   skill_defend:              'assets/sprites/character_pane/skills/skill_defend.png',
@@ -140,11 +130,10 @@ const ASSET_MAP = {
   // ── New battle screen panel assets ──────────────────
   battle_board_panel:        'assets/sprites/battle/board/battle_board_panel.png',
   // combat_log_panel:          'assets/sprites/battle/log/combat_log_panel.png',
-  character_pane_panel:      'assets/sprites/battle/character_pane/character_pane_panel.png',
-  skill_pane_panel:          'assets/sprites/battle/skills_pane/skill_pane_panel.png',
-  skills_button:             'assets/sprites/battle/skills_pane/skills_button.png',
+  // character_pane_panel / skill_pane_panel / skills_button / skills_locked_icon
+  // now come from the `ui_spritesheet_character_pane` spritesheet (names match
+  // directly — see SPRITESHEET_MAP). skills_locked_button is NOT in the sheet.
   skills_locked_button:      'assets/sprites/battle/skills_pane/skills_locked_button.png',
-  skills_locked_icon:        'assets/sprites/battle/skills_pane/skills_locked_icon.png',
   // ── Relic icons (placeholder until per-relic art is added) ──
   // Relic definitions in data/relics/relicCatalog.js reference these
   // asset keys via their `icon` field. New relics should add their
@@ -253,6 +242,11 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/battle/board/tiles/ui_spritesheet_tiles.png',
     json:  'assets/sprites/battle/board/tiles/ui_spritesheet_tiles.json',
     trim:  false, // packer already emits tight per-sprite frames
+  },
+  ui_spritesheet_character_pane: {
+    image: 'assets/sprites/battle/character_pane/ui_spritesheet_character_pane.png',
+    json:  'assets/sprites/battle/character_pane/ui_spritesheet_character_pane.json',
+    trim:  false, // sprite names match the existing keys directly (no aliases)
   },
 };
 
