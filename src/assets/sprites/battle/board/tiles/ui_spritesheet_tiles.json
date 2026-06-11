@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "sheet_w": 838,
+    "sheet_h": 669,
+    "sprite_count": 11,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "grid_dark": {
+      "x": 212,
+      "y": 252,
+      "w": 205,
+      "h": 204,
+      "index": 0,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "grid_light": {
+      "x": 421,
+      "y": 252,
+      "w": 205,
+      "h": 204,
+      "index": 1,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "wild_tile_border": {
+      "x": 4,
+      "y": 4,
+      "w": 231,
+      "h": 244,
+      "index": 2,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "thrall_tile": {
+      "x": 474,
+      "y": 4,
+      "w": 204,
+      "h": 207,
+      "index": 3,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "red_tile": {
+      "x": 4,
+      "y": 252,
+      "w": 204,
+      "h": 206,
+      "index": 4,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "diseased_tile": {
+      "x": 212,
+      "y": 462,
+      "w": 204,
+      "h": 200,
+      "index": 5,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skull_tile": {
+      "x": 239,
+      "y": 4,
+      "w": 231,
+      "h": 240,
+      "index": 6,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "purple_tile": {
+      "x": 420,
+      "y": 462,
+      "w": 203,
+      "h": 199,
+      "index": 7,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "yellow_tile": {
+      "x": 627,
+      "y": 462,
+      "w": 201,
+      "h": 199,
+      "index": 8,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "green_tile": {
+      "x": 630,
+      "y": 252,
+      "w": 204,
+      "h": 203,
+      "index": 9,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "blue_tile": {
+      "x": 4,
+      "y": 462,
+      "w": 204,
+      "h": 203,
+      "index": 10,
+      "source_w": 231,
+      "source_h": 244,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}

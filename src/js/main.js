@@ -89,20 +89,15 @@ const ASSET_MAP = {
   skill_cyst_burst:          'assets/sprites/character_pane/skills/skill_cyst_burst.png',
   skill_flair_left:          'assets/sprites/character_pane/flair/skill_flair_left.png',
   skill_flair_right:         'assets/sprites/character_pane/flair/skill_flair_right.png',
-  grid_dark:                 'assets/sprites/battle/board/grid/grid_dark.png',
-  grid_light:                'assets/sprites/battle/board/grid/grid_light.png',
+  // grid_dark / grid_light (board background tiles) now come from the
+  // `ui_spritesheet_tiles` spritesheet (sprite names match the keys directly).
   animated_text_extra_turn:  'assets/sprites/animated_text/animated_text_extra_turn.png',
   animated_text_player_turn: 'assets/sprites/animated_text/animated_text_player_turn.png',
   animated_text_enemy_turn:  'assets/sprites/animated_text/animated_text_enemy_turn.png',
-  tile_red:                  'assets/sprites/battle/board/tiles/red_tile.png',
-  tile_blue:                 'assets/sprites/battle/board/tiles/blue_tile.png',
-  tile_green:                'assets/sprites/battle/board/tiles/green_tile.png',
-  tile_yellow:               'assets/sprites/battle/board/tiles/yellow_tile.png',
-  tile_purple:               'assets/sprites/battle/board/tiles/purple_tile.png',
-  tile_skull:                'assets/sprites/battle/board/tiles/skull_tile.png',
-  tile_disease:              'assets/sprites/battle/board/tiles/diseased_tile.png',
-  tile_thrall:               'assets/sprites/battle/board/tiles/thrall_tile.png',
-  wild_tile_border:          'assets/sprites/battle/board/tiles/wild_tile_border.png',
+  // Board tiles + wild border now come from the `ui_spritesheet_tiles`
+  // spritesheet (see SPRITESHEET_MAP). The board still requests `tile_<type>`
+  // keys; those are aliased onto the packed sprite names in init() (TILE_ALIASES).
+  // `wild_tile_border` matches the sprite name directly, so it needs no alias.
   // ── Character select scene assets ───────────────────
   character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.png',
   character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.png',
@@ -144,7 +139,7 @@ const ASSET_MAP = {
   rewards_background_splash:     'assets/sprites/reward_screen/rewards_background_splash.png',
   // ── New battle screen panel assets ──────────────────
   battle_board_panel:        'assets/sprites/battle/board/battle_board_panel.png',
-  combat_log_panel:          'assets/sprites/battle/log/combat_log_panel.png',
+  // combat_log_panel:          'assets/sprites/battle/log/combat_log_panel.png',
   character_pane_panel:      'assets/sprites/battle/character_pane/character_pane_panel.png',
   skill_pane_panel:          'assets/sprites/battle/skills_pane/skill_pane_panel.png',
   skills_button:             'assets/sprites/battle/skills_pane/skills_button.png',
@@ -254,6 +249,26 @@ const SPRITESHEET_MAP = {
     json:  'assets/sprites/skill_weave/ui_spritesheet_skill_weave_icons.json',
     trim:  false,
   },
+  ui_spritesheet_tiles: {
+    image: 'assets/sprites/battle/board/tiles/ui_spritesheet_tiles.png',
+    json:  'assets/sprites/battle/board/tiles/ui_spritesheet_tiles.json',
+    trim:  false, // packer already emits tight per-sprite frames
+  },
+};
+
+// ── Asset aliases (existing key → spritesheet sprite name) ──
+// The board requests `tile_<type>` keys; the packed sprites are named
+// `<color>_tile`. Alias the two so consumers stay unchanged. (`wild_tile_border`
+// matches its sprite name, so it resolves from the sheet without an alias.)
+const ASSET_ALIASES = {
+  tile_red:     'red_tile',
+  tile_blue:    'blue_tile',
+  tile_green:   'green_tile',
+  tile_yellow:  'yellow_tile',
+  tile_purple:  'purple_tile',
+  tile_skull:   'skull_tile',
+  tile_disease: 'diseased_tile',
+  tile_thrall:  'thrall_tile',
 };
 
 // ── Game viewport configuration ─────────────────────────
@@ -274,6 +289,9 @@ async function init() {
   }
   for (const [key, paths] of Object.entries(SPRITESHEET_MAP)) {
     assetManager.addSpriteSheet(key, paths.image, paths.json, { trim: paths.trim });
+  }
+  for (const [aliasKey, targetKey] of Object.entries(ASSET_ALIASES)) {
+    assetManager.alias(aliasKey, targetKey);
   }
 
   // 2. CanvasApp

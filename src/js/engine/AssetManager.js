@@ -37,6 +37,14 @@ export default class AssetManager {
     /** Map<sheetKey, { imagePath, jsonPath }> — registered spritesheets */
     this._sheets = new Map();
 
+    /**
+     * Map<aliasKey, targetKey> — alias keys resolve to another asset's image at
+     * lookup time (lazy), so a key can point at a spritesheet sprite that only
+     * exists after the sheet loads. Resolution follows chains (cycle-guarded).
+     * @type {Map<string, string>}
+     */
+    this._aliases = new Map();
+
     /** Total registered count */
     this._count = 0;
     /** Successfully loaded count */
@@ -89,6 +97,29 @@ export default class AssetManager {
       this._count++;
     }
     this._sheets.set(sheetKey, { imagePath, jsonPath, trim: !!opts.trim });
+  }
+
+  /**
+   * Register `aliasKey` as a lazy alias for `targetKey`. Looking up the alias
+   * (via get/getScaled/isLoaded) resolves to whatever `targetKey` holds at the
+   * time — including a spritesheet sprite that loads later. Lets existing asset
+   * keys be re-pointed at packed sprites without touching consumers.
+   * @param {string} aliasKey
+   * @param {string} targetKey
+   */
+  alias(aliasKey, targetKey) {
+    this._aliases.set(aliasKey, targetKey);
+  }
+
+  /** Resolve a key through the alias chain to the first real (or unaliased) key. */
+  _resolveKey(key) {
+    let k = key;
+    const seen = new Set();
+    while (!this._assets.has(k) && this._aliases.has(k) && !seen.has(k)) {
+      seen.add(k);
+      k = this._aliases.get(k);
+    }
+    return k;
   }
 
   /**
@@ -237,7 +268,7 @@ export default class AssetManager {
    * @returns {HTMLImageElement|null}
    */
   get(key) {
-    const entry = this._assets.get(key);
+    const entry = this._assets.get(this._resolveKey(key));
     if (!entry) {
       // Not registered — log once and return null
       if (!this._warnedMissing) this._warnedMissing = new Set();
@@ -293,7 +324,7 @@ export default class AssetManager {
    * @returns {boolean}
    */
   isLoaded(key) {
-    const entry = this._assets.get(key);
+    const entry = this._assets.get(this._resolveKey(key));
     return !!(entry && entry.image);
   }
 
