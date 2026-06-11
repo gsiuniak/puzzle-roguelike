@@ -765,13 +765,24 @@ export default class MapRenderer {
     const iconKey = ICON_MAP[node.type] || 'map_icon_battle';
     const iconImg = this._am ? this._am.get(iconKey) : null;
 
-    if (iconImg && iconImg.complete) {
+    // `complete !== false` accepts both loaded Images AND sliced spritesheet
+    // sprites (which are <canvas> elements with no `.complete` property), while
+    // still skipping a half-loaded <img>.
+    if (iconImg && iconImg.complete !== false) {
       ctx.globalAlpha = iconAlpha * this._overlayAlpha;
       const iconSize = r * 2 * ICON_SCALE;
-      const ix = x - iconSize / 2;
-      const iy = y - iconSize / 2;
+      // Contain-fit preserving aspect: spritesheet icons are alpha-trimmed and
+      // may be non-square (e.g. the taller boss icon), so stretching to a square
+      // box would distort them.
+      const iw = iconImg.width || iconSize;
+      const ih = iconImg.height || iconSize;
+      const scale = Math.min(iconSize / iw, iconSize / ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
+      const ix = x - dw / 2;
+      const iy = y - dh / 2;
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(iconImg, ix, iy, iconSize, iconSize);
+      ctx.drawImage(iconImg, ix, iy, dw, dh);
     } else {
       // Fallback: type letter
       ctx.globalAlpha = iconAlpha * this._overlayAlpha;

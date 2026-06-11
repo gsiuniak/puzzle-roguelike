@@ -79,13 +79,11 @@ const ASSET_MAP = {
   character_select_choose_hero_button_hover:   'assets/sprites/character_select/character_select_chooe_hero_button_hover.png',
   character_select_divider:                    'assets/sprites/character_select/character_select_divider.png',
   // ── Map scene assets ────────────────────────────────
-  map_splash:       'assets/sprites/map/map_splash.png',
-  map_icon_battle:  'assets/sprites/map/map_icon_battle.png',
-  map_icon_elite:   'assets/sprites/map/map_icon_elite.png',
-  map_icon_chest:   'assets/sprites/map/map_icon_chest.png',
-  map_icon_train:   'assets/sprites/map/map_icon_train.png',
-  map_icon_rest:    'assets/sprites/map/map_icon_rest.png',
-  map_icon_boss:    'assets/sprites/map/map_icon_boss.png',
+  map_splash:       'assets/sprites/map/map_splash.jpg',
+  // map_icon_battle / _elite / _chest / _train / _rest / _boss now come from the
+  // `ui_spritesheet_map_elements` spritesheet (sprite names match the keys
+  // directly — see SPRITESHEET_MAP). The sheet also adds map_icon_boss_malakor
+  // and map_icon_boss_empty (not yet wired). map_splash stays standalone.
   // ── Reward screen assets ────────────────────────────
   // reward_screen_panel: 'assets/sprites/reward_screen/rewards_panel.png',
   // reward_victory_text:      'assets/sprites/reward_screen/rewards_victory_text.png',
@@ -247,6 +245,11 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/reward_screen/ui_spritesheet_reward_screen_elements.png',
     json:  'assets/sprites/reward_screen/ui_spritesheet_reward_screen_elements.json',
     trim:  false, // sprite names match the reward-screen keys directly (no aliases)
+  },
+  ui_spritesheet_map_elements: {
+    image: 'assets/sprites/map/ui_spritesheet_map_elements.png',
+    json:  'assets/sprites/map/ui_spritesheet_map_elements.json',
+    trim:  false, // sprite names match the `map_icon_*` keys directly (no aliases)
   },
 };
 
