@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "sheet_w": 669,
+    "sheet_h": 726,
+    "sprite_count": 6,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "skill_oungan": {
+      "x": 256,
+      "y": 4,
+      "w": 248,
+      "h": 249,
+      "index": 0,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skill_summon_dead": {
+      "x": 4,
+      "y": 4,
+      "w": 248,
+      "h": 250,
+      "index": 1,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skill_fracture": {
+      "x": 4,
+      "y": 491,
+      "w": 217,
+      "h": 231,
+      "index": 2,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 6
+    },
+    "skill_explode": {
+      "x": 448,
+      "y": 258,
+      "w": 217,
+      "h": 228,
+      "index": 3,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 9
+    },
+    "skill_defend": {
+      "x": 4,
+      "y": 258,
+      "w": 219,
+      "h": 229,
+      "index": 4,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 8
+    },
+    "skill_bash": {
+      "x": 227,
+      "y": 258,
+      "w": 217,
+      "h": 229,
+      "index": 5,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 8
+    }
+  }
+}
