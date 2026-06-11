@@ -147,7 +147,7 @@ const SKILL_CATALOG = {
     id: 'boom_baby',
     name: 'Boom Baby!',
     description: 'Deal 999 [[damage]]',
-    icon: 'skill_slash',
+    icon: 'skill_boom_baby',
     sound: 'skill_boom_baby',
     cost: { red: 20 },
     effects: [
@@ -158,7 +158,7 @@ const SKILL_CATALOG = {
     id: 'ignition',
     name: 'Ignition',
     description: '[[Create]] 20 Red [[tiles]]',
-    icon: 'skill_slash',
+    icon: 'skill_ignition',
     sound: 'skill_ignition',
     cost: { yellow: 10 },
     effects: [
@@ -171,7 +171,7 @@ const SKILL_CATALOG = {
     id: 'boulder_throw',
     name: 'Boulder Throw',
     description: 'Deal 10 [[damage]].\n[[Create]] 6 Green [[tiles]].',
-    icon: 'skill_slash',
+    icon: 'skill_boulder_throw',
     sound: 'skill_boulder_throw',
     cost: { green: 6 },
     effects: [
@@ -183,7 +183,7 @@ const SKILL_CATALOG = {
     id: 'smash',
     name: 'Smash',
     description: 'Deal 10 [[damage]].\nGain an [[extra turn]]',
-    icon: 'skill_bash',
+    icon: 'skill_smash',
     sound: 'skill_smash',
     cost: { red: 6 },
     effects: [
@@ -197,7 +197,7 @@ const SKILL_CATALOG = {
     id: 'doomsong',
     name: 'Doomsong',
     description: '[[Create]] 10 [[skulls]]',
-    icon: 'skill_summon_dead',
+    icon: 'skill_doomsong',
     sound: 'skill_doomsong',
     cost: { purple: 7 },
     effects: [
@@ -210,7 +210,7 @@ const SKILL_CATALOG = {
     id: 'charge',
     name: 'Charge!',
     description: 'Deal 10 [[damage]].\n[[Create]] 5 Red [[tiles]].\nGain an [[extra turn]]',
-    icon: 'skill_bash',
+    icon: 'skill_charge',
     sound: 'skill_charge',
     cost: { red: 8 },
     effects: [
@@ -223,7 +223,7 @@ const SKILL_CATALOG = {
     id: 'frenzy',
     name: 'Frenzy',
     description: 'Gain 10 [[armor]].\nCreate 5 Blue [[tiles]].',
-    icon: 'skill_defend',
+    icon: 'skill_frenzy',
     sound: 'skill_frenzy',
     cost: { blue: 8 },
     effects: [

@@ -52,21 +52,11 @@ const ASSET_MAP = {
   // icon_attack / icon_block, mana_<color>, mana_<color>_simple, and mana_amount
   // now come from the `ui_spritesheet_character_pane` spritesheet (sprite names
   // match these keys directly — see SPRITESHEET_MAP).
-  skill_slash:               'assets/sprites/character_pane/skills/skill_slash.png',
-  skill_bash:                'assets/sprites/character_pane/skills/skill_bash.png',
-  skill_defend:              'assets/sprites/character_pane/skills/skill_defend.png',
-  skill_explode:             'assets/sprites/character_pane/skills/skill_explode.png',
-  skill_fracture:            'assets/sprites/character_pane/skills/skill_fracture.png',
-  skill_summon_dead:         'assets/sprites/character_pane/skills/skill_summon_dead.png',
-  skill_oungan:              'assets/sprites/character_pane/skills/skill_oungan.png',
-  skill_encroach:            'assets/sprites/character_pane/skills/skill_encroach.png',
-  skill_hound:               'assets/sprites/character_pane/skills/skill_hound.png',
-  skill_desecrate:           'assets/sprites/character_pane/skills/skill_desecrate.png',
-  skill_soul_burn:           'assets/sprites/character_pane/skills/skill_soul_burn.png',
-  skill_harvest:             'assets/sprites/character_pane/skills/skill_harvest.png',
-  skill_exsanguinate:        'assets/sprites/character_pane/skills/skill_exsanguinate.png',
-  skill_infected_bite:       'assets/sprites/character_pane/skills/skill_infected_bite.png',
-  skill_cyst_burst:          'assets/sprites/character_pane/skills/skill_cyst_burst.png',
+  // Skill icons now come from the `ui_spritesheet_player_skills` /
+  // `ui_spritesheet_enemy_skills` spritesheets (sprite names match the skill
+  // `icon` keys in skillCatalog.js directly — see SPRITESHEET_MAP). The sheets
+  // also add icons for skills that had no art before (charge, frenzy,
+  // boulder_throw, smash, ignition, boom_baby, doomsong).
   skill_flair_left:          'assets/sprites/character_pane/flair/skill_flair_left.png',
   skill_flair_right:         'assets/sprites/character_pane/flair/skill_flair_right.png',
   // grid_dark / grid_light (board background tiles) now come from the
@@ -247,6 +237,16 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/battle/portraits/ui_spritesheet_enemy_portraits.png',
     json:  'assets/sprites/battle/portraits/ui_spritesheet_enemy_portraits.json',
     trim:  false, // sprite names match the `portrait_<id>` keys directly (no aliases)
+  },
+  ui_spritesheet_player_skills: {
+    image: 'assets/sprites/skills/player/ui_spritesheet_player_skills.png',
+    json:  'assets/sprites/skills/player/ui_spritesheet_player_skills.json',
+    trim:  false, // sprite names match the skill `icon` keys directly (no aliases)
+  },
+  ui_spritesheet_enemy_skills: {
+    image: 'assets/sprites/skills/enemy/ui_spritesheet_enemy_skills.png',
+    json:  'assets/sprites/skills/enemy/ui_spritesheet_enemy_skills.json',
+    trim:  false, // sprite names match the skill `icon` keys directly (no aliases)
   },
 };
 
