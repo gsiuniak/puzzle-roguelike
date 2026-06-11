@@ -143,8 +143,11 @@ export default class FloatingImageEffect {
 
     ctx.save();
     ctx.globalAlpha = alpha;
-    // Floating effect text sprites should be crisp
-    ctx.imageSmoothingEnabled = false;
+    // These are detailed, glow-heavy art scaled to a fractional size (and the
+    // scale animates each frame), so they must be bilinearly smoothed — nearest
+    // neighbour (imageSmoothingEnabled = false) aliases the text/glow edges.
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(this.image, x, y, rw, rh);
     ctx.restore();
   }

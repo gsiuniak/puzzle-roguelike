@@ -36,150 +36,30 @@ const DEBUG_UI_LAYOUT = false;
 const DEBUG_MODE = true;
 
 // ── Asset key → path mapping ───────────────────────────
+// Standalone (non-spritesheet) assets only — large backgrounds/splashes plus a
+// few one-off elements. The bulk of per-screen UI art (portraits, skill/relic
+// icons, tiles, panels, map icons, reward + weave + character-select elements,
+// etc.) now loads from packed spritesheets — see SPRITESHEET_MAP below.
 const ASSET_MAP = {
-  title_screen:               'assets/sprites/title/title_screen.jpg',
-  battle_background_default:  'assets/sprites/battle/backgrounds/battle_background_default.jpg',
-  battle_background_malakor:  'assets/sprites/battle/backgrounds/battle_background_malakor.jpg',
-  battle_background_game_over: 'assets/sprites/battle/backgrounds/battle_background_game_over.jpg',
-  placeholder:               'assets/sprites/placeholder.png',
-  // Battle portraits (player + enemy) now come from the
-  // `ui_spritesheet_player_portraits` / `ui_spritesheet_enemy_portraits`
-  // spritesheets (sprite names match the `portrait_<id>` keys directly — see
-  // SPRITESHEET_MAP). NOTE: the CharacterSelect scene uses its own separate
-  // `character_select_portrait_*` / `character_select_splash_*` keys (unaffected).
-  // icon_attack / icon_block, mana_<color>, mana_<color>_simple, and mana_amount
-  // now come from the `ui_spritesheet_character_pane` spritesheet (sprite names
-  // match these keys directly — see SPRITESHEET_MAP).
-  // Skill icons now come from the `ui_spritesheet_player_skills` /
-  // `ui_spritesheet_enemy_skills` spritesheets (sprite names match the skill
-  // `icon` keys in skillCatalog.js directly — see SPRITESHEET_MAP). The sheets
-  // also add icons for skills that had no art before (charge, frenzy,
-  // boulder_throw, smash, ignition, boom_baby, doomsong).
-  // grid_dark / grid_light (board background tiles) now come from the
-  // `ui_spritesheet_tiles` spritesheet (sprite names match the keys directly).
-  // animated_text_extra_turn / animated_text_player_turn / animated_text_enemy_turn
-  // now come from the `ui_spritesheet_animated_text` spritesheet (sprite names
-  // match these keys directly — see SPRITESHEET_MAP).
-  // Board tiles + wild border now come from the `ui_spritesheet_tiles`
-  // spritesheet (see SPRITESHEET_MAP). The board still requests `tile_<type>`
-  // keys; those are aliased onto the packed sprite names in init() (TILE_ALIASES).
-  // `wild_tile_border` matches the sprite name directly, so it needs no alias.
-  // ── Character select scene assets ───────────────────
-  character_select_splash_warrior:             'assets/sprites/character_select/character_select_splash_warrior.jpg',
-  character_select_splash_mage:                'assets/sprites/character_select/character_select_splash_mage.jpg',
-  character_select_splash_witch_doctor:        'assets/sprites/character_select/character_select_splash_witch_doctor.jpg',
-  // character_select_portrait_<id> now come from the
-  // `ui_spritesheet_character_select_portraits` spritesheet, and
-  // character_select_info_panel / _heart / _flair_left / _flair_right /
-  // _choose_hero_button(_hover) / _divider from the
-  // `ui_spritesheet_character_select_elements` spritesheet (sprite names match
-  // these keys directly — see SPRITESHEET_MAP).
-  // ── Map scene assets ────────────────────────────────
-  map_splash:       'assets/sprites/map/map_splash.jpg',
-  // map_icon_battle / _elite / _chest / _train / _rest / _boss now come from the
-  // `ui_spritesheet_map_elements` spritesheet (sprite names match the keys
-  // directly — see SPRITESHEET_MAP). The sheet also adds map_icon_boss_malakor
-  // and map_icon_boss_empty (not yet wired). map_splash stays standalone.
-  // ── Reward screen assets ────────────────────────────
-  // reward_screen_panel: 'assets/sprites/reward_screen/rewards_panel.png',
-  // reward_victory_text:      'assets/sprites/reward_screen/rewards_victory_text.png',
-  // rewards_option_panel:     'assets/sprites/reward_screen/rewards_option_panel.png',
-  // rewards_option_panel_vertical, rewards_title_panel, reward_divider_<rarity>
-  // (common/uncommon/rare/legendary), and rewards_button_confirm(_hover) /
-  // rewards_button_skip(_hover) now come from the
-  // `ui_spritesheet_reward_screen_elements` spritesheet (sprite names match
-  // these keys directly — see SPRITESHEET_MAP).
-  battle_button_skip:            'assets/sprites/temp/skip_button.png',
-  battle_button_map:             'assets/sprites/temp/map_button.png',
-  // rewards_background_splash:     'assets/sprites/reward_screen/rewards_background_splash.png',
-  // ── New battle screen panel assets ──────────────────
-  battle_board_panel:        'assets/sprites/battle/board/battle_board_panel.png',
-  // combat_log_panel:          'assets/sprites/battle/log/combat_log_panel.png',
-  // character_pane_panel / skill_pane_panel / skills_button / skills_locked_icon
-  // now come from the `ui_spritesheet_character_pane` spritesheet (names match
-  // directly — see SPRITESHEET_MAP). skills_locked_button is NOT in the sheet.
-  // skills_locked_button:      'assets/sprites/battle/skills_pane/skills_locked_button.png',
-  // ── Relic icons (placeholder until per-relic art is added) ──
-  // Relic definitions in data/relics/relicCatalog.js reference these
-  // asset keys via their `icon` field. New relics should add their
-  // icon key here (pointing at placeholder.png is fine until art exists).
-  relic_family_crest:        'assets/sprites/relics/relic_family_crest.png',
-  relic_unstable_catalyst:   'assets/sprites/relics/relic_unstable_catalyst.png',
-  relic_evil_eye:            'assets/sprites/relics/relic_evil_eye.png',
-  // Group A — spawn-rate relics
-  relic_flint:               'assets/sprites/relics/relic_flint.png',
-  relic_dewstone:            'assets/sprites/relics/relic_dewstone.png',
-  relic_fossilized_fern:     'assets/sprites/relics/relic_fossilized_fern.png',
-  relic_copper_coil:         'assets/sprites/relics/relic_copper_coil.png',
-  relic_obsidian_shard:      'assets/sprites/relics/relic_obsidian_shard.png',
-  relic_catacomb_key:        'assets/sprites/relics/relic_catacomb_key.png',
-  // Group B — mana-gain relics (+ skull-damage Funerary Bell)
-  relic_bellows:             'assets/sprites/relics/relic_bellows.png',
-  relic_gourd_flask:         'assets/sprites/relics/relic_gourd_flask.png',
-  relic_pestle:              'assets/sprites/relics/relic_pestle.png',
-  relic_thimble:             'assets/sprites/relics/relic_thimble.png',
-  relic_astrolabe:           'assets/sprites/relics/relic_astrolabe.png',
-  relic_funerary_bell:       'assets/sprites/relics/relic_funerary_bell.png',
-  // Individual relics
-  relic_prism:               'assets/sprites/relics/relic_prism.png',
-  relic_blighted_hook:       'assets/sprites/relics/relic_blighted_hook.png',
-  relic_trebuchet:           'assets/sprites/relics/relic_trebuchet.png',
-  relic_claymore:            'assets/sprites/relics/relic_claymore.png',
-  relic_aegis:               'assets/sprites/relics/relic_aegis.png',
-  relic_thorned_rose:        'assets/sprites/relics/relic_thorned_rose.png',
-  relic_alabaster_flask:     'assets/sprites/relics/relic_alabaster_flask.png',
-  // "+attack per unspent mana" relics (one per color)
-  relic_cestus:              'assets/sprites/relics/relic_cestus.png',
-  relic_harpoon:             'assets/sprites/relics/relic_harpoon.png',
-  relic_club:                'assets/sprites/relics/relic_club.png',
-  relic_stiletto:            'assets/sprites/relics/relic_stiletto.png',
-  relic_wand:                'assets/sprites/relics/relic_wand.png',
-  // Attack / sustain / board-control legendaries
-  relic_scythe:              'assets/sprites/relics/relic_scythe.png',
-  relic_tsunami:             'assets/sprites/relics/relic_tsunami.png',
-  relic_soul_eater:          'assets/sprites/relics/relic_soul_eater.png',
-  relic_reckoning:           'assets/sprites/relics/relic_reckoning.png',
-  relic_gorepike:            'assets/sprites/relics/relic_gorepike.png',
-  relic_deathbringer:        'assets/sprites/relics/relic_deathbringer.png',
-  // Potions — grant starting mana (one per color)
-  relic_potion_red:          'assets/sprites/relics/relic_potion_red.png',
-  relic_potion_blue:         'assets/sprites/relics/relic_potion_blue.png',
-  relic_potion_green:        'assets/sprites/relics/relic_potion_green.png',
-  relic_potion_yellow:       'assets/sprites/relics/relic_potion_yellow.png',
-  relic_potion_purple:       'assets/sprites/relics/relic_potion_purple.png',
-  // Mana-gain reactors — deal 1 damage when gaining a color (one per color)
-  relic_flaming_arrow:       'assets/sprites/relics/relic_flaming_arrow.png',
-  relic_water_balloon:       'assets/sprites/relics/relic_water_balloon.png',
-  relic_thorned_branch:      'assets/sprites/relics/relic_thorned_branch.png',
-  relic_static_comb:         'assets/sprites/relics/relic_static_comb.png',
-  relic_tuning_fork:         'assets/sprites/relics/relic_tuning_fork.png',
-  // Familiars — gain +1 mana of a color on any 3+ match (one per color)
-  relic_familiar_red:        'assets/sprites/relics/relic_familiar_red.png',
-  relic_familiar_blue:       'assets/sprites/relics/relic_familiar_blue.png',
-  relic_familiar_green:      'assets/sprites/relics/relic_familiar_green.png',
-  relic_familiar_yellow:     'assets/sprites/relics/relic_familiar_yellow.png',
-  relic_familiar_purple:     'assets/sprites/relics/relic_familiar_purple.png',
-  // Individual relics
-  relic_slingshot:           'assets/sprites/relics/relic_slingshot.png',
-  relic_familiar_skull:      'assets/sprites/relics/relic_familiar_skull.png',
-  // Enemy-only relics (enemyRelicCatalog.js)
-  relic_briarthorn:          'assets/sprites/relics/relic_briarthorn.png',
-  relic_chokeweed_sap:       'assets/sprites/relics/relic_chokeweed_sap.png',
-  relic_goresnout_collars:   'assets/sprites/relics/relic_goresnout_collars.png',
-  relic_sulfur:              'assets/sprites/relics/relic_sulfur.png',
-  relic_heart_of_usurper:    'assets/sprites/relics/relic_heart_of_usurper.png',
-  relic_barons_signet:       'assets/sprites/relics/relic_barons_signet.png',
-  relic_infected_tooth:      'assets/sprites/relics/relic_infected_tooth.png',
-  relic_severed_maxilla:     'assets/sprites/relics/relic_severed_maxilla.png',
-  // ── Skill Weave ("Weave a Power") screen assets ─────
+  // ── Backgrounds / splashes (large, kept standalone) ──
+  title_screen:                         'assets/sprites/title/title_screen.jpg',
+  battle_background_default:            'assets/sprites/battle/backgrounds/battle_background_default.jpg',
+  battle_background_malakor:            'assets/sprites/battle/backgrounds/battle_background_malakor.jpg',
+  battle_background_game_over:          'assets/sprites/battle/backgrounds/battle_background_game_over.jpg',
+  map_splash:                           'assets/sprites/map/map_splash.jpg',
+  character_select_splash_warrior:      'assets/sprites/character_select/character_select_splash_warrior.jpg',
+  character_select_splash_mage:         'assets/sprites/character_select/character_select_splash_mage.jpg',
+  character_select_splash_witch_doctor: 'assets/sprites/character_select/character_select_splash_witch_doctor.jpg',
+  // ── Battle panels / buttons ──
+  battle_board_panel:                   'assets/sprites/battle/board/battle_board_panel.png',
+  battle_button_skip:                   'assets/sprites/temp/skip_button.png',
+  battle_button_map:                    'assets/sprites/temp/map_button.png',
+  // ── Skill Weave (background + default tag icon; UI elements are in a sheet) ──
   skill_weave_background:               'assets/sprites/skill_weave/skill_weave_background.png',
-  // The ui_skill_weave_* container/button/selection elements now come from the
-  // `ui_spritesheet_skill_weave_elements` spritesheet (sprite names match these
-  // keys directly — see SPRITESHEET_MAP). skill_weave_background and
-  // skill_weave_tag_test are NOT in the sheet and stay standalone PNGs.
   skill_weave_tag_test:                 'assets/sprites/skill_weave/ui_skill_weave_tag_test.png',
-  // ── General UI ──────────────────────────────────────
-  tooltip_panel:             'assets/sprites/general_ui/tooltip_panel.png',
+  // ── General UI ──
+  placeholder:                          'assets/sprites/placeholder.png',
+  tooltip_panel:                        'assets/sprites/general_ui/tooltip_panel.png',
 };
 
 // ── Spritesheet key → { image, json } mapping ──────────
@@ -256,6 +136,11 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/character_select/ui_spritesheet_character_select_portraits.png',
     json:  'assets/sprites/character_select/ui_spritesheet_character_select_portraits.json',
     trim:  false, // sprite names match the `character_select_portrait_<id>` keys directly
+  },
+  ui_spritesheet_relics: {
+    image: 'assets/sprites/relics/ui_spritesheet_relics.png',
+    json:  'assets/sprites/relics/ui_spritesheet_relics.json',
+    trim:  false, // sprite names match the `relic_<id>` keys directly (no aliases)
   },
 };
 

@@ -25,10 +25,12 @@ const NAME_BLOCK_HEIGHT = 72;
 
 // ── Name flair ──────────────────────────────────────────
 // When the name fits on ONE line, the second-line space below it is filled
-// with a decorative flourish (player pane → skill_flair_right, enemy →
-// skill_flair_left). When the name wraps to two lines there's no room, so the
-// flair is suppressed. The flair is drawn manually in render() (not a layout
-// child) so it occupies the freed band without affecting layout. Tune freely.
+// with a decorative flourish (`character_pane_flair`, sliced from the
+// ui_spritesheet_character_pane sheet — a horizontally-symmetric flourish, so
+// the same sprite is used for both the player and enemy panes). When the name
+// wraps to two lines there's no room, so the flair is suppressed. The flair is
+// drawn manually in render() (not a layout child) so it occupies the freed band
+// without affecting layout. Tune freely.
 const FLAIR_HEIGHT = 26;            // drawn height of the flourish
 const FLAIR_TOP_OFFSET = NAME_LINE_HEIGHT + 4; // band start, below the 1st name line
 const FLAIR_SIDE_INSET = 2;         // horizontal inset from the name block edge
@@ -83,15 +85,12 @@ export default class CharacterInfoPane extends UIPanel {
     this.assetManager = assetManager;
     this.smoothing = true;
 
-    /** 'player' | 'enemy' — selects the flair side. */
+    /** 'player' | 'enemy' — retained for API compatibility / future use. */
     this._side = side;
     // Decorative flourish shown in the freed band under a single-line name.
-    // Player pane flares right; enemy pane flares left (mirror). Drawn
-    // manually in render(), not added as a layout child.
-    this._flair = new UIImage(
-      side === 'enemy' ? 'skill_flair_left' : 'skill_flair_right',
-      assetManager
-    );
+    // Symmetric sprite from the character-pane sheet (same for both sides).
+    // Drawn manually in render(), not added as a layout child.
+    this._flair = new UIImage('character_pane_flair', assetManager);
     // Stretch to fill the full band width (FLAIR_HEIGHT tall) rather than
     // scaling to native aspect and parking against one edge.
     this._flair.setStyle({
