@@ -33,11 +33,11 @@ import KeywordText from './KeywordText.js';
  *   titleColor     — title text color (default '#f5e7c8')
  *   titleBold      — render title bold (default true)
  *   titleGap       — gap between title and body in px (default 8)
- *   headerIconKey  — optional AssetManager key; enables SKILL-HEADER mode:
- *                    a header row mimicking SkillButton's layout (icon |
- *                    title + mana cost) is drawn above the body. Cleared by
- *                    resetStyleDefaults so it never bleeds into other sources.
- *   headerCost     — { color: amount } mana cost rendered in the header
+ *   autoSize       — when true, the panel WIDTH grows (from the default/given
+ *                    width up to AUTO_SIZE_MAX_WIDTH) until the title + body
+ *                    fit the aspect-derived height. Used by the skill-button
+ *                    "?" tooltips so a long skill description fits without
+ *                    every other tooltip sharing the bigger size.
  */
 
 const DEFAULT_BG_KEY    = 'tooltip_panel';
@@ -49,18 +49,15 @@ const TOOLTIP_DEFAULT_TITLE_FONT_SIZE = 26;
 const TOOLTIP_DEFAULT_TITLE_COLOR     = '#ccaa77';
 const TOOLTIP_DEFAULT_TITLE_GAP       = 8;
 const FALLBACK_ASPECT_RATIO           = 2.5;
+/** Widest a panel may auto-grow (autoSize mode). */
+const AUTO_SIZE_MAX_WIDTH             = 620;
 
-// ── Skill-header mode (headerIconKey set) ──
-const HEADER_ICON_SIZE = 64;
-const HEADER_ICON_GAP  = 14;   // gap between icon and title/cost stack
-const HEADER_BODY_GAP  = 10;   // gap between header row and body text
-const HEADER_COST_FONT_SIZE = 20;
-const HEADER_COST_ORB_R     = 9;
-const HEADER_COST_GAP       = 6; // between cost number and orb
-const HEADER_MANA_COLORS = Object.freeze({
-  red: '#cc3333', blue: '#3366cc', green: '#33aa33',
-  yellow: '#cccc33', purple: '#9933cc',
-});
+// Shared offscreen ctx for text measurement outside render (autoSize).
+let _measureCtx = null;
+function getMeasureCtx() {
+  if (!_measureCtx) _measureCtx = document.createElement('canvas').getContext('2d');
+  return _measureCtx;
+}
 
 export default class Tooltip {
   /**
@@ -100,9 +97,9 @@ export default class Tooltip {
       bold: true,
     });
 
-    // Skill-header mode (icon + cost row above the body). Null = normal mode.
-    this._headerIconKey = null;
-    this._headerCost = null;
+    // Auto-grow width to fit content (skill tooltips). Per-show; reset by
+    // resetStyleDefaults.
+    this._autoSize = false;
 
     this._x = 0;
     this._y = 0;
@@ -170,27 +167,42 @@ export default class Tooltip {
       this._titleGap = opts.titleGap;
       this._cachedSize = null;
     }
-    if (opts.headerIconKey !== undefined) this._headerIconKey = opts.headerIconKey;
-    if (opts.headerCost !== undefined) this._headerCost = opts.headerCost;
+    if (opts.autoSize !== undefined) {
+      this._autoSize = !!opts.autoSize;
+      this._cachedSize = null;
+    }
   }
 
   /**
-   * Reset the per-show style overrides (body + title color) to their defaults.
+   * Reset ALL per-show options to their defaults.
    *
-   * This Tooltip instance is reused for many different sources (e.g. the same
-   * parent tooltip shows relic descriptions AND hovered-keyword definitions).
-   * Since setOptions() does PARTIAL updates, a source that sets `titleColor`
-   * (keyword spans use KEYWORD_COLOR) would otherwise bleed into the next source
-   * that omits it. TooltipManager calls this before applying a new source's
-   * options so each show starts from a clean baseline.
+   * This Tooltip instance is reused for many different sources (relic
+   * descriptions, hovered-keyword definitions, skill-button "?" tooltips).
+   * Since setOptions() does PARTIAL updates, anything one source sets
+   * (colors, but also width/scale/padding/fontSize/autoSize) would otherwise
+   * bleed into the next source that omits it — a skill tooltip's big width
+   * must not turn every relic tooltip huge. TooltipManager calls this before
+   * applying a new source's options so each show starts from a clean baseline.
    */
   resetStyleDefaults() {
-    this._textElement.setStyle({ color: TOOLTIP_DEFAULT_COLOR });
-    this._titleElement.setStyle({ color: TOOLTIP_DEFAULT_TITLE_COLOR });
-    // Header mode is opt-in per show — clear it so a skill tooltip's icon/cost
-    // never bleeds into a relic or keyword tooltip shown next.
-    this._headerIconKey = null;
-    this._headerCost = null;
+    this._scale = 1;
+    this._explicitWidth = null;
+    this._padding = TOOLTIP_DEFAULT_PADDING;
+    this._fontSize = TOOLTIP_DEFAULT_FONT_SIZE;
+    this._lineHeight = null;
+    this._titleGap = TOOLTIP_DEFAULT_TITLE_GAP;
+    this._autoSize = false;
+    this._textElement.setStyle({
+      color: TOOLTIP_DEFAULT_COLOR,
+      fontSize: TOOLTIP_DEFAULT_FONT_SIZE,
+      lineHeight: null,
+    });
+    this._titleElement.setStyle({
+      color: TOOLTIP_DEFAULT_TITLE_COLOR,
+      fontSize: TOOLTIP_DEFAULT_TITLE_FONT_SIZE,
+      bold: true,
+    });
+    this._cachedSize = null;
   }
 
   setPosition(x, y) {
@@ -210,12 +222,36 @@ export default class Tooltip {
     const aspect = (img && img.width && img.height)
       ? img.width / img.height
       : FALLBACK_ASPECT_RATIO;
-    const width = this._explicitWidth != null
+    let width = this._explicitWidth != null
       ? this._explicitWidth
       : TOOLTIP_DEFAULT_WIDTH * this._scale;
+    if (this._autoSize) width = this._computeAutoWidth(width, aspect);
     const height = width / aspect;
     this._cachedSize = { width, height };
     return this._cachedSize;
+  }
+
+  /**
+   * autoSize: smallest width ≥ `minWidth` (capped at AUTO_SIZE_MAX_WIDTH)
+   * whose aspect-derived height fits the title + gap + wrapped body. Widening
+   * also widens the wrap, so the loop converges in a couple of iterations.
+   */
+  _computeAutoWidth(minWidth, aspect) {
+    const ctx = getMeasureCtx();
+    let width = minWidth;
+    for (let i = 0; i < 5; i++) {
+      const innerW = Math.max(1, width - this._padding * 2);
+      this._titleElement.setStyle({ maxWidth: innerW });
+      this._textElement.setStyle({ maxWidth: innerW });
+      const titleH = this._title ? this._titleElement.measureText(ctx).height : 0;
+      const bodyH = this._text ? this._textElement.measureText(ctx).height : 0;
+      const gap = this._title && this._text ? this._titleGap : 0;
+      const neededH = this._padding * 2 + titleH + gap + bodyH;
+      const neededW = neededH * aspect;
+      if (neededW <= width + 0.5 || width >= AUTO_SIZE_MAX_WIDTH) break;
+      width = Math.min(AUTO_SIZE_MAX_WIDTH, Math.ceil(neededW));
+    }
+    return width;
   }
 
   /** Render at the configured position. */
@@ -253,72 +289,6 @@ export default class Tooltip {
 
     let bodyY = y + padding;
     let bodyH = innerH;
-
-    if (this._headerIconKey || this._headerCost) {
-      // ── Skill-header mode: [icon] [title / cost] row, body below ──
-      // Mimics SkillButton's layout at tooltip scale so the popup reads as
-      // "the button, but with everything".
-      const hx = x + padding;
-      const hy = y + padding;
-      const iconImg = this._assetManager && this._headerIconKey
-        ? this._assetManager.get(this._headerIconKey) : null;
-      if (iconImg) {
-        ctx.save();
-        ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(iconImg, hx, hy, HEADER_ICON_SIZE, HEADER_ICON_SIZE);
-        ctx.restore();
-      }
-
-      const textX = hx + (iconImg ? HEADER_ICON_SIZE + HEADER_ICON_GAP : 0);
-      ctx.save();
-      // Title (left-aligned beside the icon)
-      if (this._title) {
-        ctx.font = `bold ${this._titleElement.fontSize || TOOLTIP_DEFAULT_TITLE_FONT_SIZE}px "Marcellus SC", Georgia, serif`;
-        ctx.fillStyle = this._titleElement.color || TOOLTIP_DEFAULT_TITLE_COLOR;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.shadowColor = 'rgba(0,0,0,0.65)';
-        ctx.shadowBlur = 2;
-        ctx.fillText(this._title, textX, hy + 2);
-      }
-      // Mana cost row (number + colored orb per color), under the title
-      const costEntries = Object.entries(this._headerCost || {}).filter(([, n]) => n > 0);
-      if (costEntries.length) {
-        const cy = hy + HEADER_ICON_SIZE - HEADER_COST_FONT_SIZE / 2 - 4;
-        let cx = textX;
-        ctx.shadowBlur = 0;
-        for (const [color, amount] of costEntries) {
-          ctx.font = `bold ${HEADER_COST_FONT_SIZE}px Georgia, serif`;
-          ctx.fillStyle = '#ffffff';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(amount), cx, cy);
-          cx += ctx.measureText(String(amount)).width + HEADER_COST_GAP + HEADER_COST_ORB_R;
-          ctx.beginPath();
-          ctx.arc(cx, cy, HEADER_COST_ORB_R, 0, Math.PI * 2);
-          ctx.fillStyle = HEADER_MANA_COLORS[color] || '#888';
-          ctx.fill();
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = '#665522';
-          ctx.stroke();
-          cx += HEADER_COST_ORB_R + 14;
-        }
-      }
-      ctx.restore();
-
-      // Body fills the remaining height below the header row.
-      bodyY = hy + HEADER_ICON_SIZE + HEADER_BODY_GAP;
-      bodyH = Math.max(1, y + padding + innerH - bodyY);
-      if (this._text) {
-        this._textElement.setStyle({ maxWidth: innerW, alignV: 'top' });
-        this._textElement.rect.x = x + padding;
-        this._textElement.rect.y = bodyY;
-        this._textElement.rect.w = innerW;
-        this._textElement.rect.h = bodyH;
-        this._textElement.renderSelf(ctx);
-      }
-      return;
-    }
 
     if (this._title) {
       // Stack title + gap + body and vertically center the whole block

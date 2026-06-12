@@ -1416,13 +1416,14 @@ export default class BattleScene extends UIPanel {
 
   /**
    * Register each skill button's "?" badge as a full-skill tooltip source
-   * (icon + name + cost + complete description via the Tooltip's skill-header
-   * mode; [[keyword]]s inside the description still chain their own child
-   * tooltips below it). Skill-description keyword SPANS are intentionally NOT
-   * tooltip sources on the buttons anymore — the "?" badge is the single
-   * affordance. Re-runs whenever skills are (re)built; stale badge attachments
-   * from the previous build are detached first (relic icon tooltips are
-   * unaffected).
+   * (skill name + COMPLETE description; `autoSize` lets just THIS tooltip
+   * grow to fit — other tooltips keep their normal size because the Tooltip's
+   * resetStyleDefaults restores all sizing between shows). [[keyword]]s inside
+   * the description still chain their own child tooltips below it.
+   * Skill-description keyword SPANS are intentionally NOT tooltip sources on
+   * the buttons anymore — the "?" badge is the single affordance. Re-runs
+   * whenever skills are (re)built; stale badge attachments from the previous
+   * build are detached first (relic icon tooltips are unaffected).
    */
   _registerSkillTooltips() {
     const tm = this._tooltipManager;
@@ -1440,11 +1441,7 @@ export default class BattleScene extends UIPanel {
         tm.attach(btn.helpBadge, {
           title: sd.name || '',
           text: sd.description || '',
-          headerIconKey: sd.icon || null,
-          headerCost: sd.cost || null,
-          width: 480,
-          padding: 28,
-          fontSize: 20,
+          autoSize: true,
           offset: 20,
           hitPadding: 8,
         });

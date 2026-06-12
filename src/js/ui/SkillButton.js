@@ -157,7 +157,7 @@ export default class SkillButton extends UIPanel {
       fontSize: NAME_FONT_SIZE,
       color: '#e4e4d9',
       bold: true,
-      alignH: 'center',
+      alignH: 'left',
       alignV: 'center',
       height: NAME_FONT_SIZE + 4,
       margin: { bottom: 2 }
@@ -165,14 +165,15 @@ export default class SkillButton extends UIPanel {
     info.addChild(this._nameText);
 
     // Description: KeywordText so [[Keyword]] markup renders colored + bracket-
-    // free. Centered, capped at DESC_MAX_LINES (ellipsis indicates overflow —
-    // the "?" badge tooltip shows the full text). Supports '\n'.
+    // free. Left-aligned under the name (reference layout), capped at
+    // DESC_MAX_LINES (ellipsis indicates overflow — the "?" badge tooltip
+    // shows the full text). Supports '\n'.
     this._descText = new KeywordText(sd.description || '');
     this._descText.setStyle({
       fontSize: DESC_FONT_SIZE,
       color: '#cfc8a8',
-      alignH: 'center',
-      alignV: 'center',
+      alignH: 'left',
+      alignV: 'top',
       lineHeight: DESC_LINE_HEIGHT,
       maxWidth: DESC_MAX_WIDTH,
       maxLines: DESC_MAX_LINES,
