@@ -7,12 +7,18 @@
  * bump ICON_PIPELINE_VERSION when touching it (the cache key includes it):
  *
  *   1. value-noise FBM cloud background (grayscale; 'ridged' variant for veins)
- *   2. clouds lit by the glyph's glow (multiply by base + blurred glyph)
- *   3. additive bloom — four blur passes of the glyph (wide → sharp core)
+ *   2. clouds lit by the COMPOSITION's glow (multiply by base + blurred comp)
+ *   3. additive bloom — four blur passes of the composition (wide → sharp core)
  *   4. overlay layers, additive (soft pass + sharp pass)
  *   5. radial vignette (multiply)
  *   6. gradient-map LUT: luminance → palette color (THE color step)
  *   7. circular clip + beveled rim (rarity variant + secondary-palette hairline)
+ *
+ * The "composition" is the luminance canvas the old single-glyph slot grew
+ * into: ≤1 dim/soft BACKDROP art layer, then the PRIMARY glyph, then ≤2 small
+ * sharp FLANK badge layers (recipe.layers — see spellIconRecipe's slot model).
+ * Layers overdraw each other (source-over) inside the composition canvas, so a
+ * badge cleanly knocks out the art beneath it before the additive stages run.
  *
  * Everything before stage 6 works on a genuinely GRAYSCALE luminance canvas —
  * glyphs/overlays must only draw white/gray (the LUT reads the red channel).
@@ -29,7 +35,7 @@
 import { SeededRNG } from '../map/MapGenerator.js';
 
 /** Bump when stage order, palettes, glyphs, or overlays change (invalidates caches). */
-export const ICON_PIPELINE_VERSION = 1;
+export const ICON_PIPELINE_VERSION = 2; // v2: layered composition (backdrop + flank badges)
 
 /** Native render size. Icons are drawn once at this size and scaled at draw time. */
 export const ICON_NATIVE_SIZE = 512;
@@ -350,27 +356,87 @@ function toLuminanceCanvas(image) {
   return cv;
 }
 
-/** Draw the recipe's glyph onto a fresh canvas (white on transparent). */
-function drawGlyphCanvas(recipe, rng, S) {
+// ── Layer composition geometry (PNG-art layers around the primary glyph) ──
+
+/** Backdrop layer: large, dim, slightly blurred art behind the primary. Kept
+ *  low-luminance so the primary glyph keeps the focal bloom. */
+const BACKDROP_FIT = 0.94;
+const BACKDROP_ALPHA = 0.4;
+const BACKDROP_BLUR = 6; // px at 512
+
+/** Flank badges: small sharp art at the lower corners (modifier-badge read). */
+const FLANK_FIT = 0.27;
+const FLANK_POS = [[0.74, 0.75], [0.26, 0.75]]; // badge centers, fractions of S
+const FLANK_JITTER = 0.02; // ± fraction of S, seeded
+
+/** The registered image for a PNG art id, or null (not registered / no art). */
+function pngImageFor(artId) {
+  const entry = GLYPHS[artId];
+  return entry && entry.kind === 'png' && entry.image ? entry.image : null;
+}
+
+/** Contain-fit draw of a PNG/canvas art image centered at (cx, cy). */
+function drawArtImage(ctx, img, cx, cy, fitPx) {
+  const iw = img.width || fitPx;
+  const ih = img.height || fitPx;
+  const sc = fitPx / Math.max(iw, ih);
+  const w = iw * sc;
+  const h = ih * sc;
+  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+}
+
+/**
+ * Compose the luminance "glyph" canvas from the recipe's layers:
+ * backdrop art → primary glyph → flank badges, all white/gray on transparent.
+ * Draws are source-over WITHIN this canvas, so a badge overdraws (knocks out)
+ * the art beneath it before the additive bloom/lighting stages see the result
+ * — that local replacement is what keeps stacked layers readable.
+ */
+function drawCompositionCanvas(recipe, rng, S) {
+  const k = S / 512;
   const cv = document.createElement('canvas');
   cv.width = cv.height = S;
   const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  const layers = recipe.layers || [];
+
+  // 1. backdrop (dim + soft, behind everything)
+  for (const layer of layers) {
+    if (layer.placement !== 'backdrop') continue;
+    const img = pngImageFor(layer.art);
+    if (!img) continue;
+    ctx.save();
+    ctx.globalAlpha = BACKDROP_ALPHA;
+    ctx.filter = `blur(${Math.max(1, Math.round(BACKDROP_BLUR * k))}px)`;
+    drawArtImage(ctx, img, S / 2, S / 2, S * BACKDROP_FIT);
+    ctx.restore();
+  }
+
+  // 2. primary glyph (procedural or PNG)
   const entry = GLYPHS[recipe.glyph] || GLYPHS.orb;
   if (entry.kind === 'png' && entry.image) {
-    const img = entry.image;
-    const iw = img.width || S;
-    const ih = img.height || S;
-    const scale = (S * PNG_GLYPH_FIT) / Math.max(iw, ih);
-    const w = iw * scale;
-    const h = ih * scale;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
+    drawArtImage(ctx, entry.image, S / 2, S / 2, S * PNG_GLYPH_FIT);
   } else if (entry.kind === 'proc') {
     entry.draw(ctx, rng, S);
   } else {
     GLYPHS.orb.draw(ctx, rng, S);
   }
+
+  // 3. flank badges. The rng is consumed per flank layer in recipe order even
+  //    when the art is missing, so jitter stays deterministic per recipe.
+  let flankIndex = 0;
+  for (const layer of layers) {
+    if (layer.placement !== 'flank') continue;
+    const jx = (rng() - 0.5) * 2 * FLANK_JITTER * S;
+    const jy = (rng() - 0.5) * 2 * FLANK_JITTER * S;
+    const pos = FLANK_POS[Math.min(flankIndex, FLANK_POS.length - 1)];
+    flankIndex++;
+    const img = pngImageFor(layer.art);
+    if (!img) continue;
+    drawArtImage(ctx, img, pos[0] * S + jx, pos[1] * S + jy, S * FLANK_FIT);
+  }
+
   return cv;
 }
 
@@ -499,9 +565,10 @@ export function renderIcon(recipe, size = ICON_NATIVE_SIZE) {
   lum.width = lum.height = S;
   const lctx = lum.getContext('2d', { willReadFrequently: true });
 
-  // Fixed rng call order — part of the icon format: clouds → glyph → overlays.
+  // Fixed rng call order — part of the icon format: clouds → composition
+  // (primary glyph + layers) → overlays.
   const clouds = cloudCanvas(rng, recipe.bgStyle === 'ridged');
-  const glyphCv = drawGlyphCanvas(recipe, rng, S);
+  const glyphCv = drawCompositionCanvas(recipe, rng, S);
   const overlayCvs = (recipe.overlays || []).map((id) => {
     const cv = document.createElement('canvas');
     cv.width = cv.height = S;

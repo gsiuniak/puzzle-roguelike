@@ -9,8 +9,17 @@
  * ── Slot model (the coherence guarantees — do not relax) ────────────────────
  *   - Exactly ONE palette colors the icon body. A second element keyword may
  *     only tint the rim hairline (`secondaryPalette`); third+ elements drop.
- *   - Exactly ONE glyph. A losing form keyword follows its `demoteTo` path
- *     (becomes an overlay if it has one, else drops).
+ *   - Exactly ONE primary glyph. When no form keyword is present, the lead
+ *     element's sheet art becomes the primary (a "red + row" spell reads as a
+ *     flame, not a generic orb); orb only when neither exists.
+ *   - LAYERS (the combination-richness mechanism — each tag contributes its
+ *     own sheet art instead of collapsing into generic overlays):
+ *       · ≤1 BACKDROP — the lead element's art, large/dim/soft behind the
+ *         primary (the second element's art when an element IS the primary).
+ *       · ≤2 FLANK badges — losing forms first, then status keywords, each as
+ *         its own small sharp art at the icon's lower corners. A losing form
+ *         falls back to its legacy `demoteTo` overlay when badge slots are
+ *         full; statuses drop.
  *   - At most TWO overlays. Extra modifiers drop in priority order.
  *   - Unknown keywords never fail — they just contribute to the seed.
  *
@@ -114,17 +123,27 @@ export const KEYWORD_ICON_ROLES = Object.freeze({
   random: { role: 'modifier', priority: 14, overlay: 'sparks' },
   tile:   { role: 'meta',     priority: 5 },
 
-  // ── Statuses — mostly seed-only today; a few have a natural visual ──
-  barrier:    { role: 'form',     priority: 12, glyph: 'barrier_png', demoteTo: { overlay: 'greater' } },
-  berserk:    { role: 'modifier', priority: 13, overlay: 'wild' },
-  bleed:      { role: 'modifier', priority: 12, overlay: 'streaks_v' },
-  silence:    { role: 'meta',     priority: 5 },
-  cripple:    { role: 'meta',     priority: 5 },
-  enfeeble:   { role: 'meta',     priority: 5 },
-  brittle:    { role: 'meta',     priority: 5 },
-  intangible: { role: 'meta',     priority: 5 },
-  frozen:     { role: 'meta',     priority: 5 },
+  // ── Statuses → flank badge layers (each uses its own `<tag>_png` sheet art;
+  //    dropped silently when both badge slots are taken by losing forms) ──
+  barrier:    { role: 'form',   priority: 12, glyph: 'barrier_png', demoteTo: { overlay: 'greater' } },
+  berserk:    { role: 'status', priority: 13 },
+  bleed:      { role: 'status', priority: 12 },
+  frozen:     { role: 'status', priority: 11 },
+  silence:    { role: 'status', priority: 10 },
+  cripple:    { role: 'status', priority: 9 },
+  enfeeble:   { role: 'status', priority: 8 },
+  brittle:    { role: 'status', priority: 7 },
+  intangible: { role: 'status', priority: 6 },
 });
+
+/** Max small badge layers beside the primary glyph. */
+const MAX_FLANK_LAYERS = 2;
+
+/** The sheet art id for a tag, or null when the tag has no sheet sprite. */
+function artFor(tagId) {
+  const id = `${tagId}_png`;
+  return PNG_GLYPH_ID_SET.has(id) ? id : null;
+}
 
 // ═══════════════════════════════════════════════════════════
 // Seed derivation
@@ -194,6 +213,7 @@ function maxRarity(keywords) {
  * @returns {{
  *   palette: string, secondaryPalette: string|null,
  *   glyph: string, glyphSource: 'procedural'|'png',
+ *   layers: Array<{art: string, placement: 'backdrop'|'flank'}>,
  *   overlays: string[], bgStyle: 'clouds'|'ridged',
  *   rim: string, seed: number,
  * }}
@@ -210,37 +230,73 @@ export function resolveRecipe(keywords, spellId = '', runSeed = 0) {
   let palette = null;
   let secondaryPalette = null;
   let glyph = null;
+  let firstElementId = null;
+  let secondElementId = null;
   const overlays = [];
+  const flanks = [];
 
   const addOverlay = (id) => {
     if (id && overlays.length < 2 && !overlays.includes(id)) overlays.push(id);
   };
+  const addFlank = (artId) => {
+    if (artId && flanks.length < MAX_FLANK_LAYERS && !flanks.includes(artId)) {
+      flanks.push(artId);
+      return true;
+    }
+    return false;
+  };
 
-  // Element + form slots first (modifiers fill remaining overlay capacity after,
-  // so a demoted form competes with modifiers in priority order — handled by
-  // walking the sorted list once and letting addOverlay enforce the cap).
-  for (const { def } of known) {
+  // Single walk in priority order: elements claim palette slots, the first
+  // form claims the primary glyph, every other art-bearing tag competes for
+  // the flank badge slots (losing forms before statuses, since form priorities
+  // are higher), and modifiers fill the overlay slots.
+  for (const { id, def } of known) {
     if (def.role === 'element') {
-      if (!palette) palette = def.palette;
-      else if (!secondaryPalette && def.palette !== palette) secondaryPalette = def.palette;
+      if (!palette) { palette = def.palette; firstElementId = id; }
+      else if (!secondaryPalette && def.palette !== palette) {
+        secondaryPalette = def.palette;
+        secondElementId = id;
+      }
       // third+ elements: ignored
     } else if (def.role === 'form') {
       if (!glyph) glyph = def.glyph;
-      else if (def.demoteTo && def.demoteTo.overlay) addOverlay(def.demoteTo.overlay);
+      else if (!addFlank(artFor(id))) {
+        // Badge slots full — legacy generic-overlay demotion as fallback.
+        if (def.demoteTo && def.demoteTo.overlay) addOverlay(def.demoteTo.overlay);
+      }
+    } else if (def.role === 'status') {
+      addFlank(artFor(id)); // dropped silently when badge slots are full
     } else if (def.role === 'modifier') {
       addOverlay(def.overlay);
     }
     // 'meta' → seed-only
   }
 
+  // No form keyword → the lead element's art is the primary glyph. Orb only
+  // when neither a form nor an element with sheet art is present.
+  let elementIsPrimary = false;
+  if (!glyph && firstElementId && artFor(firstElementId)) {
+    glyph = artFor(firstElementId);
+    elementIsPrimary = true;
+  }
   palette = palette || DEFAULT_PALETTE;
   glyph = glyph || DEFAULT_GLYPH;
+
+  // Backdrop layer: the lead element's art behind the primary (the SECOND
+  // element's art when the lead element already IS the primary).
+  const backdropId = elementIsPrimary ? secondElementId : firstElementId;
+  const backdropArt = backdropId ? artFor(backdropId) : null;
+
+  const layers = [];
+  if (backdropArt) layers.push({ art: backdropArt, placement: 'backdrop' });
+  for (const art of flanks) layers.push({ art, placement: 'flank' });
 
   return {
     palette,
     secondaryPalette,
     glyph,
     glyphSource: PNG_GLYPH_ID_SET.has(glyph) ? 'png' : 'procedural',
+    layers,
     overlays,
     bgStyle: RIDGED_PALETTES.has(palette) ? 'ridged' : 'clouds',
     rim: RIM_BY_RARITY[maxRarity(list)] || 'iron',
@@ -260,6 +316,7 @@ export function recipeKey(recipe) {
     recipe.secondaryPalette || '-',
     recipe.glyph,
     recipe.glyphSource,
+    (recipe.layers || []).map((l) => `${l.placement === 'backdrop' ? 'b' : 'f'}.${l.art}`).join('+') || '-',
     recipe.overlays.join('+') || '-',
     recipe.bgStyle,
     recipe.rim,

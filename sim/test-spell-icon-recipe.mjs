@@ -45,6 +45,9 @@ const RUN = 'run_1234567890';
   eq('damage → damage_png glyph', r.glyph, 'damage_png');
   eq('no secondary element', r.secondaryPalette, null);
   eq('no overlays', r.overlays.length, 0);
+  eq('element backdrop layer', r.layers.length, 1);
+  eq('backdrop is red art', r.layers[0].art, 'red_png');
+  eq('backdrop placement', r.layers[0].placement, 'backdrop');
   eq('common keywords → iron rim', r.rim, 'iron');
   eq('fire → clouds bg', r.bgStyle, 'clouds');
 }
@@ -81,12 +84,23 @@ const RUN = 'run_1234567890';
   eq('bone → ridged bg', r.bgStyle, 'ridged');
 }
 
-// ── 5. Form slot conflict: losing action demotes to its overlay ──
+// ── 5. Form slot conflict: losing action becomes a flank badge layer ──
 {
-  // explode (26) beats damage (25); damage demotes to sparks
+  // explode (26) beats damage (25); damage flanks with its own art
   const r = resolveRecipe(['damage', 'explode'], 'spell_g', RUN);
   eq('explode wins glyph', r.glyph, 'explode_png');
-  check('damage demoted to sparks overlay', r.overlays.includes('sparks'), JSON.stringify(r.overlays));
+  check('damage flanks with its own art',
+    r.layers.some((l) => l.placement === 'flank' && l.art === 'damage_png'), JSON.stringify(r.layers));
+  eq('no generic overlay for the demoted form', r.overlays.length, 0);
+
+  // 5 forms: 1 primary + 2 flanks; the rest fall back to their demoteTo overlays
+  const r2 = resolveRecipe(['explode', 'damage', 'armor', 'attack', 'convert'], 'spell_g2', RUN);
+  eq('primary is highest form', r2.glyph, 'explode_png');
+  const flanks = r2.layers.filter((l) => l.placement === 'flank');
+  eq('flank badges capped at 2', flanks.length, 2);
+  eq('flank order follows priority', flanks.map((l) => l.art).join(','), 'damage_png,armor_png');
+  check('overflow forms fall back to demote overlays',
+    r2.overlays.includes('sparks') && r2.overlays.includes('greater'), JSON.stringify(r2.overlays));
 }
 
 // ── 6. Overlay cap: never more than 2, priority order wins ──
@@ -98,12 +112,12 @@ const RUN = 'run_1234567890';
   eq('second overlay', r.overlays[1], 'sparks');
 }
 
-// ── 7. Overlay dedup: demoted form + modifier mapping to same overlay ──
+// ── 7. Overlay dedup: two modifiers mapping to the same overlay ──
 {
-  // explode wins glyph; destroy demotes to 'wild'; wild modifier also 'wild' → deduped
-  const r = resolveRecipe(['explode', 'destroy', 'wild'], 'spell_i', RUN);
-  const wildCount = r.overlays.filter((o) => o === 'wild').length;
-  eq('no duplicate overlay ids', wildCount, 1);
+  // extra_turn → sparks and random → sparks → deduped to one
+  const r = resolveRecipe(['extra_turn', 'random', 'red', 'damage'], 'spell_i', RUN);
+  const sparksCount = r.overlays.filter((o) => o === 'sparks').length;
+  eq('no duplicate overlay ids', sparksCount, 1);
 }
 
 // ── 8. Rarity → rim ──
@@ -170,7 +184,10 @@ const RUN = 'run_1234567890';
       const r = resolveRecipe([a, b], `sweep_${a}_${b}`, RUN);
       if (!PALETTE_IDS.includes(r.palette) || !GLYPH_IDS.includes(r.glyph)
         || !RIM_IDS.includes(r.rim) || r.overlays.some((o) => !OVERLAY_IDS.includes(o))
-        || r.overlays.length > 2) {
+        || r.overlays.length > 2
+        || r.layers.some((l) => !GLYPH_IDS.includes(l.art))
+        || r.layers.filter((l) => l.placement === 'backdrop').length > 1
+        || r.layers.filter((l) => l.placement === 'flank').length > 2) {
         ok = false;
         console.error(`  sweep failed for [${a}, ${b}]: ${recipeKey(r)}`);
       }
@@ -190,10 +207,39 @@ const RUN = 'run_1234567890';
   eq('png glyph → glyphSource png', heal.glyphSource, 'png');
   const destroy = resolveRecipe(['red', 'destroy'], 'spell_png_b', RUN);
   eq('destroy → destroy_png glyph', destroy.glyph, 'destroy_png');
-  // no form keyword → default orb stays procedural
-  const proc = resolveRecipe(['red', 'row'], 'spell_png_c', RUN);
+  // no form AND no element → default orb stays procedural
+  const proc = resolveRecipe(['row', 'random'], 'spell_png_c', RUN);
   eq('default orb → glyphSource procedural', proc.glyph, 'orb');
   eq('procedural glyph → glyphSource procedural', proc.glyphSource, 'procedural');
+}
+
+// ── 15. Layer system: element-primary, backdrop selection, status flanks ──
+{
+  // No form → lead element's art is the primary glyph
+  const r = resolveRecipe(['red', 'row'], 'spell_l_a', RUN);
+  eq('form-less spell → element art primary', r.glyph, 'red_png');
+  eq('element primary → glyphSource png', r.glyphSource, 'png');
+  eq('lone element primary → no backdrop', r.layers.length, 0);
+
+  // Element primary + second element → second element becomes the backdrop
+  const r2 = resolveRecipe(['red', 'blue'], 'spell_l_b', RUN);
+  eq('lead element primary', r2.glyph, 'red_png');
+  eq('second element → secondary palette', r2.secondaryPalette, 'ice');
+  check('second element art backdrops',
+    r2.layers.some((l) => l.placement === 'backdrop' && l.art === 'blue_png'), JSON.stringify(r2.layers));
+
+  // Statuses flank with their own art, capped at 2 with forms winning first
+  const r3 = resolveRecipe(['damage', 'frozen', 'silence'], 'spell_l_c', RUN);
+  const f3 = r3.layers.filter((l) => l.placement === 'flank').map((l) => l.art);
+  eq('statuses flank', f3.join(','), 'frozen_png,silence_png');
+  const r4 = resolveRecipe(['explode', 'damage', 'frozen', 'silence'], 'spell_l_d', RUN);
+  const f4 = r4.layers.filter((l) => l.placement === 'flank').map((l) => l.art);
+  eq('losing form outranks statuses for badges', f4.join(','), 'damage_png,frozen_png');
+
+  // Layers participate in the cache key
+  const k1 = recipeKey(resolveRecipe(['damage'], 'spell_l_e', RUN));
+  const k2 = resolveRecipe(['red', 'damage'], 'spell_l_e', RUN);
+  check('layers change the recipe key', k1 !== recipeKey(k2));
 }
 
 console.log(failed === 0

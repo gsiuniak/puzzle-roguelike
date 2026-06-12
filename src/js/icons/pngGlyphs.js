@@ -16,10 +16,11 @@
  *   - src/icon-debug.html loads the same sheet through its own AssetManager
  *     instance and calls the same helper.
  *
- * Only FORM keywords get glyph entries — the glyph slot is the form slot.
- * Element art in the sheet (red/blue/…/skull) is unused here (elements color
- * the icon via palettes), as are shape/modifier/status sprites (those map to
- * overlays); they're available for future overlay/palette work.
+ * EVERY sheet sprite registers as a glyph id `<tagId>_png` — the recipe layer
+ * system uses them in three placements (see spellIconRecipe.resolveRecipe):
+ * form art as the PRIMARY glyph, element art as the primary (form-less spells)
+ * or as the dim BACKDROP layer, and losing-form/status art as small FLANK
+ * badges. The compositor treats all three identically (luminance art).
  *
  * Art spec: white/gray luminance art on a TRANSPARENT background (the pipeline
  * reads it as a light source — dark pixels emit nothing). Alpha-tight crops are
@@ -34,24 +35,28 @@
 
 import { registerPngGlyph } from './spellIconCompositor.js';
 
+/** Every weave tag with a sprite in the weave-grayscale sheet (all but `random`). */
+const SHEET_TAGS = Object.freeze([
+  // elements
+  'red', 'blue', 'green', 'yellow', 'purple', 'skull',
+  // actions (forms)
+  'damage', 'armor', 'create', 'destroy', 'convert', 'gain', 'heal', 'drain', 'attack', 'explode',
+  // shapes
+  'row', 'column', 'area', 'tile',
+  // modifiers
+  'extra_turn', 'wild', 'lock',
+  // statuses
+  'silence', 'cripple', 'enfeeble', 'brittle', 'intangible', 'berserk', 'bleed', 'frozen', 'barrier',
+]);
+
 /**
- * Glyph id → AssetManager asset key (= the sliced sprite's name in the
- * weave-grayscale sheet). One entry per FORM keyword in KEYWORD_ICON_ROLES.
+ * Glyph id (`<tagId>_png`) → AssetManager asset key (= the sliced sprite's
+ * name in the weave-grayscale sheet). One entry per sheet sprite.
  * @type {Readonly<Record<string, string>>}
  */
-export const PNG_GLYPH_ASSET_KEYS = Object.freeze({
-  damage_png:  'weave_grayscale_damage',
-  armor_png:   'weave_grayscale_armor',
-  attack_png:  'weave_grayscale_attack',
-  convert_png: 'weave_grayscale_convert',
-  destroy_png: 'weave_grayscale_destroy',
-  create_png:  'weave_grayscale_create',
-  heal_png:    'weave_grayscale_heal',
-  gain_png:    'weave_grayscale_gain',
-  drain_png:   'weave_grayscale_drain',
-  explode_png: 'weave_grayscale_explode',
-  barrier_png: 'weave_grayscale_barrier',
-});
+export const PNG_GLYPH_ASSET_KEYS = Object.freeze(
+  Object.fromEntries(SHEET_TAGS.map((t) => [`${t}_png`, `weave_grayscale_${t}`])),
+);
 
 /** The PNG-backed glyph ids (consumed by spellIconRecipe.js). */
 export const PNG_GLYPH_IDS = Object.freeze(Object.keys(PNG_GLYPH_ASSET_KEYS));
