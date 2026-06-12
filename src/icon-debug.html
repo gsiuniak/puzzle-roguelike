@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gems — spell icon debug grid</title>
+<style>
+  :root{ --bg:#141110; --panel:#1d1916; --line:#332b24; --text:#d8d2c8; --muted:#8d8478; --accent:#e8a33d; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,sans-serif}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  h1{font-size:16px;letter-spacing:.1em;margin:0;color:var(--accent)}
+  label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  input{background:var(--panel);border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:6px;font:inherit;width:200px}
+  button{background:var(--accent);color:#1c1407;border:0;border-radius:6px;padding:7px 14px;font:500 13px system-ui;cursor:pointer}
+  main{display:grid;grid-template-columns:1fr 360px;gap:0}
+  .grid{padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:14px;align-content:start}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;background:none;border:0;padding:0;color:inherit}
+  .cell canvas{width:104px;height:104px;border-radius:50%}
+  .cell span{font-size:10px;color:var(--muted);text-align:center;word-break:break-word}
+  aside{border-left:1px solid var(--line);background:var(--panel);padding:20px;position:sticky;top:0;height:100vh;overflow:auto}
+  aside canvas{width:280px;height:280px;border-radius:50%;display:block;margin:0 auto 14px}
+  pre{font-size:11px;color:var(--muted);white-space:pre-wrap;word-break:break-all;background:var(--bg);padding:10px;border-radius:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>SPELL ICON DEBUG GRID</h1>
+  <div><label>run seed </label><input id="runSeed" value="run_debug_1"></div>
+  <div><label>count </label><input id="count" value="96" style="width:60px"></div>
+  <button id="regen">Regenerate</button>
+  <span id="stats" style="color:var(--muted);font-size:12px"></span>
+</header>
+<main>
+  <div class="grid" id="grid"></div>
+  <aside>
+    <canvas id="big" width="512" height="512"></canvas>
+    <pre id="info">Click an icon to inspect its resolved IconRecipe.</pre>
+  </aside>
+</main>
+
+<script type="module">
+// Dev-only validation page (plan §4): renders a grid of random keyword combos
+// drawn from the REAL weave-tag catalog through the REAL resolution + compositor
+// modules. Use it to spot incoherent combos — fixes belong in
+// spellIconRecipe.js (roles/priorities) or the compositor palettes, not new art.
+import { resolveRecipe } from './js/icons/spellIconRecipe.js';
+import { renderIcon } from './js/icons/spellIconCompositor.js';
+import { SKILL_WEAVE_TAGS } from './js/data/skillWeaveTags.js';
+
+const TAG_IDS = Object.keys(SKILL_WEAVE_TAGS);
+const $ = (id) => document.getElementById(id);
+
+// Math.random is fine HERE (picking which combos to preview) — the icons
+// themselves render deterministically from (runSeed, spellId, keywords).
+function randomCombo() {
+  const n = 2 + Math.floor(Math.random() * 3); // 2–4 keywords, like a real weave
+  const pool = TAG_IDS.slice();
+  const combo = [];
+  for (let i = 0; i < n; i++) {
+    combo.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  return combo;
+}
+
+function inspect(combo, recipe, canvas) {
+  const big = $('big');
+  const bctx = big.getContext('2d');
+  bctx.clearRect(0, 0, 512, 512);
+  bctx.drawImage(canvas, 0, 0, 512, 512);
+  $('info').textContent = `keywords: [${combo.join(', ')}]\n\n` + JSON.stringify(recipe, null, 2);
+  console.log('[icon-debug]', combo, recipe);
+}
+
+function regenerate() {
+  const grid = $('grid');
+  grid.innerHTML = '';
+  const runSeed = $('runSeed').value;
+  const count = Math.max(1, Math.min(500, parseInt($('count').value, 10) || 96));
+  const t0 = performance.now();
+  for (let i = 0; i < count; i++) {
+    const combo = randomCombo();
+    const recipe = resolveRecipe(combo, `debug_${i}_${combo.join('_')}`, runSeed);
+    const canvas = renderIcon(recipe);
+    const cell = document.createElement('button');
+    cell.className = 'cell';
+    const label = document.createElement('span');
+    label.textContent = combo.join(' + ');
+    cell.append(canvas, label);
+    grid.append(cell);
+    cell.onclick = () => inspect(combo, recipe, canvas);
+  }
+  const dt = performance.now() - t0;
+  $('stats').textContent = `${count} icons in ${Math.round(dt)}ms (${(dt / count).toFixed(1)}ms each)`;
+}
+
+$('regen').onclick = regenerate;
+$('runSeed').onchange = regenerate;
+regenerate();
+</script>
+</body>
+</html>

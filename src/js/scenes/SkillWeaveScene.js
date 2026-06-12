@@ -9,6 +9,7 @@ import {
 } from '../data/skillWeaveTags.js';
 import { TAG_RARITY, rollRoundsPerWeave, rollTagsPerRound } from '../data/weaveConfig.js';
 import { synthesize } from '../data/skillSynthesizer.js';
+import { getSpellIcon } from '../icons/spellIcons.js';
 
 /**
  * SkillWeaveScene — the "Weave a Power" skill reward screen.
@@ -249,6 +250,8 @@ export default class SkillWeaveScene extends UIPanel {
     this._onComplete = null;
     /** Scene to return to when finished (default: the map). */
     this._returnScene = 'MapScene';
+    /** Run seed (MapScene._seed) — feeds procedural spell-icon generation. */
+    this._runSeed = '';
 
     this._handleMouseDown = this._onMouseDown.bind(this);
     this._handleMouseMove = this._onMouseMove.bind(this);
@@ -267,10 +270,12 @@ export default class SkillWeaveScene extends UIPanel {
    * @param {object} opts
    * @param {Function} [opts.onComplete] — invoked when the weave is confirmed
    * @param {string}   [opts.returnScene] — scene to fade to on finish
+   * @param {string}   [opts.runSeed] — run seed for procedural spell icons
    */
-  configure({ onComplete = null, returnScene = 'MapScene' } = {}) {
+  configure({ onComplete = null, returnScene = 'MapScene', runSeed = '' } = {}) {
     this._onComplete = typeof onComplete === 'function' ? onComplete : null;
     this._returnScene = returnScene || 'MapScene';
+    this._runSeed = runSeed || '';
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -552,8 +557,24 @@ export default class SkillWeaveScene extends UIPanel {
     // bag; no real skill emitted until skills are wired into battle).
     const synthesis = synthesize(recipe);
 
+    // Generate the spell's procedural icon from the woven keywords. The canvas
+    // is registered with the AssetManager under `icon.assetKey`, so once the
+    // synthesizer emits a real skill, setting `skill.icon = icon.assetKey`
+    // makes it render through SkillButton/UIImage like any sprite.
+    let icon = null;
+    try {
+      icon = getSpellIcon({
+        keywords: recipe,
+        spellId: 'woven_' + recipe.join('_'),
+        runSeed: this._runSeed,
+        assetManager: this._sceneManager && this._sceneManager.assetManager,
+      });
+    } catch (err) {
+      console.warn('[SkillWeave] spell icon generation failed:', err);
+    }
+
     if (this._onComplete) {
-      this._onComplete({ recipe, synthesis });
+      this._onComplete({ recipe, synthesis, icon });
     }
 
     const sm = this._sceneManager;

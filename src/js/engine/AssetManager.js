@@ -263,6 +263,18 @@ export default class AssetManager {
   }
 
   /**
+   * Register a runtime-generated canvas under an asset key (e.g. procedural
+   * spell icons). Like sliced spritesheet sprites, the canvas then flows
+   * through get()/getScaled()/UIImage exactly like a loaded image. Does NOT
+   * count toward load progress (nothing loads).
+   * @param {string} key
+   * @param {HTMLCanvasElement} canvas
+   */
+  registerCanvas(key, canvas) {
+    this._assets.set(key, { path: `generated://${key}`, image: canvas });
+  }
+
+  /**
    * Get a loaded image by key.
    * @param {string} key
    * @returns {HTMLImageElement|null}

@@ -34,6 +34,7 @@ import { createPlayerBattleState, syncBattleResultsToRunState } from '../data/pl
 import { createRunState } from '../data/runState.js';
 import { resolveSkillIds } from '../data/skills/skillCatalog.js';
 import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
+import { clearSpellIconCache } from '../icons/spellIcons.js';
 
 // ── Per-floor enemy HP scaling ───────────────────────────
 // Enemy `maxHp` in the data files is a FLOOR-1-EQUIVALENT baseline. At spawn it is
@@ -272,6 +273,8 @@ export default class MapScene extends UIPanel {
     this._mapView = null;
     this._seed = '';
     this._transitioning = false;
+    // Procedural spell icons embed the run seed — last run's are dead weight.
+    clearSpellIconCache();
   }
 
   /**
@@ -559,8 +562,10 @@ export default class MapScene extends UIPanel {
 
     weaveScene.configure({
       returnScene: 'MapScene',
-      onComplete: ({ recipe }) => {
-        console.log(`[MapScene] Skill weave complete — recipe: [${(recipe || []).join(' + ')}], node: ${node.id}`);
+      runSeed: this._seed,
+      onComplete: ({ recipe, icon }) => {
+        console.log(`[MapScene] Skill weave complete — recipe: [${(recipe || []).join(' + ')}], node: ${node.id}`
+          + (icon ? `, icon: ${icon.assetKey}` : ''));
         this._handleBattleComplete({ result: 'complete', nodeId: node.id });
       },
     });
