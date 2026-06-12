@@ -28,6 +28,52 @@
 import { resolveSkillIds } from './skills/skillCatalog.js';
 import { resolveRelicIds } from './relics/relicCatalog.js';
 
+/**
+ * Max skills that can be EQUIPPED for battle at once. The player may OWN more
+ * (runState.skills grows every weave); the loadout modal manages which ones
+ * are equipped (runState.equippedSkillIds).
+ */
+export const MAX_EQUIPPED_SKILLS = 6;
+
+/**
+ * Every skill the player owns, as resolved skill objects (deep-cloned):
+ * the character's catalog skills + all run-acquired (woven) skills.
+ * @param {object} characterDef
+ * @param {object} runState
+ * @returns {object[]}
+ */
+export function getAllPlayerSkills(characterDef, runState) {
+  return [
+    ...resolveSkillIds(characterDef.skills || []),
+    ...((runState && Array.isArray(runState.skills) ? runState.skills : [])
+      .map((s) => JSON.parse(JSON.stringify(s)))),
+  ];
+}
+
+/**
+ * The EQUIPPED loadout, in order, as resolved skill objects. When the player
+ * has never customized their loadout (runState.equippedSkillIds == null) the
+ * default is the first MAX_EQUIPPED_SKILLS owned skills. Stale ids (skills
+ * that no longer exist) are skipped.
+ * @param {object} characterDef
+ * @param {object} runState
+ * @returns {object[]}
+ */
+export function getEquippedSkills(characterDef, runState) {
+  const all = getAllPlayerSkills(characterDef, runState);
+  const ids = runState && Array.isArray(runState.equippedSkillIds)
+    ? runState.equippedSkillIds
+    : null;
+  if (!ids) return all.slice(0, MAX_EQUIPPED_SKILLS);
+  const byId = new Map(all.map((s) => [s.id, s]));
+  const equipped = [];
+  for (const id of ids) {
+    const s = byId.get(id);
+    if (s && !equipped.includes(s)) equipped.push(s);
+  }
+  return equipped.slice(0, MAX_EQUIPPED_SKILLS);
+}
+
 // ── Stat Modifier Templates ────────────────────────────────────────────────
 
 /**
@@ -130,15 +176,14 @@ export function createPlayerBattleState(characterDef, runState) {
     attack: effective.startingAttack,
     block: 0,
 
-    // Resolved skill objects (cloned from skill catalog), plus any skills
-    // acquired during the run (woven skills from the Skill Weave screen —
-    // FULL skill objects stored on runState.skills, deep-cloned per battle so
-    // in-battle mutation can't leak back into the run state).
-    skills: [
-      ...resolveSkillIds(characterDef.skills || []),
-      ...((runState && Array.isArray(runState.skills) ? runState.skills : [])
-        .map((s) => JSON.parse(JSON.stringify(s)))),
-    ],
+    // The EQUIPPED battle loadout (resolved skill objects, deep-cloned per
+    // battle so in-battle mutation can't leak back). Only these are usable
+    // in combat; the full collection lives in `allSkills` for the loadout
+    // modal. See getEquippedSkills/MAX_EQUIPPED_SKILLS.
+    skills: getEquippedSkills(characterDef, runState),
+
+    // EVERY owned skill (catalog + woven) — the Manage Skills modal's pool.
+    allSkills: getAllPlayerSkills(characterDef, runState),
 
     // Resolved relic objects (cloned from relic catalog)
     relics: resolveRelicIds(relicIds),

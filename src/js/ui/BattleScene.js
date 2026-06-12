@@ -14,10 +14,11 @@ import HarvestTendrilEffect from './HarvestTendrilEffect.js';
 import BloodSplashEffect from './BloodSplashEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
+import SkillLoadoutOverlay from './SkillLoadoutOverlay.js';
 import TooltipManager from '../systems/TooltipManager.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
-import { syncBattleResultsToRunState, applyRunModifier } from '../data/playerStats.js';
+import { syncBattleResultsToRunState, applyRunModifier, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
 import Metrics from '../engine/Metrics.js';
 import { generateRelicRewardOptions } from '../data/relics/relicRewards.js';
 import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
@@ -451,12 +452,14 @@ export default class BattleScene extends UIPanel {
     this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
     this._onMouseMove = (x, y) => this._handleMouseMove(x, y);
     this._onMouseUp   = (x, y) => this._handleMouseUp(x, y);
+    this._onWheel     = (x, y, dy) => this._handleWheel(x, y, dy);
     this._onContextMenu = (e) => this._handleContextMenu(e);
     this._onKeyDown     = (e) => this._handleKeyDown(e);
 
     input.on('mousedown', this._onMouseDown);
     input.on('mousemove', this._onMouseMove);
     input.on('mouseup',   this._onMouseUp);
+    input.on('wheel',     this._onWheel);
 
     input.canvas.addEventListener('contextmenu', this._onContextMenu);
     input.canvas.addEventListener('keydown', this._onKeyDown);
@@ -470,6 +473,54 @@ export default class BattleScene extends UIPanel {
         this._battleController.tryPlayerSkill(skill);
       };
     }
+
+    // ── Manage Skills / Loadout modal (player pane only) ──
+    if (!this._loadoutOverlay) {
+      this._loadoutOverlay = new SkillLoadoutOverlay({ assetManager: this._assetManager });
+    }
+    this._loadoutOverlay.setAssetManager(this._assetManager);
+    if (this._playerSkillsPane && this._battleController) {
+      this._playerSkillsPane.onManageClick = () => this._openLoadout();
+      const ps = this._battleController.playerState;
+      this._playerSkillsPane.setEquippedInfo(
+        (ps.skills || []).length, MAX_EQUIPPED_SKILLS);
+    }
+  }
+
+  /** Open the Manage Skills / Loadout modal over the battle. */
+  _openLoadout() {
+    if (!this._loadoutOverlay || !this._battleController) return;
+    if (this._loadoutOverlay.isActive()) return;
+    const ps = this._battleController.playerState;
+    this._loadoutOverlay.show({
+      allSkills: ps.allSkills && ps.allSkills.length ? ps.allSkills : (ps.skills || []),
+      equippedIds: (ps.skills || []).map((s) => s.id),
+      maxEquipped: MAX_EQUIPPED_SKILLS,
+      onChange: (ids) => this._applyLoadout(ids),
+    });
+  }
+
+  /**
+   * Apply a loadout change LIVE: the battle state's usable skills, the
+   * persistent runState.equippedSkillIds, the battle Skills panel, and the
+   * keyword tooltip sources all update immediately.
+   * @param {string[]} ids — equipped skill ids, in order
+   */
+  _applyLoadout(ids) {
+    if (!this._battleController) return;
+    const ps = this._battleController.playerState;
+    const pool = ps.allSkills && ps.allSkills.length ? ps.allSkills : (ps.skills || []);
+    const byId = new Map(pool.map((s) => [s.id, s]));
+    ps.skills = ids.map((id) => byId.get(id)).filter(Boolean);
+
+    const runState = this.userData ? this.userData.runState : null;
+    if (runState) runState.equippedSkillIds = ids.slice();
+
+    if (this._playerSkillsPane) {
+      this._playerSkillsPane.setSkills(ps.skills);
+      this._playerSkillsPane.setEquippedInfo(ps.skills.length, MAX_EQUIPPED_SKILLS);
+    }
+    this._registerSkillTooltips();
   }
 
   /**
@@ -491,6 +542,11 @@ export default class BattleScene extends UIPanel {
     // Reset reward overlay (ensure clean state on next entry)
     if (this._rewardOverlay) {
       this._rewardOverlay.reset();
+    }
+
+    // Close the loadout modal if it was open.
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
+      this._loadoutOverlay.dismiss();
     }
 
     // Clear any tooltip attachments so they don't carry over to the next
@@ -518,6 +574,10 @@ export default class BattleScene extends UIPanel {
     if (this._onMouseUp) {
       input.off('mouseup', this._onMouseUp);
       this._onMouseUp = null;
+    }
+    if (this._onWheel) {
+      input.off('wheel', this._onWheel);
+      this._onWheel = null;
     }
     if (this._onContextMenu) {
       input.canvas.removeEventListener('contextmenu', this._onContextMenu);
@@ -547,6 +607,10 @@ export default class BattleScene extends UIPanel {
   // ── Input handlers ───────────────────────────────────
 
   _handleMouseDown(x, y) {
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
+      this._loadoutOverlay.handleMouseDown(x, y);
+      return;
+    }
     if (this._rewardOverlay && this._rewardOverlay.isActive()) {
       this._rewardOverlay.handleMouseDown(x, y);
       return;
@@ -569,11 +633,11 @@ export default class BattleScene extends UIPanel {
     if (this._relicBar && this._relicBar.handlePageClick(x, y)) return;
     if (this._enemyRelicBar && this._enemyRelicBar.handlePageClick(x, y)) return;
 
-    // Skill accordion rows expand/collapse regardless of turn state (both
-    // panes — it's informational). Casting goes through the expanded row's
-    // Cast button → onSkillClick → tryPlayerSkill (which validates the turn).
-    if (this._playerSkillsPane && this._playerSkillsPane.handleClick(x, y)) return;
-    if (this._enemySkillsPane && this._enemySkillsPane.handleClick(x, y)) return;
+    // Skills panel presses (cast-on-release / scroll-drag / scrollbar /
+    // Manage button) work regardless of turn state — casting itself routes
+    // through onSkillClick → tryPlayerSkill (which validates the turn).
+    if (this._playerSkillsPane && this._playerSkillsPane.handleMouseDown(x, y)) return;
+    if (this._enemySkillsPane && this._enemySkillsPane.handleMouseDown(x, y)) return;
 
     const board = this._board;
     if (!board) return;
@@ -604,6 +668,10 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseMove(x, y) {
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
+      this._loadoutOverlay.handleMouseMove(x, y);
+      return;
+    }
     if (this._rewardOverlay && this._rewardOverlay.isActive()) {
       this._rewardOverlay.handleMouseMove(x, y);
       return;
@@ -611,7 +679,7 @@ export default class BattleScene extends UIPanel {
     if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._tooltipManager) this._tooltipManager.onMouseMove(x, y);
 
-    // Skill accordion hover (row highlight + Cast button highlight).
+    // Skills panels: card hover + scroll-drag tracking.
     if (this._playerSkillsPane) this._playerSkillsPane.handleMouseMove(x, y);
     if (this._enemySkillsPane) this._enemySkillsPane.handleMouseMove(x, y);
 
@@ -642,9 +710,18 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseUp(x, y) {
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
+      this._loadoutOverlay.handleMouseUp(x, y);
+      return;
+    }
     if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._tooltipManager) this._tooltipManager.onMouseUp(x, y);
+
+    // Skills panels: release finishes a click-cast or ends a scroll-drag.
+    if (this._playerSkillsPane && this._playerSkillsPane.handleMouseUp(x, y)) return;
+    if (this._enemySkillsPane && this._enemySkillsPane.handleMouseUp(x, y)) return;
+
     const board = this._board;
     if (!board || !this._dragStartCell || !this._canAct() || this._isTargeting()) {
       this._selectedCell = null;
@@ -700,7 +777,24 @@ export default class BattleScene extends UIPanel {
     }
   }
 
+  /** Wheel routing: loadout modal first, then the two skills panels. */
+  _handleWheel(x, y, deltaY) {
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
+      this._loadoutOverlay.handleWheel(x, y, deltaY);
+      return;
+    }
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
+    if (this._mapView && this._mapView.isOverlayActive()) return;
+    if (this._playerSkillsPane && this._playerSkillsPane.handleWheel(x, y, deltaY)) return;
+    if (this._enemySkillsPane) this._enemySkillsPane.handleWheel(x, y, deltaY);
+  }
+
   _handleKeyDown(e) {
+    // ── Loadout modal: ESC closes, blocks all other input ──
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
+      this._loadoutOverlay.handleKeyDown(e);
+      return;
+    }
     // ── Reward overlay: ESC dismisses, blocks all other input ──
     if (this._rewardOverlay && this._rewardOverlay.isActive()) {
       if (e.key === 'Escape') {
@@ -1189,10 +1283,16 @@ export default class BattleScene extends UIPanel {
       this._rewardOverlay.update(dt);
     }
 
+    // ── Loadout modal fade-in ──
+    if (this._loadoutOverlay) {
+      this._loadoutOverlay.update(dt);
+    }
+
     // ── Tooltip manager: gate by modal overlays + advance hold timer ──
     if (this._tooltipManager) {
       const overlayActive =
         (this._rewardOverlay && this._rewardOverlay.isActive()) ||
+        (this._loadoutOverlay && this._loadoutOverlay.isActive()) ||
         (this._mapView && this._mapView.isOverlayActive());
       this._tooltipManager.setEnabled(!overlayActive);
       this._tooltipManager.update(dt);
@@ -1298,6 +1398,13 @@ export default class BattleScene extends UIPanel {
       // behind it but darkened. Alpha ramps with the overlay's entrance.
       sm._app.fillFullCanvas(`rgba(0, 0, 0, ${this._rewardOverlay.getBackdropAlpha()})`);
       this._rewardOverlay.render(ctx, w, h);
+    }
+
+    // Manage Skills / Loadout modal — same dimmed-backdrop treatment; the
+    // battle stays visible but inactive behind it.
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
+      sm._app.fillFullCanvas(`rgba(0, 0, 0, ${this._loadoutOverlay.getBackdropAlpha()})`);
+      this._loadoutOverlay.render(ctx);
     }
   }
 

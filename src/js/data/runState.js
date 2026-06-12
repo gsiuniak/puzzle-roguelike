@@ -69,6 +69,15 @@ export function createRunState(characterDef) {
     skills: [],
 
     /**
+     * The EQUIPPED battle loadout as an ordered list of skill ids (catalog
+     * ids and/or woven skill ids), capped at MAX_EQUIPPED_SKILLS. `null` =
+     * never customized → default loadout (first owned skills). Managed by
+     * the in-battle Manage Skills modal; read by getEquippedSkills().
+     * @type {string[]|null}
+     */
+    equippedSkillIds: null,
+
+    /**
      * Upgrades purchased/applied during the run (placeholder).
      * @type {Array<object>}
      */
@@ -107,6 +116,7 @@ export function serializeRunState(runState) {
     statModifiers: JSON.parse(JSON.stringify(runState.statModifiers)),
     relics: JSON.parse(JSON.stringify(runState.relics)),
     skills: JSON.parse(JSON.stringify(runState.skills || [])),
+    equippedSkillIds: runState.equippedSkillIds ? runState.equippedSkillIds.slice() : null,
     upgrades: JSON.parse(JSON.stringify(runState.upgrades)),
     rewards: JSON.parse(JSON.stringify(runState.rewards)),
     seenEnemiesByAct: JSON.parse(JSON.stringify(runState.seenEnemiesByAct || {})),
@@ -126,6 +136,7 @@ export function deserializeRunState(data) {
     statModifiers: data.statModifiers || createDefaultStatModifiers(),
     relics: data.relics || [],
     skills: data.skills || [],
+    equippedSkillIds: data.equippedSkillIds || null,
     upgrades: data.upgrades || [],
     rewards: data.rewards || [],
     seenEnemiesByAct: data.seenEnemiesByAct || {},

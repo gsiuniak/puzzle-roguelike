@@ -30,7 +30,7 @@ import AudioManager from '../audio/AudioManager.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
 import { selectEnemyForNode, markEnemySeen } from '../data/enemies/index.js';
-import { createPlayerBattleState, syncBattleResultsToRunState } from '../data/playerStats.js';
+import { createPlayerBattleState, syncBattleResultsToRunState, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
 import { createRunState } from '../data/runState.js';
 import { resolveSkillIds } from '../data/skills/skillCatalog.js';
 import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
@@ -588,6 +588,13 @@ export default class MapScene extends UIPanel {
         if (skill && this._runState) {
           if (!Array.isArray(this._runState.skills)) this._runState.skills = [];
           this._runState.skills.push(JSON.parse(JSON.stringify(skill)));
+          // If the player has customized their loadout, auto-equip the new
+          // skill while there's room (null = default loadout, which already
+          // includes new skills up to the cap).
+          const eq = this._runState.equippedSkillIds;
+          if (Array.isArray(eq) && eq.length < MAX_EQUIPPED_SKILLS) {
+            eq.push(skill.id);
+          }
           console.log(`[MapScene] Skill awarded: "${skill.name}" (${skill.id}) — `
             + `${this._runState.skills.length} woven skill(s) this run.`);
         }

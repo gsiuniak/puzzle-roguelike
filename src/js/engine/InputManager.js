@@ -38,6 +38,7 @@ export default class InputManager {
       mouseup: [],
       mousemove: [],
       keydown: [],
+      wheel: [],
     };
 
     // Bound handlers
@@ -46,6 +47,7 @@ export default class InputManager {
     this._handleMouseUp = this._onMouseUp.bind(this);
     this._handleMouseMove = this._onMouseMove.bind(this);
     this._handleKeyDown = this._onKeyDown.bind(this);
+    this._handleWheel = this._onWheel.bind(this);
 
     // Make canvas focusable for keyboard events
     this.canvas.setAttribute('tabindex', '0');
@@ -57,6 +59,8 @@ export default class InputManager {
     this.canvas.addEventListener('mouseup', this._handleMouseUp);
     this.canvas.addEventListener('mousemove', this._handleMouseMove);
     this.canvas.addEventListener('keydown', this._handleKeyDown);
+    // passive:false so scenes may scroll internal lists without the page moving
+    this.canvas.addEventListener('wheel', this._handleWheel, { passive: false });
 
     // Touch support — bind once so we can remove on destroy()
     this._handleTouchStartBound  = this._handleTouchStart.bind(this);
@@ -130,6 +134,14 @@ export default class InputManager {
 
   _onKeyDown(e) {
     this._fire('keydown', e);
+  }
+
+  /** Wheel: fires (x, y, deltaY) in design space. preventDefault keeps the
+   *  page from scrolling while a scene consumes the wheel. */
+  _onWheel(e) {
+    e.preventDefault();
+    const pos = this._getPos(e);
+    this._fire('wheel', pos.x, pos.y, e.deltaY);
   }
 
   // ── Touch ───────────────────────────────────────────
@@ -222,6 +234,7 @@ export default class InputManager {
     this.canvas.removeEventListener('mouseup', this._handleMouseUp);
     this.canvas.removeEventListener('mousemove', this._handleMouseMove);
     this.canvas.removeEventListener('keydown', this._handleKeyDown);
+    this.canvas.removeEventListener('wheel', this._handleWheel);
     this.canvas.removeEventListener('touchstart',  this._handleTouchStartBound);
     this.canvas.removeEventListener('touchmove',   this._handleTouchMoveBound);
     this.canvas.removeEventListener('touchend',    this._handleTouchEndBound);
