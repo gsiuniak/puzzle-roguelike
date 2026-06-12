@@ -9,11 +9,12 @@ import KeywordText from './KeywordText.js';
  * Only the INTERNAL list lays out dynamically:
  *
  *   - Each skill is a compact collapsed ROW: [icon] [name] [cost + gem] [⌄].
- *   - Clicking a row (or its chevron) expands it inline, accordion-style —
- *     at most ONE row is expanded; opening another collapses the previous.
+ *   - The cost + chevron zone (right side of the row) toggles the drawer;
+ *     player-pane accordion: at most ONE row open, opening another collapses
+ *     the previous. Enemy panes use setExpandAll (all open, free toggles).
  *   - Expanded content (the FULL description as a KeywordText, so [[keyword]]
- *     coloring applies, plus a Cast button on the player's pane) renders
- *     directly beneath the row and pushes the rows below it down.
+ *     coloring applies) renders directly beneath the row, left-aligned with
+ *     the name, and pushes the rows below it down.
  *   - Overflow is CLIPPED inside the panel's inner area (never grows the
  *     panel).
  *
@@ -24,10 +25,11 @@ import KeywordText from './KeywordText.js';
  * turn / for the enemy's pane). hitTest() returns null — clicks never route
  * through the generic onClick dispatch.
  *
- * CASTING: clicking a row only expands it. The player casts via the gold
- * "Cast" button inside the expanded block (rendered only when `onSkillClick`
- * is wired, i.e. the player's pane; BattleController still validates turn +
- * mana, the button just dims when unaffordable).
+ * CASTING (no Cast button): clicking the row ANYWHERE except the cost/chevron
+ * toggle zone casts the spell when castable (player pane + affordable;
+ * BattleController still validates the turn). When it can't cast (enemy pane
+ * or unaffordable) the same click toggles the drawer instead. A castable row
+ * is highlighted WHOLE (gold tint + bright border + left accent).
  *
  * Each skill row's description KeywordText is exposed via descKeywordTexts
  * for inline keyword tooltips; collapsed rows set their element `visible:
@@ -56,7 +58,11 @@ const ROW_BG_HOVER = 'rgba(44, 37, 24, 0.65)';
 const ROW_BG_EXPANDED = 'rgba(24, 20, 13, 0.72)';
 const ROW_BORDER = 'rgba(120, 100, 60, 0.35)';
 const DIVIDER_COLOR = 'rgba(214, 188, 120, 0.13)';
-const CASTABLE_ACCENT = 'rgba(237, 249, 142, 0.75)'; // left edge bar when castable
+// Whole-row castable highlight (no Cast button — the row IS the button).
+const CASTABLE_ACCENT = 'rgba(237, 249, 142, 0.75)';      // left edge bar
+const CASTABLE_FILL = 'rgba(255, 240, 180, 0.10)';        // row tint
+const CASTABLE_FILL_HOVER = 'rgba(255, 250, 200, 0.18)';  // hovered row tint
+const CASTABLE_BORDER = 'rgba(255, 240, 180, 0.95)';      // bright border
 
 const ICON_SIZE = 54;
 const ICON_GAP = 10;
@@ -79,20 +85,13 @@ const CHEVRON_MARGIN_R = 8;
 const COST_CHEVRON_GAP = 14;
 
 // ── Expanded content ──
+// The description block left-aligns with the NAME (x = padding + icon + gap).
 const DESC_FONT_SIZE = 18;
 const DESC_LINE_HEIGHT = 23;
 const DESC_COLOR = '#cfc8a8';
-const DESC_INDENT = 14;       // left/right inset of the description block
+const DESC_RIGHT_INSET = 14;  // right-side inset of the description block
 const EXPANDED_PAD_TOP = 4;
 const EXPANDED_PAD_BOTTOM = 12;
-const CAST_BTN_W = 110;
-const CAST_BTN_H = 32;
-const CAST_BTN_GAP = 10;      // gap between description and Cast button
-const CAST_BTN_BG = 'rgba(58, 46, 22, 0.9)';
-const CAST_BTN_BG_HOVER = 'rgba(86, 68, 30, 0.95)';
-const CAST_BTN_BORDER = '#d6bc78';
-const CAST_BTN_TEXT = '#f0dfae';
-const CAST_BTN_FONT_SIZE = 20;
 
 const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
@@ -130,13 +129,12 @@ export default class SkillsPane extends UIPanel {
     this._expandAll = false;
     /** Hovered row index (header band only), -1 = none. */
     this._hoverRow = -1;
-    /** True while the pointer is over the expanded row's Cast button. */
-    this._hoverCast = false;
     /** @type {object|null} player mana for affordability */
     this._mana = null;
     /**
      * Last-rendered row layout (absolute design coords) used for hit-testing:
-     * [{ y, h, castRect: {x,y,w,h}|null }]. Rebuilt every renderSelf.
+     * [{ y, h, toggleX }] — toggleX is the left edge of the cost/chevron
+     * "toggle drawer" zone. Rebuilt every renderSelf.
      */
     this._rowLayout = [];
 
@@ -168,7 +166,6 @@ export default class SkillsPane extends UIPanel {
       this._rows.push({ skill: null, locked: true, expanded: false, descKT: null });
     }
     this._hoverRow = -1;
-    this._hoverCast = false;
     this._rowLayout = [];
   }
 
@@ -225,47 +222,45 @@ export default class SkillsPane extends UIPanel {
   }
 
   /**
-   * Handle a mousedown in design space. Returns true when consumed (row
-   * toggled / cast clicked). BattleScene calls this BEFORE its turn-state
-   * gating so expansion works at any time, for both panes.
+   * Handle a mousedown in design space. Returns true when consumed.
+   * Semantics (no Cast button): in the header band, the cost/chevron zone
+   * (x ≥ toggleX) toggles the drawer; anywhere else CASTS when castable
+   * (player pane + affordable — BattleController still validates the turn),
+   * and falls back to toggling the drawer when it can't cast (enemy pane,
+   * unaffordable). BattleScene calls this BEFORE its turn-state gating so
+   * browsing works at any time, for both panes.
    */
   handleClick(x, y) {
     if (!this._insideInner(x, y)) return false;
     for (let i = 0; i < this._rowLayout.length; i++) {
       const entry = this._rowLayout[i];
       if (!entry) continue;
-      // Cast button (expanded player rows only)
-      if (entry.castRect && this._pointIn(entry.castRect, x, y)) {
-        const skill = this._rows[i] && this._rows[i].skill;
-        if (skill && this.onSkillClick && this._affordable(skill)) {
-          this.onSkillClick(skill);
+      // Header band
+      if (y >= entry.y && y <= entry.y + ROW_H) {
+        const row = this._rows[i];
+        if (!row || row.locked) return true; // consume, no-op
+        if (x >= entry.toggleX) {
+          this.toggleRow(i); // cost/chevron zone = toggle drawer
+        } else if (this.onSkillClick && this._affordable(row.skill)) {
+          this.onSkillClick(row.skill); // the row IS the cast button
+        } else {
+          this.toggleRow(i); // can't cast → show/hide info instead
         }
         return true;
       }
-      // Header band toggles expansion
-      if (y >= entry.y && y <= entry.y + ROW_H) {
-        if (!this._rows[i] || this._rows[i].locked) return true; // consume, no-op
-        this.toggleRow(i);
-        return true;
-      }
-      // Inside the expanded block (not the cast button): consume, no action
+      // Inside the expanded block: consume, no action
       if (y >= entry.y && y <= entry.y + entry.h) return true;
     }
     return false;
   }
 
-  /** Track hover for row highlight + cast button highlight. */
+  /** Track the hovered row (header band) for the highlight. */
   handleMouseMove(x, y) {
     this._hoverRow = -1;
-    this._hoverCast = false;
     if (!this._insideInner(x, y)) return;
     for (let i = 0; i < this._rowLayout.length; i++) {
       const entry = this._rowLayout[i];
       if (!entry) continue;
-      if (entry.castRect && this._pointIn(entry.castRect, x, y)) {
-        this._hoverCast = true;
-        return;
-      }
       if (y >= entry.y && y <= entry.y + ROW_H) {
         if (this._rows[i] && !this._rows[i].locked) this._hoverRow = i;
         return;
@@ -322,18 +317,18 @@ export default class SkillsPane extends UIPanel {
       const row = this._rows[i];
       const isExpanded = row.expanded && !row.locked;
 
-      // Measure expanded content first (drives this row's height).
+      // Measure expanded content first (drives this row's height). The
+      // description left-aligns with the NAME column.
+      const descX = inner.x + ROW_PAD_X + ICON_SIZE + ICON_GAP;
       let descH = 0;
-      let castH = 0;
       if (isExpanded && row.descKT) {
-        row.descKT.setStyle({ maxWidth: inner.w - DESC_INDENT * 2 });
+        row.descKT.setStyle({ maxWidth: inner.x + inner.w - DESC_RIGHT_INSET - descX });
         descH = row.descKT.measureText(ctx).height;
-        if (this.onSkillClick) castH = CAST_BTN_GAP + CAST_BTN_H;
       }
-      const extraH = isExpanded ? EXPANDED_PAD_TOP + descH + castH + EXPANDED_PAD_BOTTOM : 0;
+      const extraH = isExpanded ? EXPANDED_PAD_TOP + descH + EXPANDED_PAD_BOTTOM : 0;
       const h = ROW_H + extraH;
 
-      const entry = { y, h, castRect: null };
+      const entry = { y, h, toggleX: inner.x + inner.w };
       if (y <= inner.y + inner.h) {
         this._renderRow(ctx, row, i, inner, y, h, isExpanded, descH, entry);
         // Divider between rows (skip after the last row).
@@ -362,15 +357,22 @@ export default class SkillsPane extends UIPanel {
     const castable = !row.locked && this._affordable(skill) && !!this.onSkillClick;
 
     // Row background (whole row incl. expanded block — reads as ONE row).
+    // A castable row is highlighted WHOLE — the row itself is the cast button.
     ctx.save();
     this._roundRectPath(ctx, x, y, w, h, ROW_RADIUS);
     ctx.fillStyle = isExpanded ? ROW_BG_EXPANDED : (hovered ? ROW_BG_HOVER : ROW_BG);
     ctx.fill();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = ROW_BORDER;
+    if (castable) {
+      this._roundRectPath(ctx, x, y, w, h, ROW_RADIUS);
+      ctx.fillStyle = hovered ? CASTABLE_FILL_HOVER : CASTABLE_FILL;
+      ctx.fill();
+    }
+    ctx.lineWidth = castable ? 1.5 : 1;
+    ctx.strokeStyle = castable ? CASTABLE_BORDER : ROW_BORDER;
+    this._roundRectPath(ctx, x, y, w, h, ROW_RADIUS);
     ctx.stroke();
     if (castable) {
-      // Left accent bar: this skill can be cast right now.
+      // Left accent bar reinforces "this can be cast right now".
       ctx.fillStyle = CASTABLE_ACCENT;
       ctx.fillRect(x, y + 3, 3, h - 6);
     }
@@ -404,25 +406,23 @@ export default class SkillsPane extends UIPanel {
       ctx.restore();
     }
 
-    // Chevron (right edge)
+    // Chevron (right edge) — clean filled triangle (▼ collapsed / ▲ expanded).
     const chevCX = x + w - CHEVRON_MARGIN_R - CHEVRON_W / 2;
     const chevCY = y + ROW_H / 2;
     ctx.save();
-    ctx.strokeStyle = CHEVRON_COLOR;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ctx.fillStyle = CHEVRON_COLOR;
     ctx.beginPath();
-    if (isExpanded) { // ∧
-      ctx.moveTo(chevCX - CHEVRON_W / 2, chevCY + CHEVRON_H / 2);
-      ctx.lineTo(chevCX, chevCY - CHEVRON_H / 2);
+    if (isExpanded) { // ▲
+      ctx.moveTo(chevCX, chevCY - CHEVRON_H / 2);
       ctx.lineTo(chevCX + CHEVRON_W / 2, chevCY + CHEVRON_H / 2);
-    } else {          // ∨
+      ctx.lineTo(chevCX - CHEVRON_W / 2, chevCY + CHEVRON_H / 2);
+    } else {          // ▼
       ctx.moveTo(chevCX - CHEVRON_W / 2, chevCY - CHEVRON_H / 2);
+      ctx.lineTo(chevCX + CHEVRON_W / 2, chevCY - CHEVRON_H / 2);
       ctx.lineTo(chevCX, chevCY + CHEVRON_H / 2);
-      ctx.lineTo(chevCX + CHEVRON_W / 2, chevCY + CHEVRON_H / 2);
     }
-    ctx.stroke();
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
 
     // Mana cost (number + gem), right-aligned before the chevron.
@@ -459,6 +459,9 @@ export default class SkillsPane extends UIPanel {
       }
       ctx.restore();
     }
+    // Everything from the cost numbers to the right edge is the
+    // "toggle drawer" zone (clicks there never cast).
+    entry.toggleX = costLeft;
 
     // Name — wraps at WORD boundaries onto up to NAME_MAX_LINES lines
     // (never mid-word), vertically centered in the header band.
@@ -480,36 +483,14 @@ export default class SkillsPane extends UIPanel {
     }
     ctx.restore();
 
-    // ── Expanded block: full description (+ Cast on the player pane) ──
+    // ── Expanded block: full description, left-aligned with the name ──
     if (isExpanded && row.descKT) {
-      const descY = y + ROW_H + EXPANDED_PAD_TOP;
       const kt = row.descKT;
-      kt.rect.x = x + DESC_INDENT;
-      kt.rect.y = descY;
-      kt.rect.w = inner.w - DESC_INDENT * 2;
+      kt.rect.x = nameX;
+      kt.rect.y = y + ROW_H + EXPANDED_PAD_TOP;
+      kt.rect.w = x + w - DESC_RIGHT_INSET - nameX;
       kt.rect.h = descH;
       kt.renderSelf(ctx);
-
-      if (this.onSkillClick) {
-        const bx = x + w - DESC_INDENT - CAST_BTN_W;
-        const by = descY + descH + CAST_BTN_GAP;
-        const enabled = this._affordable(skill);
-        ctx.save();
-        this._roundRectPath(ctx, bx, by, CAST_BTN_W, CAST_BTN_H, 5);
-        ctx.fillStyle = this._hoverCast && enabled ? CAST_BTN_BG_HOVER : CAST_BTN_BG;
-        ctx.globalAlpha *= enabled ? 1 : 0.45;
-        ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = CAST_BTN_BORDER;
-        ctx.stroke();
-        ctx.font = `bold ${CAST_BTN_FONT_SIZE}px ${FONT_FAMILY}`;
-        ctx.fillStyle = CAST_BTN_TEXT;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Cast', bx + CAST_BTN_W / 2, by + CAST_BTN_H / 2 + 1);
-        ctx.restore();
-        entry.castRect = { x: bx, y: by, w: CAST_BTN_W, h: CAST_BTN_H };
-      }
     }
   }
 
