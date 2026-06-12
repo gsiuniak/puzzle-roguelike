@@ -47,7 +47,7 @@ const NATURAL_HEIGHT =
 // ── Accordion rows ──
 /** Minimum row slots shown (empty ones render as locked fillers). */
 const MIN_SLOTS = 6;
-const ROW_H = 56;             // collapsed row height
+const ROW_H = 74;             // collapsed row height (fits a 2-line name)
 const ROW_GAP = 4;
 const ROW_RADIUS = 7;
 const ROW_PAD_X = 10;
@@ -58,9 +58,13 @@ const ROW_BORDER = 'rgba(120, 100, 60, 0.35)';
 const DIVIDER_COLOR = 'rgba(214, 188, 120, 0.13)';
 const CASTABLE_ACCENT = 'rgba(237, 249, 142, 0.75)'; // left edge bar when castable
 
-const ICON_SIZE = 40;
+const ICON_SIZE = 54;
 const ICON_GAP = 10;
 const NAME_FONT_SIZE = 22;
+const NAME_LINE_HEIGHT = 26;
+/** Long names wrap at WORD boundaries onto extra lines (never mid-word);
+ *  anything past this many lines is dropped with a trailing ellipsis. */
+const NAME_MAX_LINES = 2;
 const NAME_COLOR = '#e4e4d9';
 const LOCKED_ICON_SIZE = 26;
 const LOCKED_ALPHA = 0.45;
@@ -116,10 +120,14 @@ export default class SkillsPane extends UIPanel {
     /** @type {Function|null} (skillData) => void — wired on the player pane only */
     this.onSkillClick = null;
 
-    /** @type {Array<{skill:object|null, locked:boolean, descKT:KeywordText|null}>} */
+    /** @type {Array<{skill:object|null, locked:boolean, expanded:boolean, descKT:KeywordText|null}>} */
     this._rows = [];
-    /** Index of the expanded row (accordion: at most one), -1 = none. */
-    this._expanded = -1;
+    /**
+     * When true (the ENEMY pane), every skill row starts expanded and rows
+     * toggle independently. When false (the player pane), rows start
+     * collapsed and behave accordion-style (one open at a time).
+     */
+    this._expandAll = false;
     /** Hovered row index (header band only), -1 = none. */
     this._hoverRow = -1;
     /** True while the pointer is over the expanded row's Cast button. */
@@ -152,16 +160,32 @@ export default class SkillsPane extends UIPanel {
         alignV: 'top',
         lineHeight: DESC_LINE_HEIGHT,
       });
-      descKT.visible = false; // only the expanded row's text is "live"
-      this._rows.push({ skill, locked: false, descKT });
+      const expanded = this._expandAll;
+      descKT.visible = expanded; // only expanded rows' text is "live"
+      this._rows.push({ skill, locked: false, expanded, descKT });
     }
     while (this._rows.length < MIN_SLOTS) {
-      this._rows.push({ skill: null, locked: true, descKT: null });
+      this._rows.push({ skill: null, locked: true, expanded: false, descKT: null });
     }
-    this._expanded = -1;
     this._hoverRow = -1;
     this._hoverCast = false;
     this._rowLayout = [];
+  }
+
+  /**
+   * Enemy-pane mode: every skill row starts expanded (and rows toggle
+   * independently instead of accordion-style). Applies to current rows too.
+   * @param {boolean} v
+   */
+  setExpandAll(v) {
+    this._expandAll = !!v;
+    if (this._expandAll) {
+      for (const row of this._rows) {
+        if (row.locked) continue;
+        row.expanded = true;
+        if (row.descKT) row.descKT.visible = true;
+      }
+    }
   }
 
   /** Update mana for affordability cues (idempotent, called every frame). */
@@ -184,14 +208,19 @@ export default class SkillsPane extends UIPanel {
     return true;
   }
 
-  /** Expand/collapse a row (accordion: opening one collapses the others). */
+  /** Expand/collapse a row. Accordion on the player pane (opening one
+   *  collapses the others); independent toggles in expandAll (enemy) mode. */
   toggleRow(index) {
     const row = this._rows[index];
     if (!row || row.locked) return;
-    this._expanded = this._expanded === index ? -1 : index;
-    for (let i = 0; i < this._rows.length; i++) {
-      const kt = this._rows[i].descKT;
-      if (kt) kt.visible = i === this._expanded;
+    row.expanded = !row.expanded;
+    if (!this._expandAll && row.expanded) {
+      for (let i = 0; i < this._rows.length; i++) {
+        if (i !== index) this._rows[i].expanded = false;
+      }
+    }
+    for (const r of this._rows) {
+      if (r.descKT) r.descKT.visible = r.expanded;
     }
   }
 
@@ -291,7 +320,7 @@ export default class SkillsPane extends UIPanel {
     let y = inner.y;
     for (let i = 0; i < this._rows.length; i++) {
       const row = this._rows[i];
-      const isExpanded = i === this._expanded && !row.locked;
+      const isExpanded = row.expanded && !row.locked;
 
       // Measure expanded content first (drives this row's height).
       let descH = 0;
@@ -431,18 +460,24 @@ export default class SkillsPane extends UIPanel {
       ctx.restore();
     }
 
-    // Name (clipped against the cost area)
+    // Name — wraps at WORD boundaries onto up to NAME_MAX_LINES lines
+    // (never mid-word), vertically centered in the header band.
+    const nameX = x + ROW_PAD_X + ICON_SIZE + ICON_GAP;
+    const nameMaxW = Math.max(20, costLeft - nameX);
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, Math.max(0, costLeft - x), ROW_H);
-    ctx.clip();
     ctx.font = `bold ${NAME_FONT_SIZE}px ${FONT_FAMILY}`;
     ctx.fillStyle = NAME_COLOR;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
     ctx.shadowBlur = 2;
-    ctx.fillText(skill.name || '', x + ROW_PAD_X + ICON_SIZE + ICON_GAP, y + ROW_H / 2 + 1);
+    const nameLines = this._wrapWords(ctx, skill.name || '', nameMaxW);
+    const blockH = (nameLines.length - 1) * NAME_LINE_HEIGHT;
+    let lineY = y + ROW_H / 2 + 1 - blockH / 2;
+    for (const line of nameLines) {
+      ctx.fillText(line, nameX, lineY);
+      lineY += NAME_LINE_HEIGHT;
+    }
     ctx.restore();
 
     // ── Expanded block: full description (+ Cast on the player pane) ──
@@ -476,6 +511,33 @@ export default class SkillsPane extends UIPanel {
         entry.castRect = { x: bx, y: by, w: CAST_BTN_W, h: CAST_BTN_H };
       }
     }
+  }
+
+  /**
+   * Greedy word-boundary wrap (never splits a word; a single over-long word
+   * overflows its line rather than breaking). Lines beyond NAME_MAX_LINES are
+   * dropped and the last kept line gets a trailing ellipsis.
+   * ctx.font must already be set by the caller.
+   */
+  _wrapWords(ctx, text, maxW) {
+    const words = String(text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(candidate).width > maxW) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = candidate;
+      }
+    }
+    if (line) lines.push(line);
+    if (lines.length > NAME_MAX_LINES) {
+      lines.length = NAME_MAX_LINES;
+      lines[NAME_MAX_LINES - 1] += '…';
+    }
+    return lines.length ? lines : [''];
   }
 
   _roundRectPath(ctx, x, y, w, h, r) {

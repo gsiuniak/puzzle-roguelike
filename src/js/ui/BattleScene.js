@@ -368,8 +368,10 @@ export default class BattleScene extends UIPanel {
     if (isPlayer) this._playerPane = infoPane; else this._enemyPane = infoPane;
     col.addChild(infoPane);
 
-    // 2) Skills pane (2x3 grid; remaining slots = locked placeholders showing skills_locked_icon)
+    // 2) Skills pane (fixed-size accordion list; remaining slots = locked
+    //    placeholders). The ENEMY pane starts with every skill expanded.
     const skillsPane = new SkillsPane(skills, this._assetManager);
+    skillsPane.setExpandAll(!isPlayer);
     if (isPlayer) this._playerSkillsPane = skillsPane;
     else          this._enemySkillsPane  = skillsPane;
     skillsPane.flexGrow = 0;
