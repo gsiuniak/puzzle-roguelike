@@ -246,6 +246,10 @@ function tableKeys(tagId) {
     const problems = [];
     if (!s || typeof s.id !== 'string' || !s.id) problems.push('bad id');
     if (!s.name) problems.push('no name');
+    else {
+      if (s.name.length > 20) problems.push(`name too long: "${s.name}"`);
+      if (/\bthe\b/i.test(s.name)) problems.push(`name contains "the": "${s.name}"`);
+    }
     if (!s.description) problems.push('no description');
     if (!s.sound) problems.push('no sound');
     if (!s.effects.length) problems.push('no effects');

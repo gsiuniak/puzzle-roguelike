@@ -156,36 +156,47 @@ const ACTION_NOUNS = Object.freeze({
 });
 const DEFAULT_NOUNS = Object.freeze(['Weaving', 'Working', 'Rite', 'Invocation', 'Sigil', 'Incantation']);
 
-/** Any bag tag → optional name suffixes ("Strike of Deep Winter"). */
+/**
+ * Any bag tag → optional name suffixes ("Strike of Winter"). Kept SHORT and
+ * "the"-free on purpose — names must fit NAME_MAX_LENGTH (~20 chars of UI
+ * space on the skill button).
+ */
 const TAG_SUFFIXES = Object.freeze({
-  extra_turn: ['of Haste', 'of the Second Sun', 'of Stolen Time'],
-  wild:       ['of the Wilds', 'Unbound', 'of Chaos'],
-  lock:       ['of Binding', 'of the Sealed Vault'],
-  row:        ['of the Sweeping Arc', 'of the Horizon'],
-  column:     ['of the Falling Pillar', 'of the Spire'],
-  area:       ['of the Maelstrom', 'of the Epicenter'],
-  random:     ['of Fortune', 'of the Scattered Dice'],
-  tile:       ['of the Single Mark', 'of Precision'],
-  skull:      ['of the Grave', 'of Bone'],
-  silence:    ['of Silence', 'of the Hushed'],
-  cripple:    ['of Maiming', 'of the Lamed'],
-  enfeeble:   ['of Withering', 'of Frailty'],
-  brittle:    ['of Shattering', 'of Glass'],
-  bleed:      ['of Open Wounds', 'of the Red Tithe'],
-  frozen:     ['of Deep Winter', 'of the Stilled Heart'],
-  intangible: ['of the Phantom', 'of Mist'],
-  berserk:    ['of Fury', 'of the Red Haze'],
-  barrier:    ['of the Bulwark', 'of the Unbroken'],
+  extra_turn: ['of Haste', 'of Tempo'],
+  wild:       ['Unbound', 'of Chaos'],
+  lock:       ['of Binding', 'of Seals'],
+  row:        ['of Lines', 'Sweeping'],
+  column:     ['of Pillars', 'Falling'],
+  area:       ['of Storms', 'Vast'],
+  random:     ['of Fortune', 'of Dice'],
+  tile:       ['of Marks', 'Precise'],
+  skull:      ['of Graves', 'of Bone'],
+  silence:    ['of Hush', 'Muting'],
+  cripple:    ['of Maiming', 'Laming'],
+  enfeeble:   ['of Frailty', 'Sapping'],
+  brittle:    ['of Glass', 'Cracking'],
+  bleed:      ['of Wounds', 'Rending'],
+  frozen:     ['of Winter', 'of Frost'],
+  intangible: ['of Mist', 'Phantom'],
+  berserk:    ['of Fury', 'Raging'],
+  barrier:    ['of Shells', 'Warding'],
 });
 
-/** Name pattern → relative weight (patterns needing a missing part are skipped). */
+/**
+ * Name pattern → relative weight (patterns needing a missing part are
+ * skipped; candidates longer than NAME_MAX_LENGTH are rerolled).
+ */
 const NAME_PATTERN_WEIGHTS = Object.freeze({
-  adj_noun: 40,        // "Crimson Strike"
-  adj_noun_suffix: 20, // "Crimson Strike of Deep Winter"
-  noun_suffix: 20,     // "Strike of Deep Winter"
-  the_adj_noun: 10,    // "The Crimson Strike"
-  plain_noun: 8,       // "Reckoning"
+  adj_noun: 45,        // "Crimson Strike"
+  adj_noun_suffix: 15, // "Ember Lash of Frost"
+  noun_suffix: 25,     // "Strike of Winter"
+  plain_noun: 10,      // "Reckoning"
 });
+
+/** Hard cap on generated name length (skill-button space budget). */
+const NAME_MAX_LENGTH = 20;
+/** How many random candidates to try before falling back to the bare noun. */
+const NAME_ATTEMPTS = 10;
 
 /** Display names for tile types in descriptions. */
 const TILE_LABEL = Object.freeze({
@@ -247,27 +258,38 @@ function rollCostColor(elements, primaryAction) {
   return pickWeightedEntry(Object.entries(weights)) || pickRandom(COST_COLORS);
 }
 
-/** Generate a flavor name from the bag (pattern × adjective × noun × suffix). */
+/**
+ * Generate a flavor name from the bag (pattern × adjective × noun × suffix).
+ * Re-rolls all parts per attempt until a candidate fits NAME_MAX_LENGTH;
+ * falls back to the bare action noun (every noun fits on its own).
+ */
 function generateName(tagIds, groups, primaryAction) {
   const elements = groups[TAG_CATEGORY.ELEMENT];
-  const adj = elements.length ? pickRandom(ELEMENT_ADJ[pickRandom(elements)] || []) : null;
-  const noun = pickRandom(ACTION_NOUNS[primaryAction] || DEFAULT_NOUNS);
+  const nounPool = ACTION_NOUNS[primaryAction] || DEFAULT_NOUNS;
   const suffixPool = tagIds.filter((id) => TAG_SUFFIXES[id]);
-  const suffix = suffixPool.length ? pickRandom(TAG_SUFFIXES[pickRandom(suffixPool)]) : null;
+  let noun = pickRandom(nounPool);
 
-  const candidates = Object.entries(NAME_PATTERN_WEIGHTS).filter(([pattern]) => {
-    if (pattern.includes('adj') && !adj) return false;
-    if (pattern.includes('suffix') && !suffix) return false;
-    return true;
-  });
-  const pattern = pickWeightedEntry(candidates) || 'plain_noun';
-  switch (pattern) {
-    case 'adj_noun': return `${adj} ${noun}`;
-    case 'adj_noun_suffix': return `${adj} ${noun} ${suffix}`;
-    case 'noun_suffix': return `${noun} ${suffix}`;
-    case 'the_adj_noun': return `The ${adj} ${noun}`;
-    default: return noun;
+  for (let attempt = 0; attempt < NAME_ATTEMPTS; attempt++) {
+    const adj = elements.length ? pickRandom(ELEMENT_ADJ[pickRandom(elements)] || []) : null;
+    noun = pickRandom(nounPool);
+    const suffix = suffixPool.length ? pickRandom(TAG_SUFFIXES[pickRandom(suffixPool)]) : null;
+
+    const candidates = Object.entries(NAME_PATTERN_WEIGHTS).filter(([pattern]) => {
+      if (pattern.includes('adj') && !adj) return false;
+      if (pattern.includes('suffix') && !suffix) return false;
+      return true;
+    });
+    const pattern = pickWeightedEntry(candidates) || 'plain_noun';
+    let name;
+    switch (pattern) {
+      case 'adj_noun': name = `${adj} ${noun}`; break;
+      case 'adj_noun_suffix': name = `${adj} ${noun} ${suffix}`; break;
+      case 'noun_suffix': name = `${noun} ${suffix}`; break;
+      default: name = noun; break;
+    }
+    if (name.length <= NAME_MAX_LENGTH) return name;
   }
+  return noun; // every bare noun fits the budget
 }
 
 // ═══════════════════════════════════════════════════════════

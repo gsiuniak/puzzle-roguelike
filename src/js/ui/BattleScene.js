@@ -443,8 +443,8 @@ export default class BattleScene extends UIPanel {
     if (this._enemyRelicBar) {
       this._enemyRelicBar.setTooltipManager(this._tooltipManager);
     }
-    // Inline [[keyword]] tooltips for skill descriptions.
-    this._registerSkillKeywordSources();
+    // Full-skill tooltips on each skill button's "?" badge.
+    this._registerSkillTooltips();
 
     // Create bound handlers (stored for cleanup in onExit)
     this._onMouseDown = (x, y) => this._handleMouseDown(x, y);
@@ -1404,29 +1404,52 @@ export default class BattleScene extends UIPanel {
         this._battleController.tryPlayerSkill(skill);
       };
     }
-    this._registerSkillKeywordSources();
+    this._registerSkillTooltips();
   }
 
   setEnemyData(data) {
     this._enemyData = data;
     if (this._enemyPane) this._enemyPane.setCharacterData(data);
     if (this._enemySkillsPane) this._enemySkillsPane.setSkills((data && data.skills) || []);
-    this._registerSkillKeywordSources();
+    this._registerSkillTooltips();
   }
 
   /**
-   * Register the player's & enemy's skill-description KeywordText elements as
-   * inline keyword tooltip sources. Re-runs whenever skills are (re)built, so
-   * stale span sources are dropped first (relic icon tooltips are unaffected).
+   * Register each skill button's "?" badge as a full-skill tooltip source
+   * (icon + name + cost + complete description via the Tooltip's skill-header
+   * mode; [[keyword]]s inside the description still chain their own child
+   * tooltips below it). Skill-description keyword SPANS are intentionally NOT
+   * tooltip sources on the buttons anymore — the "?" badge is the single
+   * affordance. Re-runs whenever skills are (re)built; stale badge attachments
+   * from the previous build are detached first (relic icon tooltips are
+   * unaffected).
    */
-  _registerSkillKeywordSources() {
+  _registerSkillTooltips() {
     const tm = this._tooltipManager;
     if (!tm) return;
-    tm.clearKeywordSources();
-    const opts = { scale: 1.0, padding: 22, offset: 16, hitPadding: 6 };
+    tm.clearKeywordSources(); // no inline keyword tooltips on skill buttons
+    if (this._skillBadgeAttachments) {
+      for (const badge of this._skillBadgeAttachments) tm.detach(badge);
+    }
+    this._skillBadgeAttachments = [];
     for (const pane of [this._playerSkillsPane, this._enemySkillsPane]) {
-      if (!pane) continue;
-      for (const kt of pane.descKeywordTexts) tm.attachKeywordSource(kt, opts);
+      if (!pane || !pane.skillButtons) continue;
+      for (const btn of pane.skillButtons) {
+        const sd = btn.skillData;
+        if (!sd || !btn.helpBadge) continue;
+        tm.attach(btn.helpBadge, {
+          title: sd.name || '',
+          text: sd.description || '',
+          headerIconKey: sd.icon || null,
+          headerCost: sd.cost || null,
+          width: 480,
+          padding: 28,
+          fontSize: 20,
+          offset: 20,
+          hitPadding: 8,
+        });
+        this._skillBadgeAttachments.push(btn.helpBadge);
+      }
     }
   }
 

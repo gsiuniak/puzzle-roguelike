@@ -24,6 +24,16 @@ const COST_ORB_SIZE = 28;
 const COST_COL_WIDTH = 56;
 // Gap between the cost number and its mana orb.
 const COST_PAIR_GAP = 4;
+// Max wrapped description lines shown on the button. Overflow is dropped and
+// KeywordText draws a trailing ellipsis; the full text lives in the "?" tooltip.
+const DESC_MAX_LINES = 2;
+// "?" help badge (top-right corner) — hover/hold shows the full skill tooltip.
+const HELP_BADGE_SIZE = 20;
+const HELP_BADGE_MARGIN = 4;
+const HELP_BADGE_BG = 'rgba(20, 16, 10, 0.85)';
+const HELP_BADGE_BORDER = 'rgba(214, 188, 120, 0.65)';
+const HELP_BADGE_TEXT = '#d6bc78';
+const HELP_BADGE_FONT_SIZE = 14;
 
 const MANA_COLORS = {
   red:    '#cc3333',
@@ -85,6 +95,15 @@ export default class SkillButton extends UIPanel {
     this._descText = null;
     this._costCol = null;
 
+    /**
+     * "?" help badge — a SYNTHETIC tooltip-source element (not a UI child;
+     * the badge is drawn manually in renderSelf and this rect is refreshed
+     * there). TooltipManager only needs `.visible` + `.rect`, so BattleScene
+     * attaches the full skill tooltip directly to this object. Clicks inside
+     * the badge do NOT cast the skill (see hitTest).
+     */
+    this.helpBadge = { visible: false, rect: { x: 0, y: 0, w: 0, h: 0 } };
+
     if (this._locked) this._buildLockedHierarchy();
     else this.buildHierarchy();
   }
@@ -138,7 +157,7 @@ export default class SkillButton extends UIPanel {
       fontSize: NAME_FONT_SIZE,
       color: '#e4e4d9',
       bold: true,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'center',
       height: NAME_FONT_SIZE + 4,
       margin: { bottom: 2 }
@@ -146,15 +165,17 @@ export default class SkillButton extends UIPanel {
     info.addChild(this._nameText);
 
     // Description: KeywordText so [[Keyword]] markup renders colored + bracket-
-    // free (and its spans can be registered as tooltip sources). Supports '\n'.
+    // free. Centered, capped at DESC_MAX_LINES (ellipsis indicates overflow —
+    // the "?" badge tooltip shows the full text). Supports '\n'.
     this._descText = new KeywordText(sd.description || '');
     this._descText.setStyle({
       fontSize: DESC_FONT_SIZE,
       color: '#cfc8a8',
-      alignH: 'left',
-      alignV: 'top',
+      alignH: 'center',
+      alignV: 'center',
       lineHeight: DESC_LINE_HEIGHT,
       maxWidth: DESC_MAX_WIDTH,
+      maxLines: DESC_MAX_LINES,
       flexGrow: 1,
     });
     info.addChild(this._descText);
@@ -239,6 +260,11 @@ export default class SkillButton extends UIPanel {
     return this._descText || null;
   }
 
+  /** The skill definition this button renders (null for locked slots). */
+  get skillData() {
+    return this._locked ? null : this._skillData;
+  }
+
   // ── Mana affordability ──────────────────────────────
   setManaState(manaState) {
     this._manaState = manaState;
@@ -264,6 +290,9 @@ export default class SkillButton extends UIPanel {
     if (!this.visible) return null;
     if (!this.rect.containsPoint(x, y)) return null;
     if (this._locked) return null; // locked = pass-through to parent
+    // The "?" badge is tooltip-only — clicking it must NOT cast the skill
+    // (TooltipManager hit-tests the badge rect independently).
+    if (this._pointInHelpBadge(x, y)) return null;
     if (this.onClick) return this;
     for (let i = this.children.length - 1; i >= 0; i--) {
       const hit = this.children[i].hitTest(x, y);
@@ -272,12 +301,48 @@ export default class SkillButton extends UIPanel {
     return this;
   }
 
+  _pointInHelpBadge(x, y) {
+    const b = this.helpBadge;
+    if (!b.visible) return false;
+    const r = b.rect;
+    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  }
+
   renderSelf(ctx) {
     super.renderSelf(ctx);
-    if (this._locked) return;
+    if (this._locked) {
+      this.helpBadge.visible = false;
+      return;
+    }
 
     const r = this.rect;
     const canCast = this._affordable && this.onClick;
+
+    // ── "?" help badge (top-right corner; tooltip source) ──
+    // Rect refreshed here every frame so TooltipManager always hit-tests the
+    // badge at its current laid-out position.
+    const bs = HELP_BADGE_SIZE;
+    const bx = r.x + r.w - bs - HELP_BADGE_MARGIN;
+    const by = r.y + HELP_BADGE_MARGIN;
+    this.helpBadge.visible = true;
+    this.helpBadge.rect.x = bx;
+    this.helpBadge.rect.y = by;
+    this.helpBadge.rect.w = bs;
+    this.helpBadge.rect.h = bs;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(bx + bs / 2, by + bs / 2, bs / 2, 0, Math.PI * 2);
+    ctx.fillStyle = HELP_BADGE_BG;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = HELP_BADGE_BORDER;
+    ctx.stroke();
+    ctx.fillStyle = HELP_BADGE_TEXT;
+    ctx.font = `bold ${HELP_BADGE_FONT_SIZE}px Georgia, serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', bx + bs / 2, by + bs / 2 + 1);
+    ctx.restore();
 
     // ── Castable accent + hover overlay (similar to SkillRow) ──
     if (canCast) {

@@ -33,6 +33,11 @@ import KeywordText from './KeywordText.js';
  *   titleColor     — title text color (default '#f5e7c8')
  *   titleBold      — render title bold (default true)
  *   titleGap       — gap between title and body in px (default 8)
+ *   headerIconKey  — optional AssetManager key; enables SKILL-HEADER mode:
+ *                    a header row mimicking SkillButton's layout (icon |
+ *                    title + mana cost) is drawn above the body. Cleared by
+ *                    resetStyleDefaults so it never bleeds into other sources.
+ *   headerCost     — { color: amount } mana cost rendered in the header
  */
 
 const DEFAULT_BG_KEY    = 'tooltip_panel';
@@ -44,6 +49,18 @@ const TOOLTIP_DEFAULT_TITLE_FONT_SIZE = 26;
 const TOOLTIP_DEFAULT_TITLE_COLOR     = '#ccaa77';
 const TOOLTIP_DEFAULT_TITLE_GAP       = 8;
 const FALLBACK_ASPECT_RATIO           = 2.5;
+
+// ── Skill-header mode (headerIconKey set) ──
+const HEADER_ICON_SIZE = 64;
+const HEADER_ICON_GAP  = 14;   // gap between icon and title/cost stack
+const HEADER_BODY_GAP  = 10;   // gap between header row and body text
+const HEADER_COST_FONT_SIZE = 20;
+const HEADER_COST_ORB_R     = 9;
+const HEADER_COST_GAP       = 6; // between cost number and orb
+const HEADER_MANA_COLORS = Object.freeze({
+  red: '#cc3333', blue: '#3366cc', green: '#33aa33',
+  yellow: '#cccc33', purple: '#9933cc',
+});
 
 export default class Tooltip {
   /**
@@ -82,6 +99,10 @@ export default class Tooltip {
       alignV: 'top',
       bold: true,
     });
+
+    // Skill-header mode (icon + cost row above the body). Null = normal mode.
+    this._headerIconKey = null;
+    this._headerCost = null;
 
     this._x = 0;
     this._y = 0;
@@ -149,6 +170,8 @@ export default class Tooltip {
       this._titleGap = opts.titleGap;
       this._cachedSize = null;
     }
+    if (opts.headerIconKey !== undefined) this._headerIconKey = opts.headerIconKey;
+    if (opts.headerCost !== undefined) this._headerCost = opts.headerCost;
   }
 
   /**
@@ -164,6 +187,10 @@ export default class Tooltip {
   resetStyleDefaults() {
     this._textElement.setStyle({ color: TOOLTIP_DEFAULT_COLOR });
     this._titleElement.setStyle({ color: TOOLTIP_DEFAULT_TITLE_COLOR });
+    // Header mode is opt-in per show — clear it so a skill tooltip's icon/cost
+    // never bleeds into a relic or keyword tooltip shown next.
+    this._headerIconKey = null;
+    this._headerCost = null;
   }
 
   setPosition(x, y) {
@@ -226,6 +253,72 @@ export default class Tooltip {
 
     let bodyY = y + padding;
     let bodyH = innerH;
+
+    if (this._headerIconKey || this._headerCost) {
+      // ── Skill-header mode: [icon] [title / cost] row, body below ──
+      // Mimics SkillButton's layout at tooltip scale so the popup reads as
+      // "the button, but with everything".
+      const hx = x + padding;
+      const hy = y + padding;
+      const iconImg = this._assetManager && this._headerIconKey
+        ? this._assetManager.get(this._headerIconKey) : null;
+      if (iconImg) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(iconImg, hx, hy, HEADER_ICON_SIZE, HEADER_ICON_SIZE);
+        ctx.restore();
+      }
+
+      const textX = hx + (iconImg ? HEADER_ICON_SIZE + HEADER_ICON_GAP : 0);
+      ctx.save();
+      // Title (left-aligned beside the icon)
+      if (this._title) {
+        ctx.font = `bold ${this._titleElement.fontSize || TOOLTIP_DEFAULT_TITLE_FONT_SIZE}px "Marcellus SC", Georgia, serif`;
+        ctx.fillStyle = this._titleElement.color || TOOLTIP_DEFAULT_TITLE_COLOR;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.shadowColor = 'rgba(0,0,0,0.65)';
+        ctx.shadowBlur = 2;
+        ctx.fillText(this._title, textX, hy + 2);
+      }
+      // Mana cost row (number + colored orb per color), under the title
+      const costEntries = Object.entries(this._headerCost || {}).filter(([, n]) => n > 0);
+      if (costEntries.length) {
+        const cy = hy + HEADER_ICON_SIZE - HEADER_COST_FONT_SIZE / 2 - 4;
+        let cx = textX;
+        ctx.shadowBlur = 0;
+        for (const [color, amount] of costEntries) {
+          ctx.font = `bold ${HEADER_COST_FONT_SIZE}px Georgia, serif`;
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(amount), cx, cy);
+          cx += ctx.measureText(String(amount)).width + HEADER_COST_GAP + HEADER_COST_ORB_R;
+          ctx.beginPath();
+          ctx.arc(cx, cy, HEADER_COST_ORB_R, 0, Math.PI * 2);
+          ctx.fillStyle = HEADER_MANA_COLORS[color] || '#888';
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = '#665522';
+          ctx.stroke();
+          cx += HEADER_COST_ORB_R + 14;
+        }
+      }
+      ctx.restore();
+
+      // Body fills the remaining height below the header row.
+      bodyY = hy + HEADER_ICON_SIZE + HEADER_BODY_GAP;
+      bodyH = Math.max(1, y + padding + innerH - bodyY);
+      if (this._text) {
+        this._textElement.setStyle({ maxWidth: innerW, alignV: 'top' });
+        this._textElement.rect.x = x + padding;
+        this._textElement.rect.y = bodyY;
+        this._textElement.rect.w = innerW;
+        this._textElement.rect.h = bodyH;
+        this._textElement.renderSelf(ctx);
+      }
+      return;
+    }
 
     if (this._title) {
       // Stack title + gap + body and vertically center the whole block

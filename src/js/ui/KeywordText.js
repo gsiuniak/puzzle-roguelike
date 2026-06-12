@@ -35,6 +35,10 @@ export default class KeywordText extends UIElement {
     this.alignH = 'center';
     this.alignV = 'center';
     this.maxWidth = 0;
+    /** Max wrapped lines (0 = unlimited). Overflow lines are dropped and a
+     *  trailing ellipsis is drawn after the last visible line as the
+     *  "there's more" indicator (used by SkillButton's 2-line descriptions). */
+    this.maxLines = 0;
     this.lineHeight = null;
     this._missingColor = KEYWORD_MISSING_COLOR;
 
@@ -71,6 +75,7 @@ export default class KeywordText extends UIElement {
     if (props.bold !== undefined) { this.bold = props.bold; invalidate = true; }
     if (props.italic !== undefined) { this.italic = props.italic; invalidate = true; }
     if (props.maxWidth !== undefined) { this.maxWidth = props.maxWidth; invalidate = true; }
+    if (props.maxLines !== undefined) { this.maxLines = props.maxLines; invalidate = true; }
     if (props.lineHeight !== undefined) { this.lineHeight = props.lineHeight; invalidate = true; }
     if (props.color !== undefined) { this.color = props.color; invalidate = true; }
     if (props.missingColor !== undefined) { this._missingColor = props.missingColor; invalidate = true; }
@@ -184,11 +189,24 @@ export default class KeywordText extends UIElement {
     }
     if (line.words.length || lines.length === 0) lines.push(line);
 
-    return { lines, spaceW };
+    // Line cap: drop overflow lines; renderSelf draws a trailing ellipsis.
+    let truncated = false;
+    if (this.maxLines > 0 && lines.length > this.maxLines) {
+      lines.length = this.maxLines;
+      truncated = true;
+    }
+
+    return { lines, spaceW, truncated };
+  }
+
+  /** True when the last layout dropped lines due to maxLines (valid after
+   *  the element has been measured/rendered at least once). */
+  get truncated() {
+    return !!(this._layout && this._layout.truncated);
   }
 
   _getLayout(ctx) {
-    const key = `${this.text}|${this.getFontString()}|${this.maxWidth}`;
+    const key = `${this.text}|${this.getFontString()}|${this.maxWidth}|${this.maxLines}`;
     if (this._layout && this._layoutKey === key) return this._layout;
     this._layout = this._buildLayout(ctx);
     this._layoutKey = key;
@@ -221,7 +239,8 @@ export default class KeywordText extends UIElement {
     if (!this.text) return;
 
     const r = this.rect;
-    const { lines, spaceW } = this._getLayout(ctx);
+    const layout = this._getLayout(ctx);
+    const { lines, spaceW } = layout;
     const lineCount = lines.length;
     if (lineCount === 0) return;
 
@@ -301,6 +320,14 @@ export default class KeywordText extends UIElement {
         }
       }
       closeKw();
+
+      // Truncation indicator: a trailing ellipsis after the last visible line
+      // (maxLines dropped content). Clamped to the rect's right edge.
+      if (layout.truncated && i === lineCount - 1) {
+        const ellW = ctx.measureText('…').width;
+        ctx.fillStyle = this.color;
+        ctx.fillText('…', Math.min(x + 2, r.x + r.w - ellW), cy);
+      }
     }
 
     if (needsClip) ctx.restore();
