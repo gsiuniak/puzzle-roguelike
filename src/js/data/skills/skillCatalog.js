@@ -37,9 +37,7 @@ const SKILL_CATALOG = {
     cost: { red: 5 },
     effects: [
       { effectType: 'damage', damage: { amount: 5 } },
-      { effectType: 'extra_turn' },
-      { effectType: 'apply_status', applyStatus: { id: 'crippled', target: 'opponent', turns: 3, attackValue: 1 } },
-      { effectType: 'apply_status', applyStatus: { id: 'barrier', target: 'self', turns: 3 } }
+      { effectType: 'extra_turn' }
     ],
   },
   defend: {
@@ -53,6 +51,8 @@ const SKILL_CATALOG = {
       // Armor 5→6: sim showed Defend sat under the value curve (~1.2 HPe/mana).
       { effectType: 'armor', armor: { amount: 6 } },
       { effectType: 'create_tiles', createTiles: { amount: 3, type: 'blue' } },
+      // { effectType: 'apply_status', applyStatus: { id: 'bleeding', target: 'opponent', turns: 3, attackValue: 1 } },
+      // { effectType: 'apply_status', applyStatus: { id: 'berserk', target: 'self', turns: 3 } }
     ],
   },
 

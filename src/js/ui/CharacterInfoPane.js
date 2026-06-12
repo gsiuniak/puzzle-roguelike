@@ -49,9 +49,9 @@ const FLAIR_SIDE_INSET = 2;         // horizontal inset from the name block edge
 // portrait WIDTH to get each big overlay's drawn width (height follows the
 // sprite's own aspect, so the wide debuff X stays wide); OFFSET nudges the
 // overlay center from the portrait center (px, design space; +y = down).
-const STATUS_BUFF_SCALE   = 1.35;
-const STATUS_BUFF_OFFSET  = { x: 0, y: -18 };
-const STATUS_DEBUFF_SCALE = 1.30;
+const STATUS_BUFF_SCALE   = 0.98;
+const STATUS_BUFF_OFFSET  = { x: 0, y: 5 };
+const STATUS_DEBUFF_SCALE = 0.96;
 const STATUS_DEBUFF_OFFSET = { x: 0, y: 0 };
 
 // Mini-badges for the "+N more" statuses, laid out in a centered row anchored
@@ -60,12 +60,16 @@ const STATUS_MINI_SIZE   = 38;     // square size of each mini badge
 const STATUS_MINI_GAP    = 4;      // horizontal gap between badges
 const STATUS_MINI_OFFSET = { x: 0, y: -6 }; // row center offset from portrait bottom
 
-// Remaining-turn count drawn on each big overlay (bottom-right of its box).
+// Remaining-turn count, drawn CENTERED on each overlay's emblem (the buff
+// crest's lower shield/gem; the debuff X's central badge). The emblem offsets
+// are FRACTIONS of the overlay's own width/height measured from its center
+// (+y = down), so the number tracks the emblem at any scale.
 const STATUS_COUNT_SHOW  = true;
-const STATUS_COUNT_FONT  = 24;
+const STATUS_COUNT_FONT  = 18;
 const STATUS_COUNT_COLOR = '#ffffff';
 const STATUS_COUNT_STROKE = '#000000';
-const STATUS_COUNT_OFFSET = { x: -6, y: -4 }; // from the overlay box's bottom-right
+const STATUS_BUFF_COUNT_OFFSET   = { x: 0, y: 0.3 }; // on the buff crest's emblem (lower-center)
+const STATUS_DEBUFF_COUNT_OFFSET = { x: 0, y: 0.24 }; // on the debuff X's central badge (center)
 
 const HEALTH_BAR_HEIGHT = 36;
 const HEALTH_LABEL_FONT_SIZE = 20;
@@ -455,8 +459,9 @@ export default class CharacterInfoPane extends UIPanel {
       for (const st of extras) {
         this._drawStatusSprite(ctx, am, st.id, x, y, STATUS_MINI_SIZE, STATUS_MINI_SIZE);
         if (STATUS_COUNT_SHOW && st.turns > 0) {
-          this._drawStatusCount(ctx, st.turns, x + STATUS_MINI_SIZE, y + STATUS_MINI_SIZE,
-            Math.round(STATUS_COUNT_FONT * 0.62));
+          this._drawStatusCount(ctx, st.turns,
+            x + STATUS_MINI_SIZE / 2, y + STATUS_MINI_SIZE / 2,
+            Math.round(STATUS_COUNT_FONT * 0.8));
         }
         x += STATUS_MINI_SIZE + STATUS_MINI_GAP;
       }
@@ -481,8 +486,11 @@ export default class CharacterInfoPane extends UIPanel {
     ctx.drawImage(img, x, y, w, h);
     ctx.imageSmoothingEnabled = prev;
     if (STATUS_COUNT_SHOW && st.turns > 0) {
+      // Center the count on the overlay's emblem (per-kind fractional offset).
+      const emblem = def.kind === STATUS_KIND.BUFF
+        ? STATUS_BUFF_COUNT_OFFSET : STATUS_DEBUFF_COUNT_OFFSET;
       this._drawStatusCount(ctx, st.turns,
-        x + w + STATUS_COUNT_OFFSET.x, y + h + STATUS_COUNT_OFFSET.y, STATUS_COUNT_FONT);
+        cx + emblem.x * w, cy + emblem.y * h, STATUS_COUNT_FONT);
     }
   }
 
@@ -503,12 +511,12 @@ export default class CharacterInfoPane extends UIPanel {
     ctx.imageSmoothingEnabled = prev;
   }
 
-  /** Draw a remaining-turn count number with an outline, right/bottom anchored. */
+  /** Draw a remaining-turn count number with an outline, centered at (x,y). */
   _drawStatusCount(ctx, n, x, y, fontSize) {
     ctx.save();
     ctx.font = `bold ${fontSize}px "Marcellus SC", Georgia, serif`;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'bottom';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
     ctx.lineWidth = Math.max(2, fontSize * 0.2);
     ctx.strokeStyle = STATUS_COUNT_STROKE;
