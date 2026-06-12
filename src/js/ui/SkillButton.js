@@ -29,7 +29,7 @@ const COST_PAIR_GAP = 4;
 const DESC_MAX_LINES = 2;
 // "?" help badge (top-right corner) — hover/hold shows the full skill tooltip.
 const HELP_BADGE_SIZE = 20;
-const HELP_BADGE_MARGIN = 4;
+const HELP_BADGE_MARGIN = 8;
 const HELP_BADGE_BG = 'rgba(20, 16, 10, 0.85)';
 const HELP_BADGE_BORDER = 'rgba(214, 188, 120, 0.65)';
 const HELP_BADGE_TEXT = '#d6bc78';
@@ -160,7 +160,7 @@ export default class SkillButton extends UIPanel {
       alignH: 'left',
       alignV: 'center',
       height: NAME_FONT_SIZE + 4,
-      margin: { bottom: 2 }
+      margin: { top: 3 }
     });
     info.addChild(this._nameText);
 
@@ -178,6 +178,7 @@ export default class SkillButton extends UIPanel {
       maxWidth: DESC_MAX_WIDTH,
       maxLines: DESC_MAX_LINES,
       flexGrow: 1,
+      margin: { top: 5 }
     });
     info.addChild(this._descText);
 

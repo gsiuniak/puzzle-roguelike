@@ -8,11 +8,11 @@ import SkillButton from './SkillButton.js';
 // is reserved in the panel image).
 const PANE_PADDING = { top: 48, right: 20, bottom: 24, left: 20 };
 const GRID_GAP = 6;
-const SLOT_HEIGHT = 126;
+const SLOT_HEIGHT = 105; // 126;
 
 // Default capacity matches the mock (2 columns × 3 rows).
 const COLS = 1;
-const ROWS = 5;
+const ROWS = 6; // 5;
 const SLOT_COUNT = COLS * ROWS;
 
 /**

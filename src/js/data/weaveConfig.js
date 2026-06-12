@@ -101,15 +101,15 @@ export const TAG_VALUE_TABLES = Object.freeze({
   attack: { 1: 55, 2: 33, 3: 12 },
 
   // ── Status durations (turn cycles) ──
-  silence:    { 1: 50, 2: 35, 3: 15 },
-  cripple:    { 1: 50, 2: 35, 3: 15 },
-  enfeeble:   { 1: 50, 2: 35, 3: 15 },
-  brittle:    { 1: 45, 2: 38, 3: 17 },
+  silence:    { 2: 50, 3: 35, 4: 15 },
+  cripple:    { 2: 50, 3: 35, 4: 15 },
+  enfeeble:   { 2: 50, 3: 35, 4: 15 },
+  brittle:    { 2: 45, 3: 38, 4: 17 },
   bleed:      { 2: 45, 3: 35, 4: 20 },
-  frozen:     { 1: 50, 2: 35, 3: 15 },
+  frozen:     { 2: 50, 3: 35, 4: 15 },
   intangible: { 1: 60, 2: 30, 3: 10 },
-  berserk:    { 1: 55, 2: 33, 3: 12 },
-  barrier:    { 1: 45, 2: 35, 3: 20 },
+  berserk:    { 2: 55, 3: 33, 4: 12 },
+  barrier:    { 2: 45, 3: 35, 4: 20 },
 });
 
 // ═══════════════════════════════════════════════════════════
