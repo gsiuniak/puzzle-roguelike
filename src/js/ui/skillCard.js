@@ -56,11 +56,21 @@ const DESC_LINE_HEIGHT = 20;
 const DESC_COLOR = '#cfc8a8';
 const EFFECT_GAP = 6;
 
-// Mana cost.
-const COST_FONT_SIZE = 22;
-const COST_ORB_SIZE = 24;
-const COST_PAIR_GAP = 5;
-export const COST_COL_WIDTH = 56;
+// Mana cost — a small pill BADGE attached to the icon's lower-right edge
+// (frees the whole right side of the card for name/description text).
+// Badge height ≈ 40% of ICON_SIZE; the pill widens for two-digit costs.
+const COST_BADGE_H = Math.round(ICON_SIZE * 0.40);
+const COST_BADGE_FONT_SIZE = Math.round(COST_BADGE_H * 0.68);
+const COST_BADGE_GEM_R = Math.round(COST_BADGE_H * 0.32);
+const COST_BADGE_PAD_X = 7;          // pill end-cap padding
+const COST_BADGE_GAP = 4;            // number ↔ gem gap
+const COST_BADGE_STACK_GAP = 3;      // between pills (multi-color costs)
+/** How far the pill pokes past the icon's bottom-right edge. */
+const COST_BADGE_OFFSET = { x: 4, y: 3 };
+const COST_BADGE_BG = 'rgba(10, 8, 5, 0.95)';
+const COST_BADGE_BORDER = 'rgba(214, 188, 120, 0.85)';
+const COST_BADGE_NUMBER = '#ffffff';
+const COST_BADGE_GLOW_ALPHA = 0.55;  // subtle gem-colored glow behind the pill
 
 const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
@@ -148,7 +158,8 @@ function wrapWords(ctx, text, maxW) {
  */
 export function measureCardModel(ctx, model, cardW) {
   const textX = CARD_PAD.left + ICON_SIZE + ICON_GAP; // relative to card x
-  const textW = Math.max(20, cardW - CARD_PAD.right - COST_COL_WIDTH - textX);
+  // The cost lives on the icon badge — text gets the whole right side.
+  const textW = Math.max(20, cardW - CARD_PAD.right - textX);
 
   ctx.font = `bold ${NAME_FONT_SIZE}px ${FONT_FAMILY}`;
   const nameLines = wrapWords(ctx, model.skill.name || '', textW);
@@ -255,34 +266,63 @@ export function drawCardModel(ctx, model, rect, m, opts = {}) {
     ctx.stroke();
   }
 
-  // ── Mana cost ──
+  // ── Mana cost badge: a small pill attached to the icon's lower-right
+  //    edge ("5 ●"), one pill per cost color (stacked upward for the rare
+  //    multi-color cost). Dark backing, thin gold trim, gem-colored glow. ──
   const cost = skill.cost || {};
   const costColors = Object.keys(cost).filter(c => cost[c] > 0);
   if (costColors.length) {
     ctx.save();
-    ctx.font = `bold ${COST_FONT_SIZE}px ${FONT_FAMILY}`;
+    ctx.font = `bold ${COST_BADGE_FONT_SIZE}px ${FONT_FAMILY}`;
     ctx.textBaseline = 'middle';
-    const rowH = COST_ORB_SIZE + 4;
-    let cy = y + h / 2 - ((costColors.length - 1) * rowH) / 2;
+    // Anchor: pill's bottom-right corner pokes just past the icon's edge.
+    const anchorRight = iconCX + ICON_SIZE / 2 + COST_BADGE_OFFSET.x;
+    let pillBottom = iconCY + ICON_SIZE / 2 + COST_BADGE_OFFSET.y;
     for (const color of costColors) {
       const amount = String(cost[color]);
-      const orbX = x + w - CARD_PAD.right - COST_ORB_SIZE;
+      const numW = ctx.measureText(amount).width;
+      const pillW = COST_BADGE_PAD_X + numW + COST_BADGE_GAP + COST_BADGE_GEM_R * 2 + COST_BADGE_PAD_X;
+      const px = anchorRight - pillW;
+      const py = pillBottom - COST_BADGE_H;
+      const gemColor = MANA_COLORS[color] || '#888';
+
+      // Subtle gem-colored glow under the pill, then the dark pill + trim.
+      ctx.save();
+      ctx.shadowColor = gemColor;
+      ctx.shadowBlur = 7;
+      ctx.globalAlpha *= COST_BADGE_GLOW_ALPHA;
+      roundRectPath(ctx, px, py, pillW, COST_BADGE_H, COST_BADGE_H / 2);
+      ctx.fillStyle = COST_BADGE_BG;
+      ctx.fill();
+      ctx.restore();
+      roundRectPath(ctx, px, py, pillW, COST_BADGE_H, COST_BADGE_H / 2);
+      ctx.fillStyle = COST_BADGE_BG;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = COST_BADGE_BORDER;
+      ctx.stroke();
+
+      // Number (left) + gem (right) — "5 ●".
+      const cy = py + COST_BADGE_H / 2;
+      ctx.fillStyle = COST_BADGE_NUMBER;
+      ctx.textAlign = 'left';
+      ctx.fillText(amount, px + COST_BADGE_PAD_X, cy + 1);
+      const gemCX = px + COST_BADGE_PAD_X + numW + COST_BADGE_GAP + COST_BADGE_GEM_R;
       const orbImg = asset(`mana_${color}_simple`);
       if (orbImg) {
-        ctx.drawImage(orbImg, orbX, cy - COST_ORB_SIZE / 2, COST_ORB_SIZE, COST_ORB_SIZE);
+        ctx.drawImage(orbImg, gemCX - COST_BADGE_GEM_R, cy - COST_BADGE_GEM_R,
+          COST_BADGE_GEM_R * 2, COST_BADGE_GEM_R * 2);
       } else {
         ctx.beginPath();
-        ctx.arc(orbX + COST_ORB_SIZE / 2, cy, COST_ORB_SIZE / 2, 0, Math.PI * 2);
-        ctx.fillStyle = MANA_COLORS[color] || '#888';
+        ctx.arc(gemCX, cy, COST_BADGE_GEM_R, 0, Math.PI * 2);
+        ctx.fillStyle = gemColor;
         ctx.fill();
         ctx.lineWidth = 1;
         ctx.strokeStyle = '#665522';
         ctx.stroke();
       }
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'right';
-      ctx.fillText(amount, orbX - COST_PAIR_GAP, cy + 1);
-      cy += rowH;
+
+      pillBottom = py - COST_BADGE_STACK_GAP; // next color stacks upward
     }
     ctx.restore();
   }

@@ -31,7 +31,7 @@ import { createCardModel, measureCardModel, drawCardModel } from './skillCard.js
  */
 
 // ── Outer panel (UNCHANGED dimensions — keep the surrounding layout static) ──
-const PANE_PADDING = { top: 48, right: 20, bottom: 24, left: 20 };
+const PANE_PADDING = { top: 48, right: 5, bottom: 24, left: 16 };
 // The pane's height was defined by the old grid; preserve it exactly.
 const LEGACY_SLOT_HEIGHT = 105;
 const LEGACY_ROWS = 6;
@@ -42,9 +42,9 @@ const NATURAL_HEIGHT =
 
 // ── List ──
 /** Minimum card slots shown (empty ones render as locked fillers). */
-const MIN_SLOTS = 6;
-const CARD_GAP = 6;
-const LOCKED_CARD_H = 70;
+const MIN_SLOTS = 8;
+const CARD_GAP = 2;
+const LOCKED_CARD_H = 75;
 const LOCKED_ICON_SIZE = 26;
 const LOCKED_ALPHA = 0.45;
 
