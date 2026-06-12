@@ -21,7 +21,7 @@ import KeywordText from './KeywordText.js';
 
 // ── Card chrome ──
 export const CARD_BG_KEY = 'skills_button';
-export const CARD_MIN_H = 84;
+export const CARD_MIN_H = 100;
 const CARD_RADIUS = 7;
 const CARD_FALLBACK_BG = 'rgba(12, 10, 8, 0.6)';
 const CARD_FALLBACK_BORDER = 'rgba(120, 100, 60, 0.4)';

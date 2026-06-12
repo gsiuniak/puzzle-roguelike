@@ -33,7 +33,7 @@ import { resolveRelicIds } from './relics/relicCatalog.js';
  * (runState.skills grows every weave); the loadout modal manages which ones
  * are equipped (runState.equippedSkillIds).
  */
-export const MAX_EQUIPPED_SKILLS = 6;
+export const MAX_EQUIPPED_SKILLS = 8;
 
 /**
  * Every skill the player owns, as resolved skill objects (deep-cloned):

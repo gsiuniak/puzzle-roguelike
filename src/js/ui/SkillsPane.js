@@ -44,7 +44,7 @@ const NATURAL_HEIGHT =
 /** Minimum card slots shown (empty ones render as locked fillers). */
 const MIN_SLOTS = 8;
 const CARD_GAP = 2;
-const LOCKED_CARD_H = 75;
+const LOCKED_CARD_H = 76;
 const LOCKED_ICON_SIZE = 26;
 const LOCKED_ALPHA = 0.45;
 
