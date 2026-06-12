@@ -14,6 +14,7 @@ import CombatLog from './CombatLog.js';
 import EnemyAI from './EnemyAI.js';
 import { chooseEnemyAction } from './customEnemyAi.js';
 import { TILE_TYPES, isSkull, MANA_COLORS } from './TileTypes.js';
+import { getStatusDef } from '../data/statusEffects.js';
 import PassiveSystem from '../systems/PassiveSystem.js';
 import TRIGGER_TYPES from '../systems/TriggerTypes.js';
 
@@ -300,7 +301,11 @@ export default class BattleController {
           this._dispatchDamageEvent(attackerSide, targetSide, info);
         }
       },
-      onExtraTurn: () => { this._extraTurnEarned = true; },
+      onExtraTurn: () => {
+        // Frozen blocks ALL extra-turn grants for the active side, including
+        // passive/relic-granted ones routed through here.
+        if (this._canGainExtraTurn(this.activeSide)) this._extraTurnEarned = true;
+      },
       // Board-touching passive effects (e.g. destroy_tiles_radius from
       // Unstable Catalyst) are routed here so the cascade phase machine
       // stays in charge of board mutations.
@@ -446,11 +451,11 @@ export default class BattleController {
    */
   _recomputeDynamicAttack(side) {
     if (!side) return;
-    // While an attack override is active (Exsanguinate), the side's attack is
-    // pinned to a fixed value — freeze dynamic recompute so mana changes don't
-    // fight it. _lastDynamicAttack stays put, so on expiry the saved attack and
-    // the resumed delta math reconcile correctly against the current mana.
-    if (side._attackOverride) return;
+    // While Cripple (attack override) is active, the side's attack is pinned to
+    // a fixed value — freeze dynamic recompute so mana changes don't fight it.
+    // _lastDynamicAttack stays put, so on expiry the saved attack and the
+    // resumed delta math reconcile correctly against the current mana.
+    if (this._hasStatus(side, 'crippled')) return;
     const rules = side._attackPerManaRules;
     if (!rules || rules.length === 0) return;
     let bonus = 0;
@@ -513,6 +518,9 @@ export default class BattleController {
         ...r,
         effects: (r.effects || []).map(e => ({ ...e })),
       })),
+      // Active status effects (buffs/debuffs). Runtime-only — always starts
+      // empty for a fresh battle state. See the status-effect section below.
+      statuses: [],
       // Preserve custom AI behavior key from enemy definition (if any)
       aiBehavior: d.aiBehavior || null,
     };
@@ -910,18 +918,23 @@ export default class BattleController {
     // 1. Compute tile rewards using shared path
     const rewards = this.resolver.resolveDestroyedTileRewards(this.board, positions, activeState);
 
-    // 2. Award mana from colored gems
-    for (const [color, count] of Object.entries(rewards.mana)) {
-      if (count > 0) {
-        activeState.mana[color] = (activeState.mana[color] || 0) + count;
-        this.log.add(`${activeState.name} gains ${count} ${color} mana from destroyed gems.`);
-        this._dispatchManaGain(this.activeSide, color, count);
+    // 2. Award mana from colored gems (suppressed entirely while Enfeebled —
+    //    tiles are still destroyed and skull damage still dealt below).
+    if (this._canGainMana(this.activeSide)) {
+      for (const [color, count] of Object.entries(rewards.mana)) {
+        if (count > 0) {
+          activeState.mana[color] = (activeState.mana[color] || 0) + count;
+          this.log.add(`${activeState.name} gains ${count} ${color} mana from destroyed gems.`);
+          this._dispatchManaGain(this.activeSide, color, count);
+        }
       }
+    } else {
+      this.log.add(`${activeState.name} is Enfeebled and gains no mana.`);
     }
 
-    // 3. Deal skull damage
+    // 3. Deal skull damage (isSkull → Barrier can block this instance)
     if (rewards.skullDamage > 0) {
-      const r = this._applyDamage(targetState, rewards.skullDamage);
+      const r = this._applyDamage(targetState, rewards.skullDamage, { isSkull: true });
       this.log.add(`Destroyed skulls deal ${r.actualDamage} damage to ${targetState.name}.`);
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
@@ -1182,7 +1195,8 @@ export default class BattleController {
     // conversion lines up a 4+ match. Suppress the extra-turn flag/visual when
     // resuming the turn after this resolution.
     let causePos = null;
-    if (analysis.extraTurnTrigger && !this._resumeTurnAfterResolve) {
+    if (analysis.extraTurnTrigger && !this._resumeTurnAfterResolve
+        && this._canGainExtraTurn(this.activeSide)) {
       this._extraTurnEarned = true;
       if (this._previousEmptyCells && this._previousEmptyCells.length > 0) {
         causePos = this._findCascadeCausePos(analysis, this._previousEmptyCells);
@@ -1304,7 +1318,7 @@ export default class BattleController {
     const targetState = this._opponentState();
 
     if (a.skullDamage > 0) {
-      const r = this._applyDamage(targetState, a.skullDamage);
+      const r = this._applyDamage(targetState, a.skullDamage, { isSkull: true });
       this.log.add(`Skull damage: ${r.actualDamage} dealt.`);
       // Trigger screen shake scaled by damage % of target's max HP
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
@@ -1318,12 +1332,18 @@ export default class BattleController {
       if (this._checkGameOver()) return;
     }
 
-    for (const [color, count] of Object.entries(a.mana)) {
-      if (count > 0) {
-        activeState.mana[color] = (activeState.mana[color] || 0) + count;
-        this.log.add(`${activeState.name} gains ${count} ${color} mana.`);
-        this._dispatchManaGain(this.activeSide, color, count);
+    // Mana from matched gems — suppressed entirely while Enfeebled (the tiles
+    // still clear and skull damage above is unaffected).
+    if (this._canGainMana(this.activeSide)) {
+      for (const [color, count] of Object.entries(a.mana)) {
+        if (count > 0) {
+          activeState.mana[color] = (activeState.mana[color] || 0) + count;
+          this.log.add(`${activeState.name} gains ${count} ${color} mana.`);
+          this._dispatchManaGain(this.activeSide, color, count);
+        }
       }
+    } else if (Object.values(a.mana).some(c => c > 0)) {
+      this.log.add(`${activeState.name} is Enfeebled and gains no mana.`);
     }
 
     // Capture tile types BEFORE removal so the scene can spawn
@@ -1446,10 +1466,8 @@ export default class BattleController {
     // relic effects see the correct active-side context.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_END, { side });
 
-    // Tick down any turn-scoped debuffs (Silence, Exsanguinate attack override)
-    // on the side whose turn just ended, so a debuff applied during the
-    // opponent's turn lasts exactly through this side's next turn.
-    this._tickTurnDebuffs(side);
+    // NOTE: status effects are ticked at the START of the affected side's turn
+    // (_tickStatusesAtTurnStart in _completeTurnIntro), not here.
 
     this.pendingExtraTurn = false;
     this._swapTriggerPos = null;
@@ -1494,6 +1512,15 @@ export default class BattleController {
       this.log.add('--- Your Turn ---');
     }
 
+    // Tick status effects at the START of this side's turn (arm/decrement,
+    // expire, and apply per-turn effects like Bleed). Bleed can be lethal, so
+    // re-check game over before the side acts / passives fire.
+    this._tickStatusesAtTurnStart(side);
+    if (this._checkGameOver()) {
+      if (this.onStateChange) this.onStateChange();
+      return;
+    }
+
     // Dispatch onTurnStart AFTER state is set so relic effects can
     // observe the active side correctly.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_START, { side });
@@ -1508,67 +1535,163 @@ export default class BattleController {
     return this.activeSide === 'player' ? this.enemyState : this.playerState;
   }
 
-  // ── Turn-scoped debuffs (Silence / Exsanguinate) ─────
+  // ── Status effects (buffs / debuffs) ─────────────────
   //
-  // Both are applied to a side by the OPPONENT's skill and last through that
-  // side's upcoming turn(s). The counters live directly on the combatant
-  // battle state (`_silencedTurns`, `_attackOverride`) and are decremented in
-  // _tickTurnDebuffs at the END of the affected side's own turn, so a debuff
-  // applied during the opponent's turn always covers exactly the next own turn.
+  // A status lasts N turn CYCLES of the AFFECTED combatant; a cycle = that
+  // combatant holding control once. Statuses live on `state.statuses` (an array
+  // of { id, kind, turns, _armed, sourceSide, attackValue?, savedAttack?,
+  // tickDamage? }) and are ticked at the START of the affected side's turn
+  // (_tickStatusesAtTurnStart, called from _completeTurnIntro).
+  //
+  // Each carries an `_armed` flag set at application time:
+  //   - SELF-applied (affected side IS the active side): _armed = true — the
+  //     current turn is already cycle 1, underway. The next own-turn-start
+  //     decrements it.
+  //   - OPPONENT-applied (affected side is NOT active): _armed = false — cycle 1
+  //     begins at their next turn start (which arms it without decrementing).
+  // Tick per status: if armed → turns--, else arm it; remove when turns<=0
+  // (before any per-turn effect), otherwise apply per-turn effects (Bleed).
+  // "Active" for every game-logic check = the status is PRESENT in the list.
+  //
+  // Silence (Soul Burn) and Cripple (Exsanguinate's attack-pin) are migrated
+  // onto this system — there is no separate turn-scoped-debuff path anymore.
 
-  /** Whether `state` currently cannot cast skills (Soul Burn). */
+  /** The status entry for `id` on `state`, or null. */
+  _getStatus(state, id) {
+    if (!state || !state.statuses) return null;
+    return state.statuses.find(s => s.id === id) || null;
+  }
+
+  /** Whether `state` currently has status `id` active. */
+  _hasStatus(state, id) {
+    return !!this._getStatus(state, id);
+  }
+
+  /** Whether `state` currently cannot cast skills (Silence). */
   _isSilenced(state) {
-    return !!state && (state._silencedTurns || 0) > 0;
+    return this._hasStatus(state, 'silenced');
+  }
+
+  /** Whether the side may gain mana this turn (false while Enfeebled). */
+  _canGainMana(side) {
+    return !this._hasStatus(this._getStateBySide(side), 'enfeebled');
+  }
+
+  /** Whether the side may gain an extra turn (false while Frozen). */
+  _canGainExtraTurn(side) {
+    return !this._hasStatus(this._getStateBySide(side), 'frozen');
   }
 
   /**
-   * Pin a side's attack to a fixed value for `turns` of its upcoming turns.
-   * Stores the pre-override attack so it can be restored on expiry. Refreshing
-   * an existing override keeps the ORIGINAL saved attack (so stacking casts
-   * don't bake the forced value in).
-   * @param {object} state
-   * @param {number} value
-   * @param {number} turns
+   * Apply status `id` to `targetState` for `turns` cycles. Determines _armed
+   * from whether the target is currently the active side (see section header).
+   * Refreshing an existing status keeps the longer remaining duration and the
+   * original saved data (e.g. Cripple's savedAttack), so stacking casts don't
+   * bake a forced value in.
+   * @param {object} targetState — the combatant receiving the status
+   * @param {string} id          — status id (data/statusEffects.js)
+   * @param {object} params      — { turns?, attackValue? }
+   * @param {'player'|'enemy'} applierSide — who applied it (for Bleed source)
    */
-  _applyAttackOverride(state, value, turns) {
-    if (!state) return;
-    const savedAttack = state._attackOverride
-      ? state._attackOverride.savedAttack
-      : state.attack;
-    state._attackOverride = { value, turns, savedAttack };
-    state.attack = value;
-  }
+  _applyStatus(targetState, id, params = {}, applierSide = null) {
+    const def = getStatusDef(id);
+    if (!targetState || !def) return;
+    if (!targetState.statuses) targetState.statuses = [];
 
-  /** Re-pin an active attack override to its forced value (called each frame). */
-  _enforceAttackOverride(state) {
-    if (state && state._attackOverride) state.attack = state._attackOverride.value;
-  }
+    const turns = Math.max(1, (typeof params.turns === 'number' ? params.turns : 1));
+    const selfApplied = targetState === this._activeState();
 
-  /**
-   * Decrement turn-scoped debuffs on `side` at the end of its turn, expiring
-   * those that hit 0. Restoring the attack override hands control back to the
-   * dynamic-attack recompute, which reconciles against the side's current mana.
-   * @param {'player'|'enemy'} side
-   */
-  _tickTurnDebuffs(side) {
-    const state = this._getStateBySide(side);
-    if (!state) return;
+    let st = this._getStatus(targetState, id);
+    if (st) {
+      // Refresh — extend to the longer duration; keep existing arming/saved data.
+      st.turns = Math.max(st.turns, turns);
+    } else {
+      st = {
+        id,
+        kind: def.kind,
+        turns,
+        _armed: selfApplied,
+        sourceSide: applierSide,
+      };
+      targetState.statuses.push(st);
 
-    if ((state._silencedTurns || 0) > 0) {
-      state._silencedTurns -= 1;
-      if (state._silencedTurns <= 0) {
-        state._silencedTurns = 0;
-        this.log.add(`${state.name} is no longer Silenced.`);
+      // Per-status application side effects:
+      if (id === 'crippled') {
+        // Pin attack to attackValue (default 1). Snapshot the pre-cripple attack
+        // so it can be restored on expiry; freeze dynamic-attack recompute while
+        // active (see _recomputeDynamicAttack / _enforceStatusAttack).
+        st.attackValue = (typeof params.attackValue === 'number') ? params.attackValue : 1;
+        st.savedAttack = targetState.attack;
+        targetState.attack = st.attackValue;
+      } else if (id === 'bleeding') {
+        // Snapshot the applier's attack at apply time → half (rounded up) per tick.
+        const applier = this._getStateBySide(applierSide);
+        const atk = (applier && applier.attack) || 1;
+        st.tickDamage = Math.max(1, Math.ceil(atk / 2));
       }
     }
+    if (def.kind === 'buff') this.log.add(`${targetState.name} gains ${def.name}.`);
+    else this.log.add(`${targetState.name} is afflicted with ${def.name}.`);
+  }
 
-    if (state._attackOverride) {
-      state._attackOverride.turns -= 1;
-      if (state._attackOverride.turns <= 0) {
-        state.attack = state._attackOverride.savedAttack;
-        state._attackOverride = null;
-        this.log.add(`${state.name}'s attack returns to normal.`);
-      }
+  /** Remove status `id` from `state`, running any cleanup (Cripple restore). */
+  _removeStatus(state, id) {
+    if (!state || !state.statuses) return;
+    const idx = state.statuses.findIndex(s => s.id === id);
+    if (idx < 0) return;
+    const st = state.statuses[idx];
+    state.statuses.splice(idx, 1);
+    if (id === 'crippled') {
+      // Hand attack back to the dynamic-attack recompute, which reconciles
+      // against the side's current mana on the next frame.
+      if (typeof st.savedAttack === 'number') state.attack = st.savedAttack;
+      this.log.add(`${state.name}'s attack returns to normal.`);
+    } else {
+      const def = getStatusDef(id);
+      this.log.add(`${state.name}'s ${def ? def.name : id} wears off.`);
+    }
+  }
+
+  /** Re-pin a side's attack to its Cripple value (called each frame). */
+  _enforceStatusAttack(state) {
+    const st = this._getStatus(state, 'crippled');
+    if (st && typeof st.attackValue === 'number') state.attack = st.attackValue;
+  }
+
+  /**
+   * Tick the statuses on `side` at the START of its turn (see section header).
+   * Arms or decrements each, removes expired ones, and applies per-turn effects
+   * (Bleed) for still-active statuses. Bleed may be lethal — the caller
+   * (_completeTurnIntro) re-checks game over afterward.
+   * @param {'player'|'enemy'} side
+   */
+  _tickStatusesAtTurnStart(side) {
+    const state = this._getStateBySide(side);
+    if (!state || !state.statuses || state.statuses.length === 0) return;
+
+    // Snapshot the list — _removeStatus mutates it and per-turn effects must
+    // see the pre-tick membership.
+    const current = [...state.statuses];
+    const expired = [];
+    for (const st of current) {
+      if (st._armed) st.turns -= 1;
+      else st._armed = true;
+      if (st.turns <= 0) { expired.push(st.id); continue; }
+      this._applyStatusTurnStartEffect(st, side, state);
+    }
+    for (const id of expired) this._removeStatus(state, id);
+  }
+
+  /** Per-turn-start effect for a still-active status (today: Bleed damage). */
+  _applyStatusTurnStartEffect(st, side, state) {
+    if (st.id !== 'bleeding') return;
+    const dmg = Math.max(1, st.tickDamage || 1);
+    const attackerSide = st.sourceSide || (side === 'player' ? 'enemy' : 'player');
+    const r = this._applyDamage(state, dmg, { attackerSide });
+    if (r.actualDamage > 0) {
+      this.log.add(`${state.name} takes ${r.actualDamage} bleed damage.`);
+      this._setShakeFromDamage(r.actualDamage, state.maxHp);
+      this._dispatchDamageEvent(attackerSide, side, r);
     }
   }
 
@@ -1580,11 +1703,11 @@ export default class BattleController {
     this._recomputeDynamicAttack(this.playerState);
     this._recomputeDynamicAttack(this.enemyState);
 
-    // Keep any active attack override (Exsanguinate) pinned to its forced
-    // value — catches stray mutations (e.g. a relic's gain_attack firing during
-    // the debuffed turn) so the "attack = N this turn" guarantee holds.
-    this._enforceAttackOverride(this.playerState);
-    this._enforceAttackOverride(this.enemyState);
+    // Keep an active Cripple attack-pin enforced — catches stray mutations
+    // (e.g. a relic's gain_attack firing during the crippled turn) so the
+    // "attack = N this turn" guarantee holds.
+    this._enforceStatusAttack(this.playerState);
+    this._enforceStatusAttack(this.enemyState);
 
     // ── Swap animation ──
     if (this.state === BattleState.SWAPPING && this.swapAnim) {
@@ -1649,6 +1772,17 @@ export default class BattleController {
   // ── Enemy ─────────────────────────────────────────────
 
   _doEnemyTurn() {
+    // ── 0. Silence: skip ALL skill casting (custom + standard AI) and fall
+    //    straight to the swap path. Forward-looking guard — no content silences
+    //    the enemy yet, but this keeps the status uniform across both sides.
+    const silenced = this._isSilenced(this.enemyState);
+    if (silenced) {
+      this.log.add(`${this.enemyState.name} is Silenced and cannot cast skills.`);
+      this.enemyAI = new EnemyAI(this.enemyState, this.playerState);
+      this._doEnemySwap();
+      return;
+    }
+
     // ── 1. Try custom AI handler (if any) ──────────────────
     const customAction = chooseEnemyAction(this.enemyState, {
       enemy: this.enemyState,
@@ -1694,6 +1828,15 @@ export default class BattleController {
       return;
     }
 
+    this._doEnemySwap();
+  }
+
+  /**
+   * The enemy's board-swap action (standard-AI fallback, also used directly
+   * when the enemy is Silenced). Requires `this.enemyAI` to be set.
+   * @private
+   */
+  _doEnemySwap() {
     const swap = this.enemyAI.findBestSwap(this.board);
     if (swap) {
       this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
@@ -1900,8 +2043,12 @@ export default class BattleController {
       }
 
       case SKILL_EFFECT_TYPES.EXTRA_TURN: {
-        this._extraTurnEarned = true;
-        this.log.add(`${src.name} gains an extra turn!`);
+        if (this._canGainExtraTurn(side)) {
+          this._extraTurnEarned = true;
+          this.log.add(`${src.name} gains an extra turn!`);
+        } else {
+          this.log.add(`${src.name} is Frozen and cannot gain an extra turn.`);
+        }
         return false;
       }
 
@@ -1949,23 +2096,33 @@ export default class BattleController {
       }
 
       case SKILL_EFFECT_TYPES.SILENCE: {
-        // Silence the OPPONENT for their next N turns (blocks skill casting).
-        // Decremented at the end of the silenced side's turn (_tickTurnDebuffs).
+        // Legacy alias → unified Silence status on the OPPONENT.
         const turns = (effect.silence && typeof effect.silence.turns === 'number')
           ? effect.silence.turns : 1;
-        tgt._silencedTurns = Math.max(tgt._silencedTurns || 0, turns);
-        this.log.add(`${tgt.name} is Silenced for ${turns} turn(s).`);
+        this._applyStatus(tgt, 'silenced', { turns }, side);
         return false;
       }
 
       case SKILL_EFFECT_TYPES.SET_ATTACK: {
-        // Force the OPPONENT's attack to a fixed value for their next N turns,
-        // then restore it. Expiry is handled in _tickTurnDebuffs.
+        // Legacy alias → Cripple status (attack pinned to `value`) on the OPPONENT.
         const cfg = effect.setAttack || {};
         const value = typeof cfg.value === 'number' ? cfg.value : 1;
         const turns = typeof cfg.turns === 'number' ? cfg.turns : 1;
-        this._applyAttackOverride(tgt, value, turns);
-        this.log.add(`${tgt.name}'s attack is reduced to ${value} for ${turns} turn(s).`);
+        this._applyStatus(tgt, 'crippled', { turns, attackValue: value }, side);
+        return false;
+      }
+
+      case SKILL_EFFECT_TYPES.APPLY_STATUS: {
+        // General, data-driven status application. Payload applyStatus:
+        // { id, target:'self'|'opponent', turns, attackValue? }.
+        const cfg = effect.applyStatus || {};
+        if (!cfg.id || !getStatusDef(cfg.id)) {
+          console.warn(`[BattleController] apply_status: unknown status id "${cfg.id}". Skipping.`);
+          return false;
+        }
+        const turns = typeof cfg.turns === 'number' ? cfg.turns : 1;
+        const targetState = cfg.target === 'self' ? src : tgt;
+        this._applyStatus(targetState, cfg.id, { turns, attackValue: cfg.attackValue }, side);
         return false;
       }
 
@@ -2032,8 +2189,10 @@ export default class BattleController {
    * @param {number} amount — raw damage before mitigation
    * @returns {{actualDamage:number, blocked:number, armorDamage:number}}
    */
-  _applyDamage(target, amount) {
+  _applyDamage(target, amount, opts = {}) {
     const side = target === this.playerState ? 'player' : 'enemy';
+    const attackerSide = opts.attackerSide || (side === 'player' ? 'enemy' : 'player');
+    const attacker = this._getStateBySide(attackerSide);
     const payload = { side, amount };
     // Set _currentRelicTarget so any onDamage-style hooks fired during
     // dispatch can reference the side being damaged. Cleared after.
@@ -2041,7 +2200,30 @@ export default class BattleController {
     this._currentRelicTarget = target;
     this.passives.dispatch(TRIGGER_TYPES.ON_INCOMING_DAMAGE, payload);
     this._currentRelicTarget = prevRelicTarget;
-    const finalAmount = Math.max(0, payload.amount | 0);
+
+    // ── Status-effect damage modifiers ──
+    // Order: a Berserk ATTACKER deals double and "ignores all effects" (bypasses
+    // the target's defensive statuses: Brittle/Intangible/Barrier). Otherwise the
+    // target's mitigations apply (Brittle ×1.5, then Intangible clamps to 1 — it
+    // wins over Brittle; Barrier blocks a skull-damage instance). A Berserk TARGET
+    // always takes double (its own downside, can't be ignored). Berserk is not yet
+    // applied by any content — these multipliers are tunable.
+    let dmg = Math.max(0, payload.amount | 0);
+    const attackerBerserk = !!attacker && this._hasStatus(attacker, 'berserk');
+    if (attackerBerserk) {
+      dmg *= 2;
+    } else {
+      if (this._hasStatus(target, 'brittle'))    dmg = Math.round(dmg * 1.5);
+      if (this._hasStatus(target, 'intangible')) dmg = Math.min(dmg, 1);
+      if (opts.isSkull && dmg > 0 && this._hasStatus(target, 'barrier')) {
+        dmg = 0;
+        this._removeStatus(target, 'barrier');
+        this.log.add(`${target.name}'s Barrier blocks the skull damage!`);
+      }
+    }
+    if (this._hasStatus(target, 'berserk')) dmg *= 2;
+
+    const finalAmount = Math.max(0, dmg | 0);
     const result = this.resolver.applyDamage(target, finalAmount);
     // Floating "-x" damage text over the damaged side's portrait. This is the
     // single chokepoint for ALL damage (skill, skull, passive), so every hit

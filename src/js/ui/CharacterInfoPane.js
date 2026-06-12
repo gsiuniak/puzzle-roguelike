@@ -5,6 +5,7 @@ import VideoPortrait from './VideoPortrait.js';
 import UIText from './UIText.js';
 import UIProgressBar from './UIProgressBar.js';
 import UIOrb from './UIOrb.js';
+import { getStatusDef, STATUS_KIND } from '../data/statusEffects.js';
 
 // ── Tunable layout constants ─────────────────────────────
 const PANE_PADDING = { top: 30, right: 12, bottom: 12, left: 12 };
@@ -34,6 +35,37 @@ const NAME_BLOCK_HEIGHT = 72;
 const FLAIR_HEIGHT = 26;            // drawn height of the flourish
 const FLAIR_TOP_OFFSET = NAME_LINE_HEIGHT + 4; // band start, below the 1st name line
 const FLAIR_SIDE_INSET = 2;         // horizontal inset from the name block edge
+
+// ── Status-effect overlays ──────────────────────────────
+// Active buffs/debuffs (from state.statuses) are drawn OVER the portrait in
+// render(). Buffs and debuffs use DIFFERENT art shapes — buffs are tall ornate
+// crests, debuffs are wide crossed-blade "X" overlays — so each gets its own
+// position/scale so they sit correctly. Display model = "one big + count":
+// the most-recent buff and most-recent debuff render as large overlays at their
+// anchor; any additional statuses render as a small row of mini-badges. Every
+// value here is a free knob — tweak to taste.
+//
+// Anchors are expressed relative to the portrait rect: SCALE multiplies the
+// portrait WIDTH to get each big overlay's drawn width (height follows the
+// sprite's own aspect, so the wide debuff X stays wide); OFFSET nudges the
+// overlay center from the portrait center (px, design space; +y = down).
+const STATUS_BUFF_SCALE   = 1.35;
+const STATUS_BUFF_OFFSET  = { x: 0, y: -18 };
+const STATUS_DEBUFF_SCALE = 1.30;
+const STATUS_DEBUFF_OFFSET = { x: 0, y: 0 };
+
+// Mini-badges for the "+N more" statuses, laid out in a centered row anchored
+// to the portrait's bottom edge.
+const STATUS_MINI_SIZE   = 38;     // square size of each mini badge
+const STATUS_MINI_GAP    = 4;      // horizontal gap between badges
+const STATUS_MINI_OFFSET = { x: 0, y: -6 }; // row center offset from portrait bottom
+
+// Remaining-turn count drawn on each big overlay (bottom-right of its box).
+const STATUS_COUNT_SHOW  = true;
+const STATUS_COUNT_FONT  = 24;
+const STATUS_COUNT_COLOR = '#ffffff';
+const STATUS_COUNT_STROKE = '#000000';
+const STATUS_COUNT_OFFSET = { x: -6, y: -4 }; // from the overlay box's bottom-right
 
 const HEALTH_BAR_HEIGHT = 36;
 const HEALTH_LABEL_FONT_SIZE = 20;
@@ -113,6 +145,9 @@ export default class CharacterInfoPane extends UIPanel {
     this._attackValue = null;
     this._armorValue = null;
     this._manaOrbs = { red: null, blue: null, green: null, yellow: null, purple: null };
+    // Active status effects (buffs/debuffs), refreshed from updateFromState().
+    // Each entry is the live status object { id, kind, turns, ... }.
+    this._statuses = [];
 
     if (characterData) {
       this.buildHierarchy();
@@ -281,7 +316,13 @@ export default class CharacterInfoPane extends UIPanel {
    */
   render(ctx) {
     super.render(ctx);
-    if (!this.visible || !this._nameText || !this._flair) return;
+    if (!this.visible) return;
+
+    // Status overlays sit ON TOP of the portrait — draw before the flair's
+    // early-returns so they show regardless of name/flair state.
+    this._renderStatusOverlays(ctx);
+
+    if (!this._nameText || !this._flair) return;
     if (!this._nameText.text) return;
 
     // super.render already measured + cached the name's wrap this frame.
@@ -346,6 +387,9 @@ export default class CharacterInfoPane extends UIPanel {
       const orb = this._manaOrbs[color];
       if (orb) orb.count = manaData[color] ?? 0;
     }
+
+    // Active status effects — drawn over the portrait in render().
+    this._statuses = Array.isArray(state.statuses) ? state.statuses : [];
   }
 
   updateFromData() {
@@ -362,5 +406,116 @@ export default class CharacterInfoPane extends UIPanel {
     const r = this._portrait && this._portrait.rect;
     if (!r || r.w <= 0) return null;
     return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  }
+
+  /**
+   * Draw the active status-effect overlays over the portrait. Display model is
+   * "one big + count": the most-recent buff and most-recent debuff render as
+   * large overlays at their (separately tunable) anchors; any remaining
+   * statuses render as a centered row of mini-badges below the portrait. See
+   * the STATUS_* tunables at the top of this file.
+   */
+  _renderStatusOverlays(ctx) {
+    const statuses = this._statuses;
+    if (!statuses || statuses.length === 0) return;
+    const p = this._portrait && this._portrait.rect;
+    if (!p || p.w <= 0) return;
+    const am = this._assetManager;
+    if (!am) return;
+
+    const buffs = [];
+    const debuffs = [];
+    for (const st of statuses) {
+      const def = getStatusDef(st.id);
+      if (!def) continue;
+      (def.kind === STATUS_KIND.BUFF ? buffs : debuffs).push(st);
+    }
+
+    const cx = p.x + p.w / 2;
+    const cy = p.y + p.h / 2;
+
+    // Big overlays — most-recent (last applied) of each category.
+    const bigBuff   = buffs.length   ? buffs[buffs.length - 1]     : null;
+    const bigDebuff = debuffs.length ? debuffs[debuffs.length - 1] : null;
+    if (bigBuff) {
+      this._drawBigStatus(ctx, am, bigBuff,
+        cx + STATUS_BUFF_OFFSET.x, cy + STATUS_BUFF_OFFSET.y, p.w * STATUS_BUFF_SCALE);
+    }
+    if (bigDebuff) {
+      this._drawBigStatus(ctx, am, bigDebuff,
+        cx + STATUS_DEBUFF_OFFSET.x, cy + STATUS_DEBUFF_OFFSET.y, p.w * STATUS_DEBUFF_SCALE);
+    }
+
+    // Mini-badges for everything else (additional buffs + debuffs), centered.
+    const extras = statuses.filter(s => s !== bigBuff && s !== bigDebuff);
+    if (extras.length > 0) {
+      const totalW = extras.length * STATUS_MINI_SIZE + (extras.length - 1) * STATUS_MINI_GAP;
+      let x = cx + STATUS_MINI_OFFSET.x - totalW / 2;
+      const y = p.y + p.h + STATUS_MINI_OFFSET.y - STATUS_MINI_SIZE / 2;
+      for (const st of extras) {
+        this._drawStatusSprite(ctx, am, st.id, x, y, STATUS_MINI_SIZE, STATUS_MINI_SIZE);
+        if (STATUS_COUNT_SHOW && st.turns > 0) {
+          this._drawStatusCount(ctx, st.turns, x + STATUS_MINI_SIZE, y + STATUS_MINI_SIZE,
+            Math.round(STATUS_COUNT_FONT * 0.62));
+        }
+        x += STATUS_MINI_SIZE + STATUS_MINI_GAP;
+      }
+    }
+  }
+
+  /** Draw one big overlay centered at (cx,cy); width=targetW, height by aspect. */
+  _drawBigStatus(ctx, am, st, cx, cy, targetW) {
+    const def = getStatusDef(st.id);
+    if (!def) return;
+    const img = am.get(def.icon);
+    // Sliced sheet sprites are canvases (img.complete === undefined); only a
+    // real, still-loading Image reports complete === false.
+    if (!img || img.complete === false) return;
+    const aspect = (img.width || 1) / (img.height || 1);
+    const w = targetW;
+    const h = w / aspect;
+    const x = cx - w / 2;
+    const y = cy - h / 2;
+    const prev = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.imageSmoothingEnabled = prev;
+    if (STATUS_COUNT_SHOW && st.turns > 0) {
+      this._drawStatusCount(ctx, st.turns,
+        x + w + STATUS_COUNT_OFFSET.x, y + h + STATUS_COUNT_OFFSET.y, STATUS_COUNT_FONT);
+    }
+  }
+
+  /** Draw a status sprite contain-fit inside the box at (x,y,boxW,boxH). */
+  _drawStatusSprite(ctx, am, id, x, y, boxW, boxH) {
+    const def = getStatusDef(id);
+    if (!def) return;
+    const img = am.get(def.icon);
+    if (!img || img.complete === false) return;
+    const aspect = (img.width || 1) / (img.height || 1);
+    let w = boxW, h = boxW / aspect;
+    if (h > boxH) { h = boxH; w = boxH * aspect; }
+    const dx = x + (boxW - w) / 2;
+    const dy = y + (boxH - h) / 2;
+    const prev = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, dx, dy, w, h);
+    ctx.imageSmoothingEnabled = prev;
+  }
+
+  /** Draw a remaining-turn count number with an outline, right/bottom anchored. */
+  _drawStatusCount(ctx, n, x, y, fontSize) {
+    ctx.save();
+    ctx.font = `bold ${fontSize}px "Marcellus SC", Georgia, serif`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, fontSize * 0.2);
+    ctx.strokeStyle = STATUS_COUNT_STROKE;
+    ctx.fillStyle = STATUS_COUNT_COLOR;
+    const text = String(n);
+    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x, y);
+    ctx.restore();
   }
 }

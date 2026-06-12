@@ -146,6 +146,53 @@ export const KEYWORD_DEFINITIONS = {
     id: 'extra turn',
     label: 'Extra Turn',
     description: 'Take another turn immediately after this one. Extra turns do not stack.',
+  },
+
+  // ── Status effects (buffs / debuffs) ──────────────────
+  silence: {
+    id: 'silence',
+    label: 'Silence',
+    description: 'A debuff: the afflicted cannot cast skills on their turn.',
+  },
+  cripple: {
+    id: 'cripple',
+    label: 'Cripple',
+    description: 'A debuff: the afflicted\'s [[Attack]] is reduced to 1.',
+  },
+  enfeeble: {
+    id: 'enfeeble',
+    label: 'Enfeeble',
+    description: 'A debuff: the afflicted cannot gain [[Mana]] on their turn.',
+  },
+  brittle: {
+    id: 'brittle',
+    label: 'Brittle',
+    description: 'A debuff: the afflicted takes 1.5x [[Damage]].',
+  },
+  bleed: {
+    id: 'bleed',
+    label: 'Bleed',
+    description: 'A debuff: the afflicted takes [[Damage]] at the start of each of their turns equal to half the attacker\'s [[Attack]].',
+  },
+  frozen: {
+    id: 'frozen',
+    label: 'Frozen',
+    description: 'A debuff: the afflicted cannot gain [[Extra Turns]].',
+  },
+  intangible: {
+    id: 'intangible',
+    label: 'Intangible',
+    description: 'A buff: all incoming [[Damage]] is reduced to 1.',
+  },
+  berserk: {
+    id: 'berserk',
+    label: 'Berserk',
+    description: 'A buff: deal double [[Damage]] and ignore all effects, but take double [[Damage]].',
+  },
+  barrier: {
+    id: 'barrier',
+    label: 'Barrier',
+    description: 'A buff: blocks the next instance of [[Skull]] [[Damage]].',
   }
 };
 
@@ -161,6 +208,13 @@ export const KEYWORD_ALIASES = {
   damages: 'damage',
   healing: 'heal',
   'extra-turn': 'extra turn',
+  'extra turns': 'extra turn',
+  // Status effect alternate spellings (adjective / verb forms).
+  silenced: 'silence',
+  crippled: 'cripple',
+  enfeebled: 'enfeeble',
+  bleeding: 'bleed',
+  freeze: 'frozen',
 };
 
 /**

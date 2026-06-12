@@ -38,6 +38,8 @@ const SKILL_CATALOG = {
     effects: [
       { effectType: 'damage', damage: { amount: 5 } },
       { effectType: 'extra_turn' },
+      { effectType: 'apply_status', applyStatus: { id: 'crippled', target: 'opponent', turns: 3, attackValue: 1 } },
+      { effectType: 'apply_status', applyStatus: { id: 'barrier', target: 'self', turns: 3 } }
     ],
   },
   defend: {
@@ -300,13 +302,13 @@ const SKILL_CATALOG = {
   exsanguinate: {
     id: 'exsanguinate',
     name: 'Exsanguinate',
-    description: 'Reduce Enemy Attack to 1 for 1 turn.\nGain a turn.',
+    description: 'Apply [[Cripple]] to the enemy for 1 turn.\nGain a turn.',
     icon: 'skill_exsanguinate',
     sound: 'skill_exsanguinate',
     cost: { red: 3 },
     effects: [
-      // Force the opponent's attack to 1 for their next turn; restored after.
-      { effectType: 'set_attack', setAttack: { value: 1, turns: 1 } },
+      // Apply Cripple — pin the opponent's attack to 1 for their next turn.
+      { effectType: 'apply_status', applyStatus: { id: 'crippled', target: 'opponent', turns: 1, attackValue: 1 } },
       { effectType: 'extra_turn' },
     ],
   },

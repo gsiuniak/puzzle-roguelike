@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spellforge — procedural icon compositor</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#141110; --panel:#1d1916; --panel2:#241f1b; --line:#332b24;
+    --text:#d8d2c8; --muted:#8d8478; --accent:#e8a33d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,sans-serif}
+  header{padding:28px 32px 18px;border-bottom:1px solid var(--line)}
+  h1{font:600 22px Cinzel,serif;letter-spacing:.12em;margin:0;color:var(--accent)}
+  header p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+  main{display:grid;grid-template-columns:300px 1fr;gap:0;min-height:calc(100vh - 96px)}
+  .controls{padding:24px;border-right:1px solid var(--line);background:var(--panel)}
+  .field{margin-bottom:18px}
+  label{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  select,input[type=text]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    padding:9px 10px;border-radius:8px;font:inherit}
+  select:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .row{display:flex;gap:8px}
+  button{background:var(--accent);color:#1c1407;border:0;border-radius:8px;padding:10px 14px;
+    font:500 14px Inter,sans-serif;cursor:pointer;width:100%}
+  button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .stage{padding:28px 32px;display:flex;flex-direction:column;gap:24px}
+  .preview-wrap{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+  #preview{width:300px;height:300px;border-radius:50%;
+    box-shadow:0 0 90px -20px rgba(232,163,61,.25), 0 12px 40px rgba(0,0,0,.6)}
+  .meta{max-width:380px}
+  .meta h2{font:600 16px Cinzel,serif;letter-spacing:.08em;margin:4px 0 8px;color:var(--text)}
+  .meta p{color:var(--muted);margin:0 0 14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:18px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;background:none;border:0;padding:0}
+  .cell canvas{width:120px;height:120px;border-radius:50%;transition:transform .15s}
+  .cell:hover canvas{transform:scale(1.06)}
+  .cell span{font-size:11px;color:var(--muted);letter-spacing:.04em;text-align:center}
+  h3{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:8px 0 0;font-weight:500}
+  @media (max-width:760px){main{grid-template-columns:1fr}.controls{border-right:0;border-bottom:1px solid var(--line)}}
+  @media (prefers-reduced-motion: reduce){.cell:hover canvas{transform:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Spellforge</h1>
+  <p>Procedural spell-icon compositor. Every icon is built from keywords at runtime: element → palette, form → glyph, modifier → overlay. No image assets — clouds, bloom, and color grading are generated in Canvas 2D.</p>
+</header>
+<main>
+  <aside class="controls">
+    <div class="field"><label for="el">Element (palette)</label>
+      <select id="el">
+        <option>fire</option><option selected>lightning</option><option>ice</option>
+        <option>nature</option><option>void</option><option>holy</option>
+      </select></div>
+    <div class="field"><label for="form">Form (glyph)</label>
+      <select id="form">
+        <option selected>strike</option><option>slash</option><option>burst</option>
+        <option>shield</option><option>orb</option><option>rune</option>
+      </select></div>
+    <div class="field"><label for="mod">Modifier (overlay)</label>
+      <select id="mod">
+        <option>none</option><option selected>wild</option><option>greater</option><option>sparks</option>
+      </select></div>
+    <div class="field"><label for="seed">Seed</label>
+      <div class="row"><input type="text" id="seed" value="thunderclap">
+      <button class="ghost" id="dice" style="width:auto" title="Random seed">⚄</button></div></div>
+    <div class="field"><button id="forge">Forge icon</button></div>
+    <div class="field"><button class="ghost" id="batch">Generate random batch</button></div>
+    <div class="field"><button class="ghost" id="dl">Download PNG (512px)</button></div>
+  </aside>
+
+  <section class="stage">
+    <div class="preview-wrap">
+      <canvas id="preview" width="512" height="512"></canvas>
+      <div class="meta">
+        <h2 id="name">Wild lightning strike</h2>
+        <p id="desc">Same keywords + same seed always produce the same icon. Change one keyword and only its layer changes — the rest of the icon stays recognizable, which reads as intentional design.</p>
+        <p>Pipeline: noise clouds → lit by glyph → additive bloom (4 blur passes) → modifier overlay → vignette → gradient-map LUT → beveled rim.</p>
+      </div>
+    </div>
+    <h3>Batch — click any icon to load it</h3>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+
+<script>
+'use strict';
+const S = 512;
+
+/* ---------------- seeded RNG ---------------- */
+function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* ---------------- palettes: luminance 0..1 -> color stops ---------------- */
+const PALETTES = {
+  fire:      [[0,'#0a0302'],[0.22,'#3a0d02'],[0.45,'#a82500'],[0.68,'#ff7b00'],[0.86,'#ffce6e'],[1,'#fff7e6']],
+  lightning: [[0,'#070604'],[0.25,'#241a05'],[0.5,'#8a6400'],[0.72,'#f5c000'],[0.88,'#fff0b0'],[1,'#ffffff']],
+  ice:       [[0,'#020512'],[0.25,'#0a1c4d'],[0.5,'#1f5dbb'],[0.74,'#5fb9f5'],[0.9,'#cfeeff'],[1,'#ffffff']],
+  nature:    [[0,'#020a04'],[0.25,'#0d2e12'],[0.5,'#2f7d26'],[0.74,'#8fd44a'],[0.9,'#e0f7b0'],[1,'#fbfff0']],
+  void:      [[0,'#030107'],[0.25,'#16051f'],[0.5,'#561585'],[0.74,'#a64dff'],[0.9,'#e3c2ff'],[1,'#fbf2ff']],
+  holy:      [[0,'#0c0902'],[0.25,'#4d3a08'],[0.5,'#b8922a'],[0.74,'#ffd75e'],[0.9,'#fff3c4'],[1,'#ffffff']],
+};
+function hex(c){return [parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];}
+function buildLUT(stops){
+  const lut=new Uint8ClampedArray(256*3);
+  for(let i=0;i<256;i++){
+    const t=i/255; let a=stops[0],b=stops[stops.length-1];
+    for(let s=0;s<stops.length-1;s++){ if(t>=stops[s][0]&&t<=stops[s+1][0]){a=stops[s];b=stops[s+1];break;} }
+    const f=(b[0]-a[0])>1e-6?(t-a[0])/(b[0]-a[0]):0;
+    const ca=hex(a[1]),cb=hex(b[1]);
+    for(let k=0;k<3;k++) lut[i*3+k]=ca[k]+(cb[k]-ca[k])*f;
+  }
+  return lut;
+}
+const LUTS={}; for(const k in PALETTES) LUTS[k]=buildLUT(PALETTES[k]);
+
+/* ---------------- value-noise FBM clouds ---------------- */
+function makeValueNoise(rng){
+  const N=64, g=new Float32Array(N*N);
+  for(let i=0;i<N*N;i++) g[i]=rng();
+  return function(x,y){
+    const xi=Math.floor(x), yi=Math.floor(y);
+    let fx=x-xi, fy=y-yi;
+    fx=fx*fx*(3-2*fx); fy=fy*fy*(3-2*fy);
+    const x0=xi&(N-1), x1=(xi+1)&(N-1), y0=yi&(N-1), y1=(yi+1)&(N-1);
+    const a=g[y0*N+x0], b=g[y0*N+x1], c=g[y1*N+x0], d=g[y1*N+x1];
+    return a+(b-a)*fx+(c-a)*fy+(a-b-c+d)*fx*fy;
+  };
+}
+function cloudCanvas(rng, ridged){
+  const R=256, cv=document.createElement('canvas'); cv.width=cv.height=R;
+  const ctx=cv.getContext('2d'), img=ctx.createImageData(R,R);
+  const noise=makeValueNoise(rng);
+  const ox=rng()*64, oy=rng()*64, rot=rng()*Math.PI;
+  const cosr=Math.cos(rot), sinr=Math.sin(rot);
+  for(let y=0;y<R;y++)for(let x=0;x<R;x++){
+    const u=(x*cosr - y*sinr)/R, v=(x*sinr + y*cosr)/R;
+    let amp=1, freq=4, sum=0, norm=0;
+    for(let o=0;o<5;o++){
+      let n=noise(ox+u*freq, oy+v*freq);
+      if(ridged && o>0){ n=1-Math.abs(2*n-1); n*=n; }
+      sum+=n*amp; norm+=amp; amp*=0.55; freq*=2.1;
+    }
+    let t=sum/norm;
+    t=Math.min(1,Math.max(0,(t-0.32)/0.5));      // contrast: carve cloud masses
+    t=Math.pow(t,1.25);
+    const lum=18 + t*150;
+    const i=(y*R+x)*4;
+    img.data[i]=img.data[i+1]=img.data[i+2]=lum; img.data[i+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  return cv;
+}
+
+/* ---------------- glyphs (drawn white on transparent) ---------------- */
+function poly(ctx,pts){ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.closePath();}
+
+const GLYPHS = {
+  strike(ctx,rng){
+    const cx=S/2, cy=S/2, n=7, pts=[];
+    for(let i=0;i<=n;i++){
+      const t=i/n;
+      pts.push([cx+(t-0.5)*S*0.8, cy+(rng()-0.5)*S*0.14+Math.sin(t*6.3+rng()*3)*S*0.03]);
+    }
+    const top=[],bot=[];
+    for(let i=0;i<=n;i++){
+      const t=i/n, hw=S*0.075*(0.2+Math.sin(Math.PI*t))*(0.6+rng()*0.7);
+      top.push([pts[i][0],pts[i][1]-hw]); bot.push([pts[i][0],pts[i][1]+hw]);
+    }
+    ctx.fillStyle='#fff'; poly(ctx,top.concat(bot.reverse())); ctx.fill();
+    ctx.globalCompositeOperation='destination-out';            // jagged notches
+    for(let i=1;i<n;i++) if(rng()<0.65){
+      const p=pts[i], w=S*(0.02+rng()*0.05), up=rng()<0.5?-1:1;
+      poly(ctx,[[p[0]-w,p[1]+up*S*0.12],[p[0]+w*0.2,p[1]-up*S*0.01],[p[0]+w,p[1]+up*S*0.12]]); ctx.fill();
+    }
+    ctx.globalCompositeOperation='source-over';
+    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineCap='round'; // forks
+    for(let b=0;b<3;b++){
+      const p=pts[1+Math.floor(rng()*(n-1))];
+      ctx.lineWidth=2+rng()*4; ctx.beginPath(); ctx.moveTo(p[0],p[1]);
+      let x=p[0],y=p[1];
+      for(let s=0;s<4;s++){x+=(rng()-0.5)*S*0.12; y+=(rng()<0.5?-1:1)*rng()*S*0.07; ctx.lineTo(x,y);}
+      ctx.stroke();
+    }
+  },
+  slash(ctx,rng){
+    const cx=S*0.5, cy=S*0.52, R=S*(0.3+rng()*0.06);
+    const a0=Math.PI*(0.65+rng()*0.2), a1=a0+Math.PI*(0.95+rng()*0.2), N=48;
+    const out=[],inn=[];
+    for(let i=0;i<=N;i++){
+      const t=i/N, a=a0+(a1-a0)*t, w=S*0.11*Math.pow(Math.sin(Math.PI*t),0.8);
+      out.push([cx+Math.cos(a)*R, cy+Math.sin(a)*R]);
+      inn.push([cx+Math.cos(a)*(R-w), cy+Math.sin(a)*(R-w)]);
+    }
+    ctx.fillStyle='#fff'; poly(ctx,out.concat(inn.reverse())); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineCap='round'; // motion trails
+    for(let i=0;i<4;i++){
+      const rr=R+S*(0.04+i*0.035), b0=a0+rng()*0.3, b1=b0+0.5+rng()*0.9;
+      ctx.lineWidth=1.5+rng()*2.5; ctx.beginPath(); ctx.arc(cx,cy,rr,b0,b1); ctx.stroke();
+    }
+  },
+  burst(ctx,rng){
+    const cx=S/2, cy=S/2, n=8+Math.floor(rng()*5), pts=[];
+    for(let i=0;i<n;i++){
+      const a=(i/n)*Math.PI*2+rng()*0.3;
+      const ro=S*(0.26+rng()*0.16), ri=S*(0.09+rng()*0.05);
+      pts.push([cx+Math.cos(a)*ro, cy+Math.sin(a)*ro]);
+      const a2=a+Math.PI/n;
+      pts.push([cx+Math.cos(a2)*ri, cy+Math.sin(a2)*ri]);
+    }
+    ctx.fillStyle='#fff'; poly(ctx,pts); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,S*0.075,0,7); ctx.fill();
+  },
+  shield(ctx,rng){
+    const cx=S/2, cy=S/2, w=S*(0.46+rng()*0.06), h=S*(0.56+rng()*0.06);
+    function path(sc){
+      ctx.beginPath();
+      ctx.moveTo(cx, cy-h*0.5*sc);
+      ctx.quadraticCurveTo(cx+w*0.5*sc, cy-h*0.42*sc, cx+w*0.5*sc, cy-h*0.05*sc);
+      ctx.quadraticCurveTo(cx+w*0.5*sc, cy+h*0.3*sc, cx, cy+h*0.5*sc);
+      ctx.quadraticCurveTo(cx-w*0.5*sc, cy+h*0.3*sc, cx-w*0.5*sc, cy-h*0.05*sc);
+      ctx.quadraticCurveTo(cx-w*0.5*sc, cy-h*0.42*sc, cx, cy-h*0.5*sc);
+      ctx.closePath();
+    }
+    ctx.fillStyle='#fff'; path(1); ctx.fill();          // bright border
+    ctx.fillStyle='rgb(115,115,115)'; path(0.8); ctx.fill();  // body
+    ctx.save(); path(0.8); ctx.clip();                  // lit half
+    ctx.fillStyle='rgb(175,175,175)'; ctx.fillRect(cx-w/2,cy-h/2,w/2,h); ctx.restore();
+    ctx.fillStyle='rgb(235,235,235)';                   // gem
+    poly(ctx,[[cx,cy-h*0.16],[cx+w*0.12,cy],[cx,cy+h*0.16],[cx-w*0.12,cy]]); ctx.fill();
+  },
+  orb(ctx,rng){
+    const cx=S/2, cy=S/2;
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(cx,cy,S*0.14,0,7); ctx.fill();
+    ctx.strokeStyle='rgb(160,160,160)'; ctx.lineWidth=S*0.012;
+    ctx.beginPath(); ctx.arc(cx,cy,S*0.24,0,7); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineCap='round';
+    for(let i=0;i<5;i++){                                // comet streaks
+      const a=rng()*Math.PI*2, len=S*(0.1+rng()*0.18);
+      ctx.lineWidth=2+rng()*5; ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(a)*S*0.16, cy+Math.sin(a)*S*0.16);
+      ctx.lineTo(cx+Math.cos(a)*(S*0.16+len), cy+Math.sin(a)*(S*0.16+len));
+      ctx.stroke();
+    }
+  },
+  rune(ctx,rng){
+    const cx=S/2, cy=S/2, R=S*0.29;
+    ctx.strokeStyle='#fff'; ctx.lineWidth=S*0.028; ctx.lineCap='round';
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.stroke();
+    const n=6+Math.floor(rng()*5);
+    ctx.lineWidth=S*0.014;
+    for(let i=0;i<n;i++){
+      const a=(i/n)*Math.PI*2+rng()*0.2;
+      ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(a)*R*0.86, cy+Math.sin(a)*R*0.86);
+      ctx.lineTo(cx+Math.cos(a)*R*1.18, cy+Math.sin(a)*R*1.18);
+      ctx.stroke();
+    }
+    const a0=rng()*Math.PI*2;                            // inner sigil
+    ctx.lineWidth=S*0.02; ctx.beginPath();
+    for(let i=0;i<=3;i++){
+      const a=a0+(i/3)*Math.PI*2;
+      const x=cx+Math.cos(a)*R*0.62, y=cy+Math.sin(a)*R*0.62;
+      i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+    }
+    ctx.closePath(); ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(cx,cy,S*0.045,0,7); ctx.fill();
+  },
+};
+
+/* ---------------- modifier overlays ---------------- */
+const MODS = {
+  none(){},
+  wild(ctx,rng){
+    ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineCap='round';
+    for(let i=0;i<14;i++){
+      const a=rng()*Math.PI*2; let r=S*(0.18+rng()*0.1);
+      let x=S/2+Math.cos(a)*r, y=S/2+Math.sin(a)*r;
+      ctx.lineWidth=1+rng()*3; ctx.beginPath(); ctx.moveTo(x,y);
+      for(let s=0;s<4;s++){
+        r+=S*(0.03+rng()*0.05); const ja=a+(rng()-0.5)*0.9;
+        x=S/2+Math.cos(ja)*r; y=S/2+Math.sin(ja)*r; ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  },
+  greater(ctx,rng,glyphCv){
+    ctx.save(); ctx.globalAlpha=0.22; ctx.filter='blur(6px)';
+    const sc=1.45, off=(S-S*sc)/2;
+    ctx.drawImage(glyphCv,off,off,S*sc,S*sc); ctx.restore();
+  },
+  sparks(ctx,rng){
+    ctx.fillStyle='#fff';
+    for(let i=0;i<34;i++){
+      const a=rng()*Math.PI*2, r=S*(0.12+rng()*0.32);
+      ctx.globalAlpha=0.3+rng()*0.7;
+      ctx.beginPath(); ctx.arc(S/2+Math.cos(a)*r, S/2+Math.sin(a)*r, 0.8+rng()*2.6, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  },
+};
+
+/* ---------------- the compositor ---------------- */
+function renderIcon(target, el, form, mod, seedStr){
+  const rng = mulberry32(hashStr(`${el}|${form}|${mod}|${seedStr}`));
+  const lum = document.createElement('canvas'); lum.width=lum.height=S;
+  const lctx = lum.getContext('2d', {willReadFrequently:true});
+
+  // glyph on its own canvas
+  const glyphCv = document.createElement('canvas'); glyphCv.width=glyphCv.height=S;
+  const gctx = glyphCv.getContext('2d');
+  GLYPHS[form](gctx, rng);
+
+  // modifier on its own canvas
+  const modCv = document.createElement('canvas'); modCv.width=modCv.height=S;
+  MODS[mod](modCv.getContext('2d'), rng, glyphCv);
+
+  // 1. cloud background
+  lctx.fillStyle='#000'; lctx.fillRect(0,0,S,S);
+  const ridged = (el==='lightning'||el==='void');
+  lctx.imageSmoothingEnabled=true;
+  lctx.drawImage(cloudCanvas(rng,ridged),0,0,S,S);
+
+  // 2. light the clouds with the glyph's glow (multiply by base+blurred glyph)
+  const light = document.createElement('canvas'); light.width=light.height=S;
+  const litx = light.getContext('2d');
+  litx.fillStyle='rgb(55,55,55)'; litx.fillRect(0,0,S,S);
+  litx.globalCompositeOperation='lighter';
+  litx.filter='blur(70px)'; litx.drawImage(glyphCv,0,0);
+  litx.filter='blur(28px)'; litx.globalAlpha=0.8; litx.drawImage(glyphCv,0,0);
+  lctx.globalCompositeOperation='multiply';
+  lctx.drawImage(light,0,0);
+
+  // 3. additive bloom: wide -> tight -> sharp core
+  lctx.globalCompositeOperation='lighter';
+  for(const [blur,alpha] of [[36,0.85],[14,0.9],[5,1],[0,1]]){
+    lctx.filter = blur? `blur(${blur}px)` : 'none';
+    lctx.globalAlpha=alpha;
+    lctx.drawImage(glyphCv,0,0);
+  }
+  // 4. modifier overlay, additive with a soft pass
+  lctx.filter='blur(6px)'; lctx.globalAlpha=0.7; lctx.drawImage(modCv,0,0);
+  lctx.filter='none'; lctx.globalAlpha=1; lctx.drawImage(modCv,0,0);
+
+  // 5. vignette
+  lctx.globalCompositeOperation='multiply';
+  const vg=lctx.createRadialGradient(S/2,S/2,S*0.18,S/2,S/2,S*0.52);
+  vg.addColorStop(0,'#ffffff'); vg.addColorStop(0.75,'#cfcfcf'); vg.addColorStop(1,'#3a3a3a');
+  lctx.fillStyle=vg; lctx.fillRect(0,0,S,S);
+  lctx.globalCompositeOperation='source-over';
+
+  // 6. gradient-map LUT: luminance -> element palette
+  const img = lctx.getImageData(0,0,S,S), d=img.data, lut=LUTS[el];
+  for(let i=0;i<d.length;i+=4){
+    const v=d[i];                       // grayscale, so r == luminance
+    d[i]=lut[v*3]; d[i+1]=lut[v*3+1]; d[i+2]=lut[v*3+2]; d[i+3]=255;
+  }
+
+  // 7. final composite: circular clip + beveled rim
+  const ctx = target.getContext('2d');
+  ctx.clearRect(0,0,S,S);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(S/2,S/2,S/2-32,0,7); ctx.clip();
+  const tmp=document.createElement('canvas'); tmp.width=tmp.height=S;
+  tmp.getContext('2d').putImageData(img,0,0);
+  ctx.drawImage(tmp,0,0);
+  ctx.restore();
+
+  const rim=[
+    [S/2-10, 18, '#060504'],
+    [S/2-24, 13, null   ],     // metallic band (gradient)
+    [S/2-33,  6, '#15110d'],
+  ];
+  for(const [r,w,col] of rim){
+    ctx.lineWidth=w;
+    if(col) ctx.strokeStyle=col;
+    else{
+      const g=ctx.createLinearGradient(S*0.2,0,S*0.8,S);
+      g.addColorStop(0,'#a39684'); g.addColorStop(0.5,'#4a4138'); g.addColorStop(1,'#241f1a');
+      ctx.strokeStyle=g;
+    }
+    ctx.beginPath(); ctx.arc(S/2,S/2,r,0,7); ctx.stroke();
+  }
+  ctx.lineWidth=2; ctx.strokeStyle='rgba(255,235,200,.22)';
+  ctx.beginPath(); ctx.arc(S/2,S/2,S/2-37,0,7); ctx.stroke();
+}
+
+/* ---------------- UI wiring ---------------- */
+const $=id=>document.getElementById(id);
+const preview=$('preview');
+
+function currentKeys(){return [$('el').value,$('form').value,$('mod').value,$('seed').value];}
+function forge(){
+  const [el,form,mod,seed]=currentKeys();
+  renderIcon(preview, el, form, mod, seed);
+  const modTxt = mod==='none'?'':mod+' ';
+  $('name').textContent=(modTxt+el+' '+form).replace(/^./,c=>c.toUpperCase());
+}
+$('forge').onclick=forge;
+['el','form','mod'].forEach(id=>$(id).onchange=forge);
+$('seed').onchange=forge;
+$('dice').onclick=()=>{$('seed').value=Math.random().toString(36).slice(2,9);forge();};
+$('dl').onclick=()=>{
+  const a=document.createElement('a');
+  a.download=currentKeys().join('_')+'.png';
+  a.href=preview.toDataURL('image/png'); a.click();
+};
+
+const ELS=Object.keys(PALETTES), FORMS=Object.keys(GLYPHS), MODKEYS=Object.keys(MODS);
+function batch(){
+  const grid=$('grid'); grid.innerHTML='';
+  for(let i=0;i<8;i++){
+    const el=ELS[Math.floor(Math.random()*ELS.length)];
+    const form=FORMS[Math.floor(Math.random()*FORMS.length)];
+    const mod=MODKEYS[Math.floor(Math.random()*MODKEYS.length)];
+    const seed=Math.random().toString(36).slice(2,8);
+    const cell=document.createElement('button'); cell.className='cell';
+    const cv=document.createElement('canvas'); cv.width=cv.height=S;
+    const label=document.createElement('span');
+    label.textContent=(mod==='none'?'':mod+' ')+el+' '+form;
+    cell.append(cv,label); grid.append(cell);
+    renderIcon(cv, el, form, mod, seed);
+    cell.onclick=()=>{
+      $('el').value=el; $('form').value=form; $('mod').value=mod; $('seed').value=seed; forge();
+      window.scrollTo({top:0,behavior:'smooth'});
+    };
+  }
+}
+$('batch').onclick=batch;
+
+forge();
+batch();
+</script>
+</body>
+</html>

@@ -49,7 +49,16 @@ export const SKILL_EFFECT_TYPES = {
   // Forces the OPPONENT's attack to a fixed value for N of their upcoming turns,
   // then restores it (Lord Malakor's "Exsanguinate"). Payload setAttack:
   // { value, turns }. Resolved in BattleController._resolveEffect.
+  // NOTE: SILENCE and SET_ATTACK are legacy aliases — both now route through the
+  // unified status system (apply_status: 'silenced' / 'crippled'). Prefer
+  // APPLY_STATUS for new skills.
   SET_ATTACK: 'set_attack',
+  // Applies a named status effect (buff/debuff) from data/statusEffects.js to
+  // the caster or opponent for N turn cycles. Payload applyStatus:
+  // { id, target:'self'|'opponent', turns, attackValue? }. Resolved in
+  // BattleController._resolveEffect → _applyStatus. This is the general,
+  // data-driven way to apply any status (Silence, Bleed, Intangible, …).
+  APPLY_STATUS: 'apply_status',
 };
 
 /**

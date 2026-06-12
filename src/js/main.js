@@ -142,6 +142,12 @@ const SPRITESHEET_MAP = {
     json:  'assets/sprites/relics/ui_spritesheet_relics.json',
     trim:  false, // sprite names match the `relic_<id>` keys directly (no aliases)
   },
+  ui_spritesheet_status_effects: {
+    image: 'assets/sprites/battle/status_effects/ui_spritesheet_status_effects.png',
+    json:  'assets/sprites/battle/status_effects/ui_spritesheet_status_effects.json',
+    trim:  false, // packer emits tight per-sprite frames; sprite names match the
+                  // status `icon` keys (buff_*/debuff_*) directly (no aliases)
+  },
 };
 
 // ── Asset aliases (existing key → spritesheet sprite name) ──
