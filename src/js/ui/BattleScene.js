@@ -368,10 +368,9 @@ export default class BattleScene extends UIPanel {
     if (isPlayer) this._playerPane = infoPane; else this._enemyPane = infoPane;
     col.addChild(infoPane);
 
-    // 2) Skills pane (fixed-size accordion list; remaining slots = locked
-    //    placeholders). The ENEMY pane starts with every skill expanded.
+    // 2) Skills pane (fixed-size list of auto-height skill cards; remaining
+    //    slots = locked placeholders). Full descriptions render on the cards.
     const skillsPane = new SkillsPane(skills, this._assetManager);
-    skillsPane.setExpandAll(!isPlayer);
     if (isPlayer) this._playerSkillsPane = skillsPane;
     else          this._enemySkillsPane  = skillsPane;
     skillsPane.flexGrow = 0;
@@ -1421,13 +1420,11 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * Register the skill rows' description KeywordTexts as inline keyword
-   * tooltip sources. The accordion's EXPANDED row shows the full description
-   * inline, so there is no full-skill tooltip anymore — hovering a colored
-   * [[keyword]] inside the expanded text shows that keyword's definition (+
-   * chain). Collapsed rows' KeywordTexts are `visible: false`, which the
-   * TooltipManager skips, so only the open row is hoverable. Re-runs whenever
-   * skills are (re)built (relic icon tooltips are unaffected).
+   * Register the skill cards' description KeywordTexts as inline keyword
+   * tooltip sources. Every card shows its full description directly, so
+   * there is no full-skill tooltip — hovering a colored [[keyword]] inside
+   * any card's text shows that keyword's definition (+ chain). Re-runs
+   * whenever skills are (re)built (relic icon tooltips are unaffected).
    */
   _registerSkillTooltips() {
     const tm = this._tooltipManager;

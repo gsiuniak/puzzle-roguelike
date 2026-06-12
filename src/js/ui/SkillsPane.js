@@ -2,43 +2,35 @@ import UIPanel from './UIPanel.js';
 import KeywordText from './KeywordText.js';
 
 /**
- * SkillsPane — fixed-size ACCORDION list of skills (expandable-list reference).
+ * SkillsPane — legacy-style list of full-width skill cards with DYNAMIC
+ * heights (variable-height reference mock).
  *
- * The outer panel (art + dimensions) is completely static — identical to the
- * old grid pane, so nothing around it (board, character frame) ever moves.
- * Only the INTERNAL list lays out dynamically:
+ * Each skill is one horizontal card in the classic look: circular icon on the
+ * left, prominent name, the FULL description (wrapped, keyword-colored)
+ * directly on the card, mana cost (number + gem) on the right. The card's
+ * height auto-fits its wrapped description — longer skills grow downward and
+ * push the cards below them down. No accordion, no chevron, no "?" tooltip
+ * button: everything is visible on the card itself.
  *
- *   - Each skill is a compact collapsed ROW: [icon] [name] [cost + gem] [⌄].
- *   - The cost + chevron zone (right side of the row) toggles the drawer;
- *     player-pane accordion: at most ONE row open, opening another collapses
- *     the previous. Enemy panes use setExpandAll (all open, free toggles).
- *   - Expanded content (the FULL description as a KeywordText, so [[keyword]]
- *     coloring applies) renders directly beneath the row, left-aligned with
- *     the name, and pushes the rows below it down.
- *   - Overflow is CLIPPED inside the panel's inner area (never grows the
- *     panel).
+ * The OUTER panel (art + dimensions) is completely static; overflow is
+ * CLIPPED inside the panel's inner area (never grows the panel, never moves
+ * surrounding UI).
  *
- * Implementation style: NO child UIElements — rows are drawn manually in
+ * CASTING: clicking anywhere on a castable card casts it (player pane +
+ * affordable — BattleController still validates the turn). Castable cards
+ * are highlighted whole (gold tint + bright border + left accent).
+ *
+ * Implementation style: NO child UIElements — cards are drawn manually in
  * renderSelf (RelicBar precedent) and hit-tested from the last-rendered
- * layout via handleClick/handleMouseMove, which BattleScene calls directly
- * (before its turn-state gating, so expanding works even on the enemy's
- * turn / for the enemy's pane). hitTest() returns null — clicks never route
- * through the generic onClick dispatch.
- *
- * CASTING (no Cast button): clicking the row ANYWHERE except the cost/chevron
- * toggle zone casts the spell when castable (player pane + affordable;
- * BattleController still validates the turn). When it can't cast (enemy pane
- * or unaffordable) the same click toggles the drawer instead. A castable row
- * is highlighted WHOLE (gold tint + bright border + left accent).
- *
- * Each skill row's description KeywordText is exposed via descKeywordTexts
- * for inline keyword tooltips; collapsed rows set their element `visible:
- * false` so TooltipManager ignores their stale span rects.
+ * layout via handleClick/handleMouseMove, which BattleScene calls directly.
+ * hitTest() returns null — clicks never route through the generic onClick
+ * dispatch. Each card's description KeywordText (always visible) is exposed
+ * via descKeywordTexts so its [[keyword]] spans are inline tooltip sources.
  */
 
 // ── Outer panel (UNCHANGED dimensions — keep the surrounding layout static) ──
 const PANE_PADDING = { top: 48, right: 20, bottom: 24, left: 20 };
-// The pane's height was defined by the old 6×105 grid; preserve it exactly.
+// The pane's height was defined by the old grid; preserve it exactly.
 const LEGACY_SLOT_HEIGHT = 105;
 const LEGACY_ROWS = 6;
 const LEGACY_GRID_GAP = 6;
@@ -46,52 +38,54 @@ const NATURAL_HEIGHT =
   PANE_PADDING.top + PANE_PADDING.bottom +
   LEGACY_ROWS * LEGACY_SLOT_HEIGHT + (LEGACY_ROWS - 1) * LEGACY_GRID_GAP;
 
-// ── Accordion rows ──
-/** Minimum row slots shown (empty ones render as locked fillers). */
+// ── Cards ──
+/** Minimum card slots shown (empty ones render as locked fillers). */
 const MIN_SLOTS = 6;
-const ROW_H = 74;             // collapsed row height (fits a 2-line name)
-const ROW_GAP = 4;
-const ROW_RADIUS = 7;
-const ROW_PAD_X = 10;
-const ROW_BG = 'rgba(12, 10, 8, 0.55)';
-const ROW_BG_HOVER = 'rgba(44, 37, 24, 0.65)';
-const ROW_BG_EXPANDED = 'rgba(24, 20, 13, 0.72)';
-const ROW_BORDER = 'rgba(120, 100, 60, 0.35)';
-const DIVIDER_COLOR = 'rgba(214, 188, 120, 0.13)';
-// Whole-row castable highlight (no Cast button — the row IS the button).
+/** Per-card frame art (the legacy carved-panel look), stretched to the card. */
+const CARD_BG_KEY = 'skills_button';
+const CARD_GAP = 6;
+const CARD_MIN_H = 84;          // shortest a skill card may be
+const LOCKED_CARD_H = 70;       // fixed height for empty locked slots
+const CARD_RADIUS = 7;          // fallback styling when the art is missing
+const CARD_FALLBACK_BG = 'rgba(12, 10, 8, 0.6)';
+const CARD_FALLBACK_BORDER = 'rgba(120, 100, 60, 0.4)';
+const CARD_PAD = { top: 12, bottom: 12, left: 12, right: 12 };
+const CARD_BG_HOVER = 'rgba(44, 37, 24, 0.35)';
+
+// Whole-card castable highlight (the card IS the cast button).
 const CASTABLE_ACCENT = 'rgba(237, 249, 142, 0.75)';      // left edge bar
-const CASTABLE_FILL = 'rgba(255, 240, 180, 0.10)';        // row tint
-const CASTABLE_FILL_HOVER = 'rgba(255, 250, 200, 0.18)';  // hovered row tint
+const CASTABLE_FILL = 'rgba(255, 240, 180, 0.10)';        // card tint
+const CASTABLE_FILL_HOVER = 'rgba(255, 250, 200, 0.18)';  // hovered card tint
 const CASTABLE_BORDER = 'rgba(255, 240, 180, 0.95)';      // bright border
 
-const ICON_SIZE = 54;
-const ICON_GAP = 10;
+// Circular icon (left column), vertically centered in the card.
+const ICON_SIZE = 64;
+const ICON_GAP = 12;
+const ICON_RING_COLOR = 'rgba(20, 16, 10, 0.9)';
+const ICON_RING_WIDTH = 3;
+
 const NAME_FONT_SIZE = 22;
 const NAME_LINE_HEIGHT = 26;
-/** Long names wrap at WORD boundaries onto extra lines (never mid-word);
- *  anything past this many lines is dropped with a trailing ellipsis. */
+/** Long names wrap at WORD boundaries (never mid-word); past this many lines
+ *  they're dropped with a trailing ellipsis. */
 const NAME_MAX_LINES = 2;
 const NAME_COLOR = '#e4e4d9';
-const LOCKED_ICON_SIZE = 26;
-const LOCKED_ALPHA = 0.45;
+const NAME_DESC_GAP = 4;
 
-const COST_FONT_SIZE = 22;
-const COST_ORB_SIZE = 22;
-const COST_PAIR_GAP = 5;
-const CHEVRON_W = 14;
-const CHEVRON_H = 8;
-const CHEVRON_COLOR = '#d6bc78';
-const CHEVRON_MARGIN_R = 8;
-const COST_CHEVRON_GAP = 14;
-
-// ── Expanded content ──
-// The description block left-aligns with the NAME (x = padding + icon + gap).
+// Description — full text, wrapped, keyword-colored. NO line cap: the card
+// grows to fit it.
 const DESC_FONT_SIZE = 18;
 const DESC_LINE_HEIGHT = 23;
 const DESC_COLOR = '#cfc8a8';
-const DESC_RIGHT_INSET = 14;  // right-side inset of the description block
-const EXPANDED_PAD_TOP = 4;
-const EXPANDED_PAD_BOTTOM = 12;
+
+// Mana cost (right column), vertically centered.
+const COST_FONT_SIZE = 22;
+const COST_ORB_SIZE = 24;
+const COST_PAIR_GAP = 5;
+const COST_COL_WIDTH = 56;
+
+const LOCKED_ICON_SIZE = 26;
+const LOCKED_ALPHA = 0.45;
 
 const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
@@ -119,22 +113,15 @@ export default class SkillsPane extends UIPanel {
     /** @type {Function|null} (skillData) => void — wired on the player pane only */
     this.onSkillClick = null;
 
-    /** @type {Array<{skill:object|null, locked:boolean, expanded:boolean, descKT:KeywordText|null}>} */
+    /** @type {Array<{skill:object|null, locked:boolean, descKT:KeywordText|null}>} */
     this._rows = [];
-    /**
-     * When true (the ENEMY pane), every skill row starts expanded and rows
-     * toggle independently. When false (the player pane), rows start
-     * collapsed and behave accordion-style (one open at a time).
-     */
-    this._expandAll = false;
-    /** Hovered row index (header band only), -1 = none. */
+    /** Hovered card index, -1 = none. */
     this._hoverRow = -1;
     /** @type {object|null} player mana for affordability */
     this._mana = null;
     /**
-     * Last-rendered row layout (absolute design coords) used for hit-testing:
-     * [{ y, h, toggleX }] — toggleX is the left edge of the cost/chevron
-     * "toggle drawer" zone. Rebuilt every renderSelf.
+     * Last-rendered card layout (absolute design coords) used for
+     * hit-testing: [{ y, h }]. Rebuilt every renderSelf.
      */
     this._rowLayout = [];
 
@@ -158,31 +145,14 @@ export default class SkillsPane extends UIPanel {
         alignV: 'top',
         lineHeight: DESC_LINE_HEIGHT,
       });
-      const expanded = this._expandAll;
-      descKT.visible = expanded; // only expanded rows' text is "live"
-      this._rows.push({ skill, locked: false, expanded, descKT });
+      descKT.visible = true; // always on the card → always a keyword source
+      this._rows.push({ skill, locked: false, descKT });
     }
     while (this._rows.length < MIN_SLOTS) {
-      this._rows.push({ skill: null, locked: true, expanded: false, descKT: null });
+      this._rows.push({ skill: null, locked: true, descKT: null });
     }
     this._hoverRow = -1;
     this._rowLayout = [];
-  }
-
-  /**
-   * Enemy-pane mode: every skill row starts expanded (and rows toggle
-   * independently instead of accordion-style). Applies to current rows too.
-   * @param {boolean} v
-   */
-  setExpandAll(v) {
-    this._expandAll = !!v;
-    if (this._expandAll) {
-      for (const row of this._rows) {
-        if (row.locked) continue;
-        row.expanded = true;
-        if (row.descKT) row.descKT.visible = true;
-      }
-    }
   }
 
   /** Update mana for affordability cues (idempotent, called every frame). */
@@ -190,8 +160,7 @@ export default class SkillsPane extends UIPanel {
     this._mana = manaState || null;
   }
 
-  /** Description KeywordText elements (for inline keyword tooltip sources).
-   *  Collapsed rows are visible:false, so only the expanded one is hoverable. */
+  /** Description KeywordText elements (inline keyword tooltip sources). */
   get descKeywordTexts() {
     return this._rows.filter(r => r.descKT).map(r => r.descKT);
   }
@@ -205,63 +174,37 @@ export default class SkillsPane extends UIPanel {
     return true;
   }
 
-  /** Expand/collapse a row. Accordion on the player pane (opening one
-   *  collapses the others); independent toggles in expandAll (enemy) mode. */
-  toggleRow(index) {
-    const row = this._rows[index];
-    if (!row || row.locked) return;
-    row.expanded = !row.expanded;
-    if (!this._expandAll && row.expanded) {
-      for (let i = 0; i < this._rows.length; i++) {
-        if (i !== index) this._rows[i].expanded = false;
-      }
-    }
-    for (const r of this._rows) {
-      if (r.descKT) r.descKT.visible = r.expanded;
-    }
-  }
-
   /**
    * Handle a mousedown in design space. Returns true when consumed.
-   * Semantics (no Cast button): in the header band, the cost/chevron zone
-   * (x ≥ toggleX) toggles the drawer; anywhere else CASTS when castable
-   * (player pane + affordable — BattleController still validates the turn),
-   * and falls back to toggling the drawer when it can't cast (enemy pane,
-   * unaffordable). BattleScene calls this BEFORE its turn-state gating so
-   * browsing works at any time, for both panes.
+   * Clicking anywhere on a castable card CASTS it (player pane + affordable;
+   * BattleController still validates the turn). Other card clicks are
+   * consumed without action. BattleScene calls this BEFORE its turn-state
+   * gating.
    */
   handleClick(x, y) {
     if (!this._insideInner(x, y)) return false;
     for (let i = 0; i < this._rowLayout.length; i++) {
       const entry = this._rowLayout[i];
       if (!entry) continue;
-      // Header band
-      if (y >= entry.y && y <= entry.y + ROW_H) {
+      if (y >= entry.y && y <= entry.y + entry.h) {
         const row = this._rows[i];
-        if (!row || row.locked) return true; // consume, no-op
-        if (x >= entry.toggleX) {
-          this.toggleRow(i); // cost/chevron zone = toggle drawer
-        } else if (this.onSkillClick && this._affordable(row.skill)) {
-          this.onSkillClick(row.skill); // the row IS the cast button
-        } else {
-          this.toggleRow(i); // can't cast → show/hide info instead
+        if (row && !row.locked && this.onSkillClick && this._affordable(row.skill)) {
+          this.onSkillClick(row.skill);
         }
         return true;
       }
-      // Inside the expanded block: consume, no action
-      if (y >= entry.y && y <= entry.y + entry.h) return true;
     }
     return false;
   }
 
-  /** Track the hovered row (header band) for the highlight. */
+  /** Track the hovered card for the highlight. */
   handleMouseMove(x, y) {
     this._hoverRow = -1;
     if (!this._insideInner(x, y)) return;
     for (let i = 0; i < this._rowLayout.length; i++) {
       const entry = this._rowLayout[i];
       if (!entry) continue;
-      if (y >= entry.y && y <= entry.y + ROW_H) {
+      if (y >= entry.y && y <= entry.y + entry.h) {
         if (this._rows[i] && !this._rows[i].locked) this._hoverRow = i;
         return;
       }
@@ -289,10 +232,6 @@ export default class SkillsPane extends UIPanel {
     };
   }
 
-  _pointIn(rect, x, y) {
-    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
-  }
-
   _asset(key) {
     if (!key || !this._assetManager) return null;
     const img = this._assetManager.get(key);
@@ -312,69 +251,79 @@ export default class SkillsPane extends UIPanel {
     ctx.rect(inner.x, inner.y, inner.w, inner.h);
     ctx.clip(); // overflow stays INSIDE the panel — it never grows
 
+    const textX = inner.x + CARD_PAD.left + ICON_SIZE + ICON_GAP;
+    const textW = Math.max(20, inner.x + inner.w - CARD_PAD.right - COST_COL_WIDTH - textX);
+
     let y = inner.y;
     for (let i = 0; i < this._rows.length; i++) {
       const row = this._rows[i];
-      const isExpanded = row.expanded && !row.locked;
 
-      // Measure expanded content first (drives this row's height). The
-      // description left-aligns with the NAME column.
-      const descX = inner.x + ROW_PAD_X + ICON_SIZE + ICON_GAP;
+      // ── Measure: card height auto-fits name + wrapped description ──
+      let h = LOCKED_CARD_H;
+      let nameLines = null;
       let descH = 0;
-      if (isExpanded && row.descKT) {
-        row.descKT.setStyle({ maxWidth: inner.x + inner.w - DESC_RIGHT_INSET - descX });
-        descH = row.descKT.measureText(ctx).height;
-      }
-      const extraH = isExpanded ? EXPANDED_PAD_TOP + descH + EXPANDED_PAD_BOTTOM : 0;
-      const h = ROW_H + extraH;
-
-      const entry = { y, h, toggleX: inner.x + inner.w };
-      if (y <= inner.y + inner.h) {
-        this._renderRow(ctx, row, i, inner, y, h, isExpanded, descH, entry);
-        // Divider between rows (skip after the last row).
-        if (i < this._rows.length - 1) {
-          ctx.strokeStyle = DIVIDER_COLOR;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(inner.x + 6, y + h + ROW_GAP / 2);
-          ctx.lineTo(inner.x + inner.w - 6, y + h + ROW_GAP / 2);
-          ctx.stroke();
+      if (!row.locked) {
+        ctx.font = `bold ${NAME_FONT_SIZE}px ${FONT_FAMILY}`;
+        nameLines = this._wrapWords(ctx, row.skill.name || '', textW);
+        const nameH = nameLines.length * NAME_LINE_HEIGHT;
+        if (row.descKT && row.skill.description) {
+          row.descKT.setStyle({ maxWidth: textW });
+          descH = row.descKT.measureText(ctx).height;
         }
+        const contentH = nameH + (descH > 0 ? NAME_DESC_GAP + descH : 0);
+        h = Math.max(CARD_MIN_H, CARD_PAD.top + contentH + CARD_PAD.bottom);
+      }
+
+      const entry = { y, h };
+      if (y <= inner.y + inner.h) {
+        this._renderCard(ctx, row, i, inner, y, h, textX, textW, nameLines, descH);
       }
       layout.push(entry);
-      y += h + ROW_GAP;
+      y += h + CARD_GAP;
     }
 
     ctx.restore();
     this._rowLayout = layout;
   }
 
-  _renderRow(ctx, row, index, inner, y, h, isExpanded, descH, entry) {
+  _renderCard(ctx, row, index, inner, y, h, textX, textW, nameLines, descH) {
     const x = inner.x;
     const w = inner.w;
     const skill = row.skill;
     const hovered = index === this._hoverRow;
     const castable = !row.locked && this._affordable(skill) && !!this.onSkillClick;
 
-    // Row background (whole row incl. expanded block — reads as ONE row).
-    // A castable row is highlighted WHOLE — the row itself is the cast button.
-    ctx.save();
-    this._roundRectPath(ctx, x, y, w, h, ROW_RADIUS);
-    ctx.fillStyle = isExpanded ? ROW_BG_EXPANDED : (hovered ? ROW_BG_HOVER : ROW_BG);
-    ctx.fill();
-    if (castable) {
-      this._roundRectPath(ctx, x, y, w, h, ROW_RADIUS);
-      ctx.fillStyle = hovered ? CASTABLE_FILL_HOVER : CASTABLE_FILL;
+    // ── Card frame: the legacy carved-panel art, stretched to the card ──
+    const frame = this._asset(CARD_BG_KEY);
+    if (frame) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(frame, x, y, w, h);
+      ctx.restore();
+    } else {
+      ctx.save();
+      this._roundRectPath(ctx, x, y, w, h, CARD_RADIUS);
+      ctx.fillStyle = CARD_FALLBACK_BG;
       ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = CARD_FALLBACK_BORDER;
+      ctx.stroke();
+      ctx.restore();
     }
-    ctx.lineWidth = castable ? 1.5 : 1;
-    ctx.strokeStyle = castable ? CASTABLE_BORDER : ROW_BORDER;
-    this._roundRectPath(ctx, x, y, w, h, ROW_RADIUS);
-    ctx.stroke();
+
+    // Castable: highlight the WHOLE card (the card is the cast button).
+    ctx.save();
     if (castable) {
-      // Left accent bar reinforces "this can be cast right now".
+      ctx.fillStyle = hovered ? CASTABLE_FILL_HOVER : CASTABLE_FILL;
+      ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = CASTABLE_BORDER;
+      ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
       ctx.fillStyle = CASTABLE_ACCENT;
-      ctx.fillRect(x, y + 3, 3, h - 6);
+      ctx.fillRect(x + 1, y + 4, 3, h - 8);
+    } else if (hovered && !row.locked) {
+      ctx.fillStyle = CARD_BG_HOVER;
+      ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
     }
     ctx.restore();
 
@@ -384,89 +333,77 @@ export default class SkillsPane extends UIPanel {
         ctx.save();
         ctx.globalAlpha *= LOCKED_ALPHA;
         const s = LOCKED_ICON_SIZE;
-        ctx.drawImage(img, x + w / 2 - s / 2, y + ROW_H / 2 - s / 2, s, s);
+        ctx.drawImage(img, x + w / 2 - s / 2, y + h / 2 - s / 2, s, s);
         ctx.restore();
       }
       return;
     }
 
-    // ── Header: [icon] [name] ......... [cost orb] [chevron] ──
+    // ── Circular icon (left, vertically centered) ──
     const iconImg = this._asset(skill.icon) || this._asset('placeholder');
+    const iconCX = x + CARD_PAD.left + ICON_SIZE / 2;
+    const iconCY = y + h / 2;
     if (iconImg) {
       ctx.save();
       ctx.imageSmoothingEnabled = true;
+      ctx.beginPath();
+      ctx.arc(iconCX, iconCY, ICON_SIZE / 2, 0, Math.PI * 2);
+      ctx.clip();
+      // Cover-fit into the circle's bounding square.
       const iw = iconImg.width || ICON_SIZE;
       const ih = iconImg.height || ICON_SIZE;
-      const sc = Math.min(ICON_SIZE / iw, ICON_SIZE / ih);
+      const sc = Math.max(ICON_SIZE / iw, ICON_SIZE / ih);
       const dw = iw * sc;
       const dh = ih * sc;
-      ctx.drawImage(iconImg,
-        x + ROW_PAD_X + (ICON_SIZE - dw) / 2,
-        y + ROW_H / 2 - dh / 2, dw, dh);
+      ctx.drawImage(iconImg, iconCX - dw / 2, iconCY - dh / 2, dw, dh);
+      ctx.restore();
+      // Dark ring so the icon reads as a carved circular inset.
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(iconCX, iconCY, ICON_SIZE / 2, 0, Math.PI * 2);
+      ctx.lineWidth = ICON_RING_WIDTH;
+      ctx.strokeStyle = ICON_RING_COLOR;
+      ctx.stroke();
       ctx.restore();
     }
 
-    // Chevron (right edge) — clean filled triangle (▼ collapsed / ▲ expanded).
-    const chevCX = x + w - CHEVRON_MARGIN_R - CHEVRON_W / 2;
-    const chevCY = y + ROW_H / 2;
-    ctx.save();
-    ctx.fillStyle = CHEVRON_COLOR;
-    ctx.beginPath();
-    if (isExpanded) { // ▲
-      ctx.moveTo(chevCX, chevCY - CHEVRON_H / 2);
-      ctx.lineTo(chevCX + CHEVRON_W / 2, chevCY + CHEVRON_H / 2);
-      ctx.lineTo(chevCX - CHEVRON_W / 2, chevCY + CHEVRON_H / 2);
-    } else {          // ▼
-      ctx.moveTo(chevCX - CHEVRON_W / 2, chevCY - CHEVRON_H / 2);
-      ctx.lineTo(chevCX + CHEVRON_W / 2, chevCY - CHEVRON_H / 2);
-      ctx.lineTo(chevCX, chevCY + CHEVRON_H / 2);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // Mana cost (number + gem), right-aligned before the chevron.
-    let costLeft = x + w - CHEVRON_MARGIN_R - CHEVRON_W - COST_CHEVRON_GAP;
+    // ── Mana cost (right, vertically centered): number + gem ──
     const cost = skill.cost || {};
     const costColors = Object.keys(cost).filter(c => cost[c] > 0);
     if (costColors.length) {
       ctx.save();
       ctx.font = `bold ${COST_FONT_SIZE}px ${FONT_FAMILY}`;
       ctx.textBaseline = 'middle';
-      // Draw right-to-left so multiple costs stack leftward.
-      for (let c = costColors.length - 1; c >= 0; c--) {
-        const color = costColors[c];
+      const rowH = COST_ORB_SIZE + 4;
+      let cy = y + h / 2 - ((costColors.length - 1) * rowH) / 2;
+      for (const color of costColors) {
         const amount = String(cost[color]);
-        // gem
+        const orbX = x + w - CARD_PAD.right - COST_ORB_SIZE;
         const orbImg = this._asset(`mana_${color}_simple`);
-        const orbX = costLeft - COST_ORB_SIZE;
         if (orbImg) {
-          ctx.drawImage(orbImg, orbX, y + ROW_H / 2 - COST_ORB_SIZE / 2, COST_ORB_SIZE, COST_ORB_SIZE);
+          ctx.drawImage(orbImg, orbX, cy - COST_ORB_SIZE / 2, COST_ORB_SIZE, COST_ORB_SIZE);
         } else {
           ctx.beginPath();
-          ctx.arc(orbX + COST_ORB_SIZE / 2, y + ROW_H / 2, COST_ORB_SIZE / 2, 0, Math.PI * 2);
+          ctx.arc(orbX + COST_ORB_SIZE / 2, cy, COST_ORB_SIZE / 2, 0, Math.PI * 2);
           ctx.fillStyle = MANA_COLORS[color] || '#888';
           ctx.fill();
           ctx.lineWidth = 1;
           ctx.strokeStyle = '#665522';
           ctx.stroke();
         }
-        // amount
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'right';
-        ctx.fillText(amount, orbX - COST_PAIR_GAP, y + ROW_H / 2 + 1);
-        costLeft = orbX - COST_PAIR_GAP - ctx.measureText(amount).width - 10;
+        ctx.fillText(amount, orbX - COST_PAIR_GAP, cy + 1);
+        cy += rowH;
       }
       ctx.restore();
     }
-    // Everything from the cost numbers to the right edge is the
-    // "toggle drawer" zone (clicks there never cast).
-    entry.toggleX = costLeft;
 
-    // Name — wraps at WORD boundaries onto up to NAME_MAX_LINES lines
-    // (never mid-word), vertically centered in the header band.
-    const nameX = x + ROW_PAD_X + ICON_SIZE + ICON_GAP;
-    const nameMaxW = Math.max(20, costLeft - nameX);
+    // ── Name + full description (block vertically centered in the card) ──
+    const contentH = nameLines.length * NAME_LINE_HEIGHT
+      + (descH > 0 ? NAME_DESC_GAP + descH : 0);
+    let lineY = y + Math.max(CARD_PAD.top, (h - contentH) / 2);
+
     ctx.save();
     ctx.font = `bold ${NAME_FONT_SIZE}px ${FONT_FAMILY}`;
     ctx.fillStyle = NAME_COLOR;
@@ -474,21 +411,17 @@ export default class SkillsPane extends UIPanel {
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
     ctx.shadowBlur = 2;
-    const nameLines = this._wrapWords(ctx, skill.name || '', nameMaxW);
-    const blockH = (nameLines.length - 1) * NAME_LINE_HEIGHT;
-    let lineY = y + ROW_H / 2 + 1 - blockH / 2;
     for (const line of nameLines) {
-      ctx.fillText(line, nameX, lineY);
+      ctx.fillText(line, textX, lineY + NAME_LINE_HEIGHT / 2);
       lineY += NAME_LINE_HEIGHT;
     }
     ctx.restore();
 
-    // ── Expanded block: full description, left-aligned with the name ──
-    if (isExpanded && row.descKT) {
+    if (row.descKT && descH > 0) {
       const kt = row.descKT;
-      kt.rect.x = nameX;
-      kt.rect.y = y + ROW_H + EXPANDED_PAD_TOP;
-      kt.rect.w = x + w - DESC_RIGHT_INSET - nameX;
+      kt.rect.x = textX;
+      kt.rect.y = lineY + NAME_DESC_GAP;
+      kt.rect.w = textW;
       kt.rect.h = descH;
       kt.renderSelf(ctx);
     }
