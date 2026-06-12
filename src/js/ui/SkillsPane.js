@@ -59,7 +59,7 @@ const CASTABLE_FILL_HOVER = 'rgba(255, 250, 200, 0.18)';  // hovered card tint
 const CASTABLE_BORDER = 'rgba(255, 240, 180, 0.95)';      // bright border
 
 // Circular icon (left column), vertically centered in the card.
-const ICON_SIZE = 64;
+const ICON_SIZE = 80;
 const ICON_GAP = 12;
 const ICON_RING_COLOR = 'rgba(20, 16, 10, 0.9)';
 const ICON_RING_WIDTH = 3;
