@@ -67,6 +67,11 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Thrall',
     description: 'A wild [[Tile]] that counts as any type for [[matching]] — it completes a [[Match]] with whatever it lines up beside.',
   },
+  wild: {
+    id: 'wild',
+    label: 'Wild',
+    description: 'A [[Tile]] that counts as any type for [[matching]] — it completes a [[Match]] with whatever it lines up beside.',
+  },
   harvest: {
     id: 'harvest',
     label: 'Harvest',

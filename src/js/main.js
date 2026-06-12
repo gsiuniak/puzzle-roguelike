@@ -171,6 +171,7 @@ const ASSET_ALIASES = {
   tile_skull:   'skull_tile',
   tile_disease: 'diseased_tile',
   tile_thrall:  'thrall_tile',
+  tile_wild:    'wild_tile',
 };
 
 // ── Game viewport configuration ─────────────────────────

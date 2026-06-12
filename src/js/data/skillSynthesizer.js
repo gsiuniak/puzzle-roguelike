@@ -334,10 +334,12 @@ export function synthesize(recipe) {
   /** Emit a create_tiles effect (shared by the action and injections). */
   const emitCreate = (amount, type) => {
     effects.push({ effectType: 'create_tiles', createTiles: { amount, type } });
-    if (type === 'thrall') lines.push(`[[Create]] ${amount} [[Thrall]] [[tiles]]`);
+    if (type === 'wild') lines.push(`[[Create]] ${amount} [[Wild]] [[tiles]]`);
+    else if (type === 'thrall') lines.push(`[[Create]] ${amount} [[Thrall]] [[tiles]]`);
     else if (type === 'skull') lines.push(`[[Create]] ${amount} [[Skulls]]`);
     else lines.push(`[[Create]] ${amount} ${TILE_LABEL[type]} [[tiles]]`);
-    power += amount * POWER.perTileCreated * (type === 'thrall' ? POWER.thrallTileMult : 1);
+    const isWildType = type === 'wild' || type === 'thrall';
+    power += amount * POWER.perTileCreated * (isWildType ? POWER.thrallTileMult : 1);
   };
 
   /**
@@ -431,14 +433,15 @@ export function synthesize(recipe) {
         break;
       }
       case 'create': {
-        // wild + create → Thrall tiles (the joker). Otherwise the element's
-        // tile type (skull allowed — creating Skulls is a real strategy);
-        // with neither, a color is rolled once now.
+        // wild + create → WILD tiles (the standard player joker — Malakor's
+        // Thrall is the enemy-flavored variant). Otherwise the element's tile
+        // type (skull allowed — creating Skulls is a real strategy); with
+        // neither, a color is rolled once now.
         const amount = roll('create', 3);
         let type;
         if (modifiers.has('wild') && !used.has('wild')) {
           used.add('wild');
-          type = 'thrall';
+          type = 'wild';
         } else {
           type = takeElement() || pickRandom(COST_COLORS);
         }
@@ -509,11 +512,11 @@ export function synthesize(recipe) {
 
   // ── Injection pass ("the weave surges") — see file header ──
 
-  // wild with no create → conjures Thralls anyway.
+  // wild with no create → conjures Wild tiles anyway.
   if (modifiers.has('wild') && !used.has('wild') && chance(INJECTION_CONFIG.wildCreates)) {
     used.add('wild');
     injected.add('create');
-    emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.75)), 'thrall');
+    emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.75)), 'wild');
   }
 
   // lock (no board mechanic yet) → locks the ENEMY down: applies Frozen.

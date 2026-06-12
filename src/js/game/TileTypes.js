@@ -31,8 +31,12 @@ export const TILE_TYPES = {
   SKULL:  { id: 'skull',  isSkull: true,  color: '#555555', particleColor: '#2C3E50', spawnWeight: 20 },
   // Inert tile — never spawns (weight 0), placed only by effects (Infected Tooth).
   DISEASE: { id: 'disease', isSkull: false, isInert: true, color: '#7d8a3a', particleColor: '#a4c639', spawnWeight: 0 },
-  // Wild tile — never spawns (weight 0), placed only by effects (Usurper's Heart).
-  // Matches as any adjacent concrete type. See BoardModel wild-aware detection.
+  // Wild tiles — never spawn (weight 0), placed only by effects. Both match as
+  // any adjacent concrete type (see BoardModel wild-aware detection); they
+  // differ only in ART + provenance:
+  //   WILD   — the STANDARD wild tile (player-woven "wild" skills etc.)
+  //   THRALL — Lord Malakor's wild tile (Baron's Signet / Usurper's Heart)
+  WILD:   { id: 'wild',   isSkull: false, isWild: true, color: '#c9a84c', particleColor: '#ffe28a', spawnWeight: 0 },
   THRALL: { id: 'thrall', isSkull: false, isWild: true, color: '#b0392f', particleColor: '#e2452f', spawnWeight: 0 },
 };
 

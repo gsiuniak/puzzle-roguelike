@@ -92,12 +92,12 @@ function tableKeys(tagId) {
   }
 }
 
-// ── 3. create + wild → Thrall tiles; wild consumed ──
+// ── 3. create + wild → standard WILD tiles (not Malakor's Thrall) ──
 {
   const r = synthesize(['create', 'wild']);
   const fx = r.skill.effects.find((e) => e.effectType === 'create_tiles');
   check('create_tiles emitted', !!fx);
-  if (fx) eq('wild + create → thrall tiles', fx.createTiles.type, 'thrall');
+  if (fx) eq('wild + create → wild tiles', fx.createTiles.type, 'wild');
   check('wild consumed', r.usedTags.includes('wild'));
   check('create count from table', tableKeys('create').includes(fx.createTiles.amount), String(fx.createTiles.amount));
 }
@@ -111,10 +111,10 @@ function tableKeys(tagId) {
   check('lock counts as used', lock.usedTags.includes('lock'));
   check('frozen reported as injected', lock.injectedTags.includes('frozen'));
 
-  // wild without create → conjures Thralls anyway
+  // wild without create → conjures Wild tiles anyway
   const wild = synthesize(['damage', 'wild']);
   const wfx = wild.skill.effects.find((e) => e.effectType === 'create_tiles');
-  check('wild injects thrall creation', !!wfx && wfx.createTiles.type === 'thrall', JSON.stringify(wild.skill.effects));
+  check('wild injects wild-tile creation', !!wfx && wfx.createTiles.type === 'wild', JSON.stringify(wild.skill.effects));
   check('wild counts as used', wild.usedTags.includes('wild'));
 
   // orphan shape → injects a destroy of that shape
