@@ -12,31 +12,51 @@
  *   - The FIRST action is the PRIMARY action (drives name flavor, cost-color
  *     affinity, and owns the skill's single targeting configuration).
  *   - Actions consume compatible ELEMENT / SHAPE / MODIFIER tags as they
- *     resolve (e.g. `convert` + 2 elements → convert all <el1> into <el2>;
- *     `create` + `wild` → create Thrall tiles; `destroy` + `row` → targeted
- *     row destruction).
+ *     resolve. `convert` is by-type by DEFAULT (2 elements → all <el1> into
+ *     <el2>; 1 element → all <random other color> into <el>); the precise
+ *     targeted single-tile convert happens only when the `tile` shape was
+ *     explicitly woven (area → targeted 3×3 convert).
  *   - STATUS tags always resolve to apply_status effects (buffs target self,
  *     debuffs the opponent), with rolled durations.
  *   - `extra_turn` appends an extra_turn effect LAST (a create_tiles cascade
  *     resets the flag, so ordering is load-bearing — decision #4).
- *   - NOT every tag is used: `lock` has no battle mechanic yet, `wild` without
- *     `create` does nothing, shapes need a compatible action, 3rd+ elements
- *     drop, and only ONE action may claim board targeting. Unused tags are
- *     reported in `unusedTags` (the weave scene shows them as inert).
+ *
+ * ── Injection ("the weave surges") ──────────────────────────────────────────
+ * Tags should almost never go inert — when a tag has nothing to attach to, the
+ * weave INJECTS a complementary effect instead (per-rule chances live in
+ * weaveConfig.INJECTION_CONFIG):
+ *   - `wild` with no create        → conjures Thrall tiles anyway
+ *   - `lock` (no mechanic yet)     → "locks down" the enemy: applies Frozen
+ *   - orphan shape (row/col/area/tile) → injects a destroy of that shape
+ *   - orphan `random`              → chaotic surge: gain rolled-color mana
+ *   - element used by NOTHING (not even the cost color) → conjures its tiles
+ *   - a 2nd targeted action        → vents as direct damage instead
+ *   - a PURE damage spell          → surges an Extra Turn (damage alone feels
+ *                                    weak — the surge makes it tempo-positive)
+ * Injected contributions are reported in `injectedTags` (shown as "The weave
+ * surged" on the result screen); whatever still resolves to nothing lands in
+ * `unusedTags` ("Inert threads") — rare by design.
  *
  * ── RNG ─────────────────────────────────────────────────────────────────────
  * All magnitudes are HIDDEN per-tag rolls from weaveConfig.TAG_VALUE_TABLES
- * (the "high-roll" layer — e.g. create rolls 3–12 tiles), and the mana cost is
- * rolled from weaveConfig.MANA_COST_CONFIG: a 5..8 band whose floor AND
- * ceiling rise as the spell's computed POWER score passes tier thresholds.
- * Rolls happen exactly once, here — the resulting skill is a plain stored
- * object and never re-rolls.
+ * (the "high-roll" layer — e.g. create rolls 3–12). The mana cost AMOUNT is
+ * rolled from weaveConfig.MANA_COST_CONFIG (5..8 band, floor+ceiling rise with
+ * the computed POWER score). The cost COLOR is a weighted roll
+ * (weaveConfig.COST_COLOR_WEIGHTS): bag elements weigh heavily and the primary
+ * action's affinity moderately, but neither is a hard rule. Rolls happen
+ * exactly once, here — the resulting skill is a plain stored object.
  *
  * Power weights / name tables / cost-color affinities are the tunable
- * constants below; roll tables live in weaveConfig.js.
+ * constants below; all probability tables live in weaveConfig.js.
  */
 
-import { rollTagValue, rollManaCost } from './weaveConfig.js';
+import {
+  rollTagValue,
+  rollManaCost,
+  pickWeightedEntry,
+  INJECTION_CONFIG,
+  COST_COLOR_WEIGHTS,
+} from './weaveConfig.js';
 import { getTag, getTagLabel, TAG_CATEGORY } from './skillWeaveTags.js';
 
 // ═══════════════════════════════════════════════════════════
@@ -62,7 +82,8 @@ const SELF_STATUS_TAGS = new Set(['intangible', 'berserk', 'barrier']);
 /** The five mana colors a cost may be paid in (skull is never a cost). */
 const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
 
-/** Primary action → cost color when the bag has no usable element. */
+/** Primary action → cost-color AFFINITY (a weight, not a rule — see
+ *  COST_COLOR_WEIGHTS in weaveConfig). */
 const ACTION_COST_AFFINITY = Object.freeze({
   damage: 'red', attack: 'red', explode: 'red', destroy: 'red',
   armor: 'blue', heal: 'green', create: 'green',
@@ -106,26 +127,65 @@ const POWER = Object.freeze({
   extraTurn: 8,
 });
 
-/** Element tag → name adjective. */
+// ── Name generation pools ──
+// Plenty of variety on purpose: adjectives per element × nouns per action ×
+// suffixes per tag × patterns. Extend freely — names are pure flavor.
+
+/** Element tag → name adjectives (one is picked at random). */
 const ELEMENT_ADJ = Object.freeze({
-  red: 'Crimson', blue: 'Tidal', green: 'Verdant',
-  yellow: 'Storm', purple: 'Umbral', skull: 'Deathly',
+  red:    ['Crimson', 'Scarlet', 'Searing', 'Ember', 'Blood-Forged', 'Cindering', 'Pyric'],
+  blue:   ['Tidal', 'Azure', 'Abyssal', 'Frost-Wreathed', 'Drowned', 'Riptide', 'Mistbound'],
+  green:  ['Verdant', 'Thorned', 'Wildgrown', 'Briar', 'Sporebound', 'Evergreen', 'Rooted'],
+  yellow: ['Storm-Called', 'Gilded', 'Radiant', 'Thundering', 'Sunforged', 'Static', 'Dazzling'],
+  purple: ['Umbral', 'Void-Touched', 'Eldritch', 'Duskwoven', 'Starless', 'Occult', 'Whispering'],
+  skull:  ['Deathly', 'Grave-Born', 'Skeletal', 'Dread', 'Charnel', 'Tombward', 'Mortal'],
 });
 
-/** Primary action → name noun candidates (one is picked at random). */
+/** Primary action → name noun candidates. */
 const ACTION_NOUNS = Object.freeze({
-  damage: ['Strike', 'Lash', 'Rend'],
-  armor: ['Bulwark', 'Aegis', 'Ward'],
-  heal: ['Mending', 'Renewal', 'Restoration'],
-  create: ['Genesis', 'Wellspring', 'Conjuring'],
-  destroy: ['Ruin', 'Shatter', 'Unmaking'],
-  convert: ['Transmutation', 'Alchemy', 'Reshaping'],
-  gain: ['Boon', 'Font', 'Windfall'],
-  drain: ['Siphon', 'Leeching', 'Hunger'],
-  attack: ['Ferocity', 'Whetstone', 'Bloodlust'],
-  explode: ['Cataclysm', 'Detonation', 'Conflagration'],
+  damage:  ['Strike', 'Lash', 'Rend', 'Reckoning', 'Scourge', 'Sundering', 'Spike', 'Verdict'],
+  armor:   ['Bulwark', 'Aegis', 'Ward', 'Carapace', 'Rampart', 'Shell', 'Vigil', 'Bastion'],
+  heal:    ['Mending', 'Renewal', 'Restoration', 'Blessing', 'Salve', 'Communion', 'Respite'],
+  create:  ['Genesis', 'Wellspring', 'Conjuring', 'Blooming', 'Summons', 'Manifest', 'Seeding'],
+  destroy: ['Ruin', 'Shatter', 'Unmaking', 'Collapse', 'Erasure', 'Demolition', 'Cull'],
+  convert: ['Transmutation', 'Alchemy', 'Reshaping', 'Inversion', 'Metamorphosis', 'Refrain'],
+  gain:    ['Boon', 'Font', 'Windfall', 'Tribute', 'Harvest', 'Offering', 'Bounty'],
+  drain:   ['Siphon', 'Leeching', 'Hunger', 'Theft', 'Tithe', 'Parch', 'Drought'],
+  attack:  ['Ferocity', 'Whetstone', 'Bloodlust', 'Warcry', 'Honing', 'Frenzy', 'Edge'],
+  explode: ['Cataclysm', 'Detonation', 'Conflagration', 'Starburst', 'Eruption', 'Concussion'],
 });
-const DEFAULT_NOUNS = ['Weaving', 'Working', 'Rite'];
+const DEFAULT_NOUNS = Object.freeze(['Weaving', 'Working', 'Rite', 'Invocation', 'Sigil', 'Incantation']);
+
+/** Any bag tag → optional name suffixes ("Strike of Deep Winter"). */
+const TAG_SUFFIXES = Object.freeze({
+  extra_turn: ['of Haste', 'of the Second Sun', 'of Stolen Time'],
+  wild:       ['of the Wilds', 'Unbound', 'of Chaos'],
+  lock:       ['of Binding', 'of the Sealed Vault'],
+  row:        ['of the Sweeping Arc', 'of the Horizon'],
+  column:     ['of the Falling Pillar', 'of the Spire'],
+  area:       ['of the Maelstrom', 'of the Epicenter'],
+  random:     ['of Fortune', 'of the Scattered Dice'],
+  tile:       ['of the Single Mark', 'of Precision'],
+  skull:      ['of the Grave', 'of Bone'],
+  silence:    ['of Silence', 'of the Hushed'],
+  cripple:    ['of Maiming', 'of the Lamed'],
+  enfeeble:   ['of Withering', 'of Frailty'],
+  brittle:    ['of Shattering', 'of Glass'],
+  bleed:      ['of Open Wounds', 'of the Red Tithe'],
+  frozen:     ['of Deep Winter', 'of the Stilled Heart'],
+  intangible: ['of the Phantom', 'of Mist'],
+  berserk:    ['of Fury', 'of the Red Haze'],
+  barrier:    ['of the Bulwark', 'of the Unbroken'],
+});
+
+/** Name pattern → relative weight (patterns needing a missing part are skipped). */
+const NAME_PATTERN_WEIGHTS = Object.freeze({
+  adj_noun: 40,        // "Crimson Strike"
+  adj_noun_suffix: 20, // "Crimson Strike of Deep Winter"
+  noun_suffix: 20,     // "Strike of Deep Winter"
+  the_adj_noun: 10,    // "The Crimson Strike"
+  plain_noun: 8,       // "Reckoning"
+});
 
 /** Display names for tile types in descriptions. */
 const TILE_LABEL = Object.freeze({
@@ -160,8 +220,54 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+/** Roll a 0–100 percentage chance from INJECTION_CONFIG. */
+function chance(pct) {
+  return Math.random() * 100 < pct;
+}
+
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/**
+ * Weighted cost-color roll: every color gets a baseline weight; bag elements
+ * and the primary action's affinity ADD weight (influence, not a hard rule).
+ */
+function rollCostColor(elements, primaryAction) {
+  const weights = {};
+  for (const c of COST_COLORS) weights[c] = COST_COLOR_WEIGHTS.anyColor;
+  let first = true;
+  for (const el of elements) {
+    if (!COST_COLORS.includes(el)) continue; // skull is never a cost color
+    weights[el] += first ? COST_COLOR_WEIGHTS.firstElement : COST_COLOR_WEIGHTS.otherElement;
+    first = false;
+  }
+  const affinity = ACTION_COST_AFFINITY[primaryAction];
+  if (affinity) weights[affinity] += COST_COLOR_WEIGHTS.actionAffinity;
+  return pickWeightedEntry(Object.entries(weights)) || pickRandom(COST_COLORS);
+}
+
+/** Generate a flavor name from the bag (pattern × adjective × noun × suffix). */
+function generateName(tagIds, groups, primaryAction) {
+  const elements = groups[TAG_CATEGORY.ELEMENT];
+  const adj = elements.length ? pickRandom(ELEMENT_ADJ[pickRandom(elements)] || []) : null;
+  const noun = pickRandom(ACTION_NOUNS[primaryAction] || DEFAULT_NOUNS);
+  const suffixPool = tagIds.filter((id) => TAG_SUFFIXES[id]);
+  const suffix = suffixPool.length ? pickRandom(TAG_SUFFIXES[pickRandom(suffixPool)]) : null;
+
+  const candidates = Object.entries(NAME_PATTERN_WEIGHTS).filter(([pattern]) => {
+    if (pattern.includes('adj') && !adj) return false;
+    if (pattern.includes('suffix') && !suffix) return false;
+    return true;
+  });
+  const pattern = pickWeightedEntry(candidates) || 'plain_noun';
+  switch (pattern) {
+    case 'adj_noun': return `${adj} ${noun}`;
+    case 'adj_noun_suffix': return `${adj} ${noun} ${suffix}`;
+    case 'noun_suffix': return `${noun} ${suffix}`;
+    case 'the_adj_noun': return `The ${adj} ${noun}`;
+    default: return noun;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -178,6 +284,7 @@ function capitalize(s) {
  *   rolledValues: Object<string, number>,
  *   usedTags: string[],
  *   unusedTags: string[],
+ *   injectedTags: string[],
  *   power: number,
  *   skill: object,
  *   summary: string,
@@ -197,6 +304,7 @@ export function synthesize(recipe) {
 
   // ── Consumption state ──
   const used = new Set();
+  const injected = new Set(); // tag ids describing what the weave injected
   const effects = [];
   const lines = [];      // description lines
   let power = 0;
@@ -215,12 +323,53 @@ export function synthesize(recipe) {
     }
     return null;
   };
-  /** Consume a shape tag if present and no other action claimed targeting. */
+  /** Consume a shape tag if present and unconsumed. */
   const takeShape = (...candidates) => {
     for (const s of candidates) {
       if (shapes.has(s) && !used.has(s)) { used.add(s); return s; }
     }
     return null;
+  };
+
+  /** Emit a create_tiles effect (shared by the action and injections). */
+  const emitCreate = (amount, type) => {
+    effects.push({ effectType: 'create_tiles', createTiles: { amount, type } });
+    if (type === 'thrall') lines.push(`[[Create]] ${amount} [[Thrall]] [[tiles]]`);
+    else if (type === 'skull') lines.push(`[[Create]] ${amount} [[Skulls]]`);
+    else lines.push(`[[Create]] ${amount} ${TILE_LABEL[type]} [[tiles]]`);
+    power += amount * POWER.perTileCreated * (type === 'thrall' ? POWER.thrallTileMult : 1);
+  };
+
+  /**
+   * Emit a shaped board destruction, claiming the skill's single targeting
+   * slot (shared by destroy/explode actions and the orphan-shape injection).
+   * @returns {boolean} false when the targeting slot was already taken
+   */
+  const emitDestroyShaped = (shape, isExplode = false) => {
+    if (targeting) return false;
+    if (shape === 'row') {
+      targeting = { targeting: 'board_tile', area: 1 };
+      effects.push({ effectType: 'destroy_tiles_row' });
+      lines.push('[[Destroy]] a row of [[tiles]]');
+      power += POWER.destroyRow;
+    } else if (shape === 'column') {
+      targeting = { targeting: 'board_tile', area: 1 };
+      effects.push({ effectType: 'destroy_tiles_column' });
+      lines.push('[[Destroy]] a column of [[tiles]]');
+      power += POWER.destroyColumn;
+    } else if (shape === 'tile') {
+      targeting = { targeting: 'board_tile', area: { radius: 0 } };
+      effects.push({ effectType: 'destroy_tiles' });
+      lines.push('[[Destroy]] a [[tile]]');
+      power += POWER.destroyTile;
+    } else {
+      const radius = isExplode && shape === 'area' ? 2 : 1;
+      targeting = { targeting: 'board_tile', area: { radius } };
+      effects.push({ effectType: 'destroy_tiles' });
+      lines.push(`[[Destroy]] [[tiles]] in a ${radius * 2 + 1}x${radius * 2 + 1} area`);
+      power += radius === 2 ? POWER.destroyAreaWide : POWER.destroyArea;
+    }
+    return true;
   };
 
   // ── Actions, in pick order (first = primary) ──
@@ -293,65 +442,62 @@ export function synthesize(recipe) {
         } else {
           type = takeElement() || pickRandom(COST_COLORS);
         }
-        effects.push({ effectType: 'create_tiles', createTiles: { amount, type } });
-        if (type === 'thrall') lines.push(`[[Create]] ${amount} [[Thrall]] [[tiles]]`);
-        else if (type === 'skull') lines.push(`[[Create]] ${amount} [[Skulls]]`);
-        else lines.push(`[[Create]] ${amount} ${TILE_LABEL[type]} [[tiles]]`);
-        power += amount * POWER.perTileCreated * (type === 'thrall' ? POWER.thrallTileMult : 1);
+        emitCreate(amount, type);
         break;
       }
       case 'convert': {
+        // By-type conversion is the DEFAULT read of "convert": with two
+        // elements all <el1> become <el2> (pick order); with one element a
+        // random other color becomes it. The precise targeted convert only
+        // happens when the player explicitly wove a `tile` (single) or
+        // `area` (3×3) shape.
         const from = takeElement();
-        const to = takeElement();
-        if (from && to) {
-          // Two elements → convert ALL of one type into the other (the
-          // red+convert+green special: order = pick order).
-          effects.push({ effectType: 'convert_tiles_by_type', convertByType: { from, to } });
-          lines.push(`[[Change]] all ${from === 'skull' ? '[[Skulls]]' : `${TILE_LABEL[from]} [[tiles]]`} into ${to === 'skull' ? '[[Skulls]]' : TILE_LABEL[to]}`);
-          power += POWER.convertByType;
-        } else {
-          // One (or zero) element → targeted convert. Needs the skill's single
-          // targeting slot; if another action claimed it, convert goes unused.
-          if (targeting) { used.delete(action); break; }
+        const wantsTargeted = (shapes.has('tile') && !used.has('tile'))
+          || (shapes.has('area') && !used.has('area'));
+        if (wantsTargeted && !targeting) {
           const toColor = from || pickRandom(COST_COLORS);
           const radius = takeShape('area') ? 1 : 0;
-          if (radius === 0) takeShape('tile'); // single-tile is the default shape
+          if (radius === 0) takeShape('tile');
           targeting = { targeting: 'board_tile', area: { radius } };
           effects.push({ effectType: 'convert_tile', convertTile: { type: toColor } });
           const what = radius > 0 ? '[[tiles]] in a 3x3 area' : 'a [[tile]]';
           lines.push(`[[Change]] ${what} into ${toColor === 'skull' ? '[[Skulls]]' : TILE_LABEL[toColor]}`);
           power += radius > 0 ? POWER.convertArea : POWER.convertTile;
+        } else {
+          const second = takeElement();
+          let fromType = from;
+          let toType = second;
+          if (fromType && !toType) {
+            // One element: it's the DESTINATION; convert a random other color.
+            toType = fromType;
+            fromType = pickRandom(COST_COLORS.filter((c) => c !== toType));
+          } else if (!fromType) {
+            // No elements: roll both (distinct).
+            toType = pickRandom(COST_COLORS);
+            fromType = pickRandom(COST_COLORS.filter((c) => c !== toType));
+          }
+          effects.push({ effectType: 'convert_tiles_by_type', convertByType: { from: fromType, to: toType } });
+          lines.push(`[[Change]] all ${fromType === 'skull' ? '[[Skulls]]' : `${TILE_LABEL[fromType]} [[tiles]]`} into ${toType === 'skull' ? '[[Skulls]]' : TILE_LABEL[toType]}`);
+          power += POWER.convertByType;
         }
         break;
       }
       case 'destroy':
       case 'explode': {
-        // Board destruction is targeted; only one action gets the targeting slot.
-        if (targeting) { used.delete(action); break; }
         const isExplode = action === 'explode';
-        const shape = takeShape(...(isExplode ? ['area'] : ['row', 'column', 'area', 'tile']));
-        if (shape === 'row') {
-          targeting = { targeting: 'board_tile', area: 1 };
-          effects.push({ effectType: 'destroy_tiles_row' });
-          lines.push('[[Destroy]] a row of [[tiles]]');
-          power += POWER.destroyRow;
-        } else if (shape === 'column') {
-          targeting = { targeting: 'board_tile', area: 1 };
-          effects.push({ effectType: 'destroy_tiles_column' });
-          lines.push('[[Destroy]] a column of [[tiles]]');
-          power += POWER.destroyColumn;
-        } else if (shape === 'tile') {
-          targeting = { targeting: 'board_tile', area: { radius: 0 } };
-          effects.push({ effectType: 'destroy_tiles' });
-          lines.push('[[Destroy]] a [[tile]]');
-          power += POWER.destroyTile;
-        } else {
-          // area shape widens an explode to 5×5; default is 3×3
-          const radius = isExplode && shape === 'area' ? 2 : 1;
-          targeting = { targeting: 'board_tile', area: { radius } };
-          effects.push({ effectType: 'destroy_tiles' });
-          lines.push(`[[Destroy]] [[tiles]] in a ${radius * 2 + 1}x${radius * 2 + 1} area`);
-          power += radius === 2 ? POWER.destroyAreaWide : POWER.destroyArea;
+        const shape = takeShape(...(isExplode ? ['area'] : ['row', 'column', 'area', 'tile'])) || 'default';
+        if (!emitDestroyShaped(shape === 'default' ? 'area-default' : shape, isExplode)) {
+          // Targeting slot already claimed → the destruction VENTS as raw
+          // damage instead of fizzling (injection rule).
+          if (chance(INJECTION_CONFIG.ventedActionDamages)) {
+            const amount = Math.max(3, Math.round((rollTagValue('damage') || 5) * 0.75));
+            effects.push({ effectType: 'damage', damage: { amount } });
+            lines.push(`Deal ${amount} [[damage]]`);
+            power += amount * POWER.perDamage;
+            injected.add('damage');
+          } else {
+            used.delete(action);
+          }
         }
         break;
       }
@@ -359,6 +505,59 @@ export function synthesize(recipe) {
         used.delete(action);
         break;
     }
+  }
+
+  // ── Injection pass ("the weave surges") — see file header ──
+
+  // wild with no create → conjures Thralls anyway.
+  if (modifiers.has('wild') && !used.has('wild') && chance(INJECTION_CONFIG.wildCreates)) {
+    used.add('wild');
+    injected.add('create');
+    emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.75)), 'thrall');
+  }
+
+  // lock (no board mechanic yet) → locks the ENEMY down: applies Frozen.
+  if (modifiers.has('lock') && !used.has('lock') && chance(INJECTION_CONFIG.lockFreezes)) {
+    used.add('lock');
+    injected.add('frozen');
+    effects.push({ effectType: 'apply_status', applyStatus: { id: 'frozen', target: 'opponent', turns: 1 } });
+    lines.push('Apply [[Frozen]] for 1 turn');
+    power += POWER.perDebuffTurn;
+  }
+
+  // Orphan shapes → inject a destroy of that shape (first one wins targeting).
+  for (const shape of ['row', 'column', 'area', 'tile']) {
+    if (!shapes.has(shape) || used.has(shape) || targeting) continue;
+    if (!chance(INJECTION_CONFIG.orphanShapeDestroys)) continue;
+    used.add(shape);
+    injected.add('destroy');
+    emitDestroyShaped(shape);
+    break;
+  }
+
+  // Orphan `random` → chaotic mana surge.
+  if (shapes.has('random') && !used.has('random') && chance(INJECTION_CONFIG.orphanRandomGains)) {
+    used.add('random');
+    injected.add('gain');
+    const amount = Math.max(2, Math.round((rollTagValue('gain') || 3) * 0.6));
+    const color = pickRandom(COST_COLORS);
+    effects.push({ effectType: 'gain_mana', gainMana: { color, amount } });
+    lines.push(`Gain ${amount} ${TILE_LABEL[color]} [[mana]]`);
+    power += amount * POWER.perManaGained;
+  }
+
+  // ── Cost COLOR (weighted roll — elements/affinity influence, not dictate) ──
+  const costColor = rollCostColor(elements, primaryAction);
+  // An element whose job is coloring the cost counts as used.
+  if (elements.includes(costColor)) used.add(costColor);
+
+  // Elements consumed by NOTHING (not an action, not the cost) → conjure
+  // their own tiles instead of going inert.
+  for (const el of elements) {
+    if (used.has(el) || !chance(INJECTION_CONFIG.unusedElementCreates)) continue;
+    used.add(el);
+    injected.add('create');
+    emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.6)), el);
   }
 
   // ── Statuses (always used; buffs → self, debuffs → opponent) ──
@@ -387,6 +586,15 @@ export function synthesize(recipe) {
     power += amount * POWER.perDamage;
   }
 
+  // ── Pure damage spells surge an Extra Turn (damage alone is weak tempo) ──
+  const isPureDamage = effects.length > 0 && effects.every((e) => e.effectType === 'damage');
+  if (isPureDamage && !modifiers.has('extra_turn') && chance(INJECTION_CONFIG.pureDamageExtraTurn)) {
+    injected.add('extra_turn');
+    effects.push({ effectType: 'extra_turn' });
+    lines.push('Gain an [[extra turn]]');
+    power += POWER.extraTurn;
+  }
+
   // ── extra_turn LAST (create_tiles' cascade resets the flag — decision #4) ──
   if (modifiers.has('extra_turn')) {
     used.add('extra_turn');
@@ -395,26 +603,15 @@ export function synthesize(recipe) {
     power += POWER.extraTurn;
   }
 
-  // ── Cost: color from the bag's elements (consumed or not — they flavor the
-  //    spell), falling back to the primary action's affinity. Skull is never
-  //    a cost color, but a skull element still counts as "used" when it
-  //    shaped an effect above. ──
+  // ── Cost AMOUNT from the final power score ──
   const costRoll = rollManaCost(power);
-  const costColor = elements.find((el) => COST_COLORS.includes(el))
-    || ACTION_COST_AFFINITY[primaryAction]
-    || pickRandom(COST_COLORS);
-  // An element whose only job is coloring the cost still counts as used.
-  if (elements.includes(costColor)) used.add(costColor);
   const cost = { [costColor]: costRoll.cost };
 
-  // ── Name: element adjective + primary-action noun ──
-  const adjEl = elements.find((el) => used.has(el)) || elements[0] || null;
-  const noun = pickRandom(ACTION_NOUNS[primaryAction] || DEFAULT_NOUNS);
-  const name = adjEl ? `${ELEMENT_ADJ[adjEl]} ${noun}` : `Woven ${noun}`;
-
   // ── Assemble ──
+  const name = generateName(tagIds, groups, primaryAction);
   const usedTags = tagIds.filter((id) => used.has(id));
   const unusedTags = tagIds.filter((id) => !used.has(id));
+  const injectedTags = [...injected];
   const id = `woven_${tagIds.join('_')}_${Date.now().toString(36)}`;
 
   const skill = {
@@ -428,14 +625,16 @@ export function synthesize(recipe) {
     effects,
     // Synthesis provenance — lets the icon be regenerated and the skill be
     // inspected later (not read by battle logic).
-    woven: { recipe: tagIds, rolledValues, power },
+    woven: { recipe: tagIds, rolledValues, power, injectedTags },
   };
 
   const summary = tagIds
     .map((tid) => (tid in rolledValues ? `${getTagLabel(tid)}(${rolledValues[tid]})` : getTagLabel(tid)))
     .join(' + ');
   console.log(`[SkillSynth] Woven "${name}" — [${summary}] → power ${Math.round(power)}, `
-    + `cost ${costRoll.cost} ${costColor}${unusedTags.length ? `, inert: ${unusedTags.join(', ')}` : ''}`);
+    + `cost ${costRoll.cost} ${costColor}`
+    + (injectedTags.length ? `, surged: ${injectedTags.join(', ')}` : '')
+    + (unusedTags.length ? `, inert: ${unusedTags.join(', ')}` : ''));
 
-  return { recipe: tagIds, groups, rolledValues, usedTags, unusedTags, power, skill, summary };
+  return { recipe: tagIds, groups, rolledValues, usedTags, unusedTags, injectedTags, power, skill, summary };
 }

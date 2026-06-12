@@ -174,9 +174,10 @@ const RESULT_DESC_START_Y = 706;
 const RESULT_DESC_LINE_H = 38;
 const RESULT_DESC_SIZE = 27;
 const RESULT_DESC_COLOR = '#d8d2c8';
-const RESULT_INERT_GAP = 14;          // extra gap above the inert-tags note
+const RESULT_INERT_GAP = 14;          // extra gap above the surge/inert notes
 const RESULT_INERT_SIZE = 22;
 const RESULT_INERT_COLOR = '#8d8478';
+const RESULT_SURGE_COLOR = '#cfa84f'; // gold — surged (injected) threads note
 /** Mana color → display tint for the cost line. */
 const MANA_TEXT_COLORS = Object.freeze({
   red: '#e06a5a', blue: '#6aa8e8', green: '#7ed06a',
@@ -1131,10 +1132,22 @@ export default class SkillWeaveScene extends UIPanel {
       y += RESULT_DESC_LINE_H;
     }
 
-    // Inert tags (chosen but not woven into the spell — special rules)
+    // Surged threads (effects the weave injected beyond the picked tags)
+    const surged = (this._result.synthesis.injectedTags || []);
+    if (surged.length) {
+      y += RESULT_INERT_GAP;
+      const labels = surged.map((id) => getTagLabel(id)).join(', ');
+      this._drawText(ctx, `The weave surged: ${labels}`, cx, y, {
+        size: RESULT_INERT_SIZE, color: RESULT_SURGE_COLOR,
+        shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.7)',
+      });
+      y += RESULT_DESC_LINE_H - 8;
+    }
+
+    // Inert tags (chosen but not woven into the spell — rare by design)
     const unused = (this._result.synthesis.unusedTags || []);
     if (unused.length) {
-      y += RESULT_INERT_GAP;
+      y += surged.length ? 0 : RESULT_INERT_GAP;
       const labels = unused.map((id) => getTagLabel(id)).join(', ');
       this._drawText(ctx, `Inert threads: ${labels}`, cx, y, {
         size: RESULT_INERT_SIZE, color: RESULT_INERT_COLOR,

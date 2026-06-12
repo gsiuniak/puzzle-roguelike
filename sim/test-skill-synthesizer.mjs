@@ -50,7 +50,28 @@ function tableKeys(tagId) {
     eq('converts TO second element', fx.convertByType.to, 'green');
   }
   eq('all three tags used', r.unusedTags.length, 0);
-  eq('cost color = first element', Object.keys(r.skill.cost)[0], 'red');
+  check('cost color is a valid mana color', COST_COLORS.includes(Object.keys(r.skill.cost)[0]));
+}
+
+// ── 1b. Convert is by-type by DEFAULT; targeted only with an explicit shape ──
+{
+  const one = synthesize(['convert', 'green']);
+  const fx = one.skill.effects.find((e) => e.effectType === 'convert_tiles_by_type');
+  check('single-element convert is by-type', !!fx, JSON.stringify(one.skill.effects));
+  if (fx) {
+    eq('single element is the DESTINATION', fx.convertByType.to, 'green');
+    check('source is a different color', fx.convertByType.from !== 'green' && COST_COLORS.includes(fx.convertByType.from));
+  }
+
+  const none = synthesize(['convert', 'damage']);
+  const nfx = none.skill.effects.find((e) => e.effectType === 'convert_tiles_by_type');
+  check('element-less convert still by-type (rolled colors)', !!nfx);
+  if (nfx) check('rolled from ≠ to', nfx.convertByType.from !== nfx.convertByType.to);
+
+  const tiled = synthesize(['convert', 'tile', 'green']);
+  check('convert + tile shape → targeted single convert',
+    tiled.skill.effects.some((e) => e.effectType === 'convert_tile'), JSON.stringify(tiled.skill.effects));
+  eq('targeted convert radius 0', tiled.skill.area.radius, 0);
 }
 
 // ── 2. Hidden rolls land inside their tables; cost inside the band ──
@@ -81,11 +102,47 @@ function tableKeys(tagId) {
   check('create count from table', tableKeys('create').includes(fx.createTiles.amount), String(fx.createTiles.amount));
 }
 
-// ── 4. lock has no mechanic → always inert ──
+// ── 4. Injection rules ("the weave surges") ──
 {
-  const r = synthesize(['damage', 'lock']);
-  check('lock is inert', r.unusedTags.includes('lock'), JSON.stringify(r.unusedTags));
-  check('damage still used', r.usedTags.includes('damage'));
+  // lock → injects Frozen on the enemy (no longer inert)
+  const lock = synthesize(['damage', 'lock']);
+  const lfx = lock.skill.effects.find((e) => e.effectType === 'apply_status' && e.applyStatus.id === 'frozen');
+  check('lock injects Frozen', !!lfx, JSON.stringify(lock.skill.effects));
+  check('lock counts as used', lock.usedTags.includes('lock'));
+  check('frozen reported as injected', lock.injectedTags.includes('frozen'));
+
+  // wild without create → conjures Thralls anyway
+  const wild = synthesize(['damage', 'wild']);
+  const wfx = wild.skill.effects.find((e) => e.effectType === 'create_tiles');
+  check('wild injects thrall creation', !!wfx && wfx.createTiles.type === 'thrall', JSON.stringify(wild.skill.effects));
+  check('wild counts as used', wild.usedTags.includes('wild'));
+
+  // orphan shape → injects a destroy of that shape
+  const orphan = synthesize(['red', 'row']);
+  check('orphan row injects row destruction',
+    orphan.skill.effects.some((e) => e.effectType === 'destroy_tiles_row'), JSON.stringify(orphan.skill.effects));
+  eq('injected destroy claims targeting', orphan.skill.targeting, 'board_tile');
+  check('row counts as used', orphan.usedTags.includes('row'));
+
+  // pure damage → surges an extra turn at least sometimes (75% default)
+  let surgedCount = 0;
+  for (let i = 0; i < 40; i++) {
+    const r = synthesize(['damage']);
+    const et = r.skill.effects.map((e) => e.effectType);
+    if (et.includes('extra_turn')) {
+      surgedCount++;
+      eq('surged extra_turn is last', et[et.length - 1], 'extra_turn');
+    }
+  }
+  check('pure damage surges extra turns sometimes', surgedCount > 0);
+
+  // unconsumed element → conjures its tiles (statistical: 2 elements + damage)
+  let createSeen = 0;
+  for (let i = 0; i < 30; i++) {
+    const r = synthesize(['damage', 'red', 'blue']);
+    if (r.skill.effects.some((e) => e.effectType === 'create_tiles')) createSeen++;
+  }
+  check('unconsumed elements conjure tiles', createSeen > 0);
 }
 
 // ── 5. Targeting shapes ──
@@ -108,12 +165,26 @@ function tableKeys(tagId) {
   const plain = synthesize(['explode']);
   eq('explode alone → radius 1', plain.skill.area.radius, 1);
 
-  // Only ONE action claims targeting; the second destroyer goes inert.
+  // Only ONE action claims targeting; the second destroyer VENTS as damage.
   const both = synthesize(['destroy', 'explode', 'row']);
   const targeted = both.skill.effects.filter((e) =>
     ['destroy_tiles', 'destroy_tiles_row', 'destroy_tiles_column', 'convert_tile'].includes(e.effectType));
   eq('only one targeted effect', targeted.length, 1);
-  check('losing destroyer is inert', both.unusedTags.includes('explode'), JSON.stringify(both.unusedTags));
+  check('losing destroyer vents as damage',
+    both.skill.effects.some((e) => e.effectType === 'damage'), JSON.stringify(both.skill.effects));
+  check('vented damage reported as injected', both.injectedTags.includes('damage'));
+}
+
+// ── 5b. Name variety + soft cost color ──
+{
+  const names = new Set();
+  for (let i = 0; i < 60; i++) names.add(synthesize(['red', 'damage', 'frozen']).skill.name);
+  check('names vary (>8 distinct in 60)', names.size > 8, `got ${names.size}`);
+
+  const colors = new Set();
+  for (let i = 0; i < 60; i++) colors.add(Object.keys(synthesize(['blue', 'damage']).skill.cost)[0]);
+  check('element usually influences cost color', colors.has('blue'));
+  check('cost color is NOT a hard rule', colors.size > 1, [...colors].join(','));
 }
 
 // ── 6. extra_turn is always the LAST effect (cascade ordering, decision #4) ──

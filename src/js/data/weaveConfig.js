@@ -113,7 +113,53 @@ export const TAG_VALUE_TABLES = Object.freeze({
 });
 
 // ═══════════════════════════════════════════════════════════
-// 4. Mana cost rolls (synthesized-skill costs)
+// 4. Tag injection ("the weave surges")
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Chance (0–100, %) for each tag-INJECTION rule in the synthesizer. Injection
+ * is the anti-"inert tag" mechanism: instead of a picked tag doing nothing, the
+ * weave conjures a complementary effect the player didn't pick. Tune each rule
+ * independently; 0 disables a rule (the tag goes inert instead).
+ */
+export const INJECTION_CONFIG = Object.freeze({
+  /** `wild` with no `create` → conjures Thrall tiles anyway. */
+  wildCreates: 100,
+  /** `lock` (no board mechanic yet) → "locks down" the enemy: applies Frozen. */
+  lockFreezes: 100,
+  /** A shape with no destroyer/converter → injects a destroy of that shape. */
+  orphanShapeDestroys: 100,
+  /** `random` with nothing to randomize → a chaotic surge of rolled mana. */
+  orphanRandomGains: 100,
+  /** An element consumed by nothing (not even the cost) → conjures its tiles. */
+  unusedElementCreates: 90,
+  /** A 2nd targeted action (targeting slot taken) → vents as direct damage. */
+  ventedActionDamages: 100,
+  /** A PURE damage spell (every effect is damage) → surges an Extra Turn. */
+  pureDamageExtraTurn: 75,
+});
+
+// ═══════════════════════════════════════════════════════════
+// 5. Cost color weights (synthesized-skill cost color)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Relative weights for ROLLING a synthesized skill's cost COLOR. Elements in
+ * the bag and the primary action's affinity color INFLUENCE the color without
+ * dictating it: every mana color gets `anyColor` baseline weight, the bag's
+ * first element adds `firstElement`, later elements add `otherElement`, and
+ * the primary action's affinity color adds `actionAffinity` (weights stack
+ * when they land on the same color).
+ */
+export const COST_COLOR_WEIGHTS = Object.freeze({
+  firstElement: 60,
+  otherElement: 25,
+  actionAffinity: 30,
+  anyColor: 4,
+});
+
+// ═══════════════════════════════════════════════════════════
+// 6. Mana cost rolls (synthesized-skill costs)
 // ═══════════════════════════════════════════════════════════
 
 /**
