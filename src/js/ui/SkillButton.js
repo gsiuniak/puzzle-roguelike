@@ -44,7 +44,11 @@ const MANA_COLORS = {
 };
 
 /**
- * SkillButton — skill button used by the new SkillsPane.
+ * SkillButton — LEGACY grid-style skill button.
+ *
+ * No longer used: SkillsPane was rebuilt as a fixed-size accordion list that
+ * draws its rows manually (no child buttons). Kept for reference / future
+ * reuse, like SkillRow/CharacterPane.
  *
  * Three layout columns:
  *   [icon] [name + description (stacked)] [mana cost (number + orb)]

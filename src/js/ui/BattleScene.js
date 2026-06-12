@@ -107,7 +107,7 @@ const CORNER_BUTTON_MARGIN = 12;   // inset from the physical top-right corner
  *       RelicBar      (thin vertical column of player relic icons, no bg)
  *       PlayerColumn  (column, fixed-narrow)
  *         CharacterInfoPane (compact portrait + stats + mana)
- *         SkillsPane        (2x3 grid; locked fillers)
+ *         SkillsPane        (fixed-size accordion list; locked fillers)
  *       CenterColumn  (column, flexGrow=1)
  *         TurnLabel (hidden — preserved for state/data binding only)
  *         BattleBoardPanel  (background asset + BoardPlaceholder child)
@@ -568,6 +568,12 @@ export default class BattleScene extends UIPanel {
     if (this._relicBar && this._relicBar.handlePageClick(x, y)) return;
     if (this._enemyRelicBar && this._enemyRelicBar.handlePageClick(x, y)) return;
 
+    // Skill accordion rows expand/collapse regardless of turn state (both
+    // panes — it's informational). Casting goes through the expanded row's
+    // Cast button → onSkillClick → tryPlayerSkill (which validates the turn).
+    if (this._playerSkillsPane && this._playerSkillsPane.handleClick(x, y)) return;
+    if (this._enemySkillsPane && this._enemySkillsPane.handleClick(x, y)) return;
+
     const board = this._board;
     if (!board) return;
 
@@ -603,6 +609,11 @@ export default class BattleScene extends UIPanel {
     }
     if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._tooltipManager) this._tooltipManager.onMouseMove(x, y);
+
+    // Skill accordion hover (row highlight + Cast button highlight).
+    if (this._playerSkillsPane) this._playerSkillsPane.handleMouseMove(x, y);
+    if (this._enemySkillsPane) this._enemySkillsPane.handleMouseMove(x, y);
+
     const board = this._board;
     if (!board) return;
 
@@ -627,13 +638,6 @@ export default class BattleScene extends UIPanel {
     }
     this._hoveredCell = cell;
     board.hoveredCell = cell;
-
-    const hit = this.hitTest(x, y);
-    if (this._playerSkillsPane) {
-      for (const btn of this._playerSkillsPane.skillButtons) {
-        btn._hovered = (hit === btn && btn.onClick && this._canAct());
-      }
-    }
   }
 
   _handleMouseUp(x, y) {
@@ -1415,38 +1419,22 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * Register each skill button's "?" badge as a full-skill tooltip source
-   * (skill name + COMPLETE description; `autoSize` lets just THIS tooltip
-   * grow to fit — other tooltips keep their normal size because the Tooltip's
-   * resetStyleDefaults restores all sizing between shows). [[keyword]]s inside
-   * the description still chain their own child tooltips below it.
-   * Skill-description keyword SPANS are intentionally NOT tooltip sources on
-   * the buttons anymore — the "?" badge is the single affordance. Re-runs
-   * whenever skills are (re)built; stale badge attachments from the previous
-   * build are detached first (relic icon tooltips are unaffected).
+   * Register the skill rows' description KeywordTexts as inline keyword
+   * tooltip sources. The accordion's EXPANDED row shows the full description
+   * inline, so there is no full-skill tooltip anymore — hovering a colored
+   * [[keyword]] inside the expanded text shows that keyword's definition (+
+   * chain). Collapsed rows' KeywordTexts are `visible: false`, which the
+   * TooltipManager skips, so only the open row is hoverable. Re-runs whenever
+   * skills are (re)built (relic icon tooltips are unaffected).
    */
   _registerSkillTooltips() {
     const tm = this._tooltipManager;
     if (!tm) return;
-    tm.clearKeywordSources(); // no inline keyword tooltips on skill buttons
-    if (this._skillBadgeAttachments) {
-      for (const badge of this._skillBadgeAttachments) tm.detach(badge);
-    }
-    this._skillBadgeAttachments = [];
+    tm.clearKeywordSources();
+    const opts = { offset: 16, hitPadding: 6 };
     for (const pane of [this._playerSkillsPane, this._enemySkillsPane]) {
-      if (!pane || !pane.skillButtons) continue;
-      for (const btn of pane.skillButtons) {
-        const sd = btn.skillData;
-        if (!sd || !btn.helpBadge) continue;
-        tm.attach(btn.helpBadge, {
-          title: sd.name || '',
-          text: sd.description || '',
-          autoSize: true,
-          offset: 20,
-          hitPadding: 8,
-        });
-        this._skillBadgeAttachments.push(btn.helpBadge);
-      }
+      if (!pane || !pane.descKeywordTexts) continue;
+      for (const kt of pane.descKeywordTexts) tm.attachKeywordSource(kt, opts);
     }
   }
 
