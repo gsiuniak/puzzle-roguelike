@@ -4,39 +4,53 @@
  * same glyph slot the procedural draw functions use; noise/bloom/LUT/rim stay
  * fully procedural — see spellIconCompositor.registerPngGlyph).
  *
+ * The art lives in the `ui_spritesheet_weave_grayscale` spritesheet (one
+ * `weave_grayscale_<tagId>` sprite per weave tag — registered in main.js
+ * SPRITESHEET_MAP). AssetManager slices each sprite into its own canvas under
+ * the sprite name, and a canvas is a drop-in for an Image in the compositor.
+ *
  * This file is the single source of truth for WHICH glyph ids are PNG-backed:
  *   - spellIconRecipe.js imports PNG_GLYPH_IDS to extend GLYPH_IDS and to set
  *     `glyphSource: 'png'` on recipes that resolve to one of these ids.
- *   - main.js preloads the art through the AssetManager (the asset key→path
- *     entries live in main.js ASSET_MAP as usual) and calls
- *     registerPngGlyphsFromAssets() once loading completes.
- *   - src/icon-debug.html loads the same art standalone (no AssetManager) and
- *     registers it directly via registerPngGlyph.
+ *   - main.js calls registerPngGlyphsFromAssets() once loading completes.
+ *   - src/icon-debug.html loads the same sheet through its own AssetManager
+ *     instance and calls the same helper.
+ *
+ * Only FORM keywords get glyph entries — the glyph slot is the form slot.
+ * Element art in the sheet (red/blue/…/skull) is unused here (elements color
+ * the icon via palettes), as are shape/modifier/status sprites (those map to
+ * overlays); they're available for future overlay/palette work.
  *
  * Art spec: white/gray luminance art on a TRANSPARENT background (the pipeline
  * reads it as a light source — dark pixels emit nothing). Alpha-tight crops are
  * fine: the compositor contain-fits the image into the icon's safe circle by
- * aspect (see PNG_GLYPH_FIT in spellIconCompositor.js), so no 512px-square
- * framing is required.
+ * aspect (see PNG_GLYPH_FIT in spellIconCompositor.js).
  *
  * To add a PNG glyph:
- *   1. Add an entry here (glyph id → AssetManager key).
- *   2. Add the asset key→path to main.js ASSET_MAP.
+ *   1. Add the sprite to the ui_spritesheet_weave_grayscale sheet.
+ *   2. Add an entry here (glyph id → sprite name).
  *   3. Point a keyword at the glyph id in spellIconRecipe.KEYWORD_ICON_ROLES.
- *   4. (Optional) add it to the icon-debug.html preload list.
  */
 
 import { registerPngGlyph } from './spellIconCompositor.js';
 
 /**
- * Glyph id → AssetManager asset key. The current two entries are TEMP TEST ART
- * (assets/sprites/temp/weave_grayscale_*.png) proving out the hybrid path —
- * replace with final authored glyphs as they're produced.
+ * Glyph id → AssetManager asset key (= the sliced sprite's name in the
+ * weave-grayscale sheet). One entry per FORM keyword in KEYWORD_ICON_ROLES.
  * @type {Readonly<Record<string, string>>}
  */
 export const PNG_GLYPH_ASSET_KEYS = Object.freeze({
-  flame_png:   'spell_glyph_flame_png',
-  droplet_png: 'spell_glyph_droplet_png',
+  damage_png:  'weave_grayscale_damage',
+  armor_png:   'weave_grayscale_armor',
+  attack_png:  'weave_grayscale_attack',
+  convert_png: 'weave_grayscale_convert',
+  destroy_png: 'weave_grayscale_destroy',
+  create_png:  'weave_grayscale_create',
+  heal_png:    'weave_grayscale_heal',
+  gain_png:    'weave_grayscale_gain',
+  drain_png:   'weave_grayscale_drain',
+  explode_png: 'weave_grayscale_explode',
+  barrier_png: 'weave_grayscale_barrier',
 });
 
 /** The PNG-backed glyph ids (consumed by spellIconRecipe.js). */

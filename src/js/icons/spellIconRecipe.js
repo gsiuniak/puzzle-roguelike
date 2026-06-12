@@ -89,17 +89,18 @@ export const KEYWORD_ICON_ROLES = Object.freeze({
   skull:  { role: 'element', priority: 32, palette: 'bone' },
 
   // ── Actions → glyph (demote to overlay when the form slot is taken) ──
-  explode: { role: 'form', priority: 26, glyph: 'burst',  demoteTo: { overlay: 'wild' } },
-  damage:  { role: 'form', priority: 25, glyph: 'strike', demoteTo: { overlay: 'sparks' } },
-  armor:   { role: 'form', priority: 25, glyph: 'shield', demoteTo: { overlay: 'greater' } },
-  attack:  { role: 'form', priority: 24, glyph: 'slash',  demoteTo: { overlay: 'sparks' } },
-  convert: { role: 'form', priority: 24, glyph: 'rune',   demoteTo: { overlay: 'greater' } },
-  // destroy/heal use the PNG test glyphs (temp art — proving the hybrid path)
-  destroy: { role: 'form', priority: 23, glyph: 'flame_png',   demoteTo: { overlay: 'wild' } },
-  create:  { role: 'form', priority: 22, glyph: 'rune',        demoteTo: { overlay: 'sparks' } },
-  heal:    { role: 'form', priority: 21, glyph: 'droplet_png', demoteTo: { overlay: 'greater' } },
-  gain:    { role: 'form', priority: 20, glyph: 'orb',    demoteTo: { overlay: 'sparks' } },
-  drain:   { role: 'form', priority: 19, glyph: 'orb',    demoteTo: { overlay: 'wild' } },
+  // All forms use authored PNG glyphs from the weave-grayscale sheet (see
+  // icons/pngGlyphs.js); the procedural glyphs remain as fallbacks/defaults.
+  explode: { role: 'form', priority: 26, glyph: 'explode_png', demoteTo: { overlay: 'wild' } },
+  damage:  { role: 'form', priority: 25, glyph: 'damage_png',  demoteTo: { overlay: 'sparks' } },
+  armor:   { role: 'form', priority: 25, glyph: 'armor_png',   demoteTo: { overlay: 'greater' } },
+  attack:  { role: 'form', priority: 24, glyph: 'attack_png',  demoteTo: { overlay: 'sparks' } },
+  convert: { role: 'form', priority: 24, glyph: 'convert_png', demoteTo: { overlay: 'greater' } },
+  destroy: { role: 'form', priority: 23, glyph: 'destroy_png', demoteTo: { overlay: 'wild' } },
+  create:  { role: 'form', priority: 22, glyph: 'create_png',  demoteTo: { overlay: 'sparks' } },
+  heal:    { role: 'form', priority: 21, glyph: 'heal_png',    demoteTo: { overlay: 'greater' } },
+  gain:    { role: 'form', priority: 20, glyph: 'gain_png',    demoteTo: { overlay: 'sparks' } },
+  drain:   { role: 'form', priority: 19, glyph: 'drain_png',   demoteTo: { overlay: 'wild' } },
 
   // ── Modifiers → overlay ──
   wild:       { role: 'modifier', priority: 28, overlay: 'wild' },
@@ -114,7 +115,7 @@ export const KEYWORD_ICON_ROLES = Object.freeze({
   tile:   { role: 'meta',     priority: 5 },
 
   // ── Statuses — mostly seed-only today; a few have a natural visual ──
-  barrier:    { role: 'form',     priority: 12, glyph: 'shield', demoteTo: { overlay: 'greater' } },
+  barrier:    { role: 'form',     priority: 12, glyph: 'barrier_png', demoteTo: { overlay: 'greater' } },
   berserk:    { role: 'modifier', priority: 13, overlay: 'wild' },
   bleed:      { role: 'modifier', priority: 12, overlay: 'streaks_v' },
   silence:    { role: 'meta',     priority: 5 },

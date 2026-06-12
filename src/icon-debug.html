@@ -45,22 +45,24 @@
 // modules. Use it to spot incoherent combos — fixes belong in
 // spellIconRecipe.js (roles/priorities) or the compositor palettes, not new art.
 import { resolveRecipe } from './js/icons/spellIconRecipe.js';
-import { renderIcon, registerPngGlyph } from './js/icons/spellIconCompositor.js';
+import { renderIcon } from './js/icons/spellIconCompositor.js';
 import { SKILL_WEAVE_TAGS } from './js/data/skillWeaveTags.js';
+import { registerPngGlyphsFromAssets } from './js/icons/pngGlyphs.js';
+import AssetManager from './js/engine/AssetManager.js';
 
-// PNG glyph art (the game preloads these through the AssetManager — see
-// icons/pngGlyphs.js + main.js ASSET_MAP; this dev page loads them directly).
-// Top-level await: the first grid render waits for the glyphs.
-const PNG_GLYPH_SRC = {
-  flame_png:   'assets/sprites/temp/weave_grayscale_red.png',
-  droplet_png: 'assets/sprites/temp/weave_grayscale_blue.png',
-};
-await Promise.all(Object.entries(PNG_GLYPH_SRC).map(([id, src]) => new Promise((resolve) => {
-  const img = new Image();
-  img.onload = () => { registerPngGlyph(id, img); resolve(); };
-  img.onerror = () => { console.warn(`[icon-debug] PNG glyph "${id}" failed to load (${src}) — orb fallback`); resolve(); };
-  img.src = src;
-})));
+// PNG glyph art lives in the weave-grayscale spritesheet (same sheet the game
+// loads — see main.js SPRITESHEET_MAP). Load it through a real AssetManager so
+// the slicing matches the game exactly. Top-level await: the first grid render
+// waits for the glyphs (missing art falls back to the procedural orb).
+const glyphAssets = new AssetManager();
+glyphAssets.addSpriteSheet(
+  'ui_spritesheet_weave_grayscale',
+  'assets/sprites/skill_weave/ui_spritesheet_weave_grayscale.png',
+  'assets/sprites/skill_weave/ui_spritesheet_weave_grayscale.json',
+  { trim: false },
+);
+await glyphAssets.loadAll();
+registerPngGlyphsFromAssets(glyphAssets);
 
 const TAG_IDS = Object.keys(SKILL_WEAVE_TAGS);
 const $ = (id) => document.getElementById(id);

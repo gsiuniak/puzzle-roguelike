@@ -42,7 +42,7 @@ const RUN = 'run_1234567890';
 {
   const r = resolveRecipe(['red', 'damage'], 'spell_a', RUN);
   eq('red → fire palette', r.palette, 'fire');
-  eq('damage → strike glyph', r.glyph, 'strike');
+  eq('damage → damage_png glyph', r.glyph, 'damage_png');
   eq('no secondary element', r.secondaryPalette, null);
   eq('no overlays', r.overlays.length, 0);
   eq('common keywords → iron rim', r.rim, 'iron');
@@ -85,7 +85,7 @@ const RUN = 'run_1234567890';
 {
   // explode (26) beats damage (25); damage demotes to sparks
   const r = resolveRecipe(['damage', 'explode'], 'spell_g', RUN);
-  eq('explode wins glyph', r.glyph, 'burst');
+  eq('explode wins glyph', r.glyph, 'explode_png');
   check('damage demoted to sparks overlay', r.overlays.includes('sparks'), JSON.stringify(r.overlays));
 }
 
@@ -186,11 +186,13 @@ const RUN = 'run_1234567890';
     check(`png glyph "${id}" listed in GLYPH_IDS`, GLYPH_IDS.includes(id));
   }
   const heal = resolveRecipe(['green', 'heal'], 'spell_png_a', RUN);
-  eq('heal → droplet_png glyph', heal.glyph, 'droplet_png');
+  eq('heal → heal_png glyph', heal.glyph, 'heal_png');
   eq('png glyph → glyphSource png', heal.glyphSource, 'png');
   const destroy = resolveRecipe(['red', 'destroy'], 'spell_png_b', RUN);
-  eq('destroy → flame_png glyph', destroy.glyph, 'flame_png');
-  const proc = resolveRecipe(['red', 'damage'], 'spell_png_c', RUN);
+  eq('destroy → destroy_png glyph', destroy.glyph, 'destroy_png');
+  // no form keyword → default orb stays procedural
+  const proc = resolveRecipe(['red', 'row'], 'spell_png_c', RUN);
+  eq('default orb → glyphSource procedural', proc.glyph, 'orb');
   eq('procedural glyph → glyphSource procedural', proc.glyphSource, 'procedural');
 }
 

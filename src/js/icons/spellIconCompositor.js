@@ -318,11 +318,36 @@ const PNG_GLYPH_FIT = 0.66;
  * alpha-tight crops need no 512px-square framing. Must be loaded BEFORE any
  * render that uses it (preload through AssetManager at boot — see
  * pngGlyphs.registerPngGlyphsFromAssets) — renderIcon stays synchronous.
+ *
+ * The image is desaturated to TRUE grayscale here (Rec.601 luminance, alpha
+ * kept): the LUT stage reads only the red channel, so any color tint in the
+ * authored art (e.g. green accent flourishes) would otherwise silently read
+ * darker than it looks. Doing it once at registration keeps renderIcon cheap.
  * @param {string} id
  * @param {HTMLImageElement|HTMLCanvasElement} image
  */
 export function registerPngGlyph(id, image) {
-  GLYPHS[id] = { kind: 'png', image };
+  GLYPHS[id] = { kind: 'png', image: toLuminanceCanvas(image) };
+}
+
+/** Copy an image to a canvas with every pixel set to its Rec.601 luminance. */
+function toLuminanceCanvas(image) {
+  const w = image && image.width;
+  const h = image && image.height;
+  if (!w || !h) return image;
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0);
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) | 0;
+    d[i] = d[i + 1] = d[i + 2] = lum;
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv;
 }
 
 /** Draw the recipe's glyph onto a fresh canvas (white on transparent). */

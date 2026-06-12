@@ -58,9 +58,6 @@ const ASSET_MAP = {
   // ── Skill Weave (background + default tag icon; UI elements are in a sheet) ──
   skill_weave_background:               'assets/sprites/skill_weave/skill_weave_background.png',
   skill_weave_tag_test:                 'assets/sprites/skill_weave/ui_skill_weave_tag_test.png',
-  // ── Procedural spell-icon PNG glyphs (TEMP TEST ART; ids wired in icons/pngGlyphs.js) ──
-  spell_glyph_flame_png:                'assets/sprites/temp/weave_grayscale_red.png',
-  spell_glyph_droplet_png:              'assets/sprites/temp/weave_grayscale_blue.png',
   // ── General UI ──
   placeholder:                          'assets/sprites/placeholder.png',
   tooltip_panel:                        'assets/sprites/general_ui/tooltip_panel.png',
@@ -115,6 +112,13 @@ const SPRITESHEET_MAP = {
     image: 'assets/sprites/battle/animated_text/ui_spritesheet_animated_text.png',
     json:  'assets/sprites/battle/animated_text/ui_spritesheet_animated_text.json',
     trim:  false, // sprite names match the `animated_text_*` keys directly (no aliases)
+  },
+  ui_spritesheet_weave_grayscale: {
+    image: 'assets/sprites/skill_weave/ui_spritesheet_weave_grayscale.png',
+    json:  'assets/sprites/skill_weave/ui_spritesheet_weave_grayscale.json',
+    trim:  false, // packer emits tight frames; grayscale luminance glyph art
+                  // (`weave_grayscale_<tag>`) consumed as PNG spell-icon glyphs
+                  // via icons/pngGlyphs.js (registered in loadAll().then below)
   },
   ui_spritesheet_skill_weave_elements: {
     image: 'assets/sprites/skill_weave/ui_spritesheet_skill_weave_elements.png',
