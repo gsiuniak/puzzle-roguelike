@@ -36,6 +36,15 @@ import { resolveSkillIds } from '../data/skills/skillCatalog.js';
 import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
 import { clearSpellIconCache } from '../icons/spellIcons.js';
 
+// ── TEMP testing flag ────────────────────────────────────
+/**
+ * When true, EVERY map node except the boss routes to the SkillWeaveScene
+ * (skill reward) instead of its normal behavior — for rapidly testing the
+ * weave/synthesis/skill-list flow. Set back to false to restore normal node
+ * routing (battles, chests, rests, etc.). Checked in _onNodeEntered.
+ */
+const DEBUG_ALL_NODES_SKILL_WEAVE = true;
+
 // ── Per-floor enemy HP scaling ───────────────────────────
 // Enemy `maxHp` in the data files is a FLOOR-1-EQUIVALENT baseline. At spawn it is
 // multiplied by this per-depth factor so a given enemy stays appropriately tough
@@ -373,6 +382,15 @@ export default class MapScene extends UIPanel {
    * @param {import('../map/MapNode.js').default} node
    */
   _onNodeEntered(node) {
+    // TEMP testing override: every node except the boss is a skill reward
+    // (Weave a Power). Flip DEBUG_ALL_NODES_SKILL_WEAVE (top of file) to
+    // restore normal node routing.
+    if (DEBUG_ALL_NODES_SKILL_WEAVE && node.type !== 'boss') {
+      console.log(`[MapScene] DEBUG_ALL_NODES_SKILL_WEAVE: routing ${node.type} node to SkillWeaveScene.`);
+      this._transitionToSkillWeave(node);
+      return;
+    }
+
     switch (node.type) {
       case 'battle':
         this._transitionToBattle(node);
