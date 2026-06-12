@@ -511,6 +511,11 @@ export default class BattleController {
       mana: d.mana ? { ...d.mana } : {},
       portrait: d.portrait || '',
       skills: (d.skills || []).map(s => ({ ...s })),
+      // The FULL owned-skill pool (equipped + reserve) — the Manage Skills
+      // modal's inventory. Without carrying it through the clone, the modal
+      // falls back to the equipped list and unequipping a skill "trashes" it
+      // for the rest of the battle.
+      allSkills: (d.allSkills || d.skills || []).map(s => ({ ...s })),
       // Clone relics + their effect arrays so per-battle mutations
       // (e.g. consumed/charged relics in the future) don't leak back
       // into the catalog or the persistent run state.

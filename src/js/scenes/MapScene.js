@@ -43,7 +43,7 @@ import { clearSpellIconCache } from '../icons/spellIcons.js';
  * weave/synthesis/skill-list flow. Set back to false to restore normal node
  * routing (battles, chests, rests, etc.). Checked in _onNodeEntered.
  */
-const DEBUG_ALL_NODES_SKILL_WEAVE = true;
+const DEBUG_ALL_NODES_SKILL_WEAVE = false; // true;
 
 // ── Per-floor enemy HP scaling ───────────────────────────
 // Enemy `maxHp` in the data files is a FLOOR-1-EQUIVALENT baseline. At spawn it is
