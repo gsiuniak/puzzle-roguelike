@@ -23,6 +23,7 @@ import BossIntroScene from './scenes/BossIntroScene.js';
 import SkillWeaveScene from './scenes/SkillWeaveScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
+import { registerPngGlyphsFromAssets } from './icons/pngGlyphs.js';
 
 // ── Debug flags ─────────────────────────────────────────
 const DEBUG_UI_LAYOUT = false;
@@ -57,6 +58,9 @@ const ASSET_MAP = {
   // ── Skill Weave (background + default tag icon; UI elements are in a sheet) ──
   skill_weave_background:               'assets/sprites/skill_weave/skill_weave_background.png',
   skill_weave_tag_test:                 'assets/sprites/skill_weave/ui_skill_weave_tag_test.png',
+  // ── Procedural spell-icon PNG glyphs (TEMP TEST ART; ids wired in icons/pngGlyphs.js) ──
+  spell_glyph_flame_png:                'assets/sprites/temp/weave_grayscale_red.png',
+  spell_glyph_droplet_png:              'assets/sprites/temp/weave_grayscale_blue.png',
   // ── General UI ──
   placeholder:                          'assets/sprites/placeholder.png',
   tooltip_panel:                        'assets/sprites/general_ui/tooltip_panel.png',
@@ -258,6 +262,9 @@ async function init() {
   console.log('Loading assets...');
   assetManager.loadAll().then((loadedCount) => {
     console.log(`Assets loaded: ${loadedCount} / ${assetManager.count}`);
+    // Hand the loaded PNG glyph art to the spell-icon compositor. This happens
+    // long before the first icon render (SkillWeaveScene, deep into a run).
+    registerPngGlyphsFromAssets(assetManager);
   });
 
   // AudioManager initialization runs in parallel (Howler lazily streams audio).

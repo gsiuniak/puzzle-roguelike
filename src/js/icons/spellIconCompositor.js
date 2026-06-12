@@ -21,8 +21,9 @@
  * stages in a fixed call order (clouds → glyph → overlays). No Math.random().
  *
  * Glyphs are hybrid: procedural draw functions, or registered PNG/canvas images
- * (registerPngGlyph) following the shared art spec — 512px square, transparent
- * background, white/gray luminance art inside the ~70% safe circle.
+ * (registerPngGlyph) following the shared art spec — white/gray luminance art
+ * on a transparent background. PNG art may be alpha-tight (any size/aspect);
+ * it is contain-fit into the icon's safe circle at draw time (PNG_GLYPH_FIT).
  */
 
 import { SeededRNG } from '../map/MapGenerator.js';
@@ -302,10 +303,21 @@ const GLYPHS = {};
 for (const id in PROC_GLYPHS) GLYPHS[id] = { kind: 'proc', draw: PROC_GLYPHS[id] };
 
 /**
- * Register a PNG (or canvas) glyph. Art spec: 512px square, transparent
- * background, white/gray luminance art, subject inside the ~70% safe circle,
- * consistent top-left lighting. Must be loaded BEFORE any render that uses it
- * (preload through AssetManager at boot) — renderIcon stays synchronous.
+ * Fraction of the icon size a PNG glyph's longer side is scaled to. Procedural
+ * glyphs draw their subject at roughly this span, and the vignette (stage 5)
+ * starts darkening past ~0.52·S radius — alpha-tight art larger than this
+ * would push its luminance into the rim.
+ */
+const PNG_GLYPH_FIT = 0.66;
+
+/**
+ * Register a PNG (or canvas) glyph. Art spec: white/gray luminance art on a
+ * TRANSPARENT background (the pipeline treats the glyph as a light source —
+ * dark pixels emit nothing), consistent top-left lighting. Any size/aspect:
+ * the image is contain-fit by aspect into the safe circle (PNG_GLYPH_FIT), so
+ * alpha-tight crops need no 512px-square framing. Must be loaded BEFORE any
+ * render that uses it (preload through AssetManager at boot — see
+ * pngGlyphs.registerPngGlyphsFromAssets) — renderIcon stays synchronous.
  * @param {string} id
  * @param {HTMLImageElement|HTMLCanvasElement} image
  */
@@ -320,7 +332,15 @@ function drawGlyphCanvas(recipe, rng, S) {
   const ctx = cv.getContext('2d');
   const entry = GLYPHS[recipe.glyph] || GLYPHS.orb;
   if (entry.kind === 'png' && entry.image) {
-    ctx.drawImage(entry.image, 0, 0, S, S);
+    const img = entry.image;
+    const iw = img.width || S;
+    const ih = img.height || S;
+    const scale = (S * PNG_GLYPH_FIT) / Math.max(iw, ih);
+    const w = iw * scale;
+    const h = ih * scale;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
   } else if (entry.kind === 'proc') {
     entry.draw(ctx, rng, S);
   } else {

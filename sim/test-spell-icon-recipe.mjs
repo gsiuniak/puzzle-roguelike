@@ -179,6 +179,21 @@ const RUN = 'run_1234567890';
   check('all tag pairs resolve to valid recipes', ok);
 }
 
+// ── 14. PNG glyph wiring: ids in GLYPH_IDS, glyphSource flips to 'png' ──
+{
+  const { PNG_GLYPH_IDS } = await import('../src/js/icons/pngGlyphs.js');
+  for (const id of PNG_GLYPH_IDS) {
+    check(`png glyph "${id}" listed in GLYPH_IDS`, GLYPH_IDS.includes(id));
+  }
+  const heal = resolveRecipe(['green', 'heal'], 'spell_png_a', RUN);
+  eq('heal → droplet_png glyph', heal.glyph, 'droplet_png');
+  eq('png glyph → glyphSource png', heal.glyphSource, 'png');
+  const destroy = resolveRecipe(['red', 'destroy'], 'spell_png_b', RUN);
+  eq('destroy → flame_png glyph', destroy.glyph, 'flame_png');
+  const proc = resolveRecipe(['red', 'damage'], 'spell_png_c', RUN);
+  eq('procedural glyph → glyphSource procedural', proc.glyphSource, 'procedural');
+}
+
 console.log(failed === 0
   ? `✓ spell-icon recipe tests: ${passed} checks passed`
   : `✗ spell-icon recipe tests: ${failed} FAILED, ${passed} passed`);
