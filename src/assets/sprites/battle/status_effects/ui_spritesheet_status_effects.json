@@ -40,7 +40,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "status_bleeding": {
+    "debuff_bleeding": {
       "x": 554,
       "y": 565,
       "w": 535,
@@ -51,7 +51,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "status_enfeebled": {
+    "debuff_enfeebled": {
       "x": 1089,
       "y": 4,
       "w": 532,
@@ -62,7 +62,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "status_brittle": {
+    "debuff_brittle": {
       "x": 4,
       "y": 1129,
       "w": 510,
@@ -73,7 +73,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "status_crippled": {
+    "debuff_crippled": {
       "x": 1093,
       "y": 565,
       "w": 532,
@@ -84,7 +84,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "status_frozen": {
+    "debuff_frozen": {
       "x": 518,
       "y": 1129,
       "w": 504,
@@ -95,7 +95,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "status_silenced": {
+    "debuff_silenced": {
       "x": 1026,
       "y": 1129,
       "w": 506,
