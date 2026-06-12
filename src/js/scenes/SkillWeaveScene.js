@@ -45,8 +45,11 @@ import { getSpellIcon } from '../icons/spellIcons.js';
  *              pops out of its slot and flies back to its option position while
  *              the previous step's siblings fade back in.
  *
- * NOTE: skills are not implemented yet — _finishWeave is a placeholder that logs
- * the resolved tag recipe, then returns to the map (or fires _onComplete).
+ * NOTE: skills are not implemented yet — _finishWeave synthesizes the bag (stub),
+ * generates the spell's procedural icon (spellIcons.getSpellIcon), and enters a
+ * RESULT phase: the icon is revealed where the tag options were and the confirm
+ * button becomes "Continue". _finishContinue then fires _onComplete (payload
+ * { recipe, synthesis, icon }) and returns to the map.
  *
  * Entry/exit: MapScene routes the `training` node here and sets `_onComplete` +
  * `_returnScene` so finishing completes the node and returns to the map.
@@ -143,6 +146,19 @@ const BUTTON_Y = 930;                 // top of the Back button (the row baselin
 const BUTTON_LABEL_SIZE = 32;
 const BACK_LABEL = 'Back';
 const WEAVE_LABEL = 'Weave Power';
+const CONTINUE_LABEL = 'Continue';
+
+// ── Result phase (after "Weave Power": show the generated spell icon) ──
+/** Subtitle shown while the woven icon is displayed. */
+const SUBTITLE_RESULT = 'Your Power Takes Form';
+/** Rendered diameter of the generated spell icon (design px). */
+const RESULT_ICON_SIZE = 320;
+/** Icon center, in the now-empty space where the tag options fanned out. */
+const RESULT_ICON_CY = 384;
+/** Grow/fade-in duration for the icon reveal (ms). */
+const RESULT_REVEAL_DUR = 450;
+/** Scale the icon reveal starts at. */
+const RESULT_REVEAL_START_SCALE = 0.55;
 /**
  * The Confirm button uses its own art (`ui_skill_weave_button_confirm`) which is
  * TALLER than the plain button because of the gem flair on top. The flair sits
@@ -227,6 +243,16 @@ export default class SkillWeaveScene extends UIPanel {
     this._finishing = false;
 
     /**
+     * Result phase: set by _finishWeave to { recipe, synthesis, icon } once the
+     * recipe is woven. While non-null the scene shows the generated spell icon
+     * where the tag options were, and the confirm button becomes "Continue"
+     * (which fires onComplete + leaves — see _finishContinue).
+     */
+    this._result = null;
+    /** Elapsed ms since the result reveal began (drives the grow/fade-in). */
+    this._resultTime = 0;
+
+    /**
      * Active animation, or null when idle. Shapes by kind:
      *   intro: { kind, time, total, focal:{x,y}, items:[{tagId, rect}] }
      *   commit:{ kind, time, flying:{tagId, from, to}, fading:[{tagId, rect}],
@@ -292,6 +318,8 @@ export default class SkillWeaveScene extends UIPanel {
     this._plan = this._rollWeavePlan();
     this._recipe = [];
     this._finishing = false;
+    this._result = null;
+    this._resultTime = 0;
     this._anim = null;
     this._hoverOption = -1;
     this._hoverButton = null;
@@ -423,7 +451,7 @@ export default class SkillWeaveScene extends UIPanel {
   }
 
   get _backEnabled() {
-    return this._recipe.length > 0 && !this._finishing && !this._animBusy;
+    return this._recipe.length > 0 && !this._finishing && !this._animBusy && !this._result;
   }
 
   /** Confirm is only the final "create the skill" action — active once full. */
@@ -473,11 +501,16 @@ export default class SkillWeaveScene extends UIPanel {
     };
   }
 
-  /** Confirm = resolve the completed recipe (no-op until full). */
+  /**
+   * Confirm = resolve the completed recipe (no-op until full). Two phases:
+   * first press ("Weave Power") synthesizes + reveals the generated spell icon;
+   * second press ("Continue") fires onComplete and returns to the map.
+   */
   _confirm() {
     if (!this._confirmEnabled) return;
     AudioManager.playSfx('sfx_choose_tags_confirm');
-    this._finishWeave();
+    if (this._result) this._finishContinue();
+    else this._finishWeave();
   }
 
   /**
@@ -549,8 +582,7 @@ export default class SkillWeaveScene extends UIPanel {
    * reward + complete the map node), and returns to the map.
    */
   _finishWeave() {
-    if (this._finishing) return;
-    this._finishing = true;
+    if (this._finishing || this._result) return;
 
     const recipe = this._recipe.slice();
     // Synthesize the bag into a skill (stub: rolls hidden values + records the
@@ -573,8 +605,20 @@ export default class SkillWeaveScene extends UIPanel {
       console.warn('[SkillWeave] spell icon generation failed:', err);
     }
 
+    // Enter the RESULT phase: the icon reveals where the tag options were, and
+    // the confirm button flips to "Continue" (which runs _finishContinue).
+    this._result = { recipe, synthesis, icon };
+    this._resultTime = 0;
+    this._hoverButton = null;
+  }
+
+  /** Second confirm press ("Continue") — hand off the reward + leave the scene. */
+  _finishContinue() {
+    if (this._finishing || !this._result) return;
+    this._finishing = true;
+
     if (this._onComplete) {
-      this._onComplete({ recipe, synthesis, icon });
+      this._onComplete(this._result);
     }
 
     const sm = this._sceneManager;
@@ -706,6 +750,7 @@ export default class SkillWeaveScene extends UIPanel {
   update(dt) {
     this._elapsed += dt;
     this._pulseTime += dt;
+    if (this._result) this._resultTime += dt;
     if (this._elapsed >= FADE_IN_DURATION) this._fadeInDone = true;
     this._advanceAnim(dt);
     super.update(dt);
@@ -885,7 +930,8 @@ export default class SkillWeaveScene extends UIPanel {
     ctx.globalAlpha = alpha;
 
     this._renderTitle(ctx);
-    this._renderOptions(ctx, layout);
+    if (this._result) this._renderResultIcon(ctx);   // woven icon where the tags were
+    else this._renderOptions(ctx, layout);
     this._renderRecipe(ctx, layout);
     this._renderFlyingTag(ctx);     // commit/back travelling tag — on top of recipe
     this._renderButtons(ctx, layout);
@@ -905,9 +951,11 @@ export default class SkillWeaveScene extends UIPanel {
       letterSpacing: 4, shadowBlur: 12, shadowColor: 'rgba(0,0,0,0.7)',
     });
     const total = this._recipeLength();
-    const subtitle = this._complete
-      ? SUBTITLE_COMPLETE
-      : `${SUBTITLE_CHOOSE} — Round ${Math.min(this._recipe.length + 1, total)} / ${total}`;
+    const subtitle = this._result
+      ? SUBTITLE_RESULT
+      : this._complete
+        ? SUBTITLE_COMPLETE
+        : `${SUBTITLE_CHOOSE} — Round ${Math.min(this._recipe.length + 1, total)} / ${total}`;
     this._drawText(ctx, subtitle, cx, SUBTITLE_Y, {
       size: SUBTITLE_SIZE, color: SUBTITLE_COLOR, letterSpacing: 3,
       shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.6)',
@@ -979,6 +1027,34 @@ export default class SkillWeaveScene extends UIPanel {
         }
       }
     }
+  }
+
+  // ── Render: result phase (the woven spell icon) ────────────
+
+  /**
+   * Draw the generated spell icon centered in the space the tag options
+   * occupied, with a short grow + fade-in reveal. Only called while `_result`
+   * is set (after "Weave Power", before "Continue"). If icon generation failed
+   * the space simply stays empty — Continue still works.
+   */
+  _renderResultIcon(ctx) {
+    const icon = this._result && this._result.icon;
+    if (!icon || !icon.canvas) return;
+
+    const t = this._clamp01(this._resultTime / RESULT_REVEAL_DUR);
+    const e = this._easeOutCubic(t);
+    const size = RESULT_ICON_SIZE * this._lerp(RESULT_REVEAL_START_SCALE, 1, e);
+    const cx = DESIGN_W / 2;
+
+    ctx.save();
+    ctx.globalAlpha *= e;
+    // Soft golden halo behind the icon so it sits into the scene like the plaques.
+    ctx.shadowColor = 'rgba(232, 200, 110, 0.55)';
+    ctx.shadowBlur = 40 + 14 * (0.5 + 0.5 * Math.sin(this._pulseTime * PULSE_SPEED));
+    this._drawImageRect(ctx, icon.canvas, {
+      x: cx - size / 2, y: RESULT_ICON_CY - size / 2, w: size, h: size,
+    });
+    ctx.restore();
   }
 
   /**
@@ -1164,8 +1240,10 @@ export default class SkillWeaveScene extends UIPanel {
     // Visual-enabled ignores the input lock (animBusy) so buttons don't flicker
     // dim during the brief commit/back/intro animations; clicks are still gated
     // by _backEnabled / _confirmEnabled (which DO include the lock).
-    const backVisualEnabled = this._recipe.length > 0 && !this._finishing;
+    const backVisualEnabled = this._recipe.length > 0 && !this._finishing && !this._result;
     const confirmVisualEnabled = this._complete && !this._finishing;
+    // After the weave resolves, the confirm button becomes "Continue".
+    const confirmLabel = this._result ? CONTINUE_LABEL : WEAVE_LABEL;
 
     this._drawButton(ctx, layout.backButton, BACK_LABEL, {
       variant: 'back',
@@ -1176,7 +1254,7 @@ export default class SkillWeaveScene extends UIPanel {
       textCenterFrac: 0.5,
     });
 
-    this._drawButton(ctx, layout.confirmButton, WEAVE_LABEL, {
+    this._drawButton(ctx, layout.confirmButton, confirmLabel, {
         variant: 'confirm',
         enabled: confirmVisualEnabled,
         hovered: this._hoverButton === 'confirm',

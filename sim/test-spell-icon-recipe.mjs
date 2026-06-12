@@ -149,7 +149,19 @@ const RUN = 'run_1234567890';
   }
 }
 
-// ── 12. Every weave-able combo resolves to valid ids (sweep all tag pairs) ──
+// ── 12. Keyword registry is EXACTLY the skillWeaveTags catalog ──
+// (no invented keywords, no uncovered tags — the game only has weave tags today)
+{
+  const { SKILL_WEAVE_TAGS } = await import('../src/js/data/skillWeaveTags.js');
+  const roles = Object.keys(KEYWORD_ICON_ROLES).sort();
+  const tags = Object.keys(SKILL_WEAVE_TAGS).sort();
+  const extra = roles.filter((k) => !tags.includes(k));
+  const missing = tags.filter((k) => !roles.includes(k));
+  check('no keywords beyond skillWeaveTags', extra.length === 0, extra.join(','));
+  check('every weave tag has an icon role', missing.length === 0, missing.join(','));
+}
+
+// ── 13. Every weave-able combo resolves to valid ids (sweep all tag pairs) ──
 {
   const ids = Object.keys(KEYWORD_ICON_ROLES);
   let ok = true;
