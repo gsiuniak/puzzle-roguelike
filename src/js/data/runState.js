@@ -60,6 +60,15 @@ export function createRunState(characterDef) {
     relics: [],
 
     /**
+     * Skills acquired during the run — FULL skill objects (not catalog ids),
+     * because woven skills are synthesized at the Skill Weave screen and exist
+     * nowhere else. Appended to the character's catalog skills each battle by
+     * createPlayerBattleState().
+     * @type {Array<object>}
+     */
+    skills: [],
+
+    /**
      * Upgrades purchased/applied during the run (placeholder).
      * @type {Array<object>}
      */
@@ -97,6 +106,7 @@ export function serializeRunState(runState) {
     currentHp: runState.currentHp,
     statModifiers: JSON.parse(JSON.stringify(runState.statModifiers)),
     relics: JSON.parse(JSON.stringify(runState.relics)),
+    skills: JSON.parse(JSON.stringify(runState.skills || [])),
     upgrades: JSON.parse(JSON.stringify(runState.upgrades)),
     rewards: JSON.parse(JSON.stringify(runState.rewards)),
     seenEnemiesByAct: JSON.parse(JSON.stringify(runState.seenEnemiesByAct || {})),
@@ -115,6 +125,7 @@ export function deserializeRunState(data) {
     currentHp: data.currentHp,
     statModifiers: data.statModifiers || createDefaultStatModifiers(),
     relics: data.relics || [],
+    skills: data.skills || [],
     upgrades: data.upgrades || [],
     rewards: data.rewards || [],
     seenEnemiesByAct: data.seenEnemiesByAct || {},

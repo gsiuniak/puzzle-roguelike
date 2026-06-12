@@ -45,11 +45,14 @@ import { getSpellIcon } from '../icons/spellIcons.js';
  *              pops out of its slot and flies back to its option position while
  *              the previous step's siblings fade back in.
  *
- * NOTE: skills are not implemented yet — _finishWeave synthesizes the bag (stub),
- * generates the spell's procedural icon (spellIcons.getSpellIcon), and enters a
- * RESULT phase: the icon is revealed where the tag options were and the confirm
- * button becomes "Continue". _finishContinue then fires _onComplete (payload
- * { recipe, synthesis, icon }) and returns to the map.
+ * _finishWeave synthesizes the bag into a REAL skill (skillSynthesizer —
+ * effects, randomized mana cost, generated name/description), generates the
+ * spell's procedural icon (spellIcons.getSpellIcon) and attaches it
+ * (skill.icon), then enters a RESULT phase: the icon + skill summary (name,
+ * cost, description, inert tags) are shown where the tag options were and the
+ * confirm button becomes "Continue". _finishContinue then fires _onComplete
+ * (payload { recipe, synthesis, icon }) — MapScene stores synthesis.skill on
+ * runState.skills (the award) — and returns to the map.
  *
  * Entry/exit: MapScene routes the `training` node here and sets `_onComplete` +
  * `_returnScene` so finishing completes the node and returns to the map.
@@ -159,6 +162,26 @@ const RESULT_ICON_CY = 384;
 const RESULT_REVEAL_DUR = 450;
 /** Scale the icon reveal starts at. */
 const RESULT_REVEAL_START_SCALE = 0.55;
+// The skill summary (name / cost / description / inert tags) replaces the
+// recipe container during the result phase — the description supersedes the
+// raw tag list, and the freed band (y ≈ 560–900) fits the text comfortably.
+const RESULT_NAME_Y = 602;
+const RESULT_NAME_SIZE = 46;
+const RESULT_NAME_COLOR = '#e8c86e';
+const RESULT_COST_Y = 652;
+const RESULT_COST_SIZE = 30;
+const RESULT_DESC_START_Y = 706;
+const RESULT_DESC_LINE_H = 38;
+const RESULT_DESC_SIZE = 27;
+const RESULT_DESC_COLOR = '#d8d2c8';
+const RESULT_INERT_GAP = 14;          // extra gap above the inert-tags note
+const RESULT_INERT_SIZE = 22;
+const RESULT_INERT_COLOR = '#8d8478';
+/** Mana color → display tint for the cost line. */
+const MANA_TEXT_COLORS = Object.freeze({
+  red: '#e06a5a', blue: '#6aa8e8', green: '#7ed06a',
+  yellow: '#e8cf5e', purple: '#bd7ee8',
+});
 /**
  * The Confirm button uses its own art (`ui_skill_weave_button_confirm`) which is
  * TALLER than the plain button because of the gem flair on top. The flair sits
@@ -575,24 +598,24 @@ export default class SkillWeaveScene extends UIPanel {
   }
 
   /**
-   * Resolve the completed recipe into a skill reward (PLACEHOLDER).
+   * Resolve the completed recipe into a skill reward.
    *
-   * Skills are not implemented yet, so this only logs the chosen tag path,
-   * fires the optional onComplete callback (so the host can grant/record the
-   * reward + complete the map node), and returns to the map.
+   * Synthesizes the bag into a REAL skill (skillSynthesizer — effects, cost,
+   * description, rolled magnitudes), attaches the procedural icon to it, and
+   * enters the RESULT phase, which shows the icon + name + cost + description.
+   * The host's onComplete (MapScene) stores the skill on runState.skills.
    */
   _finishWeave() {
     if (this._finishing || this._result) return;
 
     const recipe = this._recipe.slice();
-    // Synthesize the bag into a skill (stub: rolls hidden values + records the
-    // bag; no real skill emitted until skills are wired into battle).
+    // Synthesize the bag into a concrete skill (effects + rolled values +
+    // randomized mana cost + generated name/description).
     const synthesis = synthesize(recipe);
 
     // Generate the spell's procedural icon from the woven keywords. The canvas
-    // is registered with the AssetManager under `icon.assetKey`, so once the
-    // synthesizer emits a real skill, setting `skill.icon = icon.assetKey`
-    // makes it render through SkillButton/UIImage like any sprite.
+    // is registered with the AssetManager under `icon.assetKey`, so the skill
+    // renders through SkillButton/UIImage like any sprite.
     let icon = null;
     try {
       icon = getSpellIcon({
@@ -604,6 +627,7 @@ export default class SkillWeaveScene extends UIPanel {
     } catch (err) {
       console.warn('[SkillWeave] spell icon generation failed:', err);
     }
+    if (icon && synthesis.skill) synthesis.skill.icon = icon.assetKey;
 
     // Enter the RESULT phase: the icon reveals where the tag options were, and
     // the confirm button flips to "Continue" (which runs _finishContinue).
@@ -930,9 +954,14 @@ export default class SkillWeaveScene extends UIPanel {
     ctx.globalAlpha = alpha;
 
     this._renderTitle(ctx);
-    if (this._result) this._renderResultIcon(ctx);   // woven icon where the tags were
-    else this._renderOptions(ctx, layout);
-    this._renderRecipe(ctx, layout);
+    if (this._result) {
+      // Result phase: the icon + skill summary replace the options AND the
+      // recipe container (the description supersedes the raw tag list).
+      this._renderResultIcon(ctx);
+    } else {
+      this._renderOptions(ctx, layout);
+      this._renderRecipe(ctx, layout);
+    }
     this._renderFlyingTag(ctx);     // commit/back travelling tag — on top of recipe
     this._renderButtons(ctx, layout);
 
@@ -1033,27 +1062,86 @@ export default class SkillWeaveScene extends UIPanel {
 
   /**
    * Draw the generated spell icon centered in the space the tag options
-   * occupied, with a short grow + fade-in reveal. Only called while `_result`
-   * is set (after "Weave Power", before "Continue"). If icon generation failed
-   * the space simply stays empty — Continue still works.
+   * occupied, with a short grow + fade-in reveal, then the skill summary
+   * (name / cost / description) below it. Only called while `_result` is set
+   * (after "Weave Power", before "Continue"). If icon generation failed the
+   * icon space stays empty but the summary still renders — Continue works.
    */
   _renderResultIcon(ctx) {
-    const icon = this._result && this._result.icon;
-    if (!icon || !icon.canvas) return;
-
     const t = this._clamp01(this._resultTime / RESULT_REVEAL_DUR);
     const e = this._easeOutCubic(t);
-    const size = RESULT_ICON_SIZE * this._lerp(RESULT_REVEAL_START_SCALE, 1, e);
+    const cx = DESIGN_W / 2;
+
+    const icon = this._result && this._result.icon;
+    if (icon && icon.canvas) {
+      const size = RESULT_ICON_SIZE * this._lerp(RESULT_REVEAL_START_SCALE, 1, e);
+      ctx.save();
+      ctx.globalAlpha *= e;
+      // Soft golden halo behind the icon so it sits into the scene like the plaques.
+      ctx.shadowColor = 'rgba(232, 200, 110, 0.55)';
+      ctx.shadowBlur = 40 + 14 * (0.5 + 0.5 * Math.sin(this._pulseTime * PULSE_SPEED));
+      this._drawImageRect(ctx, icon.canvas, {
+        x: cx - size / 2, y: RESULT_ICON_CY - size / 2, w: size, h: size,
+      });
+      ctx.restore();
+    }
+
+    this._renderResultSkillSummary(ctx, e);
+  }
+
+  /**
+   * Draw the synthesized skill's summary (name, mana cost, description, inert
+   * tags) below the revealed icon. Replaces the recipe container during the
+   * result phase. Keyword markup ([[...]]) is stripped for plain canvas text.
+   */
+  _renderResultSkillSummary(ctx, revealAlpha) {
+    const skill = this._result && this._result.synthesis && this._result.synthesis.skill;
+    if (!skill) return;
     const cx = DESIGN_W / 2;
 
     ctx.save();
-    ctx.globalAlpha *= e;
-    // Soft golden halo behind the icon so it sits into the scene like the plaques.
-    ctx.shadowColor = 'rgba(232, 200, 110, 0.55)';
-    ctx.shadowBlur = 40 + 14 * (0.5 + 0.5 * Math.sin(this._pulseTime * PULSE_SPEED));
-    this._drawImageRect(ctx, icon.canvas, {
-      x: cx - size / 2, y: RESULT_ICON_CY - size / 2, w: size, h: size,
+    ctx.globalAlpha *= revealAlpha;
+
+    // Name
+    this._drawText(ctx, skill.name, cx, RESULT_NAME_Y, {
+      size: RESULT_NAME_SIZE, color: RESULT_NAME_COLOR,
+      letterSpacing: 2, shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.7)',
     });
+
+    // Cost — single color today ({ red: 6 } shape)
+    const [costColor, costAmount] = Object.entries(skill.cost || {})[0] || [null, 0];
+    if (costColor) {
+      const colorName = costColor.charAt(0).toUpperCase() + costColor.slice(1);
+      this._drawText(ctx, `Cost: ${costAmount} ${colorName} Mana`, cx, RESULT_COST_Y, {
+        size: RESULT_COST_SIZE,
+        color: MANA_TEXT_COLORS[costColor] || SUBTITLE_COLOR,
+        letterSpacing: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.7)',
+      });
+    }
+
+    // Description lines (strip [[keyword]] markup → plain visible labels)
+    const lines = String(skill.description || '').split('\n');
+    let y = RESULT_DESC_START_Y;
+    for (const line of lines) {
+      const plain = line.replace(/\[\[([^\]]+)\]\]/g, '$1');
+      this._drawText(ctx, plain, cx, y, {
+        size: RESULT_DESC_SIZE, color: RESULT_DESC_COLOR,
+        shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.7)',
+      });
+      y += RESULT_DESC_LINE_H;
+    }
+
+    // Inert tags (chosen but not woven into the spell — special rules)
+    const unused = (this._result.synthesis.unusedTags || []);
+    if (unused.length) {
+      y += RESULT_INERT_GAP;
+      const labels = unused.map((id) => getTagLabel(id)).join(', ');
+      this._drawText(ctx, `Inert threads: ${labels}`, cx, y, {
+        size: RESULT_INERT_SIZE, color: RESULT_INERT_COLOR,
+        shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.7)',
+      });
+    }
+
     ctx.restore();
   }
 

@@ -563,7 +563,16 @@ export default class MapScene extends UIPanel {
     weaveScene.configure({
       returnScene: 'MapScene',
       runSeed: this._seed,
-      onComplete: ({ recipe, icon }) => {
+      onComplete: ({ recipe, synthesis, icon }) => {
+        // AWARD: the synthesized skill joins the run — createPlayerBattleState
+        // appends runState.skills to the character's catalog skills each battle.
+        const skill = synthesis && synthesis.skill;
+        if (skill && this._runState) {
+          if (!Array.isArray(this._runState.skills)) this._runState.skills = [];
+          this._runState.skills.push(JSON.parse(JSON.stringify(skill)));
+          console.log(`[MapScene] Skill awarded: "${skill.name}" (${skill.id}) — `
+            + `${this._runState.skills.length} woven skill(s) this run.`);
+        }
         console.log(`[MapScene] Skill weave complete — recipe: [${(recipe || []).join(' + ')}], node: ${node.id}`
           + (icon ? `, icon: ${icon.assetKey}` : ''));
         this._handleBattleComplete({ result: 'complete', nodeId: node.id });

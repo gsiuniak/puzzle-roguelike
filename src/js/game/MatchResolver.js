@@ -25,6 +25,10 @@ export const SKILL_EFFECT_TYPES = {
   ARMOR: 'armor',
   DESTROY_TILES: 'destroy_tiles',
   DESTROY_TILES_ROW: 'destroy_tiles_row',
+  // Column mirror of DESTROY_TILES_ROW: destroys full columns centered on the
+  // targeted column. Skill-level `area` is a number = how many columns.
+  // (Synthesized "destroy + column" skills.)
+  DESTROY_TILES_COLUMN: 'destroy_tiles_column',
   CREATE_TILES: 'create_tiles',
   CONVERT_TILE: 'convert_tile',
   CONVERT_TILES_BY_TYPE: 'convert_tiles_by_type',
@@ -42,6 +46,10 @@ export const SKILL_EFFECT_TYPES = {
   // drainMana: { amount, color? } — omit color to drain every color. Resolved
   // in BattleController._resolveEffect.
   DRAIN_MANA: 'drain_mana',
+  // Grants the CASTER mana. Payload gainMana: { color, amount }. Resolved in
+  // BattleController._resolveEffect; gated by Enfeebled, fires onGainMana so
+  // mana-reactor relics see it. (Synthesized "gain" skills.)
+  GAIN_MANA: 'gain_mana',
   // Silences the OPPONENT for N of their upcoming turns (blocks skill casting).
   // Payload silence: { turns }. Resolved in BattleController._resolveEffect;
   // enforced in tryPlayerSkill. (Lord Malakor's "Soul Burn".)

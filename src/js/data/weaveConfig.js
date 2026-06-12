@@ -86,7 +86,77 @@ export const TAGS_PER_ROUND_WEIGHTS = Object.freeze({
 export const TAG_VALUE_TABLES = Object.freeze({
   // `create N tiles` — small rolls common, a 12 is a jackpot.
   create: { 3: 24, 4: 20, 5: 16, 6: 13, 7: 10, 8: 7, 9: 5, 10: 3, 11: 1.5, 12: 0.5 },
+
+  // ── Action magnitudes ──
+  // `deal N damage` / `gain N armor` / `heal N HP` — mid rolls common.
+  damage: { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
+  armor:  { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
+  heal:   { 4: 16, 5: 20, 6: 20, 7: 15, 8: 11, 9: 8, 10: 5, 11: 3, 12: 2 },
+  // `gain N mana` of a color.
+  gain:   { 3: 25, 4: 25, 5: 20, 6: 14, 7: 9, 8: 7 },
+  // `drain N mana` from the opponent (drains EVERY color when un-elemented,
+  // so the table stays modest).
+  drain:  { 2: 30, 3: 30, 4: 22, 5: 12, 6: 6 },
+  // `gain N attack` — permanent for the battle, so the rolls are small.
+  attack: { 1: 55, 2: 33, 3: 12 },
+
+  // ── Status durations (turn cycles) ──
+  silence:    { 1: 50, 2: 35, 3: 15 },
+  cripple:    { 1: 50, 2: 35, 3: 15 },
+  enfeeble:   { 1: 50, 2: 35, 3: 15 },
+  brittle:    { 1: 45, 2: 38, 3: 17 },
+  bleed:      { 2: 45, 3: 35, 4: 20 },
+  frozen:     { 1: 50, 2: 35, 3: 15 },
+  intangible: { 1: 60, 2: 30, 3: 10 },
+  berserk:    { 1: 55, 2: 33, 3: 12 },
+  barrier:    { 1: 45, 2: 35, 3: 20 },
 });
+
+// ═══════════════════════════════════════════════════════════
+// 4. Mana cost rolls (synthesized-skill costs)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Synthesized-skill mana cost configuration.
+ *
+ * A spell's cost is rolled from a FLOOR..CEILING band. The base band is
+ * 5..8; every POWER threshold the spell's computed power score passes raises
+ * BOTH the floor and the ceiling by 1, so stronger spells cost more while
+ * keeping the same roll spread.
+ *
+ * `spreadWeights` sets the relative chance of each offset WITHIN the band
+ * (key 0 = the floor, key (ceiling−floor) = the ceiling) — tweak any single
+ * number to bias rolls cheap or expensive.
+ */
+export const MANA_COST_CONFIG = Object.freeze({
+  baseFloor: 5,
+  baseCeiling: 8,
+  /** Power score thresholds; each one passed → +1 floor AND +1 ceiling. */
+  powerTierThresholds: Object.freeze([14, 22, 32]),
+  /** Offset-from-floor → relative weight (cheap rolls slightly favored). */
+  spreadWeights: Object.freeze({ 0: 30, 1: 30, 2: 25, 3: 15 }),
+});
+
+/**
+ * Roll a synthesized skill's mana cost from its power score.
+ * @param {number} power — the synthesizer's computed power score
+ * @returns {{ cost: number, floor: number, ceiling: number, tier: number }}
+ */
+export function rollManaCost(power = 0) {
+  const cfg = MANA_COST_CONFIG;
+  let tier = 0;
+  for (const t of cfg.powerTierThresholds) if (power >= t) tier++;
+  const floor = cfg.baseFloor + tier;
+  const ceiling = cfg.baseCeiling + tier;
+  const bandWidth = ceiling - floor;
+  const entries = [];
+  for (let off = 0; off <= bandWidth; off++) {
+    entries.push([off, cfg.spreadWeights[off] != null ? cfg.spreadWeights[off] : 1]);
+  }
+  const off = pickWeightedEntry(entries);
+  const cost = floor + (off == null ? 0 : Number(off));
+  return { cost, floor, ceiling, tier };
+}
 
 // ═══════════════════════════════════════════════════════════
 // Weighted-pick helpers (relative weights; normalized at pick time)

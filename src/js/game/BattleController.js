@@ -799,6 +799,7 @@ export default class BattleController {
       switch (effect.effectType) {
         case SKILL_EFFECT_TYPES.DESTROY_TILES:
         case SKILL_EFFECT_TYPES.DESTROY_TILES_ROW:
+        case SKILL_EFFECT_TYPES.DESTROY_TILES_COLUMN:
           this._executeDestroyTiles(area, col, row, skill.name);
           enteredCascade = true;
           break;
@@ -857,10 +858,16 @@ export default class BattleController {
     const skill = this._targetingSkill;
     if (!skill || !skill.area) return [];
 
-    // Row-based targeting (DESTROY_TILES_ROW): area is a number (1, 3, 5, ...)
-    // representing the total number of rows affected centered on the hovered row.
+    // Line-based targeting (DESTROY_TILES_ROW / _COLUMN): area is a number
+    // (1, 3, 5, ...) = how many rows/columns are affected, centered on the
+    // hovered cell. Column variant is discriminated by the effect type.
     if (typeof skill.area === 'number') {
-      return this._computeRowArea(col, row, skill.area);
+      const isColumn = (skill.effects || []).some(
+        (e) => e.effectType === SKILL_EFFECT_TYPES.DESTROY_TILES_COLUMN,
+      );
+      return isColumn
+        ? this._computeColumnArea(col, row, skill.area)
+        : this._computeRowArea(col, row, skill.area);
     }
 
     // Radius-based targeting (DESTROY_TILES): area.radius defines a square
@@ -895,6 +902,28 @@ export default class BattleController {
     for (let r = centerRow - halfSpan; r <= centerRow + halfSpan; r++) {
       if (r < 0 || r >= this.board.rows) continue;
       for (let c = 0; c < this.board.cols; c++) {
+        if (this.board.get(c, r)) {
+          cells.push({ col: c, row: r });
+        }
+      }
+    }
+    return cells;
+  }
+
+  /**
+   * Column mirror of _computeRowArea: areaCount full columns centered on
+   * centerCol, spanning all rows.
+   * @param {number} centerCol - center column
+   * @param {number} centerRow - center row (hover context, unused for column area)
+   * @param {number} areaCount - number of columns to affect (1, 3, 5, ...)
+   * @returns {Array<{col:number, row:number}>}
+   */
+  _computeColumnArea(centerCol, centerRow, areaCount) {
+    const halfSpan = Math.floor(areaCount / 2);
+    const cells = [];
+    for (let c = centerCol - halfSpan; c <= centerCol + halfSpan; c++) {
+      if (c < 0 || c >= this.board.cols) continue;
+      for (let r = 0; r < this.board.rows; r++) {
         if (this.board.get(c, r)) {
           cells.push({ col: c, row: r });
         }
@@ -2091,6 +2120,27 @@ export default class BattleController {
           // Draining unspent mana can lower the opponent's dynamic attack.
           this._recomputeDynamicAttack(tgt);
           if (drained > 0) this.log.add(`${tgt.name} is drained of ${drained} mana.`);
+        }
+        return false;
+      }
+
+      case SKILL_EFFECT_TYPES.GAIN_MANA: {
+        // Grant the CASTER mana (synthesized "gain" skills). Gated by Enfeebled
+        // like every other in-battle mana credit; fires onGainMana so reactor
+        // relics (Flaming Arrow, …) see it — same as cascade/skill-destroy gains.
+        const gm = effect.gainMana || {};
+        const amount = typeof gm.amount === 'number' ? gm.amount : 0;
+        const color = gm.color;
+        if (amount > 0 && color) {
+          if (this._canGainMana(side)) {
+            if (!src.mana) src.mana = {};
+            src.mana[color] = (src.mana[color] || 0) + amount;
+            this._recomputeDynamicAttack(src);
+            this.log.add(`${src.name} gains ${amount} ${color} mana.`);
+            this._dispatchManaGain(side, color, amount);
+          } else {
+            this.log.add(`${src.name} is Enfeebled and gains no mana.`);
+          }
         }
         return false;
       }

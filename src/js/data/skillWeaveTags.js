@@ -18,9 +18,9 @@
  * (no duplicate slots). Validity/meaning of the resulting bag is resolved at
  * synthesis time, not here — so any combination the player can pick is allowed.
  *
- * NOTE: skills are not implemented yet. The recipe → concrete-skill step is a
- * placeholder (skillSynthesizer.synthesize). This module + weaveConfig only
- * define and feed the tag bag.
+ * The recipe → concrete-skill step is skillSynthesizer.synthesize, which emits
+ * a real, castable skill. This module + weaveConfig only define and feed the
+ * tag bag.
  */
 
 import { TAG_RARITY, RARITY_WEIGHTS, pickWeightedEntry } from './weaveConfig.js';
@@ -97,7 +97,8 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   wild:       { id: 'wild',       label: 'Wild',       category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.LEGENDARY, icon: null },
   lock:       { id: 'lock',       label: 'Lock',       category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.RARE,      icon: null },
 
-  // ── Status effects (enemy debuffs; LOGIC ADDED LATER — data stubs only) ──
+  // ── Status effects (synthesized into apply_status effects — debuffs hit the
+  //    enemy, buffs (intangible/berserk/barrier) buff the caster) ──
   silence:    { id: 'silence',    label: 'Silence',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
   cripple:    { id: 'cripple',    label: 'Cripple',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
   enfeeble:   { id: 'enfeeble',   label: 'Enfeeble',   category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },

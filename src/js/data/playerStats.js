@@ -130,8 +130,15 @@ export function createPlayerBattleState(characterDef, runState) {
     attack: effective.startingAttack,
     block: 0,
 
-    // Resolved skill objects (cloned from skill catalog)
-    skills: resolveSkillIds(characterDef.skills || []),
+    // Resolved skill objects (cloned from skill catalog), plus any skills
+    // acquired during the run (woven skills from the Skill Weave screen —
+    // FULL skill objects stored on runState.skills, deep-cloned per battle so
+    // in-battle mutation can't leak back into the run state).
+    skills: [
+      ...resolveSkillIds(characterDef.skills || []),
+      ...((runState && Array.isArray(runState.skills) ? runState.skills : [])
+        .map((s) => JSON.parse(JSON.stringify(s)))),
+    ],
 
     // Resolved relic objects (cloned from relic catalog)
     relics: resolveRelicIds(relicIds),
