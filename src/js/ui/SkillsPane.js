@@ -1,5 +1,8 @@
 import UIPanel from './UIPanel.js';
-import { createCardModel, measureCardModel, drawCardModel } from './skillCard.js';
+import {
+  createCardModel, measureCardModel, drawCardModel,
+  CARD_BG_KEY, CARD_PAD, ICON_SIZE,
+} from './skillCard.js';
 
 /**
  * SkillsPane — fixed-size battle panel showing the EQUIPPED skills as
@@ -41,12 +44,22 @@ const NATURAL_HEIGHT =
   LEGACY_ROWS * LEGACY_SLOT_HEIGHT + (LEGACY_ROWS - 1) * LEGACY_GRID_GAP;
 
 // ── List ──
-/** Minimum card slots shown (empty ones render as locked fillers). */
+/** Minimum card slots shown (empty ones render as GHOST placeholder cards). */
 const MIN_SLOTS = 8;
 const CARD_GAP = 2;
-const LOCKED_CARD_H = 76;
-const LOCKED_ICON_SIZE = 26;
-const LOCKED_ALPHA = 0.45;
+
+// ── Ghost slots (empty placeholders — dimmed card silhouettes, NO lock) ──
+// They mirror the real card's geometry (same frame art, same icon position)
+// at much lower contrast, so the list keeps its rhythm and the empty space
+// reads as "future skill slot", not "disabled button".
+const GHOST_CARD_H = 76;
+const GHOST_BASE_BG = 'rgba(10, 8, 6, 0.55)';
+const GHOST_BORDER = 'rgba(120, 100, 60, 0.22)';
+const GHOST_FRAME_ALPHA = 0.22;      // skills_button art, heavily dimmed
+const GHOST_ICON_FILL = 'rgba(5, 4, 3, 0.6)';     // circular icon recess
+const GHOST_ICON_RING = 'rgba(150, 130, 90, 0.18)';
+const GHOST_ICON_INNER_RING = 'rgba(0, 0, 0, 0.4)';
+const GHOST_DIVIDER = 'rgba(214, 188, 120, 0.06)'; // faint placeholder line
 
 // ── Scrolling ──
 const SCROLLBAR_GUTTER = 12;       // space reserved at the right for the bar
@@ -322,7 +335,7 @@ export default class SkillsPane extends UIPanel {
     let contentH = 0;
     for (const row of this._rows) {
       let m = null;
-      let h = LOCKED_CARD_H;
+      let h = GHOST_CARD_H;
       if (!row.locked) {
         m = measureCardModel(ctx, row.model, cardW);
         h = m.h;
@@ -346,7 +359,7 @@ export default class SkillsPane extends UIPanel {
       const visible = y + h >= inner.y && y <= inner.y + inner.h;
       if (visible) {
         if (row.locked) {
-          this._renderLockedCard(ctx, inner.x, y, cardW, h);
+          this._renderGhostCard(ctx, inner.x, y, cardW, h);
         } else {
           if (row.model) for (const kt of row.model.effectKTs) kt.visible = true;
           drawCardModel(ctx, row.model, { x: inner.x, y, w: cardW, h }, m, {
@@ -428,19 +441,58 @@ export default class SkillsPane extends UIPanel {
     }
   }
 
-  _renderLockedCard(ctx, x, y, w, h) {
+  /**
+   * Ghost slot — a dimmed placeholder card silhouette (NO lock symbol).
+   * Mirrors the real card: same frame art (heavily dimmed) and a faint
+   * circular icon recess at the exact spot a real skill's icon sits, so the
+   * list keeps its rhythm and empty space reads as "future skill slot".
+   */
+  _renderGhostCard(ctx, x, y, w, h) {
     ctx.save();
-    ctx.fillStyle = 'rgba(12, 10, 8, 0.55)';
+
+    // Dark base + faint border (lower contrast than active cards).
+    ctx.fillStyle = GHOST_BASE_BG;
     ctx.fillRect(x, y, w, h);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(120, 100, 60, 0.3)';
+    ctx.strokeStyle = GHOST_BORDER;
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    const img = this._asset('skills_locked_icon');
-    if (img) {
-      ctx.globalAlpha *= LOCKED_ALPHA;
-      const s = LOCKED_ICON_SIZE;
-      ctx.drawImage(img, x + w / 2 - s / 2, y + h / 2 - s / 2, s, s);
+
+    // The carved frame art, heavily dimmed — keeps the card silhouette.
+    const frame = this._asset(CARD_BG_KEY);
+    if (frame) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha *= GHOST_FRAME_ALPHA;
+      ctx.drawImage(frame, x, y, w, h);
+      ctx.restore();
     }
+
+    // Circular icon recess at the real icon's position (clamped to the
+    // ghost card's height so shorter slots keep a proportioned well).
+    const r = Math.min(ICON_SIZE / 2, (h - 14) / 2);
+    const cx = x + CARD_PAD.left + ICON_SIZE / 2;
+    const cy = y + h / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = GHOST_ICON_FILL;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = GHOST_ICON_RING;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(2, r - 4), 0, Math.PI * 2);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = GHOST_ICON_INNER_RING;
+    ctx.stroke();
+
+    // Very faint placeholder line where a skill name would sit.
+    const lineX = x + CARD_PAD.left + ICON_SIZE + 14;
+    const lineW = Math.max(0, w - (lineX - x) - CARD_PAD.right - 20);
+    if (lineW > 30) {
+      ctx.fillStyle = GHOST_DIVIDER;
+      ctx.fillRect(lineX, cy - 1, lineW * 0.55, 2);
+    }
+
     ctx.restore();
   }
 }
