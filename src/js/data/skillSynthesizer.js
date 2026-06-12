@@ -642,6 +642,10 @@ export function synthesize(recipe) {
   const skill = {
     id,
     name,
+    // STRUCTURED effect lines — one complete gameplay sentence per entry
+    // (renderers wrap each naturally; never insert manual breaks inside one).
+    descriptionLines: lines.slice(),
+    // Joined form for consumers that take a single string (tooltips, scenes).
     description: lines.join('\n') || 'It does... something?',
     icon: null, // filled by SkillWeaveScene from the procedural spell icon
     sound: ACTION_SOUND[primaryAction] || DEFAULT_SOUND,

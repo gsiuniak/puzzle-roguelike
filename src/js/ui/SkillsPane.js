@@ -72,11 +72,13 @@ const NAME_MAX_LINES = 2;
 const NAME_COLOR = '#e4e4d9';
 const NAME_DESC_GAP = 4;
 
-// Description — full text, wrapped, keyword-colored. NO line cap: the card
-// grows to fit it.
-const DESC_FONT_SIZE = 18;
-const DESC_LINE_HEIGHT = 23;
+// Description — STRUCTURED effect lines: each effect is its own block
+// (complete sentence, wraps naturally within itself, keyword-colored), with
+// a small gap between effects. NO line cap: the card grows to fit.
+const DESC_FONT_SIZE = 17;
+const DESC_LINE_HEIGHT = 20;
 const DESC_COLOR = '#cfc8a8';
+const EFFECT_GAP = 6;          // vertical gap between separate effect blocks
 
 // Mana cost (right column), vertically centered.
 const COST_FONT_SIZE = 22;
@@ -113,7 +115,7 @@ export default class SkillsPane extends UIPanel {
     /** @type {Function|null} (skillData) => void — wired on the player pane only */
     this.onSkillClick = null;
 
-    /** @type {Array<{skill:object|null, locked:boolean, descKT:KeywordText|null}>} */
+    /** @type {Array<{skill:object|null, locked:boolean, effectKTs:KeywordText[]}>} */
     this._rows = [];
     /** Hovered card index, -1 = none. */
     this._hoverRow = -1;
@@ -137,22 +139,43 @@ export default class SkillsPane extends UIPanel {
     const list = skills || [];
     this._rows = [];
     for (const skill of list) {
-      const descKT = new KeywordText(skill.description || '');
-      descKT.setStyle({
-        fontSize: DESC_FONT_SIZE,
-        color: DESC_COLOR,
-        alignH: 'left',
-        alignV: 'top',
-        lineHeight: DESC_LINE_HEIGHT,
-      });
-      descKT.visible = true; // always on the card → always a keyword source
-      this._rows.push({ skill, locked: false, descKT });
+      // One KeywordText per EFFECT line. Preferred source: the structured
+      // `descriptionLines` array (one complete sentence per effect — the
+      // skill synthesizer emits this); legacy `description` strings fall
+      // back to splitting on '\n' (the catalog authors one effect per line).
+      const lines = Array.isArray(skill.descriptionLines) && skill.descriptionLines.length
+        ? skill.descriptionLines
+        : String(skill.description || '').split('\n');
+      const effectKTs = [];
+      for (const raw of lines) {
+        const line = this._ensureSentence(raw);
+        if (!line) continue;
+        const kt = new KeywordText(line);
+        kt.setStyle({
+          fontSize: DESC_FONT_SIZE,
+          color: DESC_COLOR,
+          alignH: 'left',
+          alignV: 'top',
+          lineHeight: DESC_LINE_HEIGHT,
+        });
+        kt.visible = true; // always on the card → always a keyword source
+        effectKTs.push(kt);
+      }
+      this._rows.push({ skill, locked: false, effectKTs });
     }
     while (this._rows.length < MIN_SLOTS) {
-      this._rows.push({ skill: null, locked: true, descKT: null });
+      this._rows.push({ skill: null, locked: true, effectKTs: [] });
     }
     this._hoverRow = -1;
     this._rowLayout = [];
+  }
+
+  /** Trim an effect line and give it terminal punctuation (display only) so
+   *  every effect reads as a complete statement ("Deal 5 Damage."). */
+  _ensureSentence(raw) {
+    const line = String(raw == null ? '' : raw).trim();
+    if (!line) return '';
+    return /[.!?]$/.test(line) ? line : `${line}.`;
   }
 
   /** Update mana for affordability cues (idempotent, called every frame). */
@@ -160,9 +183,13 @@ export default class SkillsPane extends UIPanel {
     this._mana = manaState || null;
   }
 
-  /** Description KeywordText elements (inline keyword tooltip sources). */
+  /** All effect-line KeywordText elements (inline keyword tooltip sources). */
   get descKeywordTexts() {
-    return this._rows.filter(r => r.descKT).map(r => r.descKT);
+    const out = [];
+    for (const r of this._rows) {
+      if (r.effectKTs) out.push(...r.effectKTs);
+    }
+    return out;
   }
 
   _affordable(skill) {
@@ -258,25 +285,30 @@ export default class SkillsPane extends UIPanel {
     for (let i = 0; i < this._rows.length; i++) {
       const row = this._rows[i];
 
-      // ── Measure: card height auto-fits name + wrapped description ──
+      // ── Measure: card height auto-fits name + the effect blocks ──
       let h = LOCKED_CARD_H;
       let nameLines = null;
-      let descH = 0;
+      let effectHeights = null;
+      let effectsH = 0;
       if (!row.locked) {
         ctx.font = `bold ${NAME_FONT_SIZE}px ${FONT_FAMILY}`;
         nameLines = this._wrapWords(ctx, row.skill.name || '', textW);
         const nameH = nameLines.length * NAME_LINE_HEIGHT;
-        if (row.descKT && row.skill.description) {
-          row.descKT.setStyle({ maxWidth: textW });
-          descH = row.descKT.measureText(ctx).height;
+        effectHeights = [];
+        for (const kt of row.effectKTs) {
+          kt.setStyle({ maxWidth: textW });
+          const bh = kt.measureText(ctx).height;
+          effectHeights.push(bh);
+          effectsH += bh;
         }
-        const contentH = nameH + (descH > 0 ? NAME_DESC_GAP + descH : 0);
+        if (row.effectKTs.length > 1) effectsH += (row.effectKTs.length - 1) * EFFECT_GAP;
+        const contentH = nameH + (effectsH > 0 ? NAME_DESC_GAP + effectsH : 0);
         h = Math.max(CARD_MIN_H, CARD_PAD.top + contentH + CARD_PAD.bottom);
       }
 
       const entry = { y, h };
       if (y <= inner.y + inner.h) {
-        this._renderCard(ctx, row, i, inner, y, h, textX, textW, nameLines, descH);
+        this._renderCard(ctx, row, i, inner, y, h, textX, textW, nameLines, effectHeights, effectsH);
       }
       layout.push(entry);
       y += h + CARD_GAP;
@@ -286,7 +318,7 @@ export default class SkillsPane extends UIPanel {
     this._rowLayout = layout;
   }
 
-  _renderCard(ctx, row, index, inner, y, h, textX, textW, nameLines, descH) {
+  _renderCard(ctx, row, index, inner, y, h, textX, textW, nameLines, effectHeights, effectsH) {
     const x = inner.x;
     const w = inner.w;
     const skill = row.skill;
@@ -399,9 +431,9 @@ export default class SkillsPane extends UIPanel {
       ctx.restore();
     }
 
-    // ── Name + full description (block vertically centered in the card) ──
+    // ── Name + effect blocks (content vertically centered in the card) ──
     const contentH = nameLines.length * NAME_LINE_HEIGHT
-      + (descH > 0 ? NAME_DESC_GAP + descH : 0);
+      + (effectsH > 0 ? NAME_DESC_GAP + effectsH : 0);
     let lineY = y + Math.max(CARD_PAD.top, (h - contentH) / 2);
 
     ctx.save();
@@ -417,13 +449,20 @@ export default class SkillsPane extends UIPanel {
     }
     ctx.restore();
 
-    if (row.descKT && descH > 0) {
-      const kt = row.descKT;
-      kt.rect.x = textX;
-      kt.rect.y = lineY + NAME_DESC_GAP;
-      kt.rect.w = textW;
-      kt.rect.h = descH;
-      kt.renderSelf(ctx);
+    // Each effect is its own block: wraps naturally within itself, stays
+    // visually grouped, with a small gap before the next effect.
+    if (effectsH > 0) {
+      let blockY = lineY + NAME_DESC_GAP;
+      for (let e = 0; e < row.effectKTs.length; e++) {
+        const kt = row.effectKTs[e];
+        const bh = effectHeights[e];
+        kt.rect.x = textX;
+        kt.rect.y = blockY;
+        kt.rect.w = textW;
+        kt.rect.h = bh;
+        kt.renderSelf(ctx);
+        blockY += bh + EFFECT_GAP;
+      }
     }
   }
 

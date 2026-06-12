@@ -16,7 +16,16 @@
  * {
  *   id:          string            — unique identifier (kebab/snake_case)
  *   name:        string            — display name
- *   description: string            — UI description (newlines allowed)
+ *   description: string            — UI description. CONVENTION: each '\n'-
+ *                                    separated line must be ONE COMPLETE
+ *                                    effect statement ("Deal 5 [[damage]]") —
+ *                                    renderers treat each line as its own
+ *                                    block and wrap it naturally, so never
+ *                                    hand-break a sentence mid-phrase.
+ *   descriptionLines?: string[]    — optional structured form (one effect
+ *                                    sentence per entry); preferred by the
+ *                                    SkillsPane renderer when present
+ *                                    (synthesized skills carry it)
  *   icon:        string            — AssetManager key for the icon
  *   sound:       string            — SoundConfig key for the resolve SFX
  *   cost:        { color: amount } — mana cost per color
