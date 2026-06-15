@@ -55,9 +55,9 @@ export const RARITY_WEIGHTS = Object.freeze({
  * recipe slot). Rolled once when the weave starts. Baseline ≈ 70 / 30 / 10.
  */
 export const ROUNDS_PER_WEAVE_WEIGHTS = Object.freeze({
-  2: 70,
-  3: 30,
-  4: 10,
+  // 2: 70,
+  3: 80,
+  4: 20,
 });
 
 /**
@@ -65,9 +65,9 @@ export const ROUNDS_PER_WEAVE_WEIGHTS = Object.freeze({
  * Rolled independently for each round. Baseline ≈ 50 / 35 / 15.
  */
 export const TAGS_PER_ROUND_WEIGHTS = Object.freeze({
-  2: 50,
-  3: 35,
-  4: 15,
+  2: 20,
+  3: 60,
+  4: 20,
 });
 
 // ═══════════════════════════════════════════════════════════
