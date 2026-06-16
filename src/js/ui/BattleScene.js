@@ -111,6 +111,8 @@ const TARGET_BTN_GAP = 56;         // horizontal gap between Cancel and Confirm
 const TARGET_BTN_CENTER_Y = 966;   // fallback vertical center of the row (design px)
 const TARGET_BTN_FALLBACK_ASPECT = 1175 / 330; // if the art isn't loaded yet
 const TARGET_BTN_HOVER_SCALE = 1.05; // subtle grow on hover
+const TARGET_BTN_ALPHA = 0.86;       // overall button opacity (art + label)
+const TARGET_BTN_HOVER_ALPHA = 1;    // opacity when hovered (full = pops on hover)
 // Centered button label.
 const TARGET_BTN_LABEL_SIZE = 34;
 const TARGET_BTN_LABEL_COLOR = '#fff8e8';
@@ -1636,6 +1638,9 @@ export default class BattleScene extends UIPanel {
     const h = r.h * sc;
     const x = r.x + (r.w - w) / 2;
     const y = r.y + (r.h - h) / 2;
+    // Semi-transparent (configurable) — full opacity on hover so it pops.
+    const prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = prevAlpha * (hovered ? TARGET_BTN_HOVER_ALPHA : TARGET_BTN_ALPHA);
     const prevSmoothing = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = true;
     if (hovered) {
@@ -1659,6 +1664,8 @@ export default class BattleScene extends UIPanel {
     ctx.shadowBlur = 6;
     ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + TARGET_BTN_LABEL_Y_NUDGE);
     ctx.restore();
+
+    ctx.globalAlpha = prevAlpha;
   }
 
   render(ctx) {
