@@ -1,16 +1,15 @@
 # PWA install icons
 
-The PWA manifest (see `vite.config.js`) references two square icons used for the
-"Add to Home Screen" / install experience on mobile and desktop:
+The PWA manifest (see `vite.config.js`) uses **`icon.svg`** as the install icon.
+Chrome accepts an SVG (`"sizes": "any"`) as a valid manifest icon, so no binary
+PNG export is required for the app to be installable on desktop/Android.
 
-- `icon-192.png` — 192×192 px
-- `icon-512.png` — 512×512 px (also used as the maskable icon)
+`icon.svg` is copied verbatim into the build at `dist/assets/icons/` alongside
+the rest of the game art.
 
-Drop those two PNGs in this folder. They are copied verbatim into the build at
-`dist/assets/icons/` alongside the rest of the game art.
-
-The build (`npm run build`) succeeds **without** them — the app is still an
-installable PWA, it just falls back to a generic icon until you add these.
-
-Tip: for the maskable icon, keep important art within the centre ~80% (safe
-zone) so platform masks (circle/squircle) don't clip it.
+## Optional: a custom iOS home-screen icon
+iOS Safari's "Add to Home Screen" does NOT use SVG manifest icons — it uses an
+`apple-touch-icon` PNG (or falls back to a screenshot). If you want a polished
+iOS icon, add a 180×180 (or 512×512) PNG here and reference it with a
+`<link rel="apple-touch-icon" href="assets/icons/icon-180.png">` in `index.html`.
+Not required for installability on desktop/Android.

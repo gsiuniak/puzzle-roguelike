@@ -76,6 +76,37 @@
   /* Hide when in fullscreen (toggled from JS) */
   #fullscreen-btn.is-fs { display: none; }
 
+  /* ── Install (PWA) button ──
+     Hidden until the browser fires `beforeinstallprompt` (i.e. the app is
+     installable: HTTPS + manifest + valid icon + service worker). Clicking it
+     triggers the native install prompt. Stays hidden where install isn't
+     available (raw http serve, iOS Safari, already installed). */
+  #install-btn {
+    display: none;
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    z-index: 1000;
+    height: 44px;
+    padding: 0 16px;
+    border: 1px solid rgba(216, 200, 144, 0.6);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #e0b85a;
+    font-family: 'Marcellus SC', serif;
+    font-size: 18px;
+    line-height: 1;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background 120ms ease, transform 120ms ease;
+  }
+  #install-btn:not([hidden]) { display: flex; }
+  #install-btn:hover  { background: rgba(40, 30, 14, 0.9); }
+  #install-btn:active { transform: scale(0.96); }
+
   /* ── Rotate-device overlay ──
      Shown only in portrait orientation. Pure CSS — no JS needed.
      Hiding the canvas also blocks pointer/touch input on the game. */
@@ -106,6 +137,7 @@
     #rotate-overlay   { display: flex; }
     canvas            { visibility: hidden; }
     #fullscreen-btn   { display: none; }
+    #install-btn      { display: none !important; }
   }
 </style>
 </head>
@@ -117,7 +149,31 @@
     </div>
   </div>
   <button id="fullscreen-btn" type="button" aria-label="Toggle fullscreen" title="Fullscreen">&#x26F6;</button>
+  <button id="install-btn" type="button" aria-label="Install app" title="Install app" hidden>&#x2913; Install</button>
   <script src="js/lib/howler.js"></script>
   <script type="module" src="js/main.js"></script>
+  <!-- PWA install button wiring (self-contained; no-op where install isn't available). -->
+  <script>
+  (function () {
+    var btn = document.getElementById('install-btn');
+    var deferred = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();          // suppress the mini-infobar; we drive the prompt
+      deferred = e;
+      if (btn) btn.hidden = false; // reveal our Install button
+    });
+    if (btn) btn.addEventListener('click', function () {
+      if (!deferred) return;
+      deferred.prompt();
+      deferred.userChoice.finally(function () {
+        deferred = null;
+        btn.hidden = true;
+      });
+    });
+    window.addEventListener('appinstalled', function () {
+      if (btn) btn.hidden = true;
+    });
+  })();
+  </script>
 </body>
 </html>
