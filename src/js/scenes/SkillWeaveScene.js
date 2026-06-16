@@ -162,6 +162,15 @@ const BACK_LABEL = 'Back';
 const WEAVE_LABEL = 'Weave Power';
 const CONTINUE_LABEL = 'Continue';
 
+// ── Crucible (static image shown once the recipe is full, before "Weave Power") ──
+const CRUCIBLE_ASSET_KEY = 'ui_skill_weave_crucible';
+/** Center + size of the crucible in design space (fills the freed option band). */
+const CRUCIBLE_CENTER_X = DESIGN_W / 2;
+const CRUCIBLE_CENTER_Y = 440;
+const CRUCIBLE_WIDTH = 420;           // height derives from the image aspect
+const CRUCIBLE_FALLBACK_ASPECT = 651 / 405;
+const CRUCIBLE_FADE_IN_MS = 360;      // soft reveal when the recipe completes
+
 // ── Result phase (after "Weave Power": show the generated spell icon) ──
 /** Subtitle shown while the woven icon is displayed. */
 const SUBTITLE_RESULT = 'Your Power Takes Form';
@@ -287,6 +296,10 @@ export default class SkillWeaveScene extends UIPanel {
     /** Elapsed ms since the result reveal began (drives the grow/fade-in). */
     this._resultTime = 0;
 
+    // ── Crucible (recipe-complete, pre-confirm static image) ──
+    /** Elapsed ms the crucible has been visible (drives its fade-in). */
+    this._crucibleTime = 0;
+
     /**
      * Active animation, or null when idle. Shapes by kind:
      *   intro: { kind, time, total, focal:{x,y}, items:[{tagId, rect}] }
@@ -358,6 +371,7 @@ export default class SkillWeaveScene extends UIPanel {
     this._anim = null;
     this._hoverOption = -1;
     this._hoverButton = null;
+    this._crucibleTime = 0;
     this._rollAllSteps();
     this._startIntro();   // fan the first step's tags out on load
 
@@ -790,6 +804,14 @@ export default class SkillWeaveScene extends UIPanel {
     if (this._result) this._resultTime += dt;
     if (this._elapsed >= FADE_IN_DURATION) this._fadeInDone = true;
     this._advanceAnim(dt);
+
+    // Crucible: visible only while the recipe is full but not yet woven.
+    if (this._complete && !this._result) {
+      this._crucibleTime += dt;
+    } else if (this._crucibleTime !== 0) {
+      this._crucibleTime = 0;
+    }
+
     super.update(dt);
   }
 
@@ -973,6 +995,8 @@ export default class SkillWeaveScene extends UIPanel {
       this._renderResultIcon(ctx);
     } else {
       this._renderOptions(ctx, layout);
+      // Recipe full (pre-confirm): the crucible loop plays in the freed band.
+      if (this._complete) this._renderCrucible(ctx);
       this._renderRecipe(ctx, layout);
     }
     this._renderFlyingTag(ctx);     // commit/back travelling tag — on top of recipe
@@ -1081,6 +1105,32 @@ export default class SkillWeaveScene extends UIPanel {
         }
       }
     }
+  }
+
+  // ── Render: crucible (recipe-complete, pre-confirm) ────────
+
+  /**
+   * Draw the static crucible image, centered in the band the tag options
+   * occupied, with a soft fade-in when the recipe completes. No-op until the
+   * sprite is loaded (degrades gracefully).
+   */
+  _renderCrucible(ctx) {
+    const img = this._asset(CRUCIBLE_ASSET_KEY);
+    if (!img || !img.width) return;
+
+    const fade = this._clamp01(this._crucibleTime / CRUCIBLE_FADE_IN_MS);
+    const w = CRUCIBLE_WIDTH;
+    const h = w / this._aspect(CRUCIBLE_ASSET_KEY, CRUCIBLE_FALLBACK_ASPECT);
+    const rect = {
+      x: CRUCIBLE_CENTER_X - w / 2,
+      y: CRUCIBLE_CENTER_Y - h / 2,
+      w, h,
+    };
+
+    ctx.save();
+    ctx.globalAlpha *= fade;
+    this._drawImageRect(ctx, img, rect);
+    ctx.restore();
   }
 
   // ── Render: result phase (the woven spell icon) ────────────
