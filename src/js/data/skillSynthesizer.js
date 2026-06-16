@@ -133,28 +133,95 @@ const POWER = Object.freeze({
 
 /** Element tag → name adjectives (one is picked at random). */
 const ELEMENT_ADJ = Object.freeze({
-  red:    ['Crimson', 'Scarlet', 'Searing', 'Ember', 'Blood-Forged', 'Cindering', 'Pyric'],
-  blue:   ['Tidal', 'Azure', 'Abyssal', 'Frost-Wreathed', 'Drowned', 'Riptide', 'Mistbound'],
-  green:  ['Verdant', 'Thorned', 'Wildgrown', 'Briar', 'Sporebound', 'Evergreen', 'Rooted'],
-  yellow: ['Storm-Called', 'Gilded', 'Radiant', 'Thundering', 'Sunforged', 'Static', 'Dazzling'],
-  purple: ['Umbral', 'Void-Touched', 'Eldritch', 'Duskwoven', 'Starless', 'Occult', 'Whispering'],
-  skull:  ['Deathly', 'Grave-Born', 'Skeletal', 'Dread', 'Charnel', 'Tombward', 'Mortal'],
+  red: [
+    'Crimson', 'Scarlet', 'Searing', 'Ember', 'Blood-Forged', 'Cindering', 'Pyric',
+    'Molten', 'Infernal', 'Smoldering', 'Volcanic', 'Hellfire', 'Charred', 'Burning',
+    'Magma', 'Ashen', 'Blazing', 'Furnace', 'Sanguine', 'Roaring', 'Kindled', 'Embered',
+  ],
+  blue: [
+    'Tidal', 'Azure', 'Abyssal', 'Frost-Wreathed', 'Drowned', 'Riptide', 'Mistbound',
+    'Glacial', 'Oceanic', 'Frozen', 'Briny', 'Tempest', 'Sapphire', 'Deepwater',
+    'Hailborn', 'Cerulean', 'Surging', 'Tidewrought', 'Cresting', 'Frigid', 'Stormfed',
+  ],
+  green: [
+    'Verdant', 'Thorned', 'Wildgrown', 'Briar', 'Sporebound', 'Evergreen', 'Rooted',
+    'Venomous', 'Mossgrown', 'Bramblewood', 'Toxic', 'Feral', 'Overgrown', 'Sylvan',
+    'Bloomtouched', 'Blighted', 'Creeping', 'Vinewrought', 'Wildwood', 'Festering',
+  ],
+  yellow: [
+    'Storm-Called', 'Gilded', 'Radiant', 'Thundering', 'Sunforged', 'Static', 'Dazzling',
+    'Voltaic', 'Golden', 'Solar', 'Blinding', 'Galvanic', 'Brilliant', 'Stormlit',
+    'Levin', 'Searing', 'Arcing', 'Sparking', 'Sunbright', 'Skyborn', 'Fulgent',
+  ],
+  purple: [
+    'Umbral', 'Void-Touched', 'Eldritch', 'Duskwoven', 'Starless', 'Occult', 'Whispering',
+    'Shadowed', 'Arcane', 'Nightbound', 'Hexen', 'Spectral', 'Twilight', 'Forbidden',
+    'Maddening', 'Witchwoven', 'Gloaming', 'Cursed', 'Phantasmal', 'Unhallowed', 'Veiled',
+  ],
+  skull: [
+    'Deathly', 'Grave-Born', 'Skeletal', 'Dread', 'Charnel', 'Tombward', 'Mortal',
+    'Necrotic', 'Sepulchral', 'Ghastly', 'Cadaverous', 'Wraithlike', 'Bonewrought',
+    'Funereal', 'Plagued', 'Withered', 'Rotbound', 'Ossuary', 'Lichborn', 'Hollowed',
+  ],
 });
 
 /** Primary action → name noun candidates. */
 const ACTION_NOUNS = Object.freeze({
-  damage:  ['Strike', 'Lash', 'Rend', 'Reckoning', 'Scourge', 'Sundering', 'Spike', 'Verdict'],
-  armor:   ['Bulwark', 'Aegis', 'Ward', 'Carapace', 'Rampart', 'Shell', 'Vigil', 'Bastion'],
-  heal:    ['Mending', 'Renewal', 'Restoration', 'Blessing', 'Salve', 'Communion', 'Respite'],
-  create:  ['Genesis', 'Wellspring', 'Conjuring', 'Blooming', 'Summons', 'Manifest', 'Seeding'],
-  destroy: ['Ruin', 'Shatter', 'Unmaking', 'Collapse', 'Erasure', 'Demolition', 'Cull'],
-  convert: ['Transmutation', 'Alchemy', 'Reshaping', 'Inversion', 'Metamorphosis', 'Refrain'],
-  drain:   ['Siphon', 'Leeching', 'Hunger', 'Theft', 'Tithe', 'Parch', 'Drought'],
-  attack:  ['Ferocity', 'Whetstone', 'Bloodlust', 'Warcry', 'Honing', 'Frenzy', 'Edge'],
-  explode: ['Cataclysm', 'Detonation', 'Conflagration', 'Starburst', 'Eruption', 'Concussion'],
-  shuffle: ['Upheaval', 'Maelstrom', 'Tumult', 'Churn', 'Disorder', 'Reshuffle', 'Cataclysm'],
+  damage: [
+    'Strike', 'Lash', 'Rend', 'Reckoning', 'Scourge', 'Sundering', 'Spike', 'Verdict',
+    'Smite', 'Onslaught', 'Lance', 'Wrath', 'Cleave', 'Havoc', 'Punishment', 'Blow',
+    'Laceration', 'Maul', 'Skewer', 'Judgment', 'Impalement', 'Carnage',
+  ],
+  armor: [
+    'Bulwark', 'Aegis', 'Ward', 'Carapace', 'Rampart', 'Shell', 'Vigil', 'Bastion',
+    'Mantle', 'Fortress', 'Redoubt', 'Guardian', 'Palisade', 'Barricade', 'Aegida',
+    'Buttress', 'Sanctuary', 'Embrace', 'Phalanx',
+  ],
+  heal: [
+    'Mending', 'Renewal', 'Restoration', 'Blessing', 'Salve', 'Communion', 'Respite',
+    'Solace', 'Rebirth', 'Grace', 'Reprieve', 'Recovery', 'Benediction', 'Suture',
+    'Balm', 'Convalescence', 'Tonic', 'Mercy',
+  ],
+  create: [
+    'Genesis', 'Wellspring', 'Conjuring', 'Blooming', 'Summons', 'Manifest', 'Seeding',
+    'Spawning', 'Bloom', 'Emergence', 'Birthing', 'Yield', 'Outgrowth', 'Flourishing',
+    'Quickening', 'Begetting', 'Calling',
+  ],
+  destroy: [
+    'Ruin', 'Shatter', 'Unmaking', 'Collapse', 'Erasure', 'Demolition', 'Cull',
+    'Annihilation', 'Obliteration', 'Wreckage', 'Razing', 'Devastation', 'Breaking',
+    'Doom', 'Undoing', 'Pulverization', 'Rending',
+  ],
+  convert: [
+    'Transmutation', 'Alchemy', 'Reshaping', 'Inversion', 'Metamorphosis', 'Refrain',
+    'Transfiguration', 'Rebinding', 'Permutation', 'Recasting', 'Conversion', 'Shift',
+    'Reforging', 'Sublimation', 'Reweaving',
+  ],
+  drain: [
+    'Siphon', 'Leeching', 'Hunger', 'Theft', 'Tithe', 'Parch', 'Drought',
+    'Withering', 'Sapping', 'Devouring', 'Famine', 'Atrophy', 'Consumption',
+    'Draining', 'Sustenance', 'Glutton',
+  ],
+  attack: [
+    'Ferocity', 'Whetstone', 'Bloodlust', 'Warcry', 'Honing', 'Frenzy', 'Edge',
+    'Savagery', 'Bloodrage', 'Fury', 'Sharpening', 'Onset', 'Vigor', 'Bloodthirst',
+    'Rampage', 'Berserking', 'Goad',
+  ],
+  explode: [
+    'Cataclysm', 'Detonation', 'Conflagration', 'Starburst', 'Eruption', 'Concussion',
+    'Blast', 'Implosion', 'Firestorm', 'Rupture', 'Combustion', 'Shockwave', 'Nova',
+    'Burst', 'Fulmination', 'Discharge',
+  ],
+  shuffle: [
+    'Upheaval', 'Maelstrom', 'Tumult', 'Churn', 'Disorder', 'Reshuffle', 'Cataclysm',
+    'Pandemonium', 'Vortex', 'Whirl', 'Turmoil', 'Scramble', 'Chaos', 'Cascade',
+    'Convulsion', 'Riot',
+  ],
 });
-const DEFAULT_NOUNS = Object.freeze(['Weaving', 'Working', 'Rite', 'Invocation', 'Sigil', 'Incantation']);
+const DEFAULT_NOUNS = Object.freeze([
+  'Weaving', 'Working', 'Rite', 'Invocation', 'Sigil', 'Incantation', 'Hex', 'Charm',
+  'Spell', 'Conjuration', 'Glyph', 'Enchantment', 'Casting', 'Ritual', 'Augury', 'Cantrip',
+]);
 
 /**
  * Any bag tag → optional name suffixes ("Strike of Winter"). Kept SHORT and
@@ -162,24 +229,41 @@ const DEFAULT_NOUNS = Object.freeze(['Weaving', 'Working', 'Rite', 'Invocation',
  * space on the skill button).
  */
 const TAG_SUFFIXES = Object.freeze({
-  extra_turn: ['of Haste', 'of Tempo'],
-  wild:       ['Unbound', 'of Chaos'],
-  shuffle:    ['of Chaos', 'Scattering'],
-  row:        ['of Lines', 'Sweeping'],
-  column:     ['of Pillars', 'Falling'],
-  area:       ['of Storms', 'Vast'],
-  random:     ['of Fortune', 'of Dice'],
-  tile:       ['of Marks', 'Precise'],
-  skull:      ['of Graves', 'of Bone'],
-  silence:    ['of Hush', 'Muting'],
-  cripple:    ['of Maiming', 'Laming'],
-  enfeeble:   ['of Frailty', 'Sapping'],
-  brittle:    ['of Glass', 'Cracking'],
-  bleed:      ['of Wounds', 'Rending'],
-  frozen:     ['of Winter', 'of Frost'],
-  intangible: ['of Mist', 'Phantom'],
-  berserk:    ['of Fury', 'Raging'],
-  barrier:    ['of Shells', 'Warding'],
+  // Elements — so even a plain element+action bag can earn an evocative suffix.
+  red:        ['of Cinders', 'of Flame', 'of Ash', 'of Embers'],
+  blue:       ['of Tides', 'of Frost', 'of the Deep', 'of Brine'],
+  green:      ['of Thorns', 'of Blight', 'of the Wild', 'of Spores'],
+  yellow:     ['of Storms', 'of Thunder', 'of Light', 'of the Sun'],
+  purple:     ['of Shadows', 'of the Void', 'of Whispers', 'of Dusk'],
+  skull:      ['of Graves', 'of Bone', 'of the Dead', 'of Rot'],
+  // Actions.
+  damage:     ['of Wrath', 'Unleashed', 'of Ruin'],
+  armor:      ['of Wardens', 'Enduring', 'of Vigil'],
+  heal:       ['of Mercy', 'Restoring', 'of Grace'],
+  create:     ['of Genesis', 'Unfolding', 'of Seeds'],
+  destroy:    ['of Ruin', 'Undone', 'of Collapse'],
+  convert:    ['of Change', 'Shifting', 'of Flux'],
+  drain:      ['of Hunger', 'Withering', 'of Famine'],
+  attack:     ['of Fury', 'Rising', 'of Bloodlust'],
+  explode:    ['of Cataclysm', 'Bursting', 'of the Blast'],
+  // Modifiers / shapes / statuses.
+  extra_turn: ['of Haste', 'of Tempo', 'Quickening'],
+  wild:       ['Unbound', 'of Chaos', 'of the Wyld'],
+  shuffle:    ['of Chaos', 'Scattering', 'of Upheaval'],
+  row:        ['of Lines', 'Sweeping', 'of the Row'],
+  column:     ['of Pillars', 'Falling', 'of the Spire'],
+  area:       ['of Storms', 'Vast', 'of the Maw'],
+  random:     ['of Fortune', 'of Dice', 'of Whim'],
+  tile:       ['of Marks', 'Precise', 'of the Sigil'],
+  silence:    ['of Hush', 'Muting', 'of Silence'],
+  cripple:    ['of Maiming', 'Laming', 'of the Cripple'],
+  enfeeble:   ['of Frailty', 'Sapping', 'of Weakness'],
+  brittle:    ['of Glass', 'Cracking', 'of Shards'],
+  bleed:      ['of Wounds', 'Rending', 'of Bloodletting'],
+  frozen:     ['of Winter', 'of Frost', 'of the Glacier'],
+  intangible: ['of Mist', 'Phantom', 'of Phantoms'],
+  berserk:    ['of Fury', 'Raging', 'of the Berserker'],
+  barrier:    ['of Shells', 'Warding', 'of Bulwarks'],
 });
 
 /**
@@ -194,9 +278,11 @@ const NAME_PATTERN_WEIGHTS = Object.freeze({
 });
 
 /** Hard cap on generated name length (skill-button space budget). */
-const NAME_MAX_LENGTH = 20;
-/** How many random candidates to try before falling back to the bare noun. */
-const NAME_ATTEMPTS = 10;
+const NAME_MAX_LENGTH = 38;
+/** How many random candidates to try before falling back to the bare noun.
+ *  Higher now that the pools are large + suffixes are common, so a longer combo
+ *  that overflows NAME_MAX_LENGTH gets re-rolled into a fitting one more often. */
+const NAME_ATTEMPTS = 18;
 
 /** Display names for tile types in descriptions. */
 const TILE_LABEL = Object.freeze({
