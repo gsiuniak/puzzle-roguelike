@@ -42,10 +42,16 @@ export default class HarvestTendrilEffect {
    * @param {number} [config.strands=3]        - parallel energy strands per source
    * @param {number} [config.pulses=2]         - bright pulses flowing along each strand
    * @param {number} [config.pulseSpeed=0.0017]- pulse travel rate (path-fraction/ms)
+   * @param {string} [config.coreColor='#ffd2c2'] - hot inner-core / pulse / flare color
+   * @param {boolean}[config.continuous=false] - when true the connection never fades
+   *   or completes (stays at full strength forever) — caller drops the instance to
+   *   end it. Used for the sustained Skill-Weave crucible beams.
    */
   constructor(sources, target, config = {}) {
     this.target = target;
     this.color = config.color || '#d22a2a';
+    this.coreColor = config.coreColor || '#ffd2c2';
+    this.continuous = !!config.continuous;
 
     this.formDuration = config.formDuration != null ? config.formDuration : 240;
     this.holdDuration = config.holdDuration != null ? config.holdDuration : 420;
@@ -97,11 +103,12 @@ export default class HarvestTendrilEffect {
   update(dt) {
     if (this.done) return;
     this.elapsed += dt;
-    if (this.elapsed >= this._total) this.done = true;
+    if (!this.continuous && this.elapsed >= this._total) this.done = true;
   }
 
-  /** Overall alpha (1 during form+hold, easing to 0 over fade). */
+  /** Overall alpha (1 during form+hold, easing to 0 over fade; always 1 if continuous). */
   get _alpha() {
+    if (this.continuous) return 1;
     if (this.elapsed <= this._fadeStart) return 1;
     const p = (this.elapsed - this._fadeStart) / this.fadeDuration;
     return Math.max(0, 1 - p * p);
@@ -140,7 +147,7 @@ export default class HarvestTendrilEffect {
     const STEPS = 26;
 
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha *= alpha;
     ctx.globalCompositeOperation = 'lighter'; // additive glow
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -165,7 +172,7 @@ export default class HarvestTendrilEffect {
         ctx.stroke();
 
         // Bright inner core pass (thin, hot) for an energy look.
-        ctx.strokeStyle = '#ffd2c2';
+        ctx.strokeStyle = this.coreColor;
         ctx.lineWidth = Math.max(1, this.thickness * strand.widthScale * 0.35);
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
@@ -179,7 +186,7 @@ export default class HarvestTendrilEffect {
           const p = this._pointAt(t, strand, pu);
           const r = this.thickness * strand.widthScale * (0.7 + 0.4 * Math.sin(pu * Math.PI));
           const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.2);
-          g.addColorStop(0, '#fff0e8');
+          g.addColorStop(0, this.coreColor);
           g.addColorStop(0.4, this.color);
           g.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = g;
@@ -205,7 +212,7 @@ export default class HarvestTendrilEffect {
     if (this.elapsed >= this.formDuration * 0.6) {
       const r = 10 + 22 * Math.min(1, head);
       const grad = ctx.createRadialGradient(this.target.x, this.target.y, 0, this.target.x, this.target.y, r);
-      grad.addColorStop(0, '#ffd2c2');
+      grad.addColorStop(0, this.coreColor);
       grad.addColorStop(0.35, this.color);
       grad.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = grad;

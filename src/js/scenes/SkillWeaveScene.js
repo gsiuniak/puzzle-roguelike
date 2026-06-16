@@ -8,6 +8,7 @@ import {
 import { TAG_RARITY, rollRoundsPerWeave, rollTagsPerRound } from '../data/weaveConfig.js';
 import { synthesize } from '../data/skillSynthesizer.js';
 import { getSpellIcon } from '../icons/spellIcons.js';
+import HarvestTendrilEffect from '../ui/HarvestTendrilEffect.js';
 
 /**
  * SkillWeaveScene — the "Weave a Power" skill reward screen.
@@ -171,6 +172,18 @@ const CRUCIBLE_WIDTH = 420;           // height derives from the image aspect
 const CRUCIBLE_FALLBACK_ASPECT = 651 / 405;
 const CRUCIBLE_FADE_IN_MS = 360;      // soft reveal when the recipe completes
 
+// ── Crucible orbs + energy beams (one orb per recipe tag, by rarity) ──
+/** Rarity → orb sprite (matches the sheet sprite names directly, no alias). */
+const ORB_ASSET_PREFIX = 'ui_skill_weave_orb_';
+const ORB_WIDTH = 110;                // height derives from the orb art aspect
+const ORB_FALLBACK_ASPECT = 476 / 646;
+/** Vertical position of the orb's GLOWING BALL within the art (0=top, 1=bottom);
+ *  orbs are anchored by + beams emitted from this point (the ball, not the stand). */
+const ORB_BALL_FRAC = 0.36;
+/** Beam (HarvestTendril) energy colors — purple to match the crucible vortex. */
+const ORB_BEAM_COLOR = '#9a4ff5';
+const ORB_BEAM_CORE_COLOR = '#efe2ff';
+
 // ── Result phase (after "Weave Power": show the generated spell icon) ──
 /** Subtitle shown while the woven icon is displayed. */
 const SUBTITLE_RESULT = 'Your Power Takes Form';
@@ -299,6 +312,13 @@ export default class SkillWeaveScene extends UIPanel {
     // ── Crucible (recipe-complete, pre-confirm static image) ──
     /** Elapsed ms the crucible has been visible (drives its fade-in). */
     this._crucibleTime = 0;
+    /**
+     * Sustained energy beams from the rarity orbs to the crucible center, alive
+     * only while the recipe is full (pre-confirm). A continuous-mode
+     * HarvestTendrilEffect, rebuilt when the complete-state is (re)entered.
+     * @type {HarvestTendrilEffect|null}
+     */
+    this._crucibleBeams = null;
 
     /**
      * Active animation, or null when idle. Shapes by kind:
@@ -372,6 +392,7 @@ export default class SkillWeaveScene extends UIPanel {
     this._hoverOption = -1;
     this._hoverButton = null;
     this._crucibleTime = 0;
+    this._crucibleBeams = null;
     this._rollAllSteps();
     this._startIntro();   // fan the first step's tags out on load
 
@@ -805,11 +826,14 @@ export default class SkillWeaveScene extends UIPanel {
     if (this._elapsed >= FADE_IN_DURATION) this._fadeInDone = true;
     this._advanceAnim(dt);
 
-    // Crucible: visible only while the recipe is full but not yet woven.
+    // Crucible + orb beams: alive only while the recipe is full but not yet woven.
     if (this._complete && !this._result) {
       this._crucibleTime += dt;
-    } else if (this._crucibleTime !== 0) {
+      this._ensureCrucibleBeams();
+      if (this._crucibleBeams) this._crucibleBeams.update(dt);
+    } else if (this._crucibleTime !== 0 || this._crucibleBeams) {
       this._crucibleTime = 0;
+      this._crucibleBeams = null;   // dropping the instance ends the sustained beams
     }
 
     super.update(dt);
@@ -861,6 +885,71 @@ export default class SkillWeaveScene extends UIPanel {
       rects.push({ x: a.cx - optW / 2, y: a.cy - optH / 2, w: optW, h: optH });
     }
     return rects;
+  }
+
+  /**
+   * Ball-center anchors for the rarity orbs ringing the crucible, by recipe
+   * count (1–4). Arranged in the same SPIRIT as the tag-option fan (one up top,
+   * the rest splayed to the sides) but pulled in tight around the crucible disc.
+   * Each is the orb's glowing-ball center (the beam origin + the orb anchor).
+   */
+  _orbAnchors(count) {
+    const cx = CRUCIBLE_CENTER_X;
+    const cy = CRUCIBLE_CENTER_Y;
+    if (count <= 1) return [{ cx, cy: cy - 172 }];
+    if (count === 2) return [{ cx: cx - 300, cy: cy - 6 }, { cx: cx + 300, cy: cy - 6 }];
+    if (count === 3) {
+      return [
+        { cx, cy: cy - 168 },
+        { cx: cx - 300, cy: cy + 6 },
+        { cx: cx + 300, cy: cy + 6 },
+      ];
+    }
+    // 4-up: a box hugging the crucible corners.
+    return [
+      { cx: cx - 296, cy: cy - 128 }, { cx: cx + 296, cy: cy - 128 },
+      { cx: cx - 296, cy: cy + 44 }, { cx: cx + 296, cy: cy + 44 },
+    ];
+  }
+
+  /**
+   * Orb draw rects (one per recipe tag) — the orb art is positioned so its ball
+   * (ORB_BALL_FRAC down the art) sits on the anchor. Returns [] before complete.
+   */
+  _orbRects() {
+    const count = this._recipeLength();
+    if (!count) return [];
+    const aspect = this._aspect(`${ORB_ASSET_PREFIX}common`, ORB_FALLBACK_ASPECT);
+    const w = ORB_WIDTH;
+    const h = w / aspect;
+    return this._orbAnchors(count).map((a) => ({
+      x: a.cx - w / 2,
+      y: a.cy - h * ORB_BALL_FRAC,
+      w, h,
+    }));
+  }
+
+  /** Build the sustained orb→crucible beams (continuous HarvestTendrilEffect). */
+  _ensureCrucibleBeams() {
+    if (this._crucibleBeams) return this._crucibleBeams;
+    const count = this._recipeLength();
+    if (!count) return null;
+    const sources = this._orbAnchors(count).map((a) => ({ x: a.cx, y: a.cy }));
+    const target = { x: CRUCIBLE_CENTER_X, y: CRUCIBLE_CENTER_Y };
+    this._crucibleBeams = new HarvestTendrilEffect(sources, target, {
+      color: ORB_BEAM_COLOR,
+      coreColor: ORB_BEAM_CORE_COLOR,
+      continuous: true,
+      formDuration: 360,
+      amplitude: 26,
+      waveCount: 2.0,
+      flowSpeed: 0.012,
+      thickness: 6,
+      strands: 3,
+      pulses: 2,
+      pulseSpeed: 0.0018,
+    });
+    return this._crucibleBeams;
   }
 
   /** The focal point a set of option rects fans out from (centroid of centers). */
@@ -1110,9 +1199,9 @@ export default class SkillWeaveScene extends UIPanel {
   // ── Render: crucible (recipe-complete, pre-confirm) ────────
 
   /**
-   * Draw the static crucible image, centered in the band the tag options
-   * occupied, with a soft fade-in when the recipe completes. No-op until the
-   * sprite is loaded (degrades gracefully).
+   * Draw the crucible scene (recipe-complete): the static crucible image, the
+   * sustained orb→center energy beams (additive, over the disc), and the rarity
+   * orbs ringing it — all with a soft fade-in. No-op until the sprite is loaded.
    */
   _renderCrucible(ctx) {
     const img = this._asset(CRUCIBLE_ASSET_KEY);
@@ -1129,8 +1218,24 @@ export default class SkillWeaveScene extends UIPanel {
 
     ctx.save();
     ctx.globalAlpha *= fade;
+
+    // Crucible disc, then beams (additive) flowing into its center, then orbs.
     this._drawImageRect(ctx, img, rect);
+    if (this._crucibleBeams) this._crucibleBeams.render(ctx);
+    this._renderCrucibleOrbs(ctx);
+
     ctx.restore();
+  }
+
+  /** Draw a rarity orb at each recipe position (the energy beam emitters). */
+  _renderCrucibleOrbs(ctx) {
+    const rects = this._orbRects();
+    for (let i = 0; i < rects.length; i++) {
+      const rarity = getTagRarity(this._recipe[i]);
+      const img = this._asset(`${ORB_ASSET_PREFIX}${rarity}`)
+        || this._asset(`${ORB_ASSET_PREFIX}common`);
+      if (img && img.width) this._drawImageRect(ctx, img, rects[i]);
+    }
   }
 
   // ── Render: result phase (the woven spell icon) ────────────
