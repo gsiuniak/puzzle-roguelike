@@ -85,6 +85,19 @@ const MANAGE_BTN_FONT_SIZE = 16;
 const COUNT_FONT_SIZE = 15;
 const COUNT_COLOR = '#9d927c';
 
+// ── Nameplate title ("Skills") ──
+// The panel art's nameplate no longer bakes in the word, so it's drawn as text
+// centered in the nameplate banner. Y is a FRACTION of panel height (the art is
+// stretched to the rect), so it tracks the banner if the panel resizes.
+const TITLE_TEXT = 'Skills';
+const TITLE_FONT_SIZE = 23;
+const TITLE_COLOR = '#e8d8a8';
+const TITLE_CENTER_Y_FRAC = 0.04; // nameplate banner vertical center
+const TITLE_LETTER_SPACING = 1.5;
+
+// ── Whether to show Equipped Info 
+const EQUIPPED_INFO_IS_ENABLED = false
+
 const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
 export default class SkillsPane extends UIPanel {
@@ -321,6 +334,21 @@ export default class SkillsPane extends UIPanel {
   renderSelf(ctx) {
     super.renderSelf(ctx); // panel art
 
+    // Centered "Skills" title in the nameplate banner (the art no longer bakes
+    // the word in). Drawn for both the player and enemy panes.
+    ctx.save();
+    ctx.font = `${TITLE_FONT_SIZE}px ${FONT_FAMILY}`;
+    ctx.fillStyle = TITLE_COLOR;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.letterSpacing = `${TITLE_LETTER_SPACING}px`;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(TITLE_TEXT,
+      this.rect.x + this.rect.w / 2,
+      this.rect.y + this.rect.h * TITLE_CENTER_Y_FRAC);
+    ctx.restore();
+
     const inner = this._innerRect();
     const cardW = inner.w - SCROLLBAR_GUTTER;
     const layout = [];
@@ -432,7 +460,7 @@ export default class SkillsPane extends UIPanel {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('Manage', bx + MANAGE_BTN_W / 2, by + MANAGE_BTN_H / 2 + 1);
-      if (this._equippedInfo) {
+      if (this._equippedInfo && EQUIPPED_INFO_IS_ENABLED) {
         ctx.font = `${COUNT_FONT_SIZE}px ${FONT_FAMILY}`;
         ctx.fillStyle = COUNT_COLOR;
         ctx.textAlign = 'right';
