@@ -65,8 +65,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: {
-        name: 'Puzzle Roguelike',
-        short_name: 'Roguelike',
+        name: 'Puzzle Rogue',
+        short_name: 'Puzzle Rogue',
         description: 'Match-3 Puzzle Roguelike',
         theme_color: '#000000',
         background_color: '#000000',
@@ -74,12 +74,12 @@ export default defineConfig({
         orientation: 'landscape',
         start_url: './',
         scope: './',
-        // SVG icon — Chrome accepts an SVG ("sizes":"any") as a valid install
-        // icon, so no binary PNG export is needed for installability. (Add a PNG
-        // apple-touch-icon later only if you want a custom iOS home-screen icon.)
+        // Square icons (192/512). JPEG is accepted by the manifest; the 512 also
+        // serves as the maskable icon (the emblem is full-bleed + opaque).
         icons: [
-          { src: 'assets/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-          { src: 'assets/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
+          { src: 'assets/icons/icon-192.jpg', sizes: '192x192', type: 'image/jpeg', purpose: 'any' },
+          { src: 'assets/icons/icon-512.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'any' },
+          { src: 'assets/icons/icon-512.jpg', sizes: '512x512', type: 'image/jpeg', purpose: 'maskable' },
         ],
       },
       workbox: {
