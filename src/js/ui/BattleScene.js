@@ -117,6 +117,10 @@ const TARGET_BTN_HOVER_ALPHA = 1;    // opacity when hovered (full = pops on hov
 const TARGET_BTN_LABEL_SIZE = 34;
 const TARGET_BTN_LABEL_COLOR = '#fff8e8';
 const TARGET_BTN_LABEL_Y_NUDGE = 0; // px vertical offset for the label center
+// "Casting <skill>" prompt at the top of the screen during targeting.
+const TARGET_PROMPT_Y = 64;          // vertical center (design px from top)
+const TARGET_PROMPT_FONT_SIZE = 40;
+const TARGET_PROMPT_COLOR = '#f0e4bf';
 
 /**
  * BattleScene — battle layout with three compact columns.
@@ -1619,8 +1623,19 @@ export default class BattleScene extends UIPanel {
     const rects = this._getTargetingButtonRects();
     if (!rects) return;
 
-    // Prompt text intentionally NOT rendered — the authored button art conveys
-    // the action. (Was "Aim <Spell>, then Cast" / "Click a target for <Spell>".)
+    // "Casting <skill>" prompt centered at the top of the screen.
+    const app = this._sceneManager._app;
+    const skill = this._battleController._targetingSkill;
+    const name = skill && skill.name ? skill.name : 'a spell';
+    ctx.save();
+    ctx.font = `${TARGET_PROMPT_FONT_SIZE}px "Marcellus SC", Georgia, serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = TARGET_PROMPT_COLOR;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 8;
+    ctx.fillText(`Casting ${name}`, app.width / 2, TARGET_PROMPT_Y);
+    ctx.restore();
 
     if (rects.confirm) {
       this._drawTargetButton(ctx, rects.confirm, TARGET_CONFIRM_SPRITE, 'Confirm');
