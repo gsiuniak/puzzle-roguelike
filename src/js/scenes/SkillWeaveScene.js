@@ -180,9 +180,15 @@ const ORB_FALLBACK_ASPECT = 476 / 646;
 /** Vertical position of the orb's GLOWING BALL within the art (0=top, 1=bottom);
  *  orbs are anchored by + beams emitted from this point (the ball, not the stand). */
 const ORB_BALL_FRAC = 0.36;
-/** Beam (HarvestTendril) energy colors — purple to match the crucible vortex. */
-const ORB_BEAM_COLOR = '#9a4ff5';
-const ORB_BEAM_CORE_COLOR = '#efe2ff';
+/** Per-rarity beam energy colors ({ color: glow, core: hot inner }), keyed by the
+ *  TAG_RARITY value. Each orb's beam is tinted to its tag's rarity. */
+const ORB_BEAM_COLORS = {
+  [TAG_RARITY.COMMON]:    { color: '#9a86b8', core: '#e9e2f4' }, // greyish-purple
+  [TAG_RARITY.UNCOMMON]:  { color: '#5fc46a', core: '#dffbe0' }, // green
+  [TAG_RARITY.RARE]:      { color: '#a25bff', core: '#efe2ff' }, // purple
+  [TAG_RARITY.LEGENDARY]: { color: '#f3a23a', core: '#ffe9c6' }, // orange
+};
+const ORB_BEAM_FALLBACK = { color: '#9a4ff5', core: '#efe2ff' };
 
 // ── Result phase (after "Weave Power": show the generated spell icon) ──
 /** Subtitle shown while the woven icon is displayed. */
@@ -314,9 +320,10 @@ export default class SkillWeaveScene extends UIPanel {
     this._crucibleTime = 0;
     /**
      * Sustained energy beams from the rarity orbs to the crucible center, alive
-     * only while the recipe is full (pre-confirm). A continuous-mode
-     * HarvestTendrilEffect, rebuilt when the complete-state is (re)entered.
-     * @type {HarvestTendrilEffect|null}
+     * only while the recipe is full (pre-confirm). One continuous-mode
+     * HarvestTendrilEffect PER orb (so each is tinted to its tag's rarity),
+     * rebuilt when the complete-state is (re)entered.
+     * @type {HarvestTendrilEffect[]|null}
      */
     this._crucibleBeams = null;
 
@@ -830,10 +837,10 @@ export default class SkillWeaveScene extends UIPanel {
     if (this._complete && !this._result) {
       this._crucibleTime += dt;
       this._ensureCrucibleBeams();
-      if (this._crucibleBeams) this._crucibleBeams.update(dt);
+      if (this._crucibleBeams) for (const b of this._crucibleBeams) b.update(dt);
     } else if (this._crucibleTime !== 0 || this._crucibleBeams) {
       this._crucibleTime = 0;
-      this._crucibleBeams = null;   // dropping the instance ends the sustained beams
+      this._crucibleBeams = null;   // dropping the instances ends the sustained beams
     }
 
     super.update(dt);
@@ -929,25 +936,32 @@ export default class SkillWeaveScene extends UIPanel {
     }));
   }
 
-  /** Build the sustained orb→crucible beams (continuous HarvestTendrilEffect). */
+  /**
+   * Build the sustained orb→crucible beams — one continuous HarvestTendrilEffect
+   * per orb so each beam is tinted to its tag's rarity color.
+   */
   _ensureCrucibleBeams() {
     if (this._crucibleBeams) return this._crucibleBeams;
     const count = this._recipeLength();
     if (!count) return null;
-    const sources = this._orbAnchors(count).map((a) => ({ x: a.cx, y: a.cy }));
+    const anchors = this._orbAnchors(count);
     const target = { x: CRUCIBLE_CENTER_X, y: CRUCIBLE_CENTER_Y };
-    this._crucibleBeams = new HarvestTendrilEffect(sources, target, {
-      color: ORB_BEAM_COLOR,
-      coreColor: ORB_BEAM_CORE_COLOR,
-      continuous: true,
-      formDuration: 360,
-      amplitude: 26,
-      waveCount: 2.0,
-      flowSpeed: 0.012,
-      thickness: 6,
-      strands: 3,
-      pulses: 2,
-      pulseSpeed: 0.0018,
+    this._crucibleBeams = anchors.map((a, i) => {
+      const rarity = getTagRarity(this._recipe[i]);
+      const tint = ORB_BEAM_COLORS[rarity] || ORB_BEAM_FALLBACK;
+      return new HarvestTendrilEffect([{ x: a.cx, y: a.cy }], target, {
+        color: tint.color,
+        coreColor: tint.core,
+        continuous: true,
+        formDuration: 360,
+        amplitude: 26,
+        waveCount: 2.0,
+        flowSpeed: 0.012,
+        thickness: 6,
+        strands: 3,
+        pulses: 2,
+        pulseSpeed: 0.0018,
+      });
     });
     return this._crucibleBeams;
   }
@@ -1219,10 +1233,11 @@ export default class SkillWeaveScene extends UIPanel {
     ctx.save();
     ctx.globalAlpha *= fade;
 
-    // Crucible disc, then beams (additive) flowing into its center, then orbs.
+    // Crucible disc, then the orbs, then the beams ON TOP (additive) so the
+    // energy reads as pouring out over the front of each orb into the center.
     this._drawImageRect(ctx, img, rect);
-    if (this._crucibleBeams) this._crucibleBeams.render(ctx);
     this._renderCrucibleOrbs(ctx);
+    if (this._crucibleBeams) for (const b of this._crucibleBeams) b.render(ctx);
 
     ctx.restore();
   }
