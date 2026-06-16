@@ -1,0 +1,242 @@
+{
+  "meta": {
+    "sheet_w": 3098,
+    "sheet_h": 2468,
+    "sprite_count": 21,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "ui_skill_weave_orb_uncommon": {
+      "x": 485,
+      "y": 1167,
+      "w": 476,
+      "h": 646,
+      "index": 0,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_orb_common": {
+      "x": 4,
+      "y": 1817,
+      "w": 476,
+      "h": 647,
+      "index": 1,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_orb_rare": {
+      "x": 4,
+      "y": 1167,
+      "w": 477,
+      "h": 646,
+      "index": 2,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_orb_legendary": {
+      "x": 965,
+      "y": 1167,
+      "w": 476,
+      "h": 642,
+      "index": 3,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_crucible": {
+      "x": 1162,
+      "y": 1817,
+      "w": 651,
+      "h": 405,
+      "index": 4,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_title_flair": {
+      "x": 1709,
+      "y": 918,
+      "w": 1014,
+      "h": 92,
+      "index": 5,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_container_wide": {
+      "x": 1709,
+      "y": 594,
+      "w": 1245,
+      "h": 320,
+      "index": 6,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container_legendary": {
+      "x": 1732,
+      "y": 4,
+      "w": 854,
+      "h": 569,
+      "index": 7,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container": {
+      "x": 871,
+      "y": 4,
+      "w": 857,
+      "h": 571,
+      "index": 8,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container_uncommon": {
+      "x": 846,
+      "y": 594,
+      "w": 859,
+      "h": 524,
+      "index": 9,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_container": {
+      "x": 2277,
+      "y": 1167,
+      "w": 817,
+      "h": 311,
+      "index": 10,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container_rare": {
+      "x": 4,
+      "y": 594,
+      "w": 838,
+      "h": 569,
+      "index": 11,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_option_container_legendary_old": {
+      "x": 4,
+      "y": 4,
+      "w": 863,
+      "h": 586,
+      "index": 12,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_button_confirm": {
+      "x": 1445,
+      "y": 1515,
+      "w": 830,
+      "h": 235,
+      "index": 13,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 1
+    },
+    "ui_skill_weave_button_confirm2": {
+      "x": 484,
+      "y": 2231,
+      "w": 829,
+      "h": 210,
+      "index": 14,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_button": {
+      "x": 2279,
+      "y": 1515,
+      "w": 812,
+      "h": 174,
+      "index": 15,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 1
+    },
+    "ui_skill_weave_tag_test": {
+      "x": 2958,
+      "y": 594,
+      "w": 85,
+      "h": 120,
+      "index": 16,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_container_old": {
+      "x": 1445,
+      "y": 1167,
+      "w": 828,
+      "h": 344,
+      "index": 17,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_selection_container": {
+      "x": 1817,
+      "y": 1817,
+      "w": 595,
+      "h": 358,
+      "index": 18,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_skill_weave_selection_blank_container": {
+      "x": 2416,
+      "y": 1817,
+      "w": 595,
+      "h": 357,
+      "index": 19,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 1
+    },
+    "ui_skill_weave_option_container_old2": {
+      "x": 484,
+      "y": 1817,
+      "w": 674,
+      "h": 410,
+      "index": 20,
+      "source_w": 1245,
+      "source_h": 647,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}

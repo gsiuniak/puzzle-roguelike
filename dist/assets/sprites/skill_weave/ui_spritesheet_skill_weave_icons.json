@@ -1,0 +1,209 @@
+{
+  "meta": {
+    "sheet_w": 1047,
+    "sheet_h": 1256,
+    "sprite_count": 18,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "weave_icon_extra_turn": {
+      "x": 546,
+      "y": 525,
+      "w": 169,
+      "h": 169,
+      "index": 0,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_row": {
+      "x": 719,
+      "y": 525,
+      "w": 261,
+      "h": 103,
+      "index": 1,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_column": {
+      "x": 4,
+      "y": 984,
+      "w": 102,
+      "h": 268,
+      "index": 2,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_explode": {
+      "x": 4,
+      "y": 4,
+      "w": 247,
+      "h": 252,
+      "index": 3,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_damage": {
+      "x": 732,
+      "y": 4,
+      "w": 227,
+      "h": 233,
+      "index": 4,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_area": {
+      "x": 804,
+      "y": 260,
+      "w": 200,
+      "h": 198,
+      "index": 5,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_gain": {
+      "x": 382,
+      "y": 525,
+      "w": 160,
+      "h": 182,
+      "index": 6,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_convert": {
+      "x": 195,
+      "y": 525,
+      "w": 183,
+      "h": 185,
+      "index": 7,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_purple": {
+      "x": 606,
+      "y": 260,
+      "w": 194,
+      "h": 214,
+      "index": 8,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_attack": {
+      "x": 255,
+      "y": 4,
+      "w": 238,
+      "h": 245,
+      "index": 9,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_armor": {
+      "x": 212,
+      "y": 260,
+      "w": 205,
+      "h": 257,
+      "index": 10,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_red": {
+      "x": 421,
+      "y": 260,
+      "w": 181,
+      "h": 233,
+      "index": 11,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_green": {
+      "x": 4,
+      "y": 745,
+      "w": 170,
+      "h": 235,
+      "index": 12,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_yellow": {
+      "x": 497,
+      "y": 4,
+      "w": 231,
+      "h": 235,
+      "index": 13,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_tile": {
+      "x": 178,
+      "y": 745,
+      "w": 155,
+      "h": 165,
+      "index": 14,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_random": {
+      "x": 4,
+      "y": 525,
+      "w": 187,
+      "h": 216,
+      "index": 15,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_skull": {
+      "x": 4,
+      "y": 260,
+      "w": 204,
+      "h": 261,
+      "index": 16,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_icon_create": {
+      "x": 963,
+      "y": 4,
+      "w": 80,
+      "h": 84,
+      "index": 17,
+      "source_w": 261,
+      "source_h": 268,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}

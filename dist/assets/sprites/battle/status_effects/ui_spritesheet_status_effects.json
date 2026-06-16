@@ -1,0 +1,110 @@
+{
+  "meta": {
+    "sheet_w": 1629,
+    "sheet_h": 1444,
+    "sprite_count": 9,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "buff_intangible": {
+      "x": 4,
+      "y": 4,
+      "w": 562,
+      "h": 557,
+      "index": 0,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "buff_berserk": {
+      "x": 4,
+      "y": 565,
+      "w": 546,
+      "h": 560,
+      "index": 1,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "buff_barrier": {
+      "x": 570,
+      "y": 4,
+      "w": 515,
+      "h": 526,
+      "index": 2,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "debuff_bleeding": {
+      "x": 554,
+      "y": 565,
+      "w": 535,
+      "h": 313,
+      "index": 3,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "debuff_enfeebled": {
+      "x": 1089,
+      "y": 4,
+      "w": 532,
+      "h": 316,
+      "index": 4,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "debuff_brittle": {
+      "x": 4,
+      "y": 1129,
+      "w": 510,
+      "h": 311,
+      "index": 5,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "debuff_crippled": {
+      "x": 1093,
+      "y": 565,
+      "w": 532,
+      "h": 309,
+      "index": 6,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "debuff_frozen": {
+      "x": 518,
+      "y": 1129,
+      "w": 504,
+      "h": 300,
+      "index": 7,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "debuff_silenced": {
+      "x": 1026,
+      "y": 1129,
+      "w": 506,
+      "h": 296,
+      "index": 8,
+      "source_w": 562,
+      "source_h": 560,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}
