@@ -26,7 +26,6 @@
 <body>
 <header>
   <h1>SPELL ICON DEBUG GRID</h1>
-  <div><label>run seed </label><input id="runSeed" value="run_debug_1"></div>
   <div><label>count </label><input id="count" value="96" style="width:60px"></div>
   <button id="regen">Regenerate</button>
   <span id="stats" style="color:var(--muted);font-size:12px"></span>
@@ -35,40 +34,39 @@
   <div class="grid" id="grid"></div>
   <aside>
     <canvas id="big" width="512" height="512"></canvas>
-    <pre id="info">Click an icon to inspect its resolved IconRecipe.</pre>
+    <pre id="info">Click an icon to inspect its resolved layer plan.</pre>
   </aside>
 </main>
 
 <script type="module">
-// Dev-only validation page (plan §4): renders a grid of random keyword combos
-// drawn from the REAL weave-tag catalog through the REAL resolution + compositor
-// modules. Use it to spot incoherent combos — fixes belong in
-// spellIconRecipe.js (roles/priorities) or the compositor palettes, not new art.
-import { resolveRecipe } from './js/icons/spellIconRecipe.js';
+// Dev-only validation page: renders a grid of random keyword combos drawn from
+// the REAL weave-tag catalog through the REAL selection + compositor modules, so
+// you can eyeball how the authored base/effect layers blend. Fixes to which
+// sprite a tag picks belong in spellIconRecipe.js (EFFECT_TAG_PRIORITY / naming);
+// fixes to the blend look belong in spellIconCompositor.js.
+import { resolveIconPlan } from './js/icons/spellIconRecipe.js';
 import { renderIcon } from './js/icons/spellIconCompositor.js';
 import { SKILL_WEAVE_TAGS } from './js/data/skillWeaveTags.js';
-import { registerPngGlyphsFromAssets } from './js/icons/pngGlyphs.js';
 import AssetManager from './js/engine/AssetManager.js';
 
-// PNG glyph art lives in the weave-grayscale spritesheet (same sheet the game
-// loads — see main.js SPRITESHEET_MAP). Load it through a real AssetManager so
-// the slicing matches the game exactly. Top-level await: the first grid render
-// waits for the glyphs (missing art falls back to the procedural orb).
-const glyphAssets = new AssetManager();
-glyphAssets.addSpriteSheet(
-  'ui_spritesheet_weave_grayscale',
-  'assets/sprites/skill_weave/ui_spritesheet_weave_grayscale.png',
-  'assets/sprites/skill_weave/ui_spritesheet_weave_grayscale.json',
-  { trim: false },
-);
-await glyphAssets.loadAll();
-registerPngGlyphsFromAssets(glyphAssets);
+// The compositor fetches sliced sprites by key at render time, so load the two
+// weave sheets through a real AssetManager (same slicing as the game). Top-level
+// await: the first grid render waits for the art.
+const assets = new AssetManager();
+assets.addSpriteSheet('ui_spritesheet_weave_base',
+  'assets/sprites/skill_weave/ui_spritesheet_weave_base.png',
+  'assets/sprites/skill_weave/ui_spritesheet_weave_base.json', { trim: false });
+assets.addSpriteSheet('ui_spritesheet_weave_generic',
+  'assets/sprites/skill_weave/ui_spritesheet_weave_generic.png',
+  'assets/sprites/skill_weave/ui_spritesheet_weave_generic.json', { trim: false });
+await assets.loadAll();
 
 const TAG_IDS = Object.keys(SKILL_WEAVE_TAGS);
+const ELEMENTS = ['red', 'blue', 'green', 'yellow', 'purple'];
 const $ = (id) => document.getElementById(id);
 
-// Math.random is fine HERE (picking which combos to preview) — the icons
-// themselves render deterministically from (runSeed, spellId, keywords).
+// Math.random is fine HERE (picking which combos to preview) — each icon renders
+// deterministically from (spellId, cost, keywords).
 function randomCombo() {
   const n = 2 + Math.floor(Math.random() * 3); // 2–4 keywords, like a real weave
   const pool = TAG_IDS.slice();
@@ -79,39 +77,45 @@ function randomCombo() {
   return combo;
 }
 
-function inspect(combo, recipe, canvas) {
+// Fake a single-color mana cost (the synthesizer's shape) so the base orb has a
+// color: prefer an element tag in the combo, else a random element.
+function costFor(combo) {
+  const el = combo.find((t) => ELEMENTS.includes(t)) || ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
+  return { [el]: 5 + Math.floor(Math.random() * 4) };
+}
+
+function inspect(combo, cost, plan, canvas) {
   const big = $('big');
   const bctx = big.getContext('2d');
   bctx.clearRect(0, 0, 512, 512);
   bctx.drawImage(canvas, 0, 0, 512, 512);
-  $('info').textContent = `keywords: [${combo.join(', ')}]\n\n` + JSON.stringify(recipe, null, 2);
-  console.log('[icon-debug]', combo, recipe);
+  $('info').textContent = `keywords: [${combo.join(', ')}]\ncost: ${JSON.stringify(cost)}\n\n` + JSON.stringify(plan, null, 2);
+  console.log('[icon-debug]', combo, cost, plan);
 }
 
 function regenerate() {
   const grid = $('grid');
   grid.innerHTML = '';
-  const runSeed = $('runSeed').value;
   const count = Math.max(1, Math.min(500, parseInt($('count').value, 10) || 96));
   const t0 = performance.now();
   for (let i = 0; i < count; i++) {
     const combo = randomCombo();
-    const recipe = resolveRecipe(combo, `debug_${i}_${combo.join('_')}`, runSeed);
-    const canvas = renderIcon(recipe);
+    const cost = costFor(combo);
+    const plan = resolveIconPlan(combo, cost, `debug_${i}_${combo.join('_')}`, assets);
+    const canvas = renderIcon(plan, assets);
     const cell = document.createElement('button');
     cell.className = 'cell';
     const label = document.createElement('span');
     label.textContent = combo.join(' + ');
     cell.append(canvas, label);
     grid.append(cell);
-    cell.onclick = () => inspect(combo, recipe, canvas);
+    cell.onclick = () => inspect(combo, cost, plan, canvas);
   }
   const dt = performance.now() - t0;
   $('stats').textContent = `${count} icons in ${Math.round(dt)}ms (${(dt / count).toFixed(1)}ms each)`;
 }
 
 $('regen').onclick = regenerate;
-$('runSeed').onchange = regenerate;
 regenerate();
 </script>
 </body>

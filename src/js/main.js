@@ -23,7 +23,6 @@ import BossIntroScene from './scenes/BossIntroScene.js';
 import SkillWeaveScene from './scenes/SkillWeaveScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
-import { registerPngGlyphsFromAssets } from './icons/pngGlyphs.js';
 
 // ── Debug flags ─────────────────────────────────────────
 const DEBUG_UI_LAYOUT = false;
@@ -113,12 +112,19 @@ const SPRITESHEET_MAP = {
     json:  'assets/sprites/battle/animated_text/ui_spritesheet_animated_text.json',
     trim:  false, // sprite names match the `animated_text_*` keys directly (no aliases)
   },
-  ui_spritesheet_weave_grayscale: {
-    image: 'assets/sprites/skill_weave/ui_spritesheet_weave_grayscale.png',
-    json:  'assets/sprites/skill_weave/ui_spritesheet_weave_grayscale.json',
-    trim:  false, // packer emits tight frames; grayscale luminance glyph art
-                  // (`weave_grayscale_<tag>`) consumed as PNG spell-icon glyphs
-                  // via icons/pngGlyphs.js (registered in loadAll().then below)
+  // Spell-icon compositing layers (icons/spellIconRecipe.js + spellIconCompositor.js):
+  //   weave_base    — circular colored mana-orb backgrounds (weave_base_<color>[_n])
+  //   weave_generic — effect foreground sprites (weave_generic_<tag>[_n]) + icon_border_2
+  // Sliced per-sprite by AssetManager and fetched by key at icon render time.
+  ui_spritesheet_weave_base: {
+    image: 'assets/sprites/skill_weave/ui_spritesheet_weave_base.png',
+    json:  'assets/sprites/skill_weave/ui_spritesheet_weave_base.json',
+    trim:  false, // sprite names match the weave_base_<color> keys directly (no aliases)
+  },
+  ui_spritesheet_weave_generic: {
+    image: 'assets/sprites/skill_weave/ui_spritesheet_weave_generic.png',
+    json:  'assets/sprites/skill_weave/ui_spritesheet_weave_generic.json',
+    trim:  false, // sprite names match the weave_generic_<tag> / icon_border_2 keys directly
   },
   ui_spritesheet_skill_weave_elements: {
     image: 'assets/sprites/skill_weave/ui_spritesheet_skill_weave_elements.png',
@@ -267,9 +273,8 @@ async function init() {
   console.log('Loading assets...');
   assetManager.loadAll().then((loadedCount) => {
     console.log(`Assets loaded: ${loadedCount} / ${assetManager.count}`);
-    // Hand the loaded PNG glyph art to the spell-icon compositor. This happens
-    // long before the first icon render (SkillWeaveScene, deep into a run).
-    registerPngGlyphsFromAssets(assetManager);
+    // Spell icons composite from the weave_base / weave_generic sheets at render
+    // time (icons/spellIcons.js) — no boot-time glyph registration needed.
   });
 
   // AudioManager initialization runs in parallel (Howler lazily streams audio).

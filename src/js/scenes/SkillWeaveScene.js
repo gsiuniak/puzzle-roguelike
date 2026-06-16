@@ -614,15 +614,16 @@ export default class SkillWeaveScene extends UIPanel {
     // randomized mana cost + generated name/description).
     const synthesis = synthesize(recipe);
 
-    // Generate the spell's procedural icon from the woven keywords. The canvas
-    // is registered with the AssetManager under `icon.assetKey`, so the skill
-    // renders through SkillButton/UIImage like any sprite.
+    // Composite the spell's icon from authored spritesheet layers (base orb by
+    // mana color + 1-2 effect sprites + border). The canvas is registered with
+    // the AssetManager under `icon.assetKey`, so the skill renders through
+    // SkillButton/UIImage like any sprite.
     let icon = null;
     try {
       icon = getSpellIcon({
         keywords: recipe,
+        cost: synthesis.skill && synthesis.skill.cost,
         spellId: 'woven_' + recipe.join('_'),
-        runSeed: this._runSeed,
         assetManager: this._sceneManager && this._sceneManager.assetManager,
       });
     } catch (err) {

@@ -1,245 +1,165 @@
 /**
- * test-spell-icon-recipe.mjs — unit tests for the spell-icon keyword resolution
- * (src/js/icons/spellIconRecipe.js). Pure logic, no canvas — runs under node:
+ * test-spell-icon-recipe.mjs — unit tests for the spell-icon layer SELECTION
+ * (src/js/icons/spellIconRecipe.js → resolveIconPlan). Pure logic, no canvas —
+ * runs under node:
  *
  *   node sim/test-spell-icon-recipe.mjs
  *
- * Covers the coherence guarantees: slot-conflict demotion, dual-element rim
- * behavior, overlay cap, empty/unknown keyword handling, rarity → rim mapping,
- * and determinism (choices seed-independent; seed run-dependent).
+ * Covers base-color choice from mana cost (dominant / tie-break / fallback),
+ * major+minor effect ranking, the verb-less default subject, border resolution,
+ * deterministic variant selection, and signature determinism.
+ *
+ * Sprite naming (matches the authored sheets): base orbs `<color>_base[_n]`,
+ * effect foregrounds `foreground_<tag>[_n]`, border `icon_border_2`.
  */
 
-import {
-  resolveRecipe,
-  recipeKey,
-  deriveIconSeed,
-  KEYWORD_ICON_ROLES,
-  PALETTE_IDS,
-  GLYPH_IDS,
-  OVERLAY_IDS,
-  RIM_IDS,
-} from '../src/js/icons/spellIconRecipe.js';
+import { resolveIconPlan, hashString } from '../src/js/icons/spellIconRecipe.js';
 
 let passed = 0;
 let failed = 0;
 
 function check(name, cond, detail = '') {
-  if (cond) {
-    passed++;
-  } else {
-    failed++;
-    console.error(`  ✗ ${name}${detail ? ` — ${detail}` : ''}`);
-  }
+  if (cond) { passed++; } else { failed++; console.error(`  ✗ ${name}${detail ? ` — ${detail}` : ''}`); }
 }
-
 function eq(name, actual, expected) {
   check(name, actual === expected, `expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 }
 
-const RUN = 'run_1234567890';
-
-// ── 1. Basic mapping: element → palette, action → glyph ──
-{
-  const r = resolveRecipe(['red', 'damage'], 'spell_a', RUN);
-  eq('red → fire palette', r.palette, 'fire');
-  eq('damage → damage_png glyph', r.glyph, 'damage_png');
-  eq('no secondary element', r.secondaryPalette, null);
-  eq('no overlays', r.overlays.length, 0);
-  eq('element backdrop layer', r.layers.length, 1);
-  eq('backdrop is red art', r.layers[0].art, 'red_png');
-  eq('backdrop placement', r.layers[0].placement, 'backdrop');
-  eq('common keywords → iron rim', r.rim, 'iron');
-  eq('fire → clouds bg', r.bgStyle, 'clouds');
+/** Fake AssetManager: isLoaded/get answer from a fixed key set. */
+function fakeAM(keys) {
+  const set = new Set(keys);
+  return {
+    isLoaded: (k) => set.has(k),
+    get: (k) => (set.has(k) ? { width: 178, height: 178 } : null),
+  };
 }
 
-// ── 2. Defaults: empty / unknown keywords never fail ──
+const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'skull'];
+const EFFECTS = [
+  'damage', 'armor', 'create', 'destroy', 'convert', 'gain', 'heal', 'drain', 'attack', 'explode',
+  'row', 'column', 'area', 'tile', 'extra_turn', 'wild', 'lock',
+  'silence', 'cripple', 'enfeeble', 'brittle', 'intangible', 'berserk', 'bleed', 'frozen', 'barrier',
+];
+/** A full, single-variant sheet: every base color + effect + the border. */
+const FULL = fakeAM([
+  ...COLORS.map((c) => `${c}_base`),
+  ...EFFECTS.map((t) => `foreground_${t}`),
+  'icon_border_2',
+]);
+
+// ── 1. Base color = dominant mana color from cost ──
 {
-  const r = resolveRecipe([], 'spell_b', RUN);
-  eq('empty → arcane palette', r.palette, 'arcane');
-  eq('empty → orb glyph', r.glyph, 'orb');
-  const r2 = resolveRecipe(['nonsense_keyword', 'also_unknown'], 'spell_c', RUN);
-  eq('unknown → arcane palette', r2.palette, 'arcane');
-  eq('unknown → orb glyph', r2.glyph, 'orb');
-  eq('unknown → no overlays', r2.overlays.length, 0);
-  const r3 = resolveRecipe(null, 'spell_b2', RUN);
-  eq('null keywords → orb glyph', r3.glyph, 'orb');
+  const p = resolveIconPlan(['red', 'damage'], { red: 7 }, 'a', FULL);
+  eq('cost color → base', p.baseKey, 'red_base');
+  eq('action → major effect', p.majorKey, 'foreground_damage');
+  eq('lone effect → no minor', p.minorKey, null);
+  eq('border is icon_border_2', p.borderKey, 'icon_border_2');
+  eq('color recorded', p.color, 'red');
 }
 
-// ── 3. Dual element: second element only tints the rim (secondaryPalette) ──
+// ── 2. Multi-color cost → highest amount wins ──
 {
-  const r = resolveRecipe(['red', 'blue', 'damage'], 'spell_d', RUN);
-  eq('first element wins body', r.palette, 'fire');
-  eq('second element → secondary only', r.secondaryPalette, 'ice');
-  // third element ignored
-  const r2 = resolveRecipe(['red', 'blue', 'green'], 'spell_e', RUN);
-  eq('third element ignored (palette)', r2.palette, 'fire');
-  eq('third element ignored (secondary)', r2.secondaryPalette, 'ice');
+  const p = resolveIconPlan(['blue', 'green', 'create'], { blue: 3, green: 8 }, 'b', FULL);
+  eq('dominant (green) base', p.baseKey, 'green_base');
 }
 
-// ── 4. Skull outranks colors (priority 32 > 30) regardless of input order ──
+// ── 3. Tied cost → broken by an element tag the spell carries ──
 {
-  const r = resolveRecipe(['red', 'skull'], 'spell_f', RUN);
-  eq('skull wins the body palette', r.palette, 'bone');
-  eq('red demotes to secondary', r.secondaryPalette, 'fire');
-  eq('bone → ridged bg', r.bgStyle, 'ridged');
+  const p = resolveIconPlan(['purple', 'damage'], { red: 5, purple: 5 }, 'c', FULL);
+  eq('tie broken by element tag', p.color, 'purple');
 }
 
-// ── 5. Form slot conflict: losing action becomes a flank badge layer ──
+// ── 4. No usable cost → first element tag, else neutral (skull base) ──
 {
-  // explode (26) beats damage (25); damage flanks with its own art
-  const r = resolveRecipe(['damage', 'explode'], 'spell_g', RUN);
-  eq('explode wins glyph', r.glyph, 'explode_png');
-  check('damage flanks with its own art',
-    r.layers.some((l) => l.placement === 'flank' && l.art === 'damage_png'), JSON.stringify(r.layers));
-  eq('no generic overlay for the demoted form', r.overlays.length, 0);
-
-  // 5 forms: 1 primary + 2 flanks; the rest fall back to their demoteTo overlays
-  const r2 = resolveRecipe(['explode', 'damage', 'armor', 'attack', 'convert'], 'spell_g2', RUN);
-  eq('primary is highest form', r2.glyph, 'explode_png');
-  const flanks = r2.layers.filter((l) => l.placement === 'flank');
-  eq('flank badges capped at 2', flanks.length, 2);
-  eq('flank order follows priority', flanks.map((l) => l.art).join(','), 'damage_png,armor_png');
-  check('overflow forms fall back to demote overlays',
-    r2.overlays.includes('sparks') && r2.overlays.includes('greater'), JSON.stringify(r2.overlays));
+  const p = resolveIconPlan(['yellow', 'attack'], {}, 'd', FULL);
+  eq('no cost → element fallback', p.baseKey, 'yellow_base');
+  const p2 = resolveIconPlan(['damage'], null, 'e', FULL);
+  eq('no cost, no element → skull base', p2.baseKey, 'skull_base');
 }
 
-// ── 6. Overlay cap: never more than 2, priority order wins ──
+// ── 5. Major/minor ranking: action is major, shape/status is minor ──
 {
-  // wild(28) + extra_turn(27) + lock(18) + random(14) → wild + sparks only
-  const r = resolveRecipe(['wild', 'extra_turn', 'lock', 'random', 'red', 'damage'], 'spell_h', RUN);
-  check('≤2 overlays', r.overlays.length <= 2, JSON.stringify(r.overlays));
-  eq('highest-priority overlay first', r.overlays[0], 'wild');
-  eq('second overlay', r.overlays[1], 'sparks');
+  const p = resolveIconPlan(['red', 'explode', 'area'], { red: 6 }, 'f', FULL);
+  eq('highest-priority action is major', p.majorKey, 'foreground_explode');
+  eq('shape becomes minor', p.minorKey, 'foreground_area');
+  // two actions: higher one major, the other minor
+  const p2 = resolveIconPlan(['damage', 'heal'], { red: 5 }, 'g', FULL);
+  eq('damage outranks heal (major)', p2.majorTag, 'damage');
+  eq('heal is minor', p2.minorTag, 'heal');
 }
 
-// ── 7. Overlay dedup: two modifiers mapping to the same overlay ──
+// ── 6. Elements never become effect layers ──
 {
-  // extra_turn → sparks and random → sparks → deduped to one
-  const r = resolveRecipe(['extra_turn', 'random', 'red', 'damage'], 'spell_i', RUN);
-  const sparksCount = r.overlays.filter((o) => o === 'sparks').length;
-  eq('no duplicate overlay ids', sparksCount, 1);
+  const p = resolveIconPlan(['red', 'blue', 'damage'], { red: 5 }, 'h', FULL);
+  eq('only the action is the effect', p.majorTag, 'damage');
+  eq('no minor from elements', p.minorTag, null);
 }
 
-// ── 8. Rarity → rim ──
+// ── 7. Verb-less bag → default subject so every icon has one ──
 {
-  eq('uncommon (skull) → bronze', resolveRecipe(['skull'], 's', RUN).rim, 'bronze');
-  eq('rare (convert) → gold', resolveRecipe(['red', 'convert'], 's', RUN).rim, 'gold');
-  eq('legendary (wild) → arcane rim', resolveRecipe(['red', 'damage', 'wild'], 's', RUN).rim, 'arcane');
+  const p = resolveIconPlan(['red', 'blue'], { red: 5 }, 'i', FULL);
+  eq('default effect subject', p.majorTag, 'damage');
+  eq('no minor', p.minorKey, null);
 }
 
-// ── 9. Determinism: same inputs → identical recipe; choices seed-independent ──
+// ── 8. Missing effect sprite → fall through to the next available tag ──
 {
-  const a = resolveRecipe(['yellow', 'damage', 'row'], 'spell_j', RUN);
-  const b = resolveRecipe(['yellow', 'damage', 'row'], 'spell_j', RUN);
-  eq('two calls → identical recipe', recipeKey(a), recipeKey(b));
-
-  const otherRun = resolveRecipe(['yellow', 'damage', 'row'], 'spell_j', 'run_999');
-  eq('different run → same palette', otherRun.palette, a.palette);
-  eq('different run → same glyph', otherRun.glyph, a.glyph);
-  eq('different run → same overlays', otherRun.overlays.join(','), a.overlays.join(','));
-  check('different run → different seed', otherRun.seed !== a.seed);
-
-  const otherSpell = resolveRecipe(['yellow', 'damage', 'row'], 'spell_k', RUN);
-  check('different spellId → different seed', otherSpell.seed !== a.seed);
+  const am = fakeAM(['red_base', 'foreground_area', 'icon_border_2']); // no 'explode' sprite
+  const p = resolveIconPlan(['red', 'explode', 'area'], { red: 5 }, 'j', am);
+  eq('missing major falls through to area', p.majorTag, 'area');
+  eq('no further effect → no minor', p.minorKey, null);
 }
 
-// ── 10. Seed derivation is order-insensitive on keywords (sorted) ──
+// ── 9. Border absent → borderKey null (graceful) ──
 {
-  const s1 = deriveIconSeed(RUN, 'x', ['red', 'damage']);
-  const s2 = deriveIconSeed(RUN, 'x', ['damage', 'red']);
-  eq('keyword order does not change seed', s1, s2);
-  check('seed is uint32', s1 >>> 0 === s1 && s1 >= 0);
+  const am = fakeAM(['red_base', 'foreground_damage']); // no border
+  const p = resolveIconPlan(['red', 'damage'], { red: 5 }, 'k', am);
+  eq('no border sprite → null', p.borderKey, null);
 }
 
-// ── 11. Registry integrity: every payload id exists in the compositor id lists ──
+// ── 10. Base color fallback to neutral (skull) when the color has no orb ──
 {
-  for (const [id, def] of Object.entries(KEYWORD_ICON_ROLES)) {
-    if (def.palette) check(`${id}.palette valid`, PALETTE_IDS.includes(def.palette), def.palette);
-    if (def.glyph) check(`${id}.glyph valid`, GLYPH_IDS.includes(def.glyph), def.glyph);
-    if (def.overlay) check(`${id}.overlay valid`, OVERLAY_IDS.includes(def.overlay), def.overlay);
-    if (def.demoteTo && def.demoteTo.overlay) {
-      check(`${id}.demoteTo valid`, OVERLAY_IDS.includes(def.demoteTo.overlay), def.demoteTo.overlay);
-    }
-  }
+  const am = fakeAM(['skull_base', 'foreground_damage', 'icon_border_2']); // no red orb
+  const p = resolveIconPlan(['red', 'damage'], { red: 5 }, 'l', am);
+  eq('missing color base → skull', p.baseKey, 'skull_base');
 }
 
-// ── 12. Keyword registry is EXACTLY the skillWeaveTags catalog ──
-// (no invented keywords, no uncovered tags — the game only has weave tags today)
+// ── 11. Variant discovery: pick is within the authored set and deterministic ──
 {
-  const { SKILL_WEAVE_TAGS } = await import('../src/js/data/skillWeaveTags.js');
-  const roles = Object.keys(KEYWORD_ICON_ROLES).sort();
-  const tags = Object.keys(SKILL_WEAVE_TAGS).sort();
-  const extra = roles.filter((k) => !tags.includes(k));
-  const missing = tags.filter((k) => !roles.includes(k));
-  check('no keywords beyond skillWeaveTags', extra.length === 0, extra.join(','));
-  check('every weave tag has an icon role', missing.length === 0, missing.join(','));
+  const am = fakeAM([
+    'red_base_1', 'red_base_2', 'red_base_3',
+    'foreground_damage_1', 'icon_border_2',
+  ]);
+  const a = resolveIconPlan(['red', 'damage'], { red: 5 }, 'variant', am);
+  const b = resolveIconPlan(['red', 'damage'], { red: 5 }, 'variant', am);
+  check('variant in authored set', ['red_base_1', 'red_base_2', 'red_base_3'].includes(a.baseKey), a.baseKey);
+  eq('effect variant resolved', a.majorKey, 'foreground_damage_1');
+  eq('same spell → same variant', a.baseKey, b.baseKey);
 }
 
-// ── 13. Every weave-able combo resolves to valid ids (sweep all tag pairs) ──
+// ── 12. Determinism: identical inputs → identical signature ──
 {
-  const ids = Object.keys(KEYWORD_ICON_ROLES);
-  let ok = true;
-  for (const a of ids) {
-    for (const b of ids) {
-      const r = resolveRecipe([a, b], `sweep_${a}_${b}`, RUN);
-      if (!PALETTE_IDS.includes(r.palette) || !GLYPH_IDS.includes(r.glyph)
-        || !RIM_IDS.includes(r.rim) || r.overlays.some((o) => !OVERLAY_IDS.includes(o))
-        || r.overlays.length > 2
-        || r.layers.some((l) => !GLYPH_IDS.includes(l.art))
-        || r.layers.filter((l) => l.placement === 'backdrop').length > 1
-        || r.layers.filter((l) => l.placement === 'flank').length > 2) {
-        ok = false;
-        console.error(`  sweep failed for [${a}, ${b}]: ${recipeKey(r)}`);
-      }
-    }
-  }
-  check('all tag pairs resolve to valid recipes', ok);
+  const a = resolveIconPlan(['yellow', 'damage', 'row'], { yellow: 6 }, 'spell_x', FULL);
+  const b = resolveIconPlan(['yellow', 'damage', 'row'], { yellow: 6 }, 'spell_x', FULL);
+  eq('two calls → identical signature', a.signature, b.signature);
+  // signature distinguishes different layer stacks
+  const c = resolveIconPlan(['blue', 'damage', 'row'], { blue: 6 }, 'spell_x', FULL);
+  check('different base → different signature', a.signature !== c.signature);
 }
 
-// ── 14. PNG glyph wiring: ids in GLYPH_IDS, glyphSource flips to 'png' ──
+// ── 13. hashString is a stable uint32 ──
 {
-  const { PNG_GLYPH_IDS } = await import('../src/js/icons/pngGlyphs.js');
-  for (const id of PNG_GLYPH_IDS) {
-    check(`png glyph "${id}" listed in GLYPH_IDS`, GLYPH_IDS.includes(id));
-  }
-  const heal = resolveRecipe(['green', 'heal'], 'spell_png_a', RUN);
-  eq('heal → heal_png glyph', heal.glyph, 'heal_png');
-  eq('png glyph → glyphSource png', heal.glyphSource, 'png');
-  const destroy = resolveRecipe(['red', 'destroy'], 'spell_png_b', RUN);
-  eq('destroy → destroy_png glyph', destroy.glyph, 'destroy_png');
-  // no form AND no element → default orb stays procedural
-  const proc = resolveRecipe(['row', 'random'], 'spell_png_c', RUN);
-  eq('default orb → glyphSource procedural', proc.glyph, 'orb');
-  eq('procedural glyph → glyphSource procedural', proc.glyphSource, 'procedural');
+  const h = hashString('red|damage');
+  check('hash is uint32', (h >>> 0) === h && h >= 0);
+  eq('hash deterministic', hashString('red|damage'), h);
 }
 
-// ── 15. Layer system: element-primary, backdrop selection, status flanks ──
+// ── 14. No AssetManager → bare-prefix keys (still renderable) ──
 {
-  // No form → lead element's art is the primary glyph
-  const r = resolveRecipe(['red', 'row'], 'spell_l_a', RUN);
-  eq('form-less spell → element art primary', r.glyph, 'red_png');
-  eq('element primary → glyphSource png', r.glyphSource, 'png');
-  eq('lone element primary → no backdrop', r.layers.length, 0);
-
-  // Element primary + second element → second element becomes the backdrop
-  const r2 = resolveRecipe(['red', 'blue'], 'spell_l_b', RUN);
-  eq('lead element primary', r2.glyph, 'red_png');
-  eq('second element → secondary palette', r2.secondaryPalette, 'ice');
-  check('second element art backdrops',
-    r2.layers.some((l) => l.placement === 'backdrop' && l.art === 'blue_png'), JSON.stringify(r2.layers));
-
-  // Statuses flank with their own art, capped at 2 with forms winning first
-  const r3 = resolveRecipe(['damage', 'frozen', 'silence'], 'spell_l_c', RUN);
-  const f3 = r3.layers.filter((l) => l.placement === 'flank').map((l) => l.art);
-  eq('statuses flank', f3.join(','), 'frozen_png,silence_png');
-  const r4 = resolveRecipe(['explode', 'damage', 'frozen', 'silence'], 'spell_l_d', RUN);
-  const f4 = r4.layers.filter((l) => l.placement === 'flank').map((l) => l.art);
-  eq('losing form outranks statuses for badges', f4.join(','), 'damage_png,frozen_png');
-
-  // Layers participate in the cache key
-  const k1 = recipeKey(resolveRecipe(['damage'], 'spell_l_e', RUN));
-  const k2 = resolveRecipe(['red', 'damage'], 'spell_l_e', RUN);
-  check('layers change the recipe key', k1 !== recipeKey(k2));
+  const p = resolveIconPlan(['red', 'damage'], { red: 5 }, 'noam');
+  eq('no AM → bare base prefix', p.baseKey, 'red_base');
+  eq('no AM → bare effect prefix', p.majorKey, 'foreground_damage');
+  eq('no AM → border key assumed', p.borderKey, 'icon_border_2');
 }
 
 console.log(failed === 0

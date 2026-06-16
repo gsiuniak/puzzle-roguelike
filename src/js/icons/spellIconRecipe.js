@@ -1,157 +1,88 @@
 /**
- * spellIconRecipe.js — keyword → IconRecipe resolution for procedural spell icons.
+ * spellIconRecipe.js — chooses which authored sprites compose a spell's icon.
  *
- * PURE LOGIC, no canvas. Maps a spell's keyword list (the Skill Weave tag ids —
- * see data/skillWeaveTags.js) to an IconRecipe: which palette, glyph, overlays,
- * background style, rim, and render seed the compositor should use. Rendering
- * lives in spellIconCompositor.js; caching/integration in spellIcons.js.
+ * Given a spell's keyword tags (the Skill Weave tag ids — data/skillWeaveTags.js)
+ * and its mana cost, this resolves an icon PLAN: the base orb (by mana color),
+ * one or two effect sprites (by effect tag), and the border cap. The compositor
+ * (spellIconCompositor.js) draws the plan; caching lives in spellIcons.js.
  *
- * ── Slot model (the coherence guarantees — do not relax) ────────────────────
- *   - Exactly ONE palette colors the icon body. A second element keyword may
- *     only tint the rim hairline (`secondaryPalette`); third+ elements drop.
- *   - Exactly ONE primary glyph. When no form keyword is present, the lead
- *     element's sheet art becomes the primary (a "red + row" spell reads as a
- *     flame, not a generic orb); orb only when neither exists.
- *   - LAYERS (the combination-richness mechanism — each tag contributes its
- *     own sheet art instead of collapsing into generic overlays):
- *       · ≤1 BACKDROP — the lead element's art, large/dim/soft behind the
- *         primary (the second element's art when an element IS the primary).
- *       · ≤2 FLANK badges — losing forms first, then status keywords, each as
- *         its own small sharp art at the icon's lower corners. A losing form
- *         falls back to its legacy `demoteTo` overlay when badge slots are
- *         full; statuses drop.
- *   - At most TWO overlays. Extra modifiers drop in priority order.
- *   - Unknown keywords never fail — they just contribute to the seed.
+ * ── Selection rules ─────────────────────────────────────────────────────────
+ *   BASE  — the spell's dominant mana color (highest-cost color; ties broken by
+ *           the spell's first element tag). Falls back to a neutral base.
+ *   EFFECTS — 1 or 2 sprites drawn over the base. Effect-bearing tags (actions,
+ *           statuses, shapes, modifiers — NOT elements, which only color the
+ *           base) are ranked by EFFECT_TAG_PRIORITY: the top one is the MAJOR
+ *           (the readable subject, color-dodged), the next distinct one is the
+ *           MINOR (multiplied into the base). A verb-less bag falls back to a
+ *           default effect so every icon has a subject.
+ *   BORDER — always icon_border_2.
  *
- * ── Seed model ──────────────────────────────────────────────────────────────
- *   iconSeed = fnv1a(runSeed | spellId | sortedKeywords)
- *   Keyword resolution (which palette/glyph/overlays) is seed-INDEPENDENT so a
- *   fire burst is always recognizably a fire burst; the run seed only varies
- *   the compositor's jitter (cloud layout, glyph variation, overlay placement).
- *   Same spell + same run → identical icon. New run → fresh rendering.
+ * ── Sprite naming convention (matches the authored sheets) ──────────────────
+ *   ui_spritesheet_weave_base:    <color>_base_<n>     (variants 1..N, e.g. red_base_1)
+ *       <color> ∈ red blue green yellow purple skull
+ *   ui_spritesheet_weave_generic: foreground_<tag>_<n> (variants 1..N, e.g. foreground_damage_1)
+ *                                 icon_border_2        (the border cap)
+ *       <tag> = any effect tag id below (same ids as the weave tags).
+ *
+ * Variant counts are auto-discovered (the code probes the bare prefix then
+ * _1.._N), so colors/effects may carry any number of authored variants; the
+ * choice is deterministic per spell. Missing sprites degrade gracefully
+ * (skip / fall back), never throw.
  */
 
-import { getTagRarity } from '../data/skillWeaveTags.js';
-import { TAG_RARITY } from '../data/weaveConfig.js';
-import { PNG_GLYPH_IDS } from './pngGlyphs.js';
-
 // ═══════════════════════════════════════════════════════════
-// Ids used by the compositor (palettes / glyphs / overlays / rims)
+// Naming + concept tables
 // ═══════════════════════════════════════════════════════════
 
-/** Palette ids — must exist in spellIconCompositor.PALETTES. */
-export const PALETTE_IDS = Object.freeze([
-  'fire', 'lightning', 'ice', 'nature', 'void', 'holy', 'bone', 'arcane',
-]);
+const BORDER_KEY = 'icon_border_2';
+
+/** Sprite-key prefix for a color's base orb (variants are `<prefix>_<n>`). */
+const baseKeyPrefix = (color) => `${color}_base`;
+/** Sprite-key prefix for an effect tag's foreground (variants are `<prefix>_<n>`). */
+const effectKeyPrefix = (tag) => `foreground_${tag}`;
 
 /**
- * Glyph ids — must exist in the compositor's glyph registry. Procedural ids
- * first; PNG-backed ids come from pngGlyphs.js (registered with the compositor
- * at boot once their art loads).
+ * Mana colors that own a base orb. There is no neutral orb, so the no-color
+ * fallback reuses the gray/stone `skull` base.
  */
-export const GLYPH_IDS = Object.freeze([
-  'strike', 'slash', 'burst', 'shield', 'orb', 'rune',
-  ...PNG_GLYPH_IDS,
-]);
+const BASE_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple', 'skull']);
+const NEUTRAL_COLOR = 'skull';
 
-const PNG_GLYPH_ID_SET = new Set(PNG_GLYPH_IDS);
-
-/** Overlay ids — must exist in spellIconCompositor.OVERLAYS. */
-export const OVERLAY_IDS = Object.freeze([
-  'wild', 'greater', 'sparks', 'streaks_h', 'streaks_v', 'cage',
-]);
-
-/** Rim ids — must exist in spellIconCompositor.RIMS. Picked from rarity. */
-export const RIM_IDS = Object.freeze(['iron', 'bronze', 'gold', 'arcane']);
-
-const DEFAULT_PALETTE = 'arcane';
-const DEFAULT_GLYPH = 'orb';
-
-/** Palettes whose clouds read better as ridged veins than soft masses. */
-const RIDGED_PALETTES = new Set(['lightning', 'void', 'bone']);
-
-// ═══════════════════════════════════════════════════════════
-// Keyword → icon role registry
-// ═══════════════════════════════════════════════════════════
-
-/**
- * Icon role data per keyword id. Keys are the Skill Weave tag ids (the game's
- * spell keywords). Each entry:
- *   role     — 'element' | 'form' | 'modifier' | 'meta'
- *   priority — higher wins slot conflicts
- *   palette  — (element) palette id
- *   glyph    — (form) glyph id
- *   overlay  — (modifier) overlay id; omit for seed-only keywords
- *   demoteTo — (form) fallback when the glyph slot is already taken
- *
- * 'meta' keywords carry no visual payload — they still participate in the seed
- * (so e.g. "frozen damage" and plain "damage" render differently) but claim no
- * slot. New keywords default to meta when absent from this table.
- */
-export const KEYWORD_ICON_ROLES = Object.freeze({
-  // ── Elements → palette ──
-  red:    { role: 'element', priority: 30, palette: 'fire' },
-  blue:   { role: 'element', priority: 30, palette: 'ice' },
-  green:  { role: 'element', priority: 30, palette: 'nature' },
-  yellow: { role: 'element', priority: 30, palette: 'lightning' },
-  purple: { role: 'element', priority: 30, palette: 'void' },
-  skull:  { role: 'element', priority: 32, palette: 'bone' },
-
-  // ── Actions → glyph (demote to overlay when the form slot is taken) ──
-  // All forms use authored PNG glyphs from the weave-grayscale sheet (see
-  // icons/pngGlyphs.js); the procedural glyphs remain as fallbacks/defaults.
-  explode: { role: 'form', priority: 26, glyph: 'explode_png', demoteTo: { overlay: 'wild' } },
-  damage:  { role: 'form', priority: 25, glyph: 'damage_png',  demoteTo: { overlay: 'sparks' } },
-  armor:   { role: 'form', priority: 25, glyph: 'armor_png',   demoteTo: { overlay: 'greater' } },
-  attack:  { role: 'form', priority: 24, glyph: 'attack_png',  demoteTo: { overlay: 'sparks' } },
-  convert: { role: 'form', priority: 24, glyph: 'convert_png', demoteTo: { overlay: 'greater' } },
-  destroy: { role: 'form', priority: 23, glyph: 'destroy_png', demoteTo: { overlay: 'wild' } },
-  create:  { role: 'form', priority: 22, glyph: 'create_png',  demoteTo: { overlay: 'sparks' } },
-  heal:    { role: 'form', priority: 21, glyph: 'heal_png',    demoteTo: { overlay: 'greater' } },
-  gain:    { role: 'form', priority: 20, glyph: 'gain_png',    demoteTo: { overlay: 'sparks' } },
-  drain:   { role: 'form', priority: 19, glyph: 'drain_png',   demoteTo: { overlay: 'wild' } },
-
-  // ── Modifiers → overlay ──
-  wild:       { role: 'modifier', priority: 28, overlay: 'wild' },
-  extra_turn: { role: 'modifier', priority: 27, overlay: 'sparks' },
-  lock:       { role: 'modifier', priority: 18, overlay: 'cage' },
-
-  // ── Shapes → overlay ──
-  area:   { role: 'modifier', priority: 16, overlay: 'greater' },
-  row:    { role: 'modifier', priority: 15, overlay: 'streaks_h' },
-  column: { role: 'modifier', priority: 15, overlay: 'streaks_v' },
-  random: { role: 'modifier', priority: 14, overlay: 'sparks' },
-  tile:   { role: 'meta',     priority: 5 },
-
-  // ── Statuses → flank badge layers (each uses its own `<tag>_png` sheet art;
-  //    dropped silently when both badge slots are taken by losing forms) ──
-  barrier:    { role: 'form',   priority: 12, glyph: 'barrier_png', demoteTo: { overlay: 'greater' } },
-  berserk:    { role: 'status', priority: 13 },
-  bleed:      { role: 'status', priority: 12 },
-  frozen:     { role: 'status', priority: 11 },
-  silence:    { role: 'status', priority: 10 },
-  cripple:    { role: 'status', priority: 9 },
-  enfeeble:   { role: 'status', priority: 8 },
-  brittle:    { role: 'status', priority: 7 },
-  intangible: { role: 'status', priority: 6 },
+/** Element tag id → base color (for cost-tie / no-cost fallback). */
+const ELEMENT_TO_COLOR = Object.freeze({
+  red: 'red', blue: 'blue', green: 'green', yellow: 'yellow', purple: 'purple', skull: 'skull',
 });
 
-/** Max small badge layers beside the primary glyph. */
-const MAX_FLANK_LAYERS = 2;
+/**
+ * Effect-bearing tag → selection priority (higher wins the MAJOR slot). Tags
+ * absent here are not effect layers: elements color the base instead, and any
+ * unknown keyword is ignored (it still flavors the cache signature via the tag
+ * list). Actions rank above statuses, shapes, then modifiers, so the spell's
+ * verb is the readable subject and a shape/status becomes the embedded minor.
+ */
+const EFFECT_TAG_PRIORITY = Object.freeze({
+  // actions (the readable subject)
+  explode: 100, damage: 96, attack: 92, destroy: 90, convert: 86,
+  create: 84, heal: 82, armor: 80, drain: 76, gain: 74,
+  // statuses (distinct subjects, secondary to a hard action)
+  bleed: 60, frozen: 58, barrier: 57, berserk: 56, silence: 54,
+  cripple: 52, enfeeble: 50, brittle: 48, intangible: 46,
+  // shapes (read well as the embedded minor layer)
+  area: 40, row: 36, column: 36, tile: 30,
+  // modifiers
+  wild: 28, lock: 24, extra_turn: 20,
+});
 
-/** The sheet art id for a tag, or null when the tag has no sheet sprite. */
-function artFor(tagId) {
-  const id = `${tagId}_png`;
-  return PNG_GLYPH_ID_SET.has(id) ? id : null;
-}
+/** When a bag carries no effect-bearing tag, the icon still needs a subject. */
+const DEFAULT_EFFECT_TAG = 'damage';
 
 // ═══════════════════════════════════════════════════════════
-// Seed derivation
+// Hashing (FNV-1a) — deterministic variant selection + cache keys
 // ═══════════════════════════════════════════════════════════
 
 /**
- * FNV-1a hash of a string → uint32. Used both for icon seed derivation and as
- * the recipe cache key hash (spellIcons.js).
+ * FNV-1a hash of a string → uint32. Used for deterministic variant picks and as
+ * the icon cache-key hash (spellIcons.js).
  * @param {string} s
  * @returns {number} uint32
  */
@@ -164,162 +95,150 @@ export function hashString(s) {
   return h >>> 0;
 }
 
+// ═══════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════
+
+/** True if the AssetManager has the key loaded (silent — no missing-key warn). */
+function has(am, key) {
+  return !!(am && typeof am.isLoaded === 'function' && am.isLoaded(key));
+}
+
 /**
- * Derive the icon render seed from the run seed + spell identity.
- * @param {string|number} runSeed — the run's map seed (MapScene._seed)
- * @param {string} spellId — stable spell identifier within the run
- * @param {string[]} keywords
- * @returns {number} uint32
+ * All authored variant keys for a sprite prefix, in stable order: the unnumbered
+ * key (if present) then `<prefix>_1`.._N. Probes silently via isLoaded.
+ * @param {object} am — AssetManager
+ * @param {string} prefix
+ * @param {number} [maxVariants=32]
+ * @returns {string[]}
  */
-export function deriveIconSeed(runSeed, spellId, keywords) {
-  const sorted = (keywords || []).slice().sort().join('|');
-  return hashString(`${String(runSeed)} ${String(spellId)} ${sorted}`);
+function collectVariants(am, prefix, maxVariants = 32) {
+  const out = [];
+  if (has(am, prefix)) out.push(prefix);
+  for (let n = 1; n <= maxVariants; n++) {
+    const k = `${prefix}_${n}`;
+    if (has(am, k)) out.push(k);
+  }
+  return out;
+}
+
+/**
+ * Pick one variant of `prefix` deterministically from `seed`. When no Asset
+ * Manager is available (variants can't be probed) the bare prefix is returned so
+ * a render still has something to draw.
+ * @returns {string|null}
+ */
+function pickVariant(am, prefix, seed) {
+  if (!am) return prefix;
+  const variants = collectVariants(am, prefix);
+  if (!variants.length) return null;
+  return variants[seed % variants.length];
+}
+
+/** Normalize a cost object `{ color: amount }` to a stable string for hashing. */
+function costSignature(cost) {
+  if (!cost || typeof cost !== 'object') return '-';
+  return Object.keys(cost)
+    .sort()
+    .map((c) => `${c}${cost[c]}`)
+    .join(',') || '-';
+}
+
+/**
+ * Determine the dominant mana color from the cost: the highest-amount color,
+ * ties broken by the spell's first element tag, then neutral.
+ * @param {object} cost — `{ color: amount }`
+ * @param {string[]} elementTags — element tag ids present on the spell
+ * @returns {string} a BASE_COLORS entry
+ */
+function dominantColor(cost, elementTags) {
+  const entries = cost && typeof cost === 'object'
+    ? Object.entries(cost).filter(([c, amt]) => ELEMENT_TO_COLOR[c] && amt > 0)
+    : [];
+  if (entries.length) {
+    let max = -Infinity;
+    for (const [, amt] of entries) if (amt > max) max = amt;
+    const tied = entries.filter(([, amt]) => amt === max).map(([c]) => c);
+    if (tied.length === 1) return ELEMENT_TO_COLOR[tied[0]];
+    // Tie: prefer a tied color that is also one of the spell's element tags.
+    const byElement = elementTags.find((t) => tied.includes(t));
+    return ELEMENT_TO_COLOR[byElement || tied[0]];
+  }
+  // No usable cost — fall back to the first element tag, else neutral.
+  if (elementTags.length) return ELEMENT_TO_COLOR[elementTags[0]] || NEUTRAL_COLOR;
+  return NEUTRAL_COLOR;
 }
 
 // ═══════════════════════════════════════════════════════════
 // Resolution
 // ═══════════════════════════════════════════════════════════
 
-/** Rarity tier → rim id. */
-const RIM_BY_RARITY = Object.freeze({
-  [TAG_RARITY.COMMON]: 'iron',
-  [TAG_RARITY.UNCOMMON]: 'bronze',
-  [TAG_RARITY.RARE]: 'gold',
-  [TAG_RARITY.LEGENDARY]: 'arcane',
-});
-const RARITY_ORDER = [TAG_RARITY.COMMON, TAG_RARITY.UNCOMMON, TAG_RARITY.RARE, TAG_RARITY.LEGENDARY];
-
-/** Highest rarity tier among the keywords (falls back to common). */
-function maxRarity(keywords) {
-  let best = 0;
-  for (const k of keywords) {
-    const idx = RARITY_ORDER.indexOf(getTagRarity(k));
-    if (idx > best) best = idx;
-  }
-  return RARITY_ORDER[best];
-}
-
 /**
- * Resolve a keyword list into an IconRecipe.
+ * Resolve a spell's tags + cost into an icon PLAN of authored sprite keys.
  *
- * Deterministic and seed-independent in its CHOICES (palette/glyph/overlays
- * come only from the keywords); the run seed feeds only `seed`, which the
- * compositor uses for jitter. Never fails — empty/unknown keyword lists
- * produce the neutral arcane orb.
+ * Deterministic: identical (tags, cost, spellId) always resolve to the same
+ * plan. Variant selection probes the AssetManager so only authored sprites are
+ * chosen; with no AssetManager the bare-prefix keys are used (no variants).
  *
- * @param {string[]} keywords — spell keyword ids (Skill Weave tag ids)
- * @param {string} spellId — stable id for seed derivation (e.g. 'woven_red_damage')
- * @param {string|number} runSeed — the run seed (MapScene seed string)
+ * @param {string[]} tags — spell keyword/tag ids (Skill Weave tag ids)
+ * @param {object} cost — mana cost `{ color: amount }`
+ * @param {string} spellId — stable spell id (seeds the variant picks)
+ * @param {object} [assetManager] — supplies sprite presence + slices
  * @returns {{
- *   palette: string, secondaryPalette: string|null,
- *   glyph: string, glyphSource: 'procedural'|'png',
- *   layers: Array<{art: string, placement: 'backdrop'|'flank'}>,
- *   overlays: string[], bgStyle: 'clouds'|'ridged',
- *   rim: string, seed: number,
+ *   baseKey: string, minorKey: string|null, majorKey: string,
+ *   borderKey: string|null, color: string,
+ *   majorTag: string, minorTag: string|null, signature: string,
  * }}
  */
-export function resolveRecipe(keywords, spellId = '', runSeed = 0) {
-  const list = Array.isArray(keywords) ? keywords.filter((k) => typeof k === 'string') : [];
+export function resolveIconPlan(tags, cost, spellId = '', assetManager = null) {
+  const list = Array.isArray(tags) ? tags.filter((t) => typeof t === 'string') : [];
+  const am = assetManager || null;
 
-  // Sort by priority descending (stable for equal priorities: keep input order).
-  const known = list
-    .map((id, i) => ({ id, i, def: KEYWORD_ICON_ROLES[id] || null }))
-    .filter((e) => e.def)
-    .sort((a, b) => (b.def.priority - a.def.priority) || (a.i - b.i));
+  const elementTags = list.filter((t) => ELEMENT_TO_COLOR[t]);
+  const color = dominantColor(cost, elementTags);
 
-  let palette = null;
-  let secondaryPalette = null;
-  let glyph = null;
-  let firstElementId = null;
-  let secondElementId = null;
-  const overlays = [];
-  const flanks = [];
+  // Rank the effect-bearing tags; keep input order stable for equal priority.
+  const effectTags = list
+    .map((id, i) => ({ id, i, pri: EFFECT_TAG_PRIORITY[id] }))
+    .filter((e) => e.pri !== undefined)
+    .sort((a, b) => (b.pri - a.pri) || (a.i - b.i))
+    .map((e) => e.id);
 
-  const addOverlay = (id) => {
-    if (id && overlays.length < 2 && !overlays.includes(id)) overlays.push(id);
-  };
-  const addFlank = (artId) => {
-    if (artId && flanks.length < MAX_FLANK_LAYERS && !flanks.includes(artId)) {
-      flanks.push(artId);
-      return true;
-    }
-    return false;
-  };
+  const seedBase = hashString(`${String(spellId)}|${list.slice().sort().join('+')}|${costSignature(cost)}`);
 
-  // Single walk in priority order: elements claim palette slots, the first
-  // form claims the primary glyph, every other art-bearing tag competes for
-  // the flank badge slots (losing forms before statuses, since form priorities
-  // are higher), and modifiers fill the overlay slots.
-  for (const { id, def } of known) {
-    if (def.role === 'element') {
-      if (!palette) { palette = def.palette; firstElementId = id; }
-      else if (!secondaryPalette && def.palette !== palette) {
-        secondaryPalette = def.palette;
-        secondElementId = id;
-      }
-      // third+ elements: ignored
-    } else if (def.role === 'form') {
-      if (!glyph) glyph = def.glyph;
-      else if (!addFlank(artFor(id))) {
-        // Badge slots full — legacy generic-overlay demotion as fallback.
-        if (def.demoteTo && def.demoteTo.overlay) addOverlay(def.demoteTo.overlay);
-      }
-    } else if (def.role === 'status') {
-      addFlank(artFor(id)); // dropped silently when badge slots are full
-    } else if (def.role === 'modifier') {
-      addOverlay(def.overlay);
-    }
-    // 'meta' → seed-only
+  // MAJOR: the highest-priority effect tag with an authored sprite.
+  let majorTag = null;
+  let majorKey = null;
+  for (const tag of effectTags) {
+    const key = pickVariant(am, effectKeyPrefix(tag), (seedBase ^ hashString(tag)) >>> 0);
+    if (key) { majorTag = tag; majorKey = key; break; }
+  }
+  // Fallback subject so every icon reads as something.
+  if (!majorKey) {
+    majorTag = DEFAULT_EFFECT_TAG;
+    majorKey = pickVariant(am, effectKeyPrefix(DEFAULT_EFFECT_TAG), seedBase)
+      || effectKeyPrefix(DEFAULT_EFFECT_TAG);
   }
 
-  // No form keyword → the lead element's art is the primary glyph. Orb only
-  // when neither a form nor an element with sheet art is present.
-  let elementIsPrimary = false;
-  if (!glyph && firstElementId && artFor(firstElementId)) {
-    glyph = artFor(firstElementId);
-    elementIsPrimary = true;
+  // MINOR: the next distinct effect tag with an authored sprite.
+  let minorTag = null;
+  let minorKey = null;
+  for (const tag of effectTags) {
+    if (tag === majorTag) continue;
+    const key = pickVariant(am, effectKeyPrefix(tag), (seedBase ^ hashString(`m${tag}`)) >>> 0);
+    if (key) { minorTag = tag; minorKey = key; break; }
   }
-  palette = palette || DEFAULT_PALETTE;
-  glyph = glyph || DEFAULT_GLYPH;
 
-  // Backdrop layer: the lead element's art behind the primary (the SECOND
-  // element's art when the lead element already IS the primary).
-  const backdropId = elementIsPrimary ? secondElementId : firstElementId;
-  const backdropArt = backdropId ? artFor(backdropId) : null;
+  const baseKey = pickVariant(am, baseKeyPrefix(color), (seedBase ^ hashString('base')) >>> 0)
+    // Neutral fallback if the chosen color has no authored base.
+    || pickVariant(am, baseKeyPrefix(NEUTRAL_COLOR), seedBase)
+    || baseKeyPrefix(color);
 
-  const layers = [];
-  if (backdropArt) layers.push({ art: backdropArt, placement: 'backdrop' });
-  for (const art of flanks) layers.push({ art, placement: 'flank' });
+  const borderKey = !am || has(am, BORDER_KEY) ? BORDER_KEY : null;
 
-  return {
-    palette,
-    secondaryPalette,
-    glyph,
-    glyphSource: PNG_GLYPH_ID_SET.has(glyph) ? 'png' : 'procedural',
-    layers,
-    overlays,
-    bgStyle: RIDGED_PALETTES.has(palette) ? 'ridged' : 'clouds',
-    rim: RIM_BY_RARITY[maxRarity(list)] || 'iron',
-    seed: deriveIconSeed(runSeed, spellId, list),
-  };
-}
+  // Signature = the resolved sprite keys: two spells that composite from the
+  // same layers share a cache entry, and the cache key fully pins the pixels.
+  const signature = [baseKey, minorKey || '-', majorKey, borderKey || '-'].join('|');
 
-/**
- * Stable string form of a recipe — the cache key body (spellIcons.js appends
- * the pipeline version).
- * @param {object} recipe
- * @returns {string}
- */
-export function recipeKey(recipe) {
-  return [
-    recipe.palette,
-    recipe.secondaryPalette || '-',
-    recipe.glyph,
-    recipe.glyphSource,
-    (recipe.layers || []).map((l) => `${l.placement === 'backdrop' ? 'b' : 'f'}.${l.art}`).join('+') || '-',
-    recipe.overlays.join('+') || '-',
-    recipe.bgStyle,
-    recipe.rim,
-    recipe.seed,
-  ].join(':');
+  return { baseKey, minorKey, majorKey, borderKey, color, majorTag, minorTag, signature };
 }

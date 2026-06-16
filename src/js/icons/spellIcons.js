@@ -1,28 +1,26 @@
 /**
- * spellIcons.js — cache + integration layer for procedural spell icons.
+ * spellIcons.js — cache + integration layer for composited spell icons.
  *
  * Public surface:
- *   getSpellIcon({ keywords, spellId, runSeed, assetManager? })
- *     → { canvas, assetKey, recipe } — resolves, renders (once), caches.
+ *   getSpellIcon({ keywords, cost, spellId, assetManager? })
+ *     → { canvas, assetKey, plan } — resolves the layer plan, renders (once),
+ *       caches by the resolved-sprite signature, and (with an assetManager)
+ *       registers the canvas under a stable `spell_icon_<hash>` key so any
+ *       UIImage/SkillButton can draw it through the normal asset-key path.
  *   clearSpellIconCache()
- *     → drop all cached icons. Call at run boundaries (icons embed the run
- *       seed, so a previous run's icons are dead weight). Wired into
- *       MapScene.resetForNewRun().
+ *     → drop all cached icons. Wired into MapScene.resetForNewRun().
  *
- * Caching: keyed by recipeKey(recipe) + ICON_PIPELINE_VERSION. The recipe
- * contains the run-derived seed, so caches are naturally per-run; the version
- * suffix invalidates stale entries whenever the compositor pipeline changes.
- *
- * AssetManager integration: when an assetManager is supplied, the rendered
- * canvas is also registered under a stable `spell_icon_<hash>` key (via
- * AssetManager.registerCanvas), so any UIImage/SkillButton can display the
- * icon through the normal asset-key path — no consumer special-casing.
+ * Caching: keyed by the plan signature (the resolved base/effect/border sprite
+ * keys) + size + ICON_PIPELINE_VERSION. Two spells whose icons composite from
+ * the same authored layers naturally share one cached canvas. Icons no longer
+ * embed the run seed (the art is authored, not procedural), so a given spell
+ * always produces the same icon — but clearing per run keeps memory bounded.
  */
 
-import { resolveRecipe, recipeKey, hashString } from './spellIconRecipe.js';
+import { resolveIconPlan, hashString } from './spellIconRecipe.js';
 import { renderIcon, ICON_PIPELINE_VERSION, ICON_NATIVE_SIZE } from './spellIconCompositor.js';
 
-/** @type {Map<string, {canvas: HTMLCanvasElement, assetKey: string, recipe: object}>} */
+/** @type {Map<string, {canvas: HTMLCanvasElement, assetKey: string, plan: object}>} */
 const _cache = new Map();
 
 /**
@@ -30,22 +28,22 @@ const _cache = new Map();
  *
  * @param {object} opts
  * @param {string[]} opts.keywords — the spell's keyword ids (Skill Weave tag ids)
- * @param {string}   opts.spellId — stable spell identifier within the run
- * @param {string|number} opts.runSeed — the run seed (MapScene seed string)
- * @param {object}   [opts.assetManager] — when given, the canvas is registered
- *   under the returned assetKey so it's drawable via the normal asset path
+ * @param {object}   [opts.cost] — the spell's mana cost `{ color: amount }`
+ * @param {string}   opts.spellId — stable spell identifier
+ * @param {object}   [opts.assetManager] — supplies sheet sprites; when given the
+ *   canvas is registered under the returned assetKey so it's drawable normally
  * @param {number}   [opts.size=ICON_NATIVE_SIZE] — native render size
- * @returns {{ canvas: HTMLCanvasElement, assetKey: string, recipe: object }}
+ * @returns {{ canvas: HTMLCanvasElement, assetKey: string, plan: object }}
  */
-export function getSpellIcon({ keywords, spellId, runSeed, assetManager = null, size = ICON_NATIVE_SIZE }) {
-  const recipe = resolveRecipe(keywords, spellId, runSeed);
-  const key = `${recipeKey(recipe)}:${size}:v${ICON_PIPELINE_VERSION}`;
+export function getSpellIcon({ keywords, cost = null, spellId, assetManager = null, size = ICON_NATIVE_SIZE }) {
+  const plan = resolveIconPlan(keywords, cost, spellId, assetManager);
+  const key = `${plan.signature}:${size}:v${ICON_PIPELINE_VERSION}`;
 
   let entry = _cache.get(key);
   if (!entry) {
-    const canvas = renderIcon(recipe, size);
+    const canvas = renderIcon(plan, assetManager, size);
     const assetKey = `spell_icon_${hashString(key).toString(36)}`;
-    entry = { canvas, assetKey, recipe };
+    entry = { canvas, assetKey, plan };
     _cache.set(key, entry);
   }
 

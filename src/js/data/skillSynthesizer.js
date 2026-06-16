@@ -111,7 +111,7 @@ const POWER = Object.freeze({
   perManaGained: 1,
   perManaDrainedOneColor: 1,
   perManaDrainedAllColors: 2.5,
-  perAttack: 5,          // permanent for the battle
+  perAttack: 2,          // permanent for the battle
   perTileCreated: 1,
   thrallTileMult: 1.5,   // wild tiles are worth more per tile
   destroyTile: 2,        // single-tile snipe
