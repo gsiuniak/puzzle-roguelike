@@ -117,10 +117,16 @@ const TARGET_BTN_HOVER_ALPHA = 1;    // opacity when hovered (full = pops on hov
 const TARGET_BTN_LABEL_SIZE = 34;
 const TARGET_BTN_LABEL_COLOR = '#fff8e8';
 const TARGET_BTN_LABEL_Y_NUDGE = 0; // px vertical offset for the label center
-// "Casting <skill>" prompt at the top of the screen during targeting.
-const TARGET_PROMPT_Y = 64;          // vertical center (design px from top)
-const TARGET_PROMPT_FONT_SIZE = 40;
+// "Casting <skill>" prompt at the top of the screen during targeting — drawn on
+// the `ui_skill_nameplate` banner with the text centered inside it.
+const TARGET_NAMEPLATE_SPRITE = 'ui_skill_nameplate';
+const TARGET_NAMEPLATE_W = 720;      // display width of the nameplate (design px)
+const TARGET_NAMEPLATE_FALLBACK_ASPECT = 1300 / 149; // if the art isn't loaded yet
+const TARGET_PROMPT_Y = 58;          // nameplate + text vertical center (design px)
+const TARGET_PROMPT_FONT_SIZE = 38;
 const TARGET_PROMPT_COLOR = '#f0e4bf';
+const TARGET_PROMPT_TEXT_Y_NUDGE = 0;     // text vertical offset within the plate
+const TARGET_PROMPT_MAX_WIDTH_FRAC = 0.72; // text shrinks to fit this fraction of the plate width
 
 /**
  * BattleScene — battle layout with three compact columns.
@@ -1623,18 +1629,41 @@ export default class BattleScene extends UIPanel {
     const rects = this._getTargetingButtonRects();
     if (!rects) return;
 
-    // "Casting <skill>" prompt centered at the top of the screen.
+    // "Casting <skill>" prompt on the nameplate banner, centered at the top.
     const app = this._sceneManager._app;
+    const cx = app.width / 2;
     const skill = this._battleController._targetingSkill;
     const name = skill && skill.name ? skill.name : 'a spell';
+
+    const plate = this._assetManager && this._assetManager.get(TARGET_NAMEPLATE_SPRITE);
+    const plateAspect = (plate && plate.width && plate.height)
+      ? plate.width / plate.height : TARGET_NAMEPLATE_FALLBACK_ASPECT;
+    const plateH = TARGET_NAMEPLATE_W / plateAspect;
+    if (plate) {
+      const prevSmoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(plate, cx - TARGET_NAMEPLATE_W / 2, TARGET_PROMPT_Y - plateH / 2,
+        TARGET_NAMEPLATE_W, plateH);
+      ctx.imageSmoothingEnabled = prevSmoothing;
+    }
+
+    // Text centered within the nameplate, shrunk to fit its usable width.
+    const text = `Casting ${name}`;
     ctx.save();
-    ctx.font = `${TARGET_PROMPT_FONT_SIZE}px "Marcellus SC", Georgia, serif`;
+    let size = TARGET_PROMPT_FONT_SIZE;
+    ctx.font = `${size}px "Marcellus SC", Georgia, serif`;
+    const usable = TARGET_NAMEPLATE_W * TARGET_PROMPT_MAX_WIDTH_FRAC;
+    const measured = ctx.measureText(text).width;
+    if (measured > usable) {
+      size = Math.max(14, Math.floor(size * (usable / measured)));
+      ctx.font = `${size}px "Marcellus SC", Georgia, serif`;
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = TARGET_PROMPT_COLOR;
     ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
     ctx.shadowBlur = 8;
-    ctx.fillText(`Casting ${name}`, app.width / 2, TARGET_PROMPT_Y);
+    ctx.fillText(text, cx, TARGET_PROMPT_Y + TARGET_PROMPT_TEXT_Y_NUDGE);
     ctx.restore();
 
     if (rects.confirm) {
