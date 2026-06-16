@@ -23,7 +23,8 @@ This document is the project routing map. Use it to determine which files own wh
 
 **Project:** `gems` — Match-3 Puzzle Roguelike
 **Stack:** Vanilla JavaScript (ES modules), HTML5 Canvas, Howler.js for audio
-**Build:** No bundler; modules loaded natively via `<script type="module">`. Root `package.json` sets `"type": "module"` so node tooling (`sim/` scripts/tests) can import the `src/js` ES modules directly.
+**Build:** No bundler is REQUIRED — the game runs raw by serving the project and opening [`src/index.html`](src/index.html) (native ES modules + relative asset paths, no build step). This is still the primary dev/serve flow. Root `package.json` sets `"type": "module"` so node tooling (`sim/` scripts/tests) can import the `src/js` ES modules directly.
+**Optional Vite build (for distribution):** [`vite.config.js`](vite.config.js) adds an ADDITIVE build that does NOT change raw serving — `npm run build` → a minified, **PWA**-enabled `dist/` (installable on mobile/desktop; offline via a service worker), `npm run dev` (HMR), `npm run preview` (serve `dist/`). Key invariants: `root:'src'` (builds the same untouched `src/index.html`), `base:'./'` (works at a domain root AND a subpath like itch.io), game `assets/` are referenced by STRING path / runtime `fetch()` (not Vite imports) so they're copied to `dist/assets` VERBATIM (the `copyGameAssets` plugin) and every runtime path resolves identically; Vite's hashed output goes in a separate `bundle/` dir. PWA precaches only the JS/CSS/HTML shell and runtime-caches images/audio/fonts/json (CacheFirst); cutscene `.mp4`s are intentionally not cached. Install icons: drop `icon-192.png`/`icon-512.png` in [`src/assets/icons/`](src/assets/icons/) (build works without them). Same `dist/` output also feeds Electron (desktop) / Capacitor (mobile store apps) if ever wanted.
 **Entry:** [`src/index.html`](src/index.html) → [`src/js/main.js`](src/js/main.js)
 
 ### Directory Layout

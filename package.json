@@ -4,5 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Match-3 Puzzle Roguelike",
-  "devDependencies": {}
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^0.20.5"
+  }
 }

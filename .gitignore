@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Vite build output
+dist/
+
+# Vite / tooling caches
+.vite/
+*.local
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
