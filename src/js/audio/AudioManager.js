@@ -177,6 +177,31 @@ class _AudioManager {
   }
 
   /**
+   * Stop a SFX/UI sound. Pass the play id (returned by playSfx/playUi) to stop a
+   * specific instance — e.g. a looping sound — or omit it to stop every instance
+   * of the key. Optional fade-out avoids a click when cutting a sustained loop.
+   *
+   * @param {string} key
+   * @param {number|null} [id]        — specific play id, or null for all instances
+   * @param {number}      [fadeOut=0] — ms fade before stopping (only when id given)
+   */
+  stopSfx(key, id = null, fadeOut = 0) {
+    const howl = this._sounds.get(key);
+    if (!howl) return;
+    if (id === null || id === undefined) {
+      howl.stop();
+      return;
+    }
+    if (fadeOut > 0) {
+      const v = howl.volume(id) || 0;
+      howl.fade(v, 0, fadeOut, id);
+      setTimeout(() => howl.stop(id), fadeOut + 50);
+    } else {
+      howl.stop(id);
+    }
+  }
+
+  /**
    * Play a UI sound (button hover/click, notifications).
    *
    * @param {string} key

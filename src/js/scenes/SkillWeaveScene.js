@@ -189,6 +189,10 @@ const ORB_BEAM_COLORS = {
   [TAG_RARITY.LEGENDARY]: { color: '#f3a23a', core: '#ffe9c6' }, // orange
 };
 const ORB_BEAM_FALLBACK = { color: '#9a4ff5', core: '#efe2ff' };
+/** Looping crucible/beam SFX (plays while the orbs beam; volume + stop-fade). */
+const CRUCIBLE_SFX_KEY = 'sfx_crucible';
+const CRUCIBLE_SFX_VOLUME = 0.7;
+const CRUCIBLE_SFX_STOP_FADE = 140;   // ms fade when the loop is cut
 
 // ── Result phase (after "Weave Power": show the generated spell icon) ──
 /** Subtitle shown while the woven icon is displayed. */
@@ -326,6 +330,8 @@ export default class SkillWeaveScene extends UIPanel {
      * @type {HarvestTendrilEffect[]|null}
      */
     this._crucibleBeams = null;
+    /** Howl play id of the looping crucible SFX while it's beaming (else null). */
+    this._crucibleSfxId = null;
 
     /**
      * Active animation, or null when idle. Shapes by kind:
@@ -400,6 +406,7 @@ export default class SkillWeaveScene extends UIPanel {
     this._hoverButton = null;
     this._crucibleTime = 0;
     this._crucibleBeams = null;
+    this._crucibleSfxId = null;
     this._rollAllSteps();
     this._startIntro();   // fan the first step's tags out on load
 
@@ -429,6 +436,7 @@ export default class SkillWeaveScene extends UIPanel {
     input.off('mousemove', this._handleMouseMove);
     input.off('keydown', this._handleKeyDown);
     this._destroyBackgroundVideo();
+    this._stopCrucibleSfx();   // safety: never leave the loop ringing after exit
   }
 
   // ── Background video setup / teardown ──────────────────────
@@ -838,9 +846,11 @@ export default class SkillWeaveScene extends UIPanel {
       this._crucibleTime += dt;
       this._ensureCrucibleBeams();
       if (this._crucibleBeams) for (const b of this._crucibleBeams) b.update(dt);
-    } else if (this._crucibleTime !== 0 || this._crucibleBeams) {
+      this._startCrucibleSfx();   // begin the looping beam SFX (idempotent)
+    } else if (this._crucibleTime !== 0 || this._crucibleBeams || this._crucibleSfxId !== null) {
       this._crucibleTime = 0;
       this._crucibleBeams = null;   // dropping the instances ends the sustained beams
+      this._stopCrucibleSfx();
     }
 
     super.update(dt);
@@ -964,6 +974,22 @@ export default class SkillWeaveScene extends UIPanel {
       });
     });
     return this._crucibleBeams;
+  }
+
+  /** Start the looping crucible/beam SFX once (idempotent while it's playing). */
+  _startCrucibleSfx() {
+    if (this._crucibleSfxId !== null) return;
+    this._crucibleSfxId = AudioManager.playSfx(CRUCIBLE_SFX_KEY, {
+      loop: true,
+      volume: CRUCIBLE_SFX_VOLUME,
+    });
+  }
+
+  /** Stop the looping crucible/beam SFX (short fade to avoid a click). */
+  _stopCrucibleSfx() {
+    if (this._crucibleSfxId === null) return;
+    AudioManager.stopSfx(CRUCIBLE_SFX_KEY, this._crucibleSfxId, CRUCIBLE_SFX_STOP_FADE);
+    this._crucibleSfxId = null;
   }
 
   /** The focal point a set of option rects fans out from (centroid of centers). */

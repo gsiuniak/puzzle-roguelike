@@ -295,6 +295,12 @@ const SOUNDS = {
     src: ['assets/audio/sfx/skill_weave/sfx_choose_tags_confirm.mp3'],
     category: AudioCategory.SFX,
   },
+  // Sustained crucible/beam loop (recipe complete, pre-confirm). Looped + stopped
+  // by SkillWeaveScene via playSfx({loop:true}) / stopSfx.
+  sfx_crucible: {
+    src: ['assets/audio/sfx/skill_weave/sfx_crucible.mp3'],
+    category: AudioCategory.SFX,
+  },
 
   // ── UI ──────────────────────────────────────────────────
   ui_button_hover: {
