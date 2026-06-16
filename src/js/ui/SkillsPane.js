@@ -90,9 +90,9 @@ const COUNT_COLOR = '#9d927c';
 // centered in the nameplate banner. Y is a FRACTION of panel height (the art is
 // stretched to the rect), so it tracks the banner if the panel resizes.
 const TITLE_TEXT = 'Skills';
-const TITLE_FONT_SIZE = 23;
+const TITLE_FONT_SIZE = 32;
 const TITLE_COLOR = '#e8d8a8';
-const TITLE_CENTER_Y_FRAC = 0.04; // nameplate banner vertical center
+const TITLE_CENTER_Y_FRAC = 0.035; // nameplate banner vertical center
 const TITLE_LETTER_SPACING = 1.5;
 
 // ── Whether to show Equipped Info 
