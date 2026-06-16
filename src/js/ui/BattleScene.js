@@ -99,14 +99,22 @@ const CORNER_BUTTON_SIZE = 60;     // icon width/height
 const CORNER_BUTTON_GAP = 8;       // vertical gap between the two icons
 const CORNER_BUTTON_MARGIN = 12;   // inset from the physical top-right corner
 
-// Targeting Confirm/Cancel controls — a touch-friendly bar shown only during
-// TARGETING, centered near the bottom of the design viewport. Drawn in design
-// space (render()) and hit-tested in design-space coords.
-const TARGET_BTN_W = 240;          // button width
-const TARGET_BTN_H = 92;           // button height
-const TARGET_BTN_GAP = 80;         // horizontal gap between Cancel and Confirm
+// Targeting Confirm/Cancel controls — shown only during TARGETING, anchored
+// below the board. The button art comes from the character-pane spritesheet
+// (`ui_skill_confirm` / `ui_skill_cancel`); width is derived from the art's
+// aspect at render time so it never distorts. Drawn in design space (render())
+// and hit-tested in design-space coords.
+const TARGET_CONFIRM_SPRITE = 'ui_skill_confirm';
+const TARGET_CANCEL_SPRITE = 'ui_skill_cancel';
+const TARGET_BTN_H = 92;           // display height of the button art (px)
+const TARGET_BTN_GAP = 56;         // horizontal gap between Cancel and Confirm
 const TARGET_BTN_CENTER_Y = 966;   // fallback vertical center of the row (design px)
-const TARGET_BTN_RADIUS = 16;      // rounded-corner radius
+const TARGET_BTN_FALLBACK_ASPECT = 1175 / 330; // if the art isn't loaded yet
+const TARGET_BTN_HOVER_SCALE = 1.05; // subtle grow on hover
+// Centered button label.
+const TARGET_BTN_LABEL_SIZE = 34;
+const TARGET_BTN_LABEL_COLOR = '#fff8e8';
+const TARGET_BTN_LABEL_Y_NUDGE = 0; // px vertical offset for the label center
 
 /**
  * BattleScene — battle layout with three compact columns.
@@ -1535,7 +1543,7 @@ export default class BattleScene extends UIPanel {
    * On TOUCH there are two buttons (Cancel | Cast — board taps only position).
    * On DESKTOP a click casts instantly, so only a single centered Cancel button
    * is shown (`confirm` is null). Null if no app.
-   * @returns {{cancel:object, confirm:object|null, cx:number, promptY:number, touch:boolean}|null}
+   * @returns {{cancel:object, confirm:object|null, cx:number, touch:boolean}|null}
    */
   _getTargetingButtonRects() {
     const app = this._sceneManager && this._sceneManager._app;
@@ -1549,20 +1557,28 @@ export default class BattleScene extends UIPanel {
       centerY = Math.min(below, app.height - TARGET_BTN_H / 2 - 16);
     }
     const top = centerY - TARGET_BTN_H / 2;
+    const w = Math.round(TARGET_BTN_H * this._targetBtnAspect());
     const touch = this._isTouchInput();
     if (touch) {
       return {
-        cancel:  { x: cx - TARGET_BTN_GAP / 2 - TARGET_BTN_W, y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
-        confirm: { x: cx + TARGET_BTN_GAP / 2,               y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
-        cx, promptY: top - 30, touch: true,
+        cancel:  { x: cx - TARGET_BTN_GAP / 2 - w, y: top, w, h: TARGET_BTN_H },
+        confirm: { x: cx + TARGET_BTN_GAP / 2,     y: top, w, h: TARGET_BTN_H },
+        cx, touch: true,
       };
     }
     // Desktop: a single centered Cancel button (clicks on the board cast).
     return {
-      cancel:  { x: cx - TARGET_BTN_W / 2, y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
+      cancel:  { x: cx - w / 2, y: top, w, h: TARGET_BTN_H },
       confirm: null,
-      cx, promptY: top - 30, touch: false,
+      cx, touch: false,
     };
+  }
+
+  /** Aspect ratio of the targeting button art (falls back before it loads). */
+  _targetBtnAspect() {
+    const img = this._assetManager && this._assetManager.get(TARGET_CONFIRM_SPRITE);
+    if (img && img.width && img.height) return img.width / img.height;
+    return TARGET_BTN_FALLBACK_ASPECT;
   }
 
   /**
@@ -1592,7 +1608,7 @@ export default class BattleScene extends UIPanel {
       || (!!rects.confirm && BattleScene._pointInRect(x, y, rects.confirm));
   }
 
-  /** Draw the targeting Confirm/Cancel bar + prompt. Only while targeting. */
+  /** Draw the targeting Cancel/Cast button art. Only while targeting. */
   _renderTargetingControls(ctx) {
     if (!this._isTargeting()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
@@ -1601,79 +1617,48 @@ export default class BattleScene extends UIPanel {
     const rects = this._getTargetingButtonRects();
     if (!rects) return;
 
-    // Prompt above the buttons. Touch positions then casts; desktop clicks a
-    // tile to cast directly.
-    const skill = this._battleController._targetingSkill;
-    const name = skill && skill.name ? skill.name : 'your skill';
-    const prompt = rects.touch ? `Aim ${name}, then Cast` : `Click a target for ${name}`;
-    ctx.save();
-    ctx.font = '600 34px "Marcellus SC", Georgia, serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.85)';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = '#f0e4bf';
-    ctx.fillText(prompt, rects.cx, rects.promptY);
-    ctx.restore();
+    // Prompt text intentionally NOT rendered — the authored button art conveys
+    // the action. (Was "Aim <Spell>, then Cast" / "Click a target for <Spell>".)
 
     if (rects.confirm) {
-      this._drawTargetButton(ctx, rects.confirm, 'Cast', '#2e7d4f', '#7df0a8', 'check');
+      this._drawTargetButton(ctx, rects.confirm, TARGET_CONFIRM_SPRITE, 'Confirm');
     }
-    this._drawTargetButton(ctx, rects.cancel, 'Cancel', '#7d2e34', '#f0a0a0', 'cross');
+    this._drawTargetButton(ctx, rects.cancel, TARGET_CANCEL_SPRITE, 'Cancel');
   }
 
-  /** Draw one rounded targeting button with a glyph + label. */
-  _drawTargetButton(ctx, r, label, fill, edge, glyph) {
+  /** Draw one targeting button: spritesheet art + centered label (hover grow). */
+  _drawTargetButton(ctx, r, spriteKey, label) {
+    const img = this._assetManager && this._assetManager.get(spriteKey);
+    if (!img) return;
     const hovered = BattleScene._pointInRect(this._lastPointerX, this._lastPointerY, r);
-    ctx.save();
-    BattleScene._roundRectPath(ctx, r.x, r.y, r.w, r.h, TARGET_BTN_RADIUS);
-    ctx.fillStyle = fill;
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur = 14;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.lineWidth = hovered ? 4 : 2.5;
-    ctx.strokeStyle = edge;
-    ctx.stroke();
-
-    // Glyph (drawn left of the label).
-    const gy = r.y + r.h / 2;
-    const gx = r.x + 42;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    if (glyph === 'check') {
-      ctx.moveTo(gx - 14, gy + 2);
-      ctx.lineTo(gx - 4, gy + 13);
-      ctx.lineTo(gx + 15, gy - 13);
+    const sc = hovered ? TARGET_BTN_HOVER_SCALE : 1;
+    const w = r.w * sc;
+    const h = r.h * sc;
+    const x = r.x + (r.w - w) / 2;
+    const y = r.y + (r.h - h) / 2;
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = true;
+    if (hovered) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(232, 200, 110, 0.55)';
+      ctx.shadowBlur = 18;
+      ctx.drawImage(img, x, y, w, h);
+      ctx.restore();
     } else {
-      ctx.moveTo(gx - 12, gy - 12);
-      ctx.lineTo(gx + 12, gy + 12);
-      ctx.moveTo(gx + 12, gy - 12);
-      ctx.lineTo(gx - 12, gy + 12);
+      ctx.drawImage(img, x, y, w, h);
     }
-    ctx.stroke();
+    ctx.imageSmoothingEnabled = prevSmoothing;
 
-    // Label.
-    ctx.font = '600 38px "Marcellus SC", Georgia, serif';
+    // Centered label over the art.
+    ctx.save();
+    ctx.font = `${Math.round(TARGET_BTN_LABEL_SIZE * sc)}px "Marcellus SC", Georgia, serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff8e8';
-    ctx.fillText(label, r.x + r.w / 2 + 26, gy + 2);
+    ctx.fillStyle = TARGET_BTN_LABEL_COLOR;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 6;
+    ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + TARGET_BTN_LABEL_Y_NUDGE);
     ctx.restore();
-  }
-
-  /** Rounded-rectangle path helper. */
-  static _roundRectPath(ctx, x, y, w, h, rad) {
-    const r = Math.min(rad, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
   }
 
   render(ctx) {

@@ -124,14 +124,19 @@ export default class InputManager {
     this._fire('click', pos.x, pos.y);
   }
   _onMouseDown(e) {
-    const pos = this._getPos(e);
     this.lastInputWasTouch = false;
+    // Game input is LEFT-button only. Right/middle clicks must not trigger
+    // mousedown actions (e.g. instant skill cast) — right-click is handled
+    // separately via the `contextmenu` event (e.g. cancel targeting).
+    if (e.button !== 0) return;
+    const pos = this._getPos(e);
     this.mouseDown = true;
     this._fire('mousedown', pos.x, pos.y);
   }
   _onMouseUp(e) {
-    const pos = this._getPos(e);
     this.lastInputWasTouch = false;
+    if (e.button !== 0) return;
+    const pos = this._getPos(e);
     this.mouseDown = false;
     this._fire('mouseup', pos.x, pos.y);
   }
