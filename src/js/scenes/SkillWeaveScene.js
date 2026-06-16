@@ -175,7 +175,7 @@ const CRUCIBLE_FADE_IN_MS = 360;      // soft reveal when the recipe completes
 // ── Crucible orbs + energy beams (one orb per recipe tag, by rarity) ──
 /** Rarity → orb sprite (matches the sheet sprite names directly, no alias). */
 const ORB_ASSET_PREFIX = 'ui_skill_weave_orb_';
-const ORB_WIDTH = 110;                // height derives from the orb art aspect
+const ORB_WIDTH = 80;                // height derives from the orb art aspect
 const ORB_FALLBACK_ASPECT = 476 / 646;
 /** Vertical position of the orb's GLOWING BALL within the art (0=top, 1=bottom);
  *  orbs are anchored by + beams emitted from this point (the ball, not the stand). */
