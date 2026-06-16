@@ -30,6 +30,14 @@ export default class InputManager {
     this.mouseX = 0;
     this.mouseY = 0;
     this.mouseDown = false;
+    /**
+     * Whether the most recent pointer interaction came from touch (vs a real
+     * mouse). Set true by the touch handlers, false by the mouse handlers; the
+     * touch handlers preventDefault, so no synthetic mouse events flip it back.
+     * Scenes read it to branch touch vs desktop UX (e.g. tap-to-position vs
+     * click-to-cast targeting).
+     */
+    this.lastInputWasTouch = false;
 
     // Event listeners
     this._listeners = {
@@ -117,16 +125,19 @@ export default class InputManager {
   }
   _onMouseDown(e) {
     const pos = this._getPos(e);
+    this.lastInputWasTouch = false;
     this.mouseDown = true;
     this._fire('mousedown', pos.x, pos.y);
   }
   _onMouseUp(e) {
     const pos = this._getPos(e);
+    this.lastInputWasTouch = false;
     this.mouseDown = false;
     this._fire('mouseup', pos.x, pos.y);
   }
   _onMouseMove(e) {
     const pos = this._getPos(e);
+    this.lastInputWasTouch = false;
     this.mouseX = pos.x;
     this.mouseY = pos.y;
     this._fire('mousemove', pos.x, pos.y);
@@ -156,6 +167,7 @@ export default class InputManager {
     e.preventDefault();
     if (e.touches.length === 0) return;
     const pos = this._getPos(e.touches[0]);
+    this.lastInputWasTouch = true;
     this.mouseX = pos.x;
     this.mouseY = pos.y;
     this.mouseDown = true;
@@ -170,6 +182,7 @@ export default class InputManager {
     e.preventDefault();
     if (e.touches.length === 0) return;
     const pos = this._getPos(e.touches[0]);
+    this.lastInputWasTouch = true;
     this.mouseX = pos.x;
     this.mouseY = pos.y;
     this._fire('mousemove', pos.x, pos.y);
@@ -186,6 +199,7 @@ export default class InputManager {
       const pos = this._getPos(e.changedTouches[0]);
       x = pos.x; y = pos.y;
     }
+    this.lastInputWasTouch = true;
     this.mouseX = x;
     this.mouseY = y;
     this.mouseDown = false;
@@ -201,6 +215,7 @@ export default class InputManager {
       const pos = this._getPos(e.changedTouches[0]);
       x = pos.x; y = pos.y;
     }
+    this.lastInputWasTouch = true;
     this.mouseDown = false;
     this._fire('mouseup', x, y);
   }

@@ -617,6 +617,12 @@ export default class BattleScene extends UIPanel {
     return this._battleController.state === BattleState.TARGETING;
   }
 
+  /** True when the most recent pointer interaction was touch (vs a real mouse). */
+  _isTouchInput() {
+    const input = this._sceneManager && this._sceneManager._input;
+    return !!(input && input.lastInputWasTouch);
+  }
+
   // ── Input handlers ───────────────────────────────────
 
   _handleMouseDown(x, y) {
@@ -660,13 +666,17 @@ export default class BattleScene extends UIPanel {
     if (!board) return;
 
     if (this._isTargeting()) {
-      // Board tap POSITIONS the target preview (it does not cast). Confirming
-      // is via the on-screen Confirm button / Enter — this is what makes the
-      // flow work on touch, where there's no hover to preview the area.
       const cell = board.screenToCell(x, y);
       if (cell) {
-        this._battleController.setTargetHover(cell.col, cell.row);
-        board.hoveredCell = cell;
+        if (this._isTouchInput()) {
+          // Touch: a tap POSITIONS the target preview (no hover to preview the
+          // area); the on-screen Cast button / Enter commits.
+          this._battleController.setTargetHover(cell.col, cell.row);
+          board.hoveredCell = cell;
+        } else {
+          // Desktop: a click casts instantly at the clicked tile.
+          this._battleController.tryTargetTile(cell.col, cell.row);
+        }
       }
       return;
     }
@@ -712,13 +722,19 @@ export default class BattleScene extends UIPanel {
     if (!board) return;
 
     if (this._isTargeting()) {
-      const cell = board.screenToCell(x, y);
-      if (cell) {
-        // Hover (desktop) / drag (touch) repositions the preview. Moving OFF the
-        // board (e.g. onto the Confirm/Cancel buttons) keeps the last target so
-        // it isn't wiped before the player confirms.
-        this._battleController.setTargetHover(cell.col, cell.row);
-        board.hoveredCell = cell;
+      // Never reposition when the pointer is over the Cancel/Cast buttons. The
+      // buttons can overlap the board's lower rows on some layouts, and on touch
+      // a tap fires mousemove BEFORE mousedown — without this guard, tapping
+      // Cast would first move the target to the cell under the button and then
+      // cast there (the "casts in a different area" bug).
+      if (!this._pointOverTargetingButton(x, y)) {
+        const cell = board.screenToCell(x, y);
+        if (cell) {
+          // Hover (desktop) / drag (touch) repositions the preview. Moving OFF
+          // the board keeps the last target so it isn't wiped before confirm.
+          this._battleController.setTargetHover(cell.col, cell.row);
+          board.hoveredCell = cell;
+        }
       }
       return;
     }
@@ -1512,11 +1528,14 @@ export default class BattleScene extends UIPanel {
   // ── Targeting Confirm/Cancel controls (touch-friendly) ──────
 
   /**
-   * Design-space rects for the Cancel (left) and Confirm (right) buttons.
-   * Anchored just BELOW the board (centered on it) so they never cover tiles;
-   * falls back to the viewport bottom-center if the board rect isn't ready.
-   * Clamped to stay on screen. Null if no app.
-   * @returns {{cancel:object, confirm:object, cx:number, promptY:number}|null}
+   * Design-space rects for the targeting controls, anchored just BELOW the
+   * board (centered on it) so they never cover tiles; falls back to the
+   * viewport bottom-center if the board rect isn't ready. Clamped on screen.
+   *
+   * On TOUCH there are two buttons (Cancel | Cast — board taps only position).
+   * On DESKTOP a click casts instantly, so only a single centered Cancel button
+   * is shown (`confirm` is null). Null if no app.
+   * @returns {{cancel:object, confirm:object|null, cx:number, promptY:number, touch:boolean}|null}
    */
   _getTargetingButtonRects() {
     const app = this._sceneManager && this._sceneManager._app;
@@ -1530,11 +1549,19 @@ export default class BattleScene extends UIPanel {
       centerY = Math.min(below, app.height - TARGET_BTN_H / 2 - 16);
     }
     const top = centerY - TARGET_BTN_H / 2;
+    const touch = this._isTouchInput();
+    if (touch) {
+      return {
+        cancel:  { x: cx - TARGET_BTN_GAP / 2 - TARGET_BTN_W, y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
+        confirm: { x: cx + TARGET_BTN_GAP / 2,               y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
+        cx, promptY: top - 30, touch: true,
+      };
+    }
+    // Desktop: a single centered Cancel button (clicks on the board cast).
     return {
-      cancel:  { x: cx - TARGET_BTN_GAP / 2 - TARGET_BTN_W, y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
-      confirm: { x: cx + TARGET_BTN_GAP / 2,               y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
-      cx,
-      promptY: top - 30,
+      cancel:  { x: cx - TARGET_BTN_W / 2, y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
+      confirm: null,
+      cx, promptY: top - 30, touch: false,
     };
   }
 
@@ -1545,7 +1572,7 @@ export default class BattleScene extends UIPanel {
   _handleTargetingButtonClick(x, y) {
     const rects = this._getTargetingButtonRects();
     if (!rects) return false;
-    if (BattleScene._pointInRect(x, y, rects.confirm)) {
+    if (rects.confirm && BattleScene._pointInRect(x, y, rects.confirm)) {
       this._battleController.confirmTarget();
       return true;
     }
@@ -1554,6 +1581,15 @@ export default class BattleScene extends UIPanel {
       return true;
     }
     return false;
+  }
+
+  /** True if (x,y) is over either targeting button (while targeting). */
+  _pointOverTargetingButton(x, y) {
+    if (!this._isTargeting()) return false;
+    const rects = this._getTargetingButtonRects();
+    if (!rects) return false;
+    return BattleScene._pointInRect(x, y, rects.cancel)
+      || (!!rects.confirm && BattleScene._pointInRect(x, y, rects.confirm));
   }
 
   /** Draw the targeting Confirm/Cancel bar + prompt. Only while targeting. */
@@ -1565,9 +1601,11 @@ export default class BattleScene extends UIPanel {
     const rects = this._getTargetingButtonRects();
     if (!rects) return;
 
-    // Prompt above the buttons.
+    // Prompt above the buttons. Touch positions then casts; desktop clicks a
+    // tile to cast directly.
     const skill = this._battleController._targetingSkill;
-    const prompt = skill && skill.name ? `Aim ${skill.name}` : 'Choose a target';
+    const name = skill && skill.name ? skill.name : 'your skill';
+    const prompt = rects.touch ? `Aim ${name}, then Cast` : `Click a target for ${name}`;
     ctx.save();
     ctx.font = '600 34px "Marcellus SC", Georgia, serif';
     ctx.textAlign = 'center';
@@ -1578,8 +1616,10 @@ export default class BattleScene extends UIPanel {
     ctx.fillText(prompt, rects.cx, rects.promptY);
     ctx.restore();
 
-    this._drawTargetButton(ctx, rects.confirm, 'Cast', '#2e7d4f', '#7df0a8', 'check');
-    this._drawTargetButton(ctx, rects.cancel,  'Cancel', '#7d2e34', '#f0a0a0', 'cross');
+    if (rects.confirm) {
+      this._drawTargetButton(ctx, rects.confirm, 'Cast', '#2e7d4f', '#7df0a8', 'check');
+    }
+    this._drawTargetButton(ctx, rects.cancel, 'Cancel', '#7d2e34', '#f0a0a0', 'cross');
   }
 
   /** Draw one rounded targeting button with a glyph + label. */
