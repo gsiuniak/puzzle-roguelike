@@ -2,6 +2,7 @@
 node_modules/
 
 # Vite build output
+dist/
 
 # Vite / tooling caches
 .vite/
