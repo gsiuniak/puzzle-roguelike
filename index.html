@@ -7,11 +7,13 @@
   <!-- iOS Safari "Add to Home Screen" → fullscreen-style standalone launch -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Puzzle Roguelike">
+  <meta name="apple-mobile-web-app-title" content="Puzzle Rogue">
   <!-- Android/Chrome standalone -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
-  <title>Puzzle Roguelike - Battle Test</title>
+  <!-- iOS home-screen icon (manifest icons are ignored by iOS Safari) -->
+  <link rel="apple-touch-icon" href="./bundle/icon-512-CJlw8sF1.jpg">
+  <title>Puzzle Rogue</title>
   <style>
   @font-face {
     font-family: 'Marcellus SC';
@@ -75,6 +77,13 @@
   #fullscreen-btn:active { transform: scale(0.94); }
   /* Hide when in fullscreen (toggled from JS) */
   #fullscreen-btn.is-fs { display: none; }
+  /* Hide when running as an installed PWA — it's already fullscreen/standalone,
+     so the toggle is redundant. Media query covers desktop/Android installed
+     apps; the .pwa-standalone class (set from JS) covers iOS Safari. */
+  @media (display-mode: fullscreen), (display-mode: standalone), (display-mode: minimal-ui) {
+    #fullscreen-btn { display: none !important; }
+  }
+  html.pwa-standalone #fullscreen-btn { display: none !important; }
 
   /* ── Install (PWA) button ──
      Hidden until the browser fires `beforeinstallprompt` (i.e. the app is
@@ -155,6 +164,20 @@
   <!-- PWA install button wiring (self-contained; no-op where install isn't available). -->
   <script>
   (function () {
+    // Mark the doc as a standalone/installed PWA so CSS can hide the redundant
+    // fullscreen toggle. The display-mode media query handles desktop/Android;
+    // this also covers iOS Safari (navigator.standalone).
+    if (
+      navigator.standalone === true ||
+      (window.matchMedia && (
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: fullscreen)').matches ||
+        window.matchMedia('(display-mode: minimal-ui)').matches
+      ))
+    ) {
+      document.documentElement.classList.add('pwa-standalone');
+    }
+
     var btn = document.getElementById('install-btn');
     var deferred = null;
     window.addEventListener('beforeinstallprompt', function (e) {
