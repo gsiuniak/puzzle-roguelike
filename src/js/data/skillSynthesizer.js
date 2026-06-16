@@ -84,9 +84,9 @@ const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
 /** Primary action → cost-color AFFINITY (a weight, not a rule — see
  *  COST_COLOR_WEIGHTS in weaveConfig). */
 const ACTION_COST_AFFINITY = Object.freeze({
-  damage: 'red', attack: 'red', explode: 'red', destroy: 'red',
+  damage: 'red', attack: 'blue', explode: 'red', destroy: 'red',
   armor: 'blue', heal: 'green', create: 'green',
-  convert: 'purple', drain: 'purple', shuffle: 'purple',
+  convert: 'purple', drain: 'purple', shuffle: 'yellow',
 });
 
 /** Primary action → resolve SFX (SoundConfig keys). */

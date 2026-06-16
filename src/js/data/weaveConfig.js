@@ -85,7 +85,7 @@ export const TAGS_PER_ROUND_WEIGHTS = Object.freeze({
  */
 export const TAG_VALUE_TABLES = Object.freeze({
   // `create N tiles` — small rolls common, a 12 is a jackpot.
-  create: { 3: 24, 4: 20, 5: 16, 6: 13, 7: 10, 8: 7, 9: 5, 10: 3, 11: 1.5, 12: 0.5 },
+  create: { 3: 18, 4: 26, 5: 16, 6: 13, 7: 10, 8: 7, 9: 5, 10: 3, 11: 1.5, 12: 0.5 },
 
   // ── Action magnitudes ──
   // `deal N damage` / `gain N armor` / `heal N HP` — mid rolls common.
@@ -152,8 +152,8 @@ export const INJECTION_CONFIG = Object.freeze({
 export const COST_COLOR_WEIGHTS = Object.freeze({
   firstElement: 60,
   otherElement: 25,
-  actionAffinity: 30,
-  anyColor: 4,
+  actionAffinity: 20,
+  anyColor: 15,
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -173,7 +173,7 @@ export const COST_COLOR_WEIGHTS = Object.freeze({
  * number to bias rolls cheap or expensive.
  */
 export const MANA_COST_CONFIG = Object.freeze({
-  baseFloor: 5,
+  baseFloor: 4,
   baseCeiling: 8,
   /** Power score thresholds; each one passed → +1 floor AND +1 ceiling. */
   powerTierThresholds: Object.freeze([14, 22, 32]),
