@@ -83,16 +83,31 @@ const TITLE_TEXT = 'Weave a Power';
 const TITLE_Y = 108;
 const TITLE_SIZE = 70;
 const TITLE_COLOR = '#e7c878';
-const SUBTITLE_Y = 156;
-const SUBTITLE_SIZE = 30;
+/**
+ * Vertical gradient for the title text (top → bottom color stops). Gives the
+ * "Weave a Power" wordmark the soft light-to-rich gold sheen seen in the mock.
+ */
+const TITLE_GRADIENT = [
+  [0.0, '#ece0b6'],  // bright highlight at the top of the letters
+  [0.5, '#e3c688'],  // mid gold (base color)
+  [1.0, '#a27e46'],  // richer/darker gold at the baseline
+];
+const SUBTITLE_Y = 154;
+const SUBTITLE_SIZE = 25;
 const SUBTITLE_COLOR = '#9a86b8';
 const SUBTITLE_CHOOSE = 'Choose a Tag';
 const SUBTITLE_COMPLETE = 'Recipe Complete';
 
+// ── Title flair (ornate divider beneath the title/subtitle block) ──
+const TITLE_FLAIR_KEY = 'ui_skill_weave_title_flair';
+const TITLE_FLAIR_CENTER_Y = 192;     // vertical center of the flair divider
+const TITLE_FLAIR_WIDTH = 440;        // rendered width (height derives from art aspect)
+const TITLE_FLAIR_FALLBACK_ASPECT = 1014 / 92;
+
 // ── Tag option plaques ──
-const OPTION_W = 296;                 // base plaque width (label scaling reference)
+const OPTION_W = 270;                 // base plaque width (label scaling reference)
 /** Plaque width by visible option count (full size across all counts). */
-const OPTION_W_BY_COUNT = { 1: 296, 2: 296, 3: 296, 4: 296 };
+const OPTION_W_BY_COUNT = { 1: 270, 2: 270, 3: 270, 4: 270 };
 /** Per-rarity hover-glow tint for the option plaques. */
 const OPTION_GLOW_BY_RARITY = {
   [TAG_RARITY.COMMON]:    'rgba(160, 160, 168, 0.85)',  // dull grey
@@ -795,20 +810,20 @@ export default class SkillWeaveScene extends UIPanel {
   /** Triangle / grid anchors for the option plaques, by visible count (1–4). */
   _optionAnchors(count) {
     const cx = DESIGN_W / 2;
-    if (count <= 1) return [{ cx, cy: 360 }];
-    if (count === 2) return [{ cx: cx - 226, cy: 398 }, { cx: cx + 226, cy: 398 }];
+    if (count <= 1) return [{ cx, cy: 372 }];
+    if (count === 2) return [{ cx: cx - 226, cy: 402 }, { cx: cx + 226, cy: 402 }];
     if (count === 3) {
       return [
-        { cx, cy: 296 },
-        { cx: cx - 250, cy: 472 },
-        { cx: cx + 250, cy: 472 },
+        { cx, cy: 306 },
+        { cx: cx - 250, cy: 486 },
+        { cx: cx + 250, cy: 486 },
       ];
     }
     // 4-up: a 2×2 grid at full plaque size (columns widened + rows spread so the
     // flair tips clear each other vertically and the bottom row clears the recipe).
     return [
-      { cx: cx - 262, cy: 274 }, { cx: cx + 262, cy: 274 },
-      { cx: cx - 262, cy: 482 }, { cx: cx + 262, cy: 482 },
+      { cx: cx - 262, cy: 306 }, { cx: cx + 262, cy: 306 },
+      { cx: cx - 262, cy: 490 }, { cx: cx + 262, cy: 490 },
     ];
   }
 
@@ -975,6 +990,7 @@ export default class SkillWeaveScene extends UIPanel {
     const cx = DESIGN_W / 2;
     this._drawText(ctx, TITLE_TEXT, cx, TITLE_Y, {
       size: TITLE_SIZE, color: TITLE_COLOR, bold: false,
+      gradient: TITLE_GRADIENT,
       letterSpacing: 4, shadowBlur: 12, shadowColor: 'rgba(0,0,0,0.7)',
     });
     const total = this._recipeLength();
@@ -987,6 +1003,17 @@ export default class SkillWeaveScene extends UIPanel {
       size: SUBTITLE_SIZE, color: SUBTITLE_COLOR, letterSpacing: 3,
       shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.6)',
     });
+
+    // Ornate divider flair beneath the title/subtitle block.
+    const flair = this._asset(TITLE_FLAIR_KEY);
+    if (flair && flair.width) {
+      const aspect = this._aspect(TITLE_FLAIR_KEY, TITLE_FLAIR_FALLBACK_ASPECT);
+      const w = TITLE_FLAIR_WIDTH;
+      const h = w / aspect;
+      this._drawImageRect(ctx, flair, {
+        x: cx - w / 2, y: TITLE_FLAIR_CENTER_Y - h / 2, w, h,
+      });
+    }
   }
 
   // ── Render: option plaques (anim-aware) ────────────────────
@@ -1409,12 +1436,27 @@ export default class SkillWeaveScene extends UIPanel {
       size = 28, color = '#e2cd92', bold = false,
       align = 'center', baseline = 'alphabetic',
       letterSpacing = 0, shadowBlur = 0, shadowColor = 'rgba(0,0,0,0.6)',
+      gradient = null,
     } = opts;
     ctx.save();
     ctx.font = `${bold ? 'bold ' : ''}${size}px ${FONT_FAMILY}`;
-    ctx.fillStyle = color;
     ctx.textAlign = align;
     ctx.textBaseline = baseline;
+    // Optional vertical gradient fill ([offset, color] stops) spanning the text's
+    // cap height around the baseline; falls back to the flat color on any failure.
+    if (gradient && gradient.length) {
+      try {
+        const top = baseline === 'middle' ? y - size * 0.5 : y - size * 0.82;
+        const bottom = baseline === 'middle' ? y + size * 0.5 : y + size * 0.18;
+        const grad = ctx.createLinearGradient(0, top, 0, bottom);
+        for (const [stop, c] of gradient) grad.addColorStop(stop, c);
+        ctx.fillStyle = grad;
+      } catch (_) {
+        ctx.fillStyle = color;
+      }
+    } else {
+      ctx.fillStyle = color;
+    }
     if (shadowBlur > 0) {
       ctx.shadowColor = shadowColor;
       ctx.shadowBlur = shadowBlur;
