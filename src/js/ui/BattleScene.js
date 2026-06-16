@@ -99,6 +99,15 @@ const CORNER_BUTTON_SIZE = 60;     // icon width/height
 const CORNER_BUTTON_GAP = 8;       // vertical gap between the two icons
 const CORNER_BUTTON_MARGIN = 12;   // inset from the physical top-right corner
 
+// Targeting Confirm/Cancel controls — a touch-friendly bar shown only during
+// TARGETING, centered near the bottom of the design viewport. Drawn in design
+// space (render()) and hit-tested in design-space coords.
+const TARGET_BTN_W = 240;          // button width
+const TARGET_BTN_H = 92;           // button height
+const TARGET_BTN_GAP = 80;         // horizontal gap between Cancel and Confirm
+const TARGET_BTN_CENTER_Y = 966;   // fallback vertical center of the row (design px)
+const TARGET_BTN_RADIUS = 16;      // rounded-corner radius
+
 /**
  * BattleScene — battle layout with three compact columns.
  *
@@ -170,6 +179,10 @@ export default class BattleScene extends UIPanel {
      * @type {boolean}
      */
     this._suppressFirstTurnSfx = true;
+
+    // Last pointer position (design space) — used for design-space button hover.
+    this._lastPointerX = -1;
+    this._lastPointerY = -1;
 
     // Child references
     this._playerPane = null;
@@ -627,6 +640,10 @@ export default class BattleScene extends UIPanel {
     // Corner action buttons (skip / map) — clickable regardless of turn state.
     if (this._handleCornerButtonClick(x, y)) return;
 
+    // Targeting Confirm/Cancel buttons (touch-friendly) take priority while
+    // targeting so a tap on them isn't read as a board reposition.
+    if (this._isTargeting() && this._handleTargetingButtonClick(x, y)) return;
+
     if (this._tooltipManager) this._tooltipManager.onMouseDown(x, y);
 
     // Relic bar page arrows are clickable regardless of turn state.
@@ -643,9 +660,13 @@ export default class BattleScene extends UIPanel {
     if (!board) return;
 
     if (this._isTargeting()) {
+      // Board tap POSITIONS the target preview (it does not cast). Confirming
+      // is via the on-screen Confirm button / Enter — this is what makes the
+      // flow work on touch, where there's no hover to preview the area.
       const cell = board.screenToCell(x, y);
       if (cell) {
-        this._battleController.tryTargetTile(cell.col, cell.row);
+        this._battleController.setTargetHover(cell.col, cell.row);
+        board.hoveredCell = cell;
       }
       return;
     }
@@ -668,6 +689,10 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseMove(x, y) {
+    // Track the pointer so design-space buttons (targeting Confirm/Cancel) can
+    // show a hover state.
+    this._lastPointerX = x;
+    this._lastPointerY = y;
     if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
       this._loadoutOverlay.handleMouseMove(x, y);
       return;
@@ -689,11 +714,12 @@ export default class BattleScene extends UIPanel {
     if (this._isTargeting()) {
       const cell = board.screenToCell(x, y);
       if (cell) {
+        // Hover (desktop) / drag (touch) repositions the preview. Moving OFF the
+        // board (e.g. onto the Confirm/Cancel buttons) keeps the last target so
+        // it isn't wiped before the player confirms.
         this._battleController.setTargetHover(cell.col, cell.row);
-      } else {
-        this._battleController.setTargetHover(null, null);
+        board.hoveredCell = cell;
       }
-      board.hoveredCell = cell;
       return;
     }
 
@@ -835,8 +861,12 @@ export default class BattleScene extends UIPanel {
     }
 
     // ── Normal battle key handling ──
-    if (e.key === 'Escape' && this._isTargeting()) {
-      this._battleController.cancelTargeting();
+    if (this._isTargeting()) {
+      if (e.key === 'Escape') {
+        this._battleController.cancelTargeting();
+      } else if (e.key === 'Enter') {
+        this._battleController.confirmTarget();
+      }
     }
   }
 
@@ -1479,6 +1509,133 @@ export default class BattleScene extends UIPanel {
     ctx.imageSmoothingEnabled = prevSmoothing;
   }
 
+  // ── Targeting Confirm/Cancel controls (touch-friendly) ──────
+
+  /**
+   * Design-space rects for the Cancel (left) and Confirm (right) buttons.
+   * Anchored just BELOW the board (centered on it) so they never cover tiles;
+   * falls back to the viewport bottom-center if the board rect isn't ready.
+   * Clamped to stay on screen. Null if no app.
+   * @returns {{cancel:object, confirm:object, cx:number, promptY:number}|null}
+   */
+  _getTargetingButtonRects() {
+    const app = this._sceneManager && this._sceneManager._app;
+    if (!app) return null;
+    let cx = app.width / 2;
+    let centerY = TARGET_BTN_CENTER_Y;
+    const board = this._board;
+    if (board && board.rect && board.rect.h > 0) {
+      cx = board.rect.x + board.rect.w / 2;
+      const below = board.rect.y + board.rect.h + 28 + TARGET_BTN_H / 2;
+      centerY = Math.min(below, app.height - TARGET_BTN_H / 2 - 16);
+    }
+    const top = centerY - TARGET_BTN_H / 2;
+    return {
+      cancel:  { x: cx - TARGET_BTN_GAP / 2 - TARGET_BTN_W, y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
+      confirm: { x: cx + TARGET_BTN_GAP / 2,               y: top, w: TARGET_BTN_W, h: TARGET_BTN_H },
+      cx,
+      promptY: top - 30,
+    };
+  }
+
+  /**
+   * Hit-test the targeting buttons. Confirm casts the skill at the current
+   * preview cell; Cancel aborts targeting. Returns true if a button was hit.
+   */
+  _handleTargetingButtonClick(x, y) {
+    const rects = this._getTargetingButtonRects();
+    if (!rects) return false;
+    if (BattleScene._pointInRect(x, y, rects.confirm)) {
+      this._battleController.confirmTarget();
+      return true;
+    }
+    if (BattleScene._pointInRect(x, y, rects.cancel)) {
+      this._battleController.cancelTargeting();
+      return true;
+    }
+    return false;
+  }
+
+  /** Draw the targeting Confirm/Cancel bar + prompt. Only while targeting. */
+  _renderTargetingControls(ctx) {
+    if (!this._isTargeting()) return;
+    if (this._mapView && this._mapView.isOverlayActive()) return;
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) return;
+    const rects = this._getTargetingButtonRects();
+    if (!rects) return;
+
+    // Prompt above the buttons.
+    const skill = this._battleController._targetingSkill;
+    const prompt = skill && skill.name ? `Aim ${skill.name}` : 'Choose a target';
+    ctx.save();
+    ctx.font = '600 34px "Marcellus SC", Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#f0e4bf';
+    ctx.fillText(prompt, rects.cx, rects.promptY);
+    ctx.restore();
+
+    this._drawTargetButton(ctx, rects.confirm, 'Cast', '#2e7d4f', '#7df0a8', 'check');
+    this._drawTargetButton(ctx, rects.cancel,  'Cancel', '#7d2e34', '#f0a0a0', 'cross');
+  }
+
+  /** Draw one rounded targeting button with a glyph + label. */
+  _drawTargetButton(ctx, r, label, fill, edge, glyph) {
+    const hovered = BattleScene._pointInRect(this._lastPointerX, this._lastPointerY, r);
+    ctx.save();
+    BattleScene._roundRectPath(ctx, r.x, r.y, r.w, r.h, TARGET_BTN_RADIUS);
+    ctx.fillStyle = fill;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 14;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = hovered ? 4 : 2.5;
+    ctx.strokeStyle = edge;
+    ctx.stroke();
+
+    // Glyph (drawn left of the label).
+    const gy = r.y + r.h / 2;
+    const gx = r.x + 42;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (glyph === 'check') {
+      ctx.moveTo(gx - 14, gy + 2);
+      ctx.lineTo(gx - 4, gy + 13);
+      ctx.lineTo(gx + 15, gy - 13);
+    } else {
+      ctx.moveTo(gx - 12, gy - 12);
+      ctx.lineTo(gx + 12, gy + 12);
+      ctx.moveTo(gx + 12, gy - 12);
+      ctx.lineTo(gx - 12, gy + 12);
+    }
+    ctx.stroke();
+
+    // Label.
+    ctx.font = '600 38px "Marcellus SC", Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff8e8';
+    ctx.fillText(label, r.x + r.w / 2 + 26, gy + 2);
+    ctx.restore();
+  }
+
+  /** Rounded-rectangle path helper. */
+  static _roundRectPath(ctx, x, y, w, h, rad) {
+    const r = Math.min(rad, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
   render(ctx) {
     // Apply screen shake offset
     const shake = this._screenShake.getOffset();
@@ -1499,6 +1656,9 @@ export default class BattleScene extends UIPanel {
     if (shake.x !== 0 || shake.y !== 0) {
       ctx.restore();
     }
+
+    // Targeting Confirm/Cancel controls (design space, above the board).
+    this._renderTargetingControls(ctx);
 
     // Tooltips render last so they sit above all battle UI (but still
     // inside the design-space viewport clip). The manager self-gates when

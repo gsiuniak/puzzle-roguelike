@@ -718,8 +718,9 @@ export default class BattleController {
     if (skill.targeting === 'board_tile') {
       this.state = BattleState.TARGETING;
       this._targetingSkill = { ...skill };
-      this._targetHoverCell = null;
-      this._targetingOverlayCells = [];
+      // Seed a default target (board center) so the area preview is visible and
+      // Confirm works immediately; the player taps/drags to reposition.
+      this._setDefaultTarget();
       this.log.add(`Select a board tile for ${skill.name}...`);
       if (this.onStateChange) this.onStateChange();
       return true;
@@ -767,9 +768,35 @@ export default class BattleController {
   enterTargeting(skill) {
     this.state = BattleState.TARGETING;
     this._targetingSkill = { ...skill };
-    this._targetHoverCell = null;
-    this._targetingOverlayCells = [];
+    this._setDefaultTarget();
     if (this.onStateChange) this.onStateChange();
+  }
+
+  /**
+   * Seed the targeting preview at the board center so the area overlay is
+   * visible immediately and Confirm works without first positioning. The
+   * player taps/drags a tile (setTargetHover) to reposition before confirming.
+   */
+  _setDefaultTarget() {
+    const col = Math.floor((this.board ? this.board.cols : 8) / 2);
+    const row = Math.floor((this.board ? this.board.rows : 8) / 2);
+    this._targetHoverCell = { col, row };
+    this._targetingOverlayCells = this._computeTargetingArea(col, row);
+  }
+
+  /** The current targeting preview cell, or null. */
+  getTargetHoverCell() {
+    return this._targetHoverCell || null;
+  }
+
+  /**
+   * Confirm the targeted skill at the current preview cell (the Confirm button
+   * / Enter). No-op unless targeting with a preview set.
+   * @returns {boolean} true if the cast was resolved
+   */
+  confirmTarget() {
+    if (this.state !== BattleState.TARGETING || !this._targetHoverCell) return false;
+    return this.tryTargetTile(this._targetHoverCell.col, this._targetHoverCell.row);
   }
 
   /**

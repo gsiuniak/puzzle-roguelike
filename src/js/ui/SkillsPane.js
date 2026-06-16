@@ -365,7 +365,10 @@ export default class SkillsPane extends UIPanel {
           drawCardModel(ctx, row.model, { x: inner.x, y, w: cardW, h }, m, {
             assetManager: this._assetManager,
             hovered: i === this._hoverRow,
-            castable: !row.locked && this._affordable(row.skill) && !!this.onSkillClick,
+            // "Castable" = affordable with the current mana. Highlighted for BOTH
+            // panes (player: you can cast it; enemy: it can cast it) — clicking is
+            // separately gated by onSkillClick in handleMouseUp.
+            castable: !row.locked && this._affordable(row.skill),
           });
         }
       }
