@@ -31,7 +31,7 @@ import { TAG_RARITY, RARITY_WEIGHTS, pickWeightedEntry } from './weaveConfig.js'
  *   ACTION   — the verb (damage, create, drain, …)
  *   ELEMENT  — a color / skull the action operates on
  *   SHAPE    — where the action lands (row, area, tile, …)
- *   MODIFIER — alters the spell (extra turn, wild, lock)
+ *   MODIFIER — alters the spell (extra turn, wild)
  *   STATUS   — a status effect applied to the enemy (logic added later)
  */
 export const TAG_CATEGORY = Object.freeze({
@@ -79,11 +79,12 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   create:  { id: 'create',  label: 'Create',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_create' },
   destroy: { id: 'destroy', label: 'Destroy', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   convert: { id: 'convert', label: 'Convert', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: 'weave_icon_convert' },
-  gain:    { id: 'gain',    label: 'Gain',    category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_gain' },
   heal:    { id: 'heal',    label: 'Heal',    category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   drain:   { id: 'drain',   label: 'Drain',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: null },
   attack:  { id: 'attack',  label: 'Attack',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_attack' },
   explode: { id: 'explode', label: 'Explode', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: 'weave_icon_explode' },
+  // Shuffle randomizes the board and ALWAYS grants an extra turn (synthesizer-forced).
+  shuffle: { id: 'shuffle', label: 'Shuffle', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.LEGENDARY,     icon: null },
 
   // ── Shapes / targets (where the action lands) ──
   row:    { id: 'row',    label: 'Row',    category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_row' },
@@ -95,7 +96,6 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // ── Modifiers (alter the spell as a whole) ──
   extra_turn: { id: 'extra_turn', label: 'Extra Turn', category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.LEGENDARY, icon: 'weave_icon_extra_turn' },
   wild:       { id: 'wild',       label: 'Wild',       category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.LEGENDARY, icon: null },
-  lock:       { id: 'lock',       label: 'Lock',       category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.RARE,      icon: null },
 
   // ── Status effects (synthesized into apply_status effects — debuffs hit the
   //    enemy, buffs (intangible/berserk/barrier) buff the caster) ──

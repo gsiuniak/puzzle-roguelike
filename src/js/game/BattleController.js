@@ -201,6 +201,14 @@ export default class BattleController {
     this._thrallSummoned = false;
 
     /**
+     * One-shot flag: set when a SHUFFLE effect reshuffles the board so
+     * BattleScene plays the board-shuffle animation exactly once. Read &
+     * cleared by getState().
+     * @type {boolean}
+     */
+    this._boardShuffled = false;
+
+    /**
      * Extra delay (ms) added to the enemy's pre-action wait for the CURRENT
      * turn only, so a turn-START spectacle (the Usurper's Heart harvest
      * tendrils, fired on the boss's onTurnStart) can play out before the boss
@@ -596,6 +604,10 @@ export default class BattleController {
     const thrallSummoned = this._thrallSummoned;
     this._thrallSummoned = false;
 
+    // One-shot board-shuffle animation flag (SHUFFLE effect), cleared on read.
+    const boardShuffled = this._boardShuffled;
+    this._boardShuffled = false;
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -613,6 +625,7 @@ export default class BattleController {
       relicTriggers,
       harvestEvents,
       thrallSummoned,
+      boardShuffled,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -2181,10 +2194,38 @@ export default class BattleController {
         return false;
       }
 
+      case SKILL_EFFECT_TYPES.SHUFFLE: {
+        this._executeShuffle(side, skill && skill.name);
+        // Never enters RESOLVING — shuffle yields a no-match board (the paired
+        // extra_turn effect resolves inline afterward).
+        return false;
+      }
+
       default:
         console.warn(`[BattleController] Unknown effect type: "${effect.effectType}". Skipping.`);
         return false;
     }
+  }
+
+  /**
+   * Execute a SHUFFLE effect: randomize the board into a fresh no-match
+   * arrangement and flag the scene to play the shuffle animation. Non-cascade
+   * (the board has no immediate matches), so it does NOT enter RESOLVING.
+   *
+   * Guard: if a cascade is already in flight (a rare combo where shuffle is
+   * woven alongside a create/destroy that already kicked off resolution),
+   * skip the shuffle rather than corrupt the in-flight board state.
+   * @param {string} side - 'player' or 'enemy'
+   * @param {string} [skillName]
+   */
+  _executeShuffle(side, skillName) {
+    if (this.state === BattleState.RESOLVING) {
+      this.log.add(`${skillName || 'Shuffle'} fizzles — the board is still resolving.`);
+      return;
+    }
+    this.board.shuffle();
+    this.log.add(`${skillName || 'A spell'} shuffles the board!`);
+    this._boardShuffled = true; // one-shot flag → BattleScene plays the animation
   }
 
   // ── Game Over ────────────────────────────────────────

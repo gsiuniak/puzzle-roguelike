@@ -142,6 +142,43 @@ export default class BoardModel {
     return (dCol === 1 && dRow === 0) || (dCol === 0 && dRow === 1);
   }
 
+  /**
+   * Randomly permute every tile on the board into a fresh arrangement with NO
+   * pre-existing matches. The exact multiset of tile types (colors, skulls,
+   * wilds, disease) is preserved — it's a true shuffle, not a re-roll. Retries
+   * full permutations until a no-match layout is found (or `maxAttempts` is
+   * exhausted, in which case the last permutation stands — vanishingly rare).
+   * @param {number} [maxAttempts=80]
+   * @returns {{ moved: boolean }}
+   */
+  shuffle(maxAttempts = 80) {
+    // Collect every occupied cell and its tile type.
+    const cells = [];
+    const bag = [];
+    for (let x = 0; x < this.cols; x++) {
+      for (let y = 0; y < this.rows; y++) {
+        if (this.grid[x][y] != null) {
+          cells.push({ col: x, row: y });
+          bag.push(this.grid[x][y]);
+        }
+      }
+    }
+    if (cells.length < 2) return { moved: false };
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // Fisher–Yates on the bag.
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+      for (let i = 0; i < cells.length; i++) {
+        this.grid[cells[i].col][cells[i].row] = bag[i];
+      }
+      if (this.findAllMatches().length === 0) break;
+    }
+    return { moved: true };
+  }
+
   // ── Initialization ───────────────────────────────────
 
   /** Fill board with random tiles, guaranteeing no pre-existing matches. */

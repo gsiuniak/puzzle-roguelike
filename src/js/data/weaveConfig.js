@@ -125,8 +125,6 @@ export const TAG_VALUE_TABLES = Object.freeze({
 export const INJECTION_CONFIG = Object.freeze({
   /** `wild` with no `create` → conjures Thrall tiles anyway. */
   wildCreates: 100,
-  /** `lock` (no board mechanic yet) → "locks down" the enemy: applies Frozen. */
-  lockFreezes: 100,
   /** A shape with no destroyer/converter → injects a destroy of that shape. */
   orphanShapeDestroys: 100,
   /** `random` with nothing to randomize → a chaotic surge of rolled mana. */

@@ -104,13 +104,6 @@ function tableKeys(tagId) {
 
 // ── 4. Injection rules ("the weave surges") ──
 {
-  // lock → injects Frozen on the enemy (no longer inert)
-  const lock = synthesize(['damage', 'lock']);
-  const lfx = lock.skill.effects.find((e) => e.effectType === 'apply_status' && e.applyStatus.id === 'frozen');
-  check('lock injects Frozen', !!lfx, JSON.stringify(lock.skill.effects));
-  check('lock counts as used', lock.usedTags.includes('lock'));
-  check('frozen reported as injected', lock.injectedTags.includes('frozen'));
-
   // wild without create → conjures Wild tiles anyway
   const wild = synthesize(['damage', 'wild']);
   const wfx = wild.skill.effects.find((e) => e.effectType === 'create_tiles');
@@ -210,12 +203,17 @@ function tableKeys(tagId) {
   if (bfx) eq('buff targets self', bfx.applyStatus.target, 'self');
 }
 
-// ── 8. gain + element → that color's mana; skull never a cost color ──
+// ── 8. shuffle → board shuffle ALWAYS paired with an extra turn ──
 {
-  const r = synthesize(['gain', 'blue']);
-  const fx = r.skill.effects.find((e) => e.effectType === 'gain_mana');
-  check('gain_mana emitted', !!fx);
-  if (fx) eq('gain uses the element color', fx.gainMana.color, 'blue');
+  const r = synthesize(['shuffle']);
+  const sfx = r.skill.effects.find((e) => e.effectType === 'shuffle');
+  check('shuffle effect emitted', !!sfx, JSON.stringify(r.skill.effects));
+  const etx = r.skill.effects.filter((e) => e.effectType === 'extra_turn');
+  eq('shuffle forces exactly one extra turn', etx.length, 1);
+  check('shuffle counts as used', r.usedTags.includes('shuffle'));
+  // Even paired with an explicit extra_turn tag, only ONE extra_turn is emitted.
+  const r2 = synthesize(['shuffle', 'extra_turn']);
+  eq('no duplicate extra turn', r2.skill.effects.filter((e) => e.effectType === 'extra_turn').length, 1);
 
   const sk = synthesize(['skull', 'create']);
   const cfx = sk.skill.effects.find((e) => e.effectType === 'create_tiles');

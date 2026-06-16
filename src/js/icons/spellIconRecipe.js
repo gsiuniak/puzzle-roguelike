@@ -63,14 +63,14 @@ const ELEMENT_TO_COLOR = Object.freeze({
 const EFFECT_TAG_PRIORITY = Object.freeze({
   // actions (the readable subject)
   explode: 100, damage: 96, attack: 92, destroy: 90, convert: 86,
-  create: 84, heal: 82, armor: 80, drain: 76, gain: 74,
+  shuffle: 85, create: 84, heal: 82, armor: 80, drain: 76,
   // statuses (distinct subjects, secondary to a hard action)
   bleed: 60, frozen: 58, barrier: 57, berserk: 56, silence: 54,
   cripple: 52, enfeeble: 50, brittle: 48, intangible: 46,
   // shapes (read well as the embedded minor layer)
   area: 40, row: 36, column: 36, tile: 30,
   // modifiers
-  wild: 28, lock: 24, extra_turn: 20,
+  wild: 28, extra_turn: 20,
 });
 
 /** When a bag carries no effect-bearing tag, the icon still needs a subject. */

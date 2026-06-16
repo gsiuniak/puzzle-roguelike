@@ -36,8 +36,8 @@ function fakeAM(keys) {
 
 const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'skull'];
 const EFFECTS = [
-  'damage', 'armor', 'create', 'destroy', 'convert', 'gain', 'heal', 'drain', 'attack', 'explode',
-  'row', 'column', 'area', 'tile', 'extra_turn', 'wild', 'lock',
+  'damage', 'armor', 'create', 'destroy', 'convert', 'shuffle', 'heal', 'drain', 'attack', 'explode',
+  'row', 'column', 'area', 'tile', 'extra_turn', 'wild',
   'silence', 'cripple', 'enfeeble', 'brittle', 'intangible', 'berserk', 'bleed', 'frozen', 'barrier',
 ];
 /** A full, single-variant sheet: every base color + effect + the border. */

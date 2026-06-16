@@ -26,7 +26,6 @@
  * weave INJECTS a complementary effect instead (per-rule chances live in
  * weaveConfig.INJECTION_CONFIG):
  *   - `wild` with no create        → conjures Thrall tiles anyway
- *   - `lock` (no mechanic yet)     → "locks down" the enemy: applies Frozen
  *   - orphan shape (row/col/area/tile) → injects a destroy of that shape
  *   - orphan `random`              → chaotic surge: gain rolled-color mana
  *   - element used by NOTHING (not even the cost color) → conjures its tiles
@@ -87,7 +86,7 @@ const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
 const ACTION_COST_AFFINITY = Object.freeze({
   damage: 'red', attack: 'red', explode: 'red', destroy: 'red',
   armor: 'blue', heal: 'green', create: 'green',
-  gain: 'yellow', convert: 'purple', drain: 'purple',
+  convert: 'purple', drain: 'purple', shuffle: 'purple',
 });
 
 /** Primary action → resolve SFX (SoundConfig keys). */
@@ -96,7 +95,7 @@ const ACTION_SOUND = Object.freeze({
   armor: 'skill_defend', heal: 'skill_oungan',
   create: 'skill_oungan', destroy: 'skill_fracture',
   explode: 'skill_explode', convert: 'skill_explode',
-  gain: 'skill_oungan', drain: 'skill_doomsong',
+  drain: 'skill_doomsong', shuffle: 'skill_fracture',
 });
 const DEFAULT_SOUND = 'sfx_skill_cast';
 
@@ -125,6 +124,7 @@ const POWER = Object.freeze({
   perDebuffTurn: 4,
   perBuffTurn: 3,
   extraTurn: 8,
+  shuffleBoard: 6,       // whole-board reshuffle (always paired with an extra turn)
 });
 
 // ── Name generation pools ──
@@ -149,10 +149,10 @@ const ACTION_NOUNS = Object.freeze({
   create:  ['Genesis', 'Wellspring', 'Conjuring', 'Blooming', 'Summons', 'Manifest', 'Seeding'],
   destroy: ['Ruin', 'Shatter', 'Unmaking', 'Collapse', 'Erasure', 'Demolition', 'Cull'],
   convert: ['Transmutation', 'Alchemy', 'Reshaping', 'Inversion', 'Metamorphosis', 'Refrain'],
-  gain:    ['Boon', 'Font', 'Windfall', 'Tribute', 'Harvest', 'Offering', 'Bounty'],
   drain:   ['Siphon', 'Leeching', 'Hunger', 'Theft', 'Tithe', 'Parch', 'Drought'],
   attack:  ['Ferocity', 'Whetstone', 'Bloodlust', 'Warcry', 'Honing', 'Frenzy', 'Edge'],
   explode: ['Cataclysm', 'Detonation', 'Conflagration', 'Starburst', 'Eruption', 'Concussion'],
+  shuffle: ['Upheaval', 'Maelstrom', 'Tumult', 'Churn', 'Disorder', 'Reshuffle', 'Cataclysm'],
 });
 const DEFAULT_NOUNS = Object.freeze(['Weaving', 'Working', 'Rite', 'Invocation', 'Sigil', 'Incantation']);
 
@@ -164,7 +164,7 @@ const DEFAULT_NOUNS = Object.freeze(['Weaving', 'Working', 'Rite', 'Invocation',
 const TAG_SUFFIXES = Object.freeze({
   extra_turn: ['of Haste', 'of Tempo'],
   wild:       ['Unbound', 'of Chaos'],
-  lock:       ['of Binding', 'of Seals'],
+  shuffle:    ['of Chaos', 'Scattering'],
   row:        ['of Lines', 'Sweeping'],
   column:     ['of Pillars', 'Falling'],
   area:       ['of Storms', 'Vast'],
@@ -331,6 +331,7 @@ export function synthesize(recipe) {
   const lines = [];      // description lines
   let power = 0;
   let targeting = null;  // { targeting: 'board_tile', area } — one per skill
+  let forceExtraTurn = false; // set by `shuffle` (always grants an extra turn)
   const elements = groups[TAG_CATEGORY.ELEMENT].slice();
   const shapes = new Set(groups[TAG_CATEGORY.SHAPE]);
   const modifiers = new Set(groups[TAG_CATEGORY.MODIFIER]);
@@ -431,14 +432,14 @@ export function synthesize(recipe) {
         power += amount * POWER.perAttack;
         break;
       }
-      case 'gain': {
-        // Gain mana of the element's color; with no usable element the color
-        // is rolled once now (skull can't be a mana color).
-        const amount = roll('gain', 3);
-        const color = takeElement({ allowSkull: false }) || pickRandom(COST_COLORS);
-        effects.push({ effectType: 'gain_mana', gainMana: { color, amount } });
-        lines.push(`Gain ${amount} ${TILE_LABEL[color]} [[mana]]`);
-        power += amount * POWER.perManaGained;
+      case 'shuffle': {
+        // Randomize the whole board. Always paired with an extra turn (the
+        // append below honors forceExtraTurn), so a fresh board isn't a tempo
+        // loss. No magnitude / targeting — it reshuffles everything.
+        effects.push({ effectType: 'shuffle' });
+        lines.push('[[Shuffle]] the board');
+        forceExtraTurn = true;
+        power += POWER.shuffleBoard;
         break;
       }
       case 'drain': {
@@ -541,15 +542,6 @@ export function synthesize(recipe) {
     emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.75)), 'wild');
   }
 
-  // lock (no board mechanic yet) → locks the ENEMY down: applies Frozen.
-  if (modifiers.has('lock') && !used.has('lock') && chance(INJECTION_CONFIG.lockFreezes)) {
-    used.add('lock');
-    injected.add('frozen');
-    effects.push({ effectType: 'apply_status', applyStatus: { id: 'frozen', target: 'opponent', turns: 1 } });
-    lines.push('Apply [[Frozen]] for 1 turn');
-    power += POWER.perDebuffTurn;
-  }
-
   // Orphan shapes → inject a destroy of that shape (first one wins targeting).
   for (const shape of ['row', 'column', 'area', 'tile']) {
     if (!shapes.has(shape) || used.has(shape) || targeting) continue;
@@ -613,16 +605,17 @@ export function synthesize(recipe) {
 
   // ── Pure damage spells surge an Extra Turn (damage alone is weak tempo) ──
   const isPureDamage = effects.length > 0 && effects.every((e) => e.effectType === 'damage');
-  if (isPureDamage && !modifiers.has('extra_turn') && chance(INJECTION_CONFIG.pureDamageExtraTurn)) {
+  if (isPureDamage && !modifiers.has('extra_turn') && !forceExtraTurn && chance(INJECTION_CONFIG.pureDamageExtraTurn)) {
     injected.add('extra_turn');
     effects.push({ effectType: 'extra_turn' });
     lines.push('Gain an [[extra turn]]');
     power += POWER.extraTurn;
   }
 
-  // ── extra_turn LAST (create_tiles' cascade resets the flag — decision #4) ──
-  if (modifiers.has('extra_turn')) {
-    used.add('extra_turn');
+  // ── extra_turn LAST (create_tiles' cascade resets the flag — decision #4).
+  //    Granted by the extra_turn modifier OR forced by `shuffle`. ──
+  if (modifiers.has('extra_turn') || forceExtraTurn) {
+    if (modifiers.has('extra_turn')) used.add('extra_turn');
     effects.push({ effectType: 'extra_turn' });
     lines.push('Gain an [[extra turn]]');
     power += POWER.extraTurn;

@@ -152,6 +152,11 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Extra Turn',
     description: 'Take another turn immediately after this one. Extra turns do not stack.',
   },
+  shuffle: {
+    id: 'shuffle',
+    label: 'Shuffle',
+    description: 'Randomly rearrange every [[tile]] on the board into a fresh layout.',
+  },
 
   // ── Status effects (buffs / debuffs) ──────────────────
   silence: {

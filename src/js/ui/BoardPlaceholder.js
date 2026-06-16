@@ -38,6 +38,19 @@ const WILD_BORDER_CONFIG = {
 };
 
 /**
+ * Board-shuffle (SHUFFLE skill) fly-in animation tunables. After the model
+ * reshuffles, every tile flies in from a random offset, scaling + fading up to
+ * its cell. Distances/scales are in CELL-SIZE units so they're resolution
+ * independent; per-tile start delays are staggered for a cascading reveal.
+ */
+const SHUFFLE_ANIM_DUR = 440;        // ms for a single tile to settle
+const SHUFFLE_STAGGER = 180;         // ms spread of per-tile start delays
+const SHUFFLE_MIN_DIST = 1.2;        // start offset (cell-size units)
+const SHUFFLE_MAX_DIST = 3.6;
+const SHUFFLE_MIN_START_SCALE = 0.22;
+const SHUFFLE_MAX_START_SCALE = 0.45;
+
+/**
  * The five mana colors as HSL hues, in spectral order so the rotation reads as
  * a smooth rainbow: red → yellow → green → blue → purple. Saturation/lightness
  * come from WILD_BORDER_CONFIG.
@@ -103,7 +116,34 @@ export default class BoardPlaceholder extends UIElement {
     /** @type {{from:{col:number,row:number},to:{col:number,row:number},progress:number}|null} */
     this.swapAnim = null;
 
+    // Board-shuffle fly-in animation (purely cosmetic; the model is already
+    // reshuffled). { time, offsets: Map<"col,row", {dx,dy,startScale,delay}> }
+    this._shuffleAnim = null;
+
     if (!boardModel) this._generatePlaceholder();
+  }
+
+  /**
+   * Start the board-shuffle fly-in animation over the (already reshuffled)
+   * board. Each occupied cell gets a random start offset/scale/delay so tiles
+   * cascade into place. Idempotent-ish — a new call restarts the animation.
+   */
+  playShuffleAnimation() {
+    const offsets = new Map();
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        if (!this.getTileAt(row, col)) continue;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = SHUFFLE_MIN_DIST + Math.random() * (SHUFFLE_MAX_DIST - SHUFFLE_MIN_DIST);
+        offsets.set(`${col},${row}`, {
+          dx: Math.cos(angle) * dist,
+          dy: Math.sin(angle) * dist,
+          startScale: SHUFFLE_MIN_START_SCALE + Math.random() * (SHUFFLE_MAX_START_SCALE - SHUFFLE_MIN_START_SCALE),
+          delay: Math.random() * SHUFFLE_STAGGER,
+        });
+      }
+    }
+    this._shuffleAnim = { time: 0, offsets };
   }
 
   setBoardModel(model) {
@@ -171,6 +211,12 @@ export default class BoardPlaceholder extends UIElement {
       this._fallProgress = Math.min(1, this._fallProgress + dt / this._fallDuration);
     } else {
       this._fallProgress = 0;
+    }
+    if (this._shuffleAnim) {
+      this._shuffleAnim.time += dt;
+      if (this._shuffleAnim.time >= SHUFFLE_ANIM_DUR + SHUFFLE_STAGGER) {
+        this._shuffleAnim = null;
+      }
     }
     super.update(dt);
   }
@@ -292,28 +338,51 @@ export default class BoardPlaceholder extends UIElement {
           displayY = Math.floor(startY + (displayY - startY) * ease);
         }
 
+        // Board-shuffle fly-in: offset/scale/fade each tile toward its cell.
+        let drawX = displayX, drawY = displayY, drawCs = cs, tileAlpha = 1;
+        const sa = this._shuffleAnim;
+        if (sa) {
+          const o = sa.offsets.get(key);
+          if (o) {
+            const local = Math.max(0, Math.min(1, (sa.time - o.delay) / SHUFFLE_ANIM_DUR));
+            const e = 1 - Math.pow(1 - local, 3); // easeOutCubic
+            const inv = 1 - e;
+            drawCs = cs * (o.startScale + (1 - o.startScale) * e);
+            const cx = displayX + cs / 2 + o.dx * cs * inv;
+            const cy = displayY + cs / 2 + o.dy * cs * inv;
+            drawX = cx - drawCs / 2;
+            drawY = cy - drawCs / 2;
+            tileAlpha = Math.max(0, Math.min(1, e * 1.4));
+          }
+        }
+
+        const prevAlpha = ctx.globalAlpha;
+        if (tileAlpha < 1) ctx.globalAlpha = prevAlpha * tileAlpha;
+
         // Tile sprite
         const assetKey = `tile_${colorKey}`;
         const tileImg = this._assetManager ? this._assetManager.get(assetKey) : null;
         if (tileImg) {
-          ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, displayX, displayY, cs, cs);
+          ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, drawX, drawY, drawCs, drawCs);
         } else {
           ctx.fillStyle = fallbackColors[colorKey] || '#444';
-          ctx.fillRect(displayX + 1, displayY + 1, cs - 2, cs - 2);
+          ctx.fillRect(drawX + 1, drawY + 1, drawCs - 2, drawCs - 2);
           ctx.fillStyle = 'rgba(255,255,255,0.08)';
-          ctx.fillRect(displayX + 1, displayY + 1, cs - 2, (cs - 2) * 0.3);
+          ctx.fillRect(drawX + 1, drawY + 1, drawCs - 2, (drawCs - 2) * 0.3);
         }
 
         // Cell border
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.lineWidth = 0.5;
-        ctx.strokeRect(displayX, displayY, cs, cs);
+        ctx.strokeRect(drawX, drawY, drawCs, drawCs);
+
+        if (tileAlpha < 1) ctx.globalAlpha = prevAlpha;
 
         // Wild (Thrall) tiles: `wild_tile_border` frame overlay (slightly larger
         // than the tile). Deferred to after the tile loop (see wildBorders).
-        // Follows the tile (incl. fall animation) via displayX/displayY.
+        // Follows the tile (incl. fall + shuffle transform) via drawX/drawY/drawCs.
         if (isWild(colorKey)) {
-          wildBorders.push({ x: displayX, y: displayY });
+          wildBorders.push({ x: drawX, y: drawY, cs: drawCs });
         }
       }
     }
@@ -321,7 +390,7 @@ export default class BoardPlaceholder extends UIElement {
     // Wild-tile border pass — on top of all tiles so the overhanging frame
     // isn't clipped by neighbors.
     for (const b of wildBorders) {
-      this._drawWildTileBorder(ctx, b.x, b.y, cs);
+      this._drawWildTileBorder(ctx, b.x, b.y, b.cs != null ? b.cs : cs);
     }
 
     // ═══════════════════════════════════════════════════════

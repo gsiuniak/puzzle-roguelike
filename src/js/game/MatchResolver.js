@@ -67,6 +67,10 @@ export const SKILL_EFFECT_TYPES = {
   // BattleController._resolveEffect → _applyStatus. This is the general,
   // data-driven way to apply any status (Silence, Bleed, Intangible, …).
   APPLY_STATUS: 'apply_status',
+  // Randomizes the whole board into a fresh no-match arrangement (synthesized
+  // "shuffle" skills — always paired with an extra turn). Resolved in
+  // BattleController._resolveEffect → _executeShuffle; non-cascade.
+  SHUFFLE: 'shuffle',
 };
 
 /**

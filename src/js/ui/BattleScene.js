@@ -945,6 +945,14 @@ export default class BattleScene extends UIPanel {
       this._audioManager.playSfx('sfx_thrall_summon');
     }
 
+    // ── Board-shuffle animation (SHUFFLE skill effect) ──
+    // The board model is already reshuffled; the BoardPlaceholder plays a
+    // cosmetic fly-in over the new arrangement (the skill's own resolve SFX
+    // plays via pendingSkillSound).
+    if (state.boardShuffled && this._board && typeof this._board.playShuffleAnimation === 'function') {
+      this._board.playShuffleAnimation();
+    }
+
     // ── Spawn combat-stat floating text over portraits ──
     // Damage (red "-x"), heal (green "+x"), armor (blue "+x"). Multiple events
     // for the same side this frame are stacked vertically so they don't overlap.

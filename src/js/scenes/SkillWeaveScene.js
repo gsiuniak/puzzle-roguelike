@@ -3,9 +3,7 @@ import AudioManager from '../audio/AudioManager.js';
 import {
   drawTagsForRound,
   getTagLabel,
-  getTagIcon,
   getTagRarity,
-  DEFAULT_TAG_ICON,
 } from '../data/skillWeaveTags.js';
 import { TAG_RARITY, rollRoundsPerWeave, rollTagsPerRound } from '../data/weaveConfig.js';
 import { synthesize } from '../data/skillSynthesizer.js';
@@ -115,11 +113,9 @@ const OPTION_CONTAINER_SCALE_BY_RARITY = {
   [TAG_RARITY.RARE]:      1.1,
   [TAG_RARITY.LEGENDARY]: 1.04,
 };
-const OPTION_ICON_HEIGHT_FRAC = 0.12; // icon height as a fraction of plaque height
-// Icon + label are stacked as one block and centered vertically, then nudged UP
-// by (icon height × OPTION_STACK_TOP_BIAS) so the label lands nearer plaque center.
-const OPTION_STACK_GAP_FRAC = 0.02;   // gap between icon and label (frac of plaque height)
-const OPTION_STACK_TOP_BIAS = 0.5;    // upward shift of the stack, as a multiple of icon height
+// Option plaques are WORDS ONLY (no tag symbol) — the label is centered in the
+// plaque at this fraction of its height.
+const OPTION_LABEL_CENTER_FRAC = 0.5;
 const OPTION_LABEL_SIZE = 36;
 const OPTION_LABEL_COLOR = '#e2cd92';
 const OPTION_HOVER_SCALE = 1.05;
@@ -1205,41 +1201,15 @@ export default class SkillWeaveScene extends UIPanel {
     if (img) this._drawImageRect(ctx, img, imgRect);
     else this._drawFallbackPlaque(ctx, rect);
 
-    // Stack icon + label as one block, center it vertically, then bias upward by
-    // (icon height × OPTION_STACK_TOP_BIAS) so the label sits nearer plaque center.
-    const iconH = rect.h * OPTION_ICON_HEIGHT_FRAC;
+    // Words only — the tag label centered in the plaque (no symbol).
     const labelSize = OPTION_LABEL_SIZE * (rect.w / OPTION_W);
-    const gap = rect.h * OPTION_STACK_GAP_FRAC;
-    const blockH = iconH + gap + labelSize;
-    const blockTop = rect.y + (rect.h - blockH) / 2 - iconH * OPTION_STACK_TOP_BIAS;
-
-    this._paintIcon(ctx, rect, tagId, blockTop + iconH / 2);
-
     this._drawText(ctx, getTagLabel(tagId),
-      rect.x + rect.w / 2, blockTop + iconH + gap + labelSize / 2, {
+      rect.x + rect.w / 2, rect.y + rect.h * OPTION_LABEL_CENTER_FRAC, {
         size: labelSize,
         color: bright ? '#f4e6b8' : OPTION_LABEL_COLOR,
         baseline: 'middle',
         shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.65)',
       });
-  }
-
-  /** Draw the tag icon centered horizontally, with its center at `centerY`. */
-  _paintIcon(ctx, rect, tagId, centerY) {
-    // Prefer the tag's wired icon (spritesheet sprite or standalone); if that
-    // isn't available, fall back to the shared gold-flame placeholder.
-    const img = this._asset(getTagIcon(tagId)) || this._asset(DEFAULT_TAG_ICON);
-    const iconH = rect.h * OPTION_ICON_HEIGHT_FRAC;
-    const aspect = (img && img.width && img.height) ? img.width / img.height : (138 / 196);
-    const iconW = iconH * aspect;
-    const ix = rect.x + rect.w / 2 - iconW / 2;
-    const iy = centerY - iconH / 2;
-    if (img) {
-      const prev = ctx.imageSmoothingEnabled;
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(img, ix, iy, iconW, iconH);
-      ctx.imageSmoothingEnabled = prev;
-    }
   }
 
   // ── Render: recipe (anim-aware slot content) ───────────────
