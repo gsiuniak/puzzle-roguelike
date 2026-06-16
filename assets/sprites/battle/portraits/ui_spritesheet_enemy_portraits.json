@@ -1,0 +1,143 @@
+{
+  "meta": {
+    "sheet_w": 1480,
+    "sheet_h": 1485,
+    "sprite_count": 12,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "portrait_abomination": {
+      "x": 1112,
+      "y": 4,
+      "w": 364,
+      "h": 364,
+      "index": 0,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "portrait_malakor": {
+      "x": 371,
+      "y": 377,
+      "w": 362,
+      "h": 367,
+      "index": 1,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 1,
+      "trim_y": 0
+    },
+    "portrait_goresnout_trackers": {
+      "x": 4,
+      "y": 748,
+      "w": 362,
+      "h": 366,
+      "index": 2,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "portrait_chokeweed": {
+      "x": 744,
+      "y": 4,
+      "w": 364,
+      "h": 365,
+      "index": 3,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "portrait_stone_gargoyle": {
+      "x": 737,
+      "y": 377,
+      "w": 362,
+      "h": 367,
+      "index": 4,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "portrait_orc_taskmaster": {
+      "x": 4,
+      "y": 1118,
+      "w": 359,
+      "h": 363,
+      "index": 5,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 1,
+      "trim_y": 1
+    },
+    "portrait_shadow_weaver": {
+      "x": 376,
+      "y": 4,
+      "w": 364,
+      "h": 366,
+      "index": 6,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "portrait_goblin_sapper": {
+      "x": 1103,
+      "y": 377,
+      "w": 363,
+      "h": 365,
+      "index": 7,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "portrait_acolyte": {
+      "x": 370,
+      "y": 748,
+      "w": 364,
+      "h": 363,
+      "index": 8,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 1
+    },
+    "portrait_orc": {
+      "x": 4,
+      "y": 377,
+      "w": 363,
+      "h": 367,
+      "index": 9,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "portrait_cyclops": {
+      "x": 738,
+      "y": 748,
+      "w": 362,
+      "h": 362,
+      "index": 10,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 2,
+      "trim_y": 1
+    },
+    "portrait_goblin": {
+      "x": 4,
+      "y": 4,
+      "w": 368,
+      "h": 369,
+      "index": 11,
+      "source_w": 368,
+      "source_h": 369,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}

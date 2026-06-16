@@ -1,0 +1,363 @@
+{
+  "meta": {
+    "sheet_w": 1960,
+    "sheet_h": 2654,
+    "sprite_count": 32,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "weave_grayscale_barrier": {
+      "x": 1753,
+      "y": 519,
+      "w": 203,
+      "h": 273,
+      "index": 0,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_frozen": {
+      "x": 766,
+      "y": 1423,
+      "w": 187,
+      "h": 256,
+      "index": 1,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_bleed": {
+      "x": 734,
+      "y": 1042,
+      "w": 197,
+      "h": 288,
+      "index": 2,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_berserk": {
+      "x": 1329,
+      "y": 519,
+      "w": 206,
+      "h": 296,
+      "index": 3,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_intangible": {
+      "x": 542,
+      "y": 1042,
+      "w": 188,
+      "h": 307,
+      "index": 4,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_brittle": {
+      "x": 386,
+      "y": 1423,
+      "w": 189,
+      "h": 270,
+      "index": 5,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_enfeeble": {
+      "x": 214,
+      "y": 1423,
+      "w": 168,
+      "h": 305,
+      "index": 6,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_cripple": {
+      "x": 4,
+      "y": 2365,
+      "w": 145,
+      "h": 285,
+      "index": 7,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_silence": {
+      "x": 935,
+      "y": 1042,
+      "w": 204,
+      "h": 255,
+      "index": 8,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_lock": {
+      "x": 479,
+      "y": 4,
+      "w": 385,
+      "h": 492,
+      "index": 9,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_wild": {
+      "x": 4,
+      "y": 4,
+      "w": 471,
+      "h": 511,
+      "index": 10,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_extra_turn": {
+      "x": 4,
+      "y": 519,
+      "w": 389,
+      "h": 519,
+      "index": 11,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_tile": {
+      "x": 1025,
+      "y": 519,
+      "w": 300,
+      "h": 299,
+      "index": 12,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_area": {
+      "x": 868,
+      "y": 4,
+      "w": 378,
+      "h": 375,
+      "index": 13,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_column": {
+      "x": 4,
+      "y": 1423,
+      "w": 206,
+      "h": 393,
+      "index": 14,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_row": {
+      "x": 397,
+      "y": 904,
+      "w": 478,
+      "h": 128,
+      "index": 15,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_explode": {
+      "x": 957,
+      "y": 1423,
+      "w": 179,
+      "h": 250,
+      "index": 16,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_attack": {
+      "x": 1324,
+      "y": 1423,
+      "w": 162,
+      "h": 235,
+      "index": 17,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_drain": {
+      "x": 4,
+      "y": 2088,
+      "w": 159,
+      "h": 273,
+      "index": 18,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_heal": {
+      "x": 1342,
+      "y": 1042,
+      "w": 170,
+      "h": 190,
+      "index": 19,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_gain": {
+      "x": 1516,
+      "y": 1042,
+      "w": 144,
+      "h": 160,
+      "index": 20,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_convert": {
+      "x": 1140,
+      "y": 1423,
+      "w": 180,
+      "h": 240,
+      "index": 21,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_destroy": {
+      "x": 579,
+      "y": 1423,
+      "w": 183,
+      "h": 268,
+      "index": 22,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_create": {
+      "x": 1143,
+      "y": 1042,
+      "w": 195,
+      "h": 234,
+      "index": 23,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_armor": {
+      "x": 4,
+      "y": 1820,
+      "w": 174,
+      "h": 264,
+      "index": 24,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_damage": {
+      "x": 1539,
+      "y": 519,
+      "w": 210,
+      "h": 276,
+      "index": 25,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_skull": {
+      "x": 303,
+      "y": 1042,
+      "w": 235,
+      "h": 351,
+      "index": 26,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_purple": {
+      "x": 1590,
+      "y": 4,
+      "w": 313,
+      "h": 368,
+      "index": 27,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_yellow": {
+      "x": 1250,
+      "y": 4,
+      "w": 336,
+      "h": 369,
+      "index": 28,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_green": {
+      "x": 4,
+      "y": 1042,
+      "w": 295,
+      "h": 377,
+      "index": 29,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_blue": {
+      "x": 701,
+      "y": 519,
+      "w": 320,
+      "h": 355,
+      "index": 30,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "weave_grayscale_red": {
+      "x": 397,
+      "y": 519,
+      "w": 300,
+      "h": 381,
+      "index": 31,
+      "source_w": 478,
+      "source_h": 519,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "meta": {
+    "sheet_w": 1327,
+    "sheet_h": 1544,
+    "sprite_count": 10,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "reward_divider_rare": {
+      "x": 4,
+      "y": 1196,
+      "w": 995,
+      "h": 83,
+      "index": 0,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "reward_divider_legendary": {
+      "x": 4,
+      "y": 1283,
+      "w": 995,
+      "h": 83,
+      "index": 1,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "reward_divider_uncommon": {
+      "x": 4,
+      "y": 1370,
+      "w": 995,
+      "h": 83,
+      "index": 2,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "reward_divider_common": {
+      "x": 4,
+      "y": 1457,
+      "w": 995,
+      "h": 83,
+      "index": 3,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "rewards_title_panel": {
+      "x": 4,
+      "y": 983,
+      "w": 967,
+      "h": 209,
+      "index": 4,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "rewards_option_panel_vertical": {
+      "x": 4,
+      "y": 4,
+      "w": 558,
+      "h": 975,
+      "index": 5,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "rewards_button_skip_hover": {
+      "x": 1003,
+      "y": 1370,
+      "w": 191,
+      "h": 38,
+      "index": 6,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "rewards_button_skip": {
+      "x": 1003,
+      "y": 1412,
+      "w": 191,
+      "h": 38,
+      "index": 7,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "rewards_button_confirm_hover": {
+      "x": 1003,
+      "y": 1196,
+      "w": 320,
+      "h": 81,
+      "index": 8,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "rewards_button_confirm": {
+      "x": 1003,
+      "y": 1283,
+      "w": 320,
+      "h": 81,
+      "index": 9,
+      "source_w": 995,
+      "source_h": 975,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}
