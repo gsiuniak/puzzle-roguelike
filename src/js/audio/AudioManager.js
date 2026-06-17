@@ -18,7 +18,7 @@
  *   AudioManager.setMasterVolume(0.8);
  */
 
-import { AudioCategory } from './SoundConfig.js';
+import { AudioCategory, SFX_SPRITE_SHEET } from './SoundConfig.js';
 import {
   ENABLE_PERSISTENT_BATTLE_MUSIC,
   DEFAULT_BATTLE_MUSIC_KEY,
@@ -39,6 +39,22 @@ class _AudioManager {
      * @type {Map<string, Howl>}
      */
     this._sounds = new Map();
+
+    /**
+     * The single shared Howl backing the SFX audio sprite (SFX_SPRITE_SHEET).
+     * Sprite-backed sounds all play off this one instance via sprite names.
+     * @type {Howl|null}
+     */
+    this._spriteHowl = null;
+
+    /**
+     * Map of sound key → sprite clip name for sprite-backed sounds. A key in
+     * this map is played via `_spriteHowl.play(spriteName)` rather than its own
+     * Howl. (Such keys still register in `_sounds` pointing at `_spriteHowl`
+     * so has()/stopSfx() resolve a Howl.)
+     * @type {Map<string, string>}
+     */
+    this._spriteNames = new Map();
 
     /**
      * Reference to the sound config registry (SoundConfig.js default export).
@@ -117,26 +133,110 @@ class _AudioManager {
 
     this._config = config;
 
+    // Bind every sound def first. Sprite-backed entries record their key → clip
+    // name now; the shared sprite Howl + its offset map load asynchronously
+    // (next) and backfill those bindings once ready.
     for (const [key, def] of Object.entries(config)) {
       this.loadSound(key, def);
     }
 
+    // Kick off the SFX audio-sprite load (fetches the offset map from JSON, then
+    // builds the one shared Howl). Fire-and-forget — no SFX plays during the
+    // boot/loading screen, and any too-early playSfx just warns gracefully.
+    this._loadSpriteSheet(SFX_SPRITE_SHEET);
+
     this._initialized = true;
-    console.log(`[AudioManager] Initialized with ${this._sounds.size} sounds.`);
+    console.log(
+      `[AudioManager] Initialized with ${this._sounds.size} file sounds ` +
+      `+ ${this._spriteNames.size} sprite-backed (sprite loading async).`
+    );
   }
 
   // ── Sound Loading ─────────────────────────────────────
 
   /**
+   * Build the single shared Howl that backs the SFX audio sprite. Sprite-backed
+   * sounds (SOUNDS entries with a `sprite` name) all play off this one instance.
+   *
+   * The offset/duration map is fetched at runtime from `sheet.jsonSrc` (so a
+   * re-pack needs no code change). Once the Howl exists, every key already bound
+   * in `_spriteNames` is backfilled into `_sounds`. The JSON's own `src` field
+   * is ignored — only `sheet.src` (the real audio file) is used.
+   *
+   * @param {object} sheet — { src, jsonSrc, options? } (SFX_SPRITE_SHEET)
+   * @returns {Promise<void>}
+   */
+  async _loadSpriteSheet(sheet) {
+    if (!sheet || !sheet.src || !sheet.jsonSrc) return;
+
+    let spriteMap;
+    try {
+      const res = await fetch(sheet.jsonSrc);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      spriteMap = data && data.sprite;
+    } catch (err) {
+      console.warn(`[AudioManager] Failed to fetch SFX sprite map "${sheet.jsonSrc}":`, err);
+      return;
+    }
+    if (!spriteMap || typeof spriteMap !== 'object') {
+      console.warn(`[AudioManager] SFX sprite map "${sheet.jsonSrc}" has no "sprite" block.`);
+      return;
+    }
+
+    const { src, options = {} } = sheet;
+    try {
+      this._spriteHowl = new Howl({
+        src: Array.isArray(src) ? src : [src],
+        sprite: spriteMap,
+        volume: 0, // per-play volume is applied on play via _play
+        preload: true,
+        html5: false,
+        ...options,
+        onloaderror: (id, err) => {
+          console.warn('[AudioManager] Failed to load SFX sprite sheet:', err);
+        },
+      });
+    } catch (err) {
+      console.warn('[AudioManager] Error creating SFX sprite Howl:', err);
+      this._spriteHowl = null;
+      return;
+    }
+
+    // Backfill keys bound before the Howl existed; warn on any clip whose name
+    // isn't present in the loaded map (catches a key/clip-name mismatch).
+    for (const [key, spriteName] of this._spriteNames) {
+      if (!spriteMap[spriteName]) {
+        console.warn(`[AudioManager] Sprite clip "${spriteName}" (for "${key}") not in the sheet map.`);
+        continue;
+      }
+      this._sounds.set(key, this._spriteHowl);
+    }
+  }
+
+  /**
    * Load a single sound into the registry.
    * Gracefully warns if audio files are missing (404) — doesn't crash.
    *
+   * Two forms:
+   *   - `{ src, category, options? }`  — its own Howl (music, UI, standalone SFX).
+   *   - `{ sprite, category }`         — a clip in the shared SFX sprite sheet;
+   *                                      no new Howl, just a name binding.
+   *
    * @param {string} key    — sound key
-   * @param {object} config — { src: string|string[], category: AudioCategory, options?: object }
+   * @param {object} config — sound definition
    */
   loadSound(key, config) {
     if (this._sounds.has(key)) {
       console.warn(`[AudioManager] Sound key "${key}" already loaded. Skipping.`);
+      return;
+    }
+
+    // Sprite-backed sound: record key → clip name. The shared sprite Howl loads
+    // asynchronously (_loadSpriteSheet) and backfills `_sounds` once ready.
+    if (config.sprite) {
+      this._spriteNames.set(key, config.sprite);
+      if (this._spriteHowl) this._sounds.set(key, this._spriteHowl);
       return;
     }
 
@@ -189,6 +289,14 @@ class _AudioManager {
     const howl = this._sounds.get(key);
     if (!howl) return;
     if (id === null || id === undefined) {
+      // Without an id we'd stop the whole Howl. For a sprite-backed sound that
+      // Howl is the shared sheet — stopping it would cut EVERY SFX. Refuse and
+      // warn; callers of looping sprite sounds (e.g. sfx_crucible) must pass the
+      // play id returned by playSfx.
+      if (this._spriteNames.has(key)) {
+        console.warn(`[AudioManager] stopSfx("${key}") needs a play id for sprite-backed sounds.`);
+        return;
+      }
       howl.stop();
       return;
     }
@@ -404,7 +512,10 @@ class _AudioManager {
       ? 0
       : baseVolume * categoryVolume * this._masterVolume;
 
-    const id = howl.play();
+    // Sprite-backed sounds play a named clip off the shared sprite Howl; all
+    // others play their own Howl's full buffer.
+    const spriteName = this._spriteNames.get(key);
+    const id = spriteName !== undefined ? howl.play(spriteName) : howl.play();
     if (id !== null && id !== undefined) {
       howl.volume(effectiveVolume, id);
 

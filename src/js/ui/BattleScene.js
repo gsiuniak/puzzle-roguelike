@@ -760,13 +760,6 @@ export default class BattleScene extends UIPanel {
     }
 
     const cell = this._canAct() ? board.screenToCell(x, y) : null;
-    // Play tile_hover SFX when hovering a new tile
-    if (cell && this._audioManager) {
-      const prev = this._hoveredCell;
-      if (!prev || prev.col !== cell.col || prev.row !== cell.row) {
-        this._audioManager.playSfx('sfx_tile_hover');
-      }
-    }
     this._hoveredCell = cell;
     board.hoveredCell = cell;
   }

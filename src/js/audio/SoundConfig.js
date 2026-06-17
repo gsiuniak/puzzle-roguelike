@@ -21,6 +21,29 @@ export const AudioCategory = {
 };
 
 /**
+ * Shared SFX audio sprite — a single decoded MP3 holding every gameplay SFX
+ * clip back-to-back, with an offset/duration map. One network fetch + one
+ * decode for ALL the small one-shot sounds (instead of dozens of tiny files).
+ *
+ * The offset/duration map is NOT inlined here — it is loaded at runtime from
+ * `jsonSrc` (Howler's native sprite format `{ name: [offsetMs, durationMs] }`,
+ * the `sprite` field of that JSON). This means re-packing the sprite (which
+ * shifts every offset) needs NO code change: drop in the new `.mp3` + `.json`
+ * and the map is picked up automatically. The JSON's own `src` field points at
+ * a generator-internal filename and is ignored — the real audio file is `src`
+ * below.
+ *
+ * Individual SOUNDS entries opt into the sheet with `{ sprite: '<name>' }`
+ * instead of `{ src: [...] }`; AudioManager plays them off this one Howl.
+ */
+export const SFX_SPRITE_SHEET = {
+  key: 'sfx_sprite_sheet',
+  src: ['assets/audio/sfx/sfx_audio_sprite.ogg'],
+  jsonSrc: 'assets/audio/sfx/sfx_audio_sprite.json',
+  category: AudioCategory.SFX,
+};
+
+/**
  * Sound definition registry.
  * Each key maps to { src, category, options? }.
  *
@@ -106,201 +129,79 @@ const SOUNDS = {
   },
 
   // ── SFX — Gameplay ──────────────────────────────────────
-  sfx_match_3: {
-    src: ['assets/audio/sfx/match_3.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_match_4: {
-    src: ['assets/audio/sfx/match_4.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_match_5: {
-    src: ['assets/audio/sfx/match_5.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_skull_damage: {
-    src: ['assets/audio/sfx/skull_damage.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_tile_destroy: {
-    src: ['assets/audio/sfx/tile_destroy.mp3'],
-    category: AudioCategory.SFX,
-  },
+  // Sprite-backed entries reference a clip in SFX_SPRITE_SHEET by name.
+  sfx_match_3:      { sprite: 'match_3',      category: AudioCategory.SFX },
+  sfx_match_4:      { sprite: 'match_4',      category: AudioCategory.SFX },
+  sfx_match_5:      { sprite: 'match_5',      category: AudioCategory.SFX },
+  sfx_skull_damage: { sprite: 'skull_damage', category: AudioCategory.SFX },
+  sfx_tile_destroy: { sprite: 'tile_destroy', category: AudioCategory.SFX },
+  // No clip in the sprite sheet — kept as a standalone file (currently unused
+  // default for woven skills; file is absent on disk so it stays silent).
   sfx_skill_cast: {
     src: ['assets/audio/sfx/skill_cast.mp3'],
     category: AudioCategory.SFX,
   },
-  sfx_extra_turn: {
-    src: ['assets/audio/sfx/extra_turn.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_new_turn: {
-    src: ['assets/audio/sfx/new_turn.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_tile_hover: {
-    src: ['assets/audio/sfx/tile_hover2.mp3'],
-    category: AudioCategory.SFX,
-  },
+  sfx_extra_turn: { sprite: 'extra_turn', category: AudioCategory.SFX },
+  sfx_new_turn:   { sprite: 'new_turn',   category: AudioCategory.SFX },
+  // No clip in the sprite sheet — standalone file (currently unreferenced).
   sfx_damage_taken: {
     src: ['assets/audio/sfx/damage_taken.mp3'],
     category: AudioCategory.SFX,
   },
 
   // ── Skill resolve sounds (played when skill effect resolves, NOT on button click) ──
-  skill_bash: {
-    src: ['assets/audio/sfx/skills/warrior/skill_bash.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_defend: {
-    src: ['assets/audio/sfx/skills/warrior/skill_defend.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_slash: {
-    src: ['assets/audio/sfx/weapon_skill.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_explode: {
-    src: ['assets/audio/sfx/skills/mage/skill_explode.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_fracture: {
-    src: ['assets/audio/sfx/skills/mage/skill_fracture.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_create_skull: {
-    src: ['assets/audio/sfx/skills/general/skill_create_skull.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_oungan: {
-    src: ['assets/audio/sfx/skills/witch_doctor/skill_oungan.mp3'],
-    category: AudioCategory.SFX,
-  },
+  // All sprite-backed — clip names match the SFX_SPRITE_SHEET entries.
+  skill_bash:         { sprite: 'skill_bash',         category: AudioCategory.SFX },
+  skill_defend:       { sprite: 'skill_defend',       category: AudioCategory.SFX },
+  skill_slash:        { sprite: 'weapon_skill',       category: AudioCategory.SFX },
+  skill_explode:      { sprite: 'skill_explode',      category: AudioCategory.SFX },
+  skill_fracture:     { sprite: 'skill_fracture',     category: AudioCategory.SFX },
+  skill_create_skull: { sprite: 'skill_create_skull', category: AudioCategory.SFX },
+  skill_oungan:       { sprite: 'skill_oungan',       category: AudioCategory.SFX },
 
   // ── Enemy skill resolve sounds ──────────────────────────
-  skill_doomsong: {
-    src: ['assets/audio/sfx/skills/acolyte/sfx_skill_doomsong.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_ignition: {
-    src: ['assets/audio/sfx/skills/goblin_sapper/sfx_skill_ignition.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_boom_baby: {
-    src: ['assets/audio/sfx/skills/goblin_sapper/sfx_skill_boom_baby.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_encroach: {
-    src: ['assets/audio/sfx/skills/chokeweed/sfx_skill_encroach.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_boulder_throw: {
-    src: ['assets/audio/sfx/skills/cyclops/sfx_skill_boulder_throw.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_smash: {
-    src: ['assets/audio/sfx/skills/cyclops/sfx_smash.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_hound: {
-    src: ['assets/audio/sfx/skills/goresnout/sfx_hound.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_infected_bite: {
-    src: ['assets/audio/sfx/skills/abomination/sfx_skill_infected_bite.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_cyst_burst: {
-    src: ['assets/audio/sfx/skills/abomination/sfx_skill_cyst_burst.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_frenzy: {
-    src: ['assets/audio/sfx/skills/orc_taskmaster/sfx_skill_frenzy.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_charge: {
-    src: ['assets/audio/sfx/skills/orc_taskmaster/sfx_skill_charge.mp3'],
-    category: AudioCategory.SFX,
-  },
+  skill_doomsong:      { sprite: 'sfx_skill_doomsong',      category: AudioCategory.SFX },
+  skill_ignition:      { sprite: 'sfx_skill_ignition',      category: AudioCategory.SFX },
+  skill_boom_baby:     { sprite: 'sfx_skill_boom_baby',     category: AudioCategory.SFX },
+  skill_encroach:      { sprite: 'sfx_skill_encroach',      category: AudioCategory.SFX },
+  skill_boulder_throw: { sprite: 'sfx_skill_boulder_throw', category: AudioCategory.SFX },
+  skill_smash:         { sprite: 'sfx_smash',               category: AudioCategory.SFX },
+  skill_hound:         { sprite: 'sfx_hound',               category: AudioCategory.SFX },
+  skill_infected_bite: { sprite: 'sfx_skill_infected_bite', category: AudioCategory.SFX },
+  skill_cyst_burst:    { sprite: 'sfx_skill_cyst_burst',    category: AudioCategory.SFX },
+  skill_frenzy:        { sprite: 'sfx_skill_frenzy',        category: AudioCategory.SFX },
+  skill_charge:        { sprite: 'sfx_skill_charge',        category: AudioCategory.SFX },
 
-  // Lord Malakor (Act 1 boss). NOTE: the Desecrate file is misspelled
-  // "descecrate" on disk — the src path must match it; the key stays clean.
-  skill_desecrate: {
-    src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_descecrate.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_soul_burn: {
-    src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_soul_burn.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_harvest: {
-    src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_harvest.mp3'],
-    category: AudioCategory.SFX,
-  },
+  // Lord Malakor (Act 1 boss). NOTE: the Desecrate clip is misspelled
+  // "descecrate" in the sprite sheet — the sprite name matches it; the key stays clean.
+  skill_desecrate:    { sprite: 'sfx_skill_descecrate',  category: AudioCategory.SFX },
+  skill_soul_burn:    { sprite: 'sfx_skill_soul_burn',   category: AudioCategory.SFX },
+  skill_harvest:      { sprite: 'sfx_skill_harvest',     category: AudioCategory.SFX },
   // Thrall-harvest passive (Usurper's Heart), played when Thralls are reaped.
-  sfx_thrall_harvest: {
-    src: ['assets/audio/sfx/skills/lord_malakor/sfx_thrall_harvest.mp3'],
-    category: AudioCategory.SFX,
-  },
+  sfx_thrall_harvest: { sprite: 'sfx_thrall_harvest',    category: AudioCategory.SFX },
   // Thrall-summon passive (Baron's Signet), played when Thralls are summoned.
-  sfx_thrall_summon: {
-    src: ['assets/audio/sfx/skills/lord_malakor/sfx_thrall_summon.mp3'],
-    category: AudioCategory.SFX,
-  },
-  skill_exsanguinate: {
-    src: ['assets/audio/sfx/skills/lord_malakor/sfx_skill_exsanguinate.mp3'],
-    category: AudioCategory.SFX,
-  },
+  sfx_thrall_summon:  { sprite: 'sfx_thrall_summon',     category: AudioCategory.SFX },
+  skill_exsanguinate: { sprite: 'sfx_skill_exsanguinate', category: AudioCategory.SFX },
 
   // ── Character Select ────────────────────────────────────
-  character_select_pick: {
-    src: ['assets/audio/sfx/character_select/character_select_pick.mp3'],
-    category: AudioCategory.SFX,
-  },
-  character_select_confirm: {
-    src: ['assets/audio/sfx/character_select/character_select_confirm.mp3'],
-    category: AudioCategory.SFX,
-  },
+  character_select_pick:    { sprite: 'character_select_pick',    category: AudioCategory.SFX },
+  character_select_confirm: { sprite: 'character_select_confirm', category: AudioCategory.SFX },
 
   // ── Map ─────────────────────────────────────────────────
-  sfx_map_click_node: {
-    src: ['assets/audio/sfx/map/sfx_map_click_node.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_map_overlay_open: {
-    src: ['assets/audio/sfx/map/sfx_map_overlay_open.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_map_overlay_close: {
-    src: ['assets/audio/sfx/map/sfx_map_overlay_close.mp3'],
-    category: AudioCategory.SFX,
-  },
+  sfx_map_click_node:    { sprite: 'sfx_map_click_node',    category: AudioCategory.SFX },
+  sfx_map_overlay_open:  { sprite: 'sfx_map_overlay_open',  category: AudioCategory.SFX },
+  sfx_map_overlay_close: { sprite: 'sfx_map_overlay_close', category: AudioCategory.SFX },
 
   // ── Rewards ─────────────────────────────────────────────
-  sfx_rewards_open: {
-    src: ['assets/audio/sfx/rewards/sfx_rewards_open.mp3'],
-    category: AudioCategory.SFX,
-  },
+  sfx_rewards_open: { sprite: 'sfx_rewards_open', category: AudioCategory.SFX },
 
   // ── Skill Weave ("Weave a Power") ──────────────────────
-  sfx_choose_tag: {
-    src: ['assets/audio/sfx/skill_weave/sfx_choose_tag.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_choose_tag_back: {
-    src: ['assets/audio/sfx/skill_weave/sfx_choose_tag_back.mp3'],
-    category: AudioCategory.SFX,
-  },
-  sfx_choose_tags_confirm: {
-    src: ['assets/audio/sfx/skill_weave/sfx_choose_tags_confirm.mp3'],
-    category: AudioCategory.SFX,
-  },
+  sfx_choose_tag:          { sprite: 'sfx_choose_tag',          category: AudioCategory.SFX },
+  sfx_choose_tag_back:     { sprite: 'sfx_choose_tag_back',     category: AudioCategory.SFX },
+  sfx_choose_tags_confirm: { sprite: 'sfx_choose_tags_confirm', category: AudioCategory.SFX },
   // Sustained crucible/beam loop (recipe complete, pre-confirm). Looped + stopped
   // by SkillWeaveScene via playSfx({loop:true}) / stopSfx.
-  sfx_crucible: {
-    src: ['assets/audio/sfx/skill_weave/sfx_crucible.mp3'],
-    category: AudioCategory.SFX,
-  },
+  sfx_crucible: { sprite: 'sfx_crucible', category: AudioCategory.SFX },
 
   // ── UI ──────────────────────────────────────────────────
   ui_button_hover: {
