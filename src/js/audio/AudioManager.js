@@ -18,7 +18,7 @@
  *   AudioManager.setMasterVolume(0.8);
  */
 
-import { AudioCategory, SFX_SPRITE_SHEET } from './SoundConfig.js';
+import { AudioCategory, SFX_SPRITE_SHEET, SFX_GENERIC_SPRITE_SHEET } from './SoundConfig.js';
 import {
   ENABLE_PERSISTENT_BATTLE_MUSIC,
   DEFAULT_BATTLE_MUSIC_KEY,
@@ -140,10 +140,12 @@ class _AudioManager {
       this.loadSound(key, def);
     }
 
-    // Kick off the SFX audio-sprite load (fetches the offset map from JSON, then
-    // builds the one shared Howl). Fire-and-forget — no SFX plays during the
-    // boot/loading screen, and any too-early playSfx just warns gracefully.
+    // Kick off the SFX audio-sprite loads (fetch each offset map from JSON, then
+    // build a shared Howl per sheet). Fire-and-forget — no SFX plays during the
+    // boot/loading screen, and any too-early playSfx just warns gracefully. The
+    // generic pool (woven-skill SFX) is a second sheet with its own Howl.
     this._loadSpriteSheet(SFX_SPRITE_SHEET);
+    this._loadSpriteSheet(SFX_GENERIC_SPRITE_SHEET);
 
     this._initialized = true;
     console.log(
@@ -185,8 +187,9 @@ class _AudioManager {
     }
 
     const { src, options = {} } = sheet;
+    let howl;
     try {
-      this._spriteHowl = new Howl({
+      howl = new Howl({
         src: Array.isArray(src) ? src : [src],
         sprite: spriteMap,
         volume: 0, // per-play volume is applied on play via _play
@@ -199,18 +202,19 @@ class _AudioManager {
       });
     } catch (err) {
       console.warn('[AudioManager] Error creating SFX sprite Howl:', err);
-      this._spriteHowl = null;
       return;
     }
+    // Retain the FIRST sheet's Howl as the primary (used by loadSound for any
+    // key bound after a sheet exists). Multiple sheets can coexist: each key is
+    // routed to its own sheet's Howl via the per-key `_sounds` backfill below.
+    if (!this._spriteHowl) this._spriteHowl = howl;
 
-    // Backfill keys bound before the Howl existed; warn on any clip whose name
-    // isn't present in the loaded map (catches a key/clip-name mismatch).
+    // Backfill the keys that belong to THIS sheet (their clip name is in this
+    // sheet's map). Keys from other sheets are silently skipped here — each
+    // sheet's own _loadSpriteSheet call backfills them against its own Howl.
     for (const [key, spriteName] of this._spriteNames) {
-      if (!spriteMap[spriteName]) {
-        console.warn(`[AudioManager] Sprite clip "${spriteName}" (for "${key}") not in the sheet map.`);
-        continue;
-      }
-      this._sounds.set(key, this._spriteHowl);
+      if (!spriteMap[spriteName]) continue;
+      this._sounds.set(key, howl);
     }
   }
 

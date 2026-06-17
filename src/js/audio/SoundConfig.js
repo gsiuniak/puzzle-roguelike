@@ -44,6 +44,22 @@ export const SFX_SPRITE_SHEET = {
 };
 
 /**
+ * Second SFX audio sprite — the GENERIC effect pool. Same format/loading as
+ * SFX_SPRITE_SHEET (its own Howl, offset map fetched from `jsonSrc`); both
+ * sheets are loaded at init by AudioManager. These clips are organized by
+ * effect (create/destroy/armor/convert/change/damage), some by tile color, with
+ * multiple numbered versions. They back the SOUNDS entries auto-generated below
+ * (`sfx_generic_*`) and are picked per woven skill by the synthesizer
+ * (skillSynthesizer.pickSkillSound) at skill-creation time.
+ */
+export const SFX_GENERIC_SPRITE_SHEET = {
+  key: 'sfx_generic_sprite_sheet',
+  src: ['assets/audio/sfx/sfx_audio_generic_sprite.ogg'],
+  jsonSrc: 'assets/audio/sfx/sfx_audio_generic_sprite.json',
+  category: AudioCategory.SFX,
+};
+
+/**
  * Sound definition registry.
  * Each key maps to { src, category, options? }.
  *
@@ -231,5 +247,32 @@ const SOUNDS = {
 //     },
 //   },
 };
+
+// ── Generic SFX pool (SFX_GENERIC_SPRITE_SHEET) ─────────────
+// Auto-register one sprite-backed SOUNDS entry per clip in the generic sheet.
+// Each key === its sprite clip name (`sfx_generic_<clip>`). These are NOT wired
+// to any fixed skill — the Skill Weave synthesizer picks one per woven skill
+// (skillSynthesizer.pickSkillSound). Keep these clip lists in sync with
+// sfx_audio_generic_sprite.json.
+const GENERIC_SFX_CLIPS = [
+  // create — by tile flavor, 2 versions each
+  ...['red', 'blue', 'green', 'yellow', 'purple', 'skull', 'wild']
+    .flatMap((c) => [1, 2].map((v) => `create_${c}_${v}`)),
+  // destroy — 5 versions
+  ...[1, 2, 3, 4, 5].map((v) => `destroy_${v}`),
+  // armor — 2 versions
+  ...[1, 2].map((v) => `armor_${v}`),
+  // convert — 3 versions
+  ...[1, 2, 3].map((v) => `convert_${v}`),
+  // change (single-tile recolor) — 3 versions
+  ...[1, 2, 3].map((v) => `change_${v}`),
+  // damage — by tile color, 3 versions each
+  ...['red', 'blue', 'green', 'yellow', 'purple']
+    .flatMap((c) => [1, 2, 3].map((v) => `damage_${c}_${v}`)),
+];
+for (const clip of GENERIC_SFX_CLIPS) {
+  const key = `sfx_generic_${clip}`;
+  SOUNDS[key] = { sprite: key, category: AudioCategory.SFX };
+}
 
 export default SOUNDS;

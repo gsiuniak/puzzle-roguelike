@@ -38,8 +38,13 @@ const BORDER_KEY = 'icon_border_2';
 
 /** Sprite-key prefix for a color's base orb (variants are `<prefix>_<n>`). */
 const baseKeyPrefix = (color) => `${color}_base`;
+/**
+ * Some effect tags share authored foreground art with another tag (no dedicated
+ * sprite of their own). `change` (the single-tile recolor) reuses `convert`'s.
+ */
+const EFFECT_SPRITE_ALIAS = Object.freeze({ change: 'convert' });
 /** Sprite-key prefix for an effect tag's foreground (variants are `<prefix>_<n>`). */
-const effectKeyPrefix = (tag) => `foreground_${tag}`;
+const effectKeyPrefix = (tag) => `foreground_${EFFECT_SPRITE_ALIAS[tag] || tag}`;
 
 /**
  * Mana colors that own a base orb. There is no neutral orb, so the no-color
@@ -63,7 +68,7 @@ const ELEMENT_TO_COLOR = Object.freeze({
 const EFFECT_TAG_PRIORITY = Object.freeze({
   // actions (the readable subject)
   explode: 100, damage: 96, attack: 92, destroy: 90, convert: 86,
-  shuffle: 85, create: 84, heal: 82, armor: 80, drain: 76,
+  change: 85, shuffle: 84, create: 83, heal: 82, armor: 80, drain: 76,
   // statuses (distinct subjects, secondary to a hard action)
   bleed: 60, frozen: 58, barrier: 57, berserk: 56, silence: 54,
   cripple: 52, enfeeble: 50, brittle: 48, intangible: 46,

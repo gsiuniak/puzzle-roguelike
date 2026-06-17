@@ -79,6 +79,9 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   create:  { id: 'create',  label: 'Create',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_create' },
   destroy: { id: 'destroy', label: 'Destroy', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   convert: { id: 'convert', label: 'Convert', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: 'weave_icon_convert' },
+  // `change` is the targeted single-tile recolor (à la the Mage's Arcane
+  // Inscription) — change one tile into a color INFLUENCED by a woven element.
+  change:  { id: 'change',  label: 'Change',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_convert' },
   heal:    { id: 'heal',    label: 'Heal',    category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   drain:   { id: 'drain',   label: 'Drain',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: null },
   attack:  { id: 'attack',  label: 'Attack',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_attack' },

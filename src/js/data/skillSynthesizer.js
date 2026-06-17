@@ -86,18 +86,54 @@ const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
 const ACTION_COST_AFFINITY = Object.freeze({
   damage: 'red', attack: 'blue', explode: 'red', destroy: 'red',
   armor: 'blue', heal: 'green', create: 'green',
-  convert: 'purple', drain: 'purple', shuffle: 'yellow',
+  convert: 'purple', change: 'purple', drain: 'purple', shuffle: 'yellow',
 });
 
-/** Primary action → resolve SFX (SoundConfig keys). */
+/**
+ * Primary action → resolve SFX (SoundConfig keys). FALLBACK only — used for
+ * actions that have NO clip in the generic SFX pool (heal/attack/drain/shuffle).
+ * Actions covered by the generic pool get a `sfx_generic_*` clip instead (see
+ * pickSkillSound + GENERIC_SOUND_BY_ACTION below).
+ */
 const ACTION_SOUND = Object.freeze({
   damage: 'skill_bash', attack: 'skill_encroach',
   armor: 'skill_defend', heal: 'skill_oungan',
   create: 'skill_oungan', destroy: 'skill_fracture',
-  explode: 'skill_explode', convert: 'skill_explode',
+  explode: 'skill_explode', convert: 'skill_explode', change: 'skill_explode',
   drain: 'skill_doomsong', shuffle: 'skill_fracture',
 });
 const DEFAULT_SOUND = 'sfx_skill_cast';
+
+// ── Generic SFX pool (sfx_audio_generic_sprite — see SoundConfig.js) ──
+// A synthesized skill picks ONE clip from this authored pool at creation time
+// (here, once) and reuses it for the rest of the run. The clip is chosen by the
+// skill's PRIMARY action (the "most relevant effect"); families with multiple
+// authored versions pick one at random; color-aware families (damage/create)
+// pick the relevant tile color. Actions absent here fall back to ACTION_SOUND.
+
+/** SoundConfig key prefix for the generic pool clips. */
+const GENERIC_SOUND_PREFIX = 'sfx_generic_';
+/** Colors with authored `damage_<color>` clips. */
+const GENERIC_DAMAGE_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
+/** Tile flavors with authored `create_<flavor>` clips. */
+const GENERIC_CREATE_FLAVORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple', 'skull', 'wild']);
+/**
+ * Primary action → generic-sound descriptor.
+ *   family   — clip family stem (`<family>[_<color>]_<version>`)
+ *   versions — number of authored versions (a random one is rolled)
+ *   colored  — pick a `damage_<color>` clip from the cost color
+ *   create   — pick a `create_<flavor>` clip from the created tile type
+ * Actions NOT listed (heal/attack/drain/shuffle) have no generic clip → ACTION_SOUND.
+ */
+const GENERIC_SOUND_BY_ACTION = Object.freeze({
+  damage:  { family: 'damage',  versions: 3, colored: true },
+  explode: { family: 'destroy', versions: 5 },
+  destroy: { family: 'destroy', versions: 5 },
+  armor:   { family: 'armor',   versions: 2 },
+  convert: { family: 'convert', versions: 3 },
+  change:  { family: 'change',  versions: 3 },
+  create:  { family: 'create',  versions: 2, create: true },
+});
 
 /**
  * Power-score weights — how much each emitted effect contributes to the
@@ -197,6 +233,10 @@ const ACTION_NOUNS = Object.freeze({
     'Transfiguration', 'Rebinding', 'Permutation', 'Recasting', 'Conversion', 'Shift',
     'Reforging', 'Sublimation', 'Reweaving',
   ],
+  change: [
+    'Inscription', 'Glyph', 'Sigil', 'Mark', 'Rune', 'Reshaping', 'Etching',
+    'Inscribing', 'Brand', 'Imprint', 'Tracing', 'Scribing', 'Cipher', 'Seal',
+  ],
   drain: [
     'Siphon', 'Leeching', 'Hunger', 'Theft', 'Tithe', 'Parch', 'Drought',
     'Withering', 'Sapping', 'Devouring', 'Famine', 'Atrophy', 'Consumption',
@@ -243,6 +283,7 @@ const TAG_SUFFIXES = Object.freeze({
   create:     ['of Genesis', 'Unfolding', 'of Seeds'],
   destroy:    ['of Ruin', 'Undone', 'of Collapse'],
   convert:    ['of Change', 'Shifting', 'of Flux'],
+  change:     ['of Marks', 'Inscribed', 'of Runes'],
   drain:      ['of Hunger', 'Withering', 'of Famine'],
   attack:     ['of Fury', 'Rising', 'of Bloodlust'],
   explode:    ['of Cataclysm', 'Bursting', 'of the Blast'],
@@ -315,6 +356,65 @@ function groupByCategory(tagIds) {
 
 function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/** Roll a 1..n version number (for the multi-version generic SFX clips). */
+function rollVersion(n) {
+  return 1 + Math.floor(Math.random() * Math.max(1, n));
+}
+
+/**
+ * Build a concrete generic-pool SoundConfig key for one action descriptor:
+ * resolves the color/create flavor and rolls a random version.
+ * @param {object} desc — a GENERIC_SOUND_BY_ACTION entry
+ * @param {object[]} effects — the emitted effect list (for the create flavor)
+ * @param {string} costColor — the rolled cost color (damage clip color)
+ * @returns {string} a `sfx_generic_*` SoundConfig key
+ */
+function buildGenericSound(desc, effects, costColor) {
+  let stem = desc.family;
+  if (desc.colored) {
+    const color = GENERIC_DAMAGE_COLORS.includes(costColor) ? costColor : pickRandom(GENERIC_DAMAGE_COLORS);
+    stem = `${desc.family}_${color}`;
+  } else if (desc.create) {
+    const createEff = effects.find((e) => e.effectType === 'create_tiles');
+    let flavor = createEff && createEff.createTiles ? createEff.createTiles.type : null;
+    if (flavor === 'thrall') flavor = 'wild'; // Thrall is the enemy-flavored wild
+    if (!GENERIC_CREATE_FLAVORS.includes(flavor)) {
+      flavor = GENERIC_CREATE_FLAVORS.includes(costColor) ? costColor : 'red';
+    }
+    stem = `${desc.family}_${flavor}`;
+  }
+  return `${GENERIC_SOUND_PREFIX}${stem}_${rollVersion(desc.versions)}`;
+}
+
+/**
+ * Choose the resolve SFX for a synthesized skill — preferring the generic SFX
+ * pool (sfx_audio_generic_sprite), with a random version, so the spell's "most
+ * relevant effect" is voiced. The bag's ACTIONS are walked in pick order and
+ * the FIRST one that has a generic clip wins — so a multi-action spell whose
+ * PRIMARY action has no generic clip (e.g. `attack`, which voiced an old
+ * `skill_encroach` before) still draws from the generic pool via its other
+ * actions (damage / create / …). Color-aware families pick the relevant tile
+ * color (damage → cost color; create → the created tile flavor). Only when NO
+ * bag action maps to the generic pool (pure attack/heal/drain/shuffle) does it
+ * fall back to the per-action authored sound. Called ONCE here, so the chosen
+ * clip persists for the rest of the run.
+ *
+ * @param {string[]} actions — the spell's action tags, in pick order
+ * @param {object[]} effects — the emitted effect list (for the create flavor)
+ * @param {string} costColor — the rolled cost color (damage clip color)
+ * @returns {string} a SoundConfig key
+ */
+function pickSkillSound(actions, effects, costColor) {
+  const list = Array.isArray(actions) ? actions : [];
+  for (const action of list) {
+    const desc = GENERIC_SOUND_BY_ACTION[action];
+    if (desc) return buildGenericSound(desc, effects, costColor);
+  }
+  // No bag action has a generic clip — fall back to the primary action's
+  // authored sound (else the silent default).
+  return ACTION_SOUND[list[0]] || DEFAULT_SOUND;
 }
 
 /** Roll a 0–100 percentage chance from INJECTION_CONFIG. */
@@ -594,6 +694,29 @@ export function synthesize(recipe) {
         }
         break;
       }
+      case 'change': {
+        // Targeted single-tile recolor (à la the Mage's Arcane Inscription).
+        // The destination COLOR is influenced by a woven element (else rolled);
+        // an `area` shape widens it to a 3×3. If the single targeting slot is
+        // already claimed, it degrades to a by-type recolor (no targeting).
+        const toColor = takeElement({ allowSkull: true }) || pickRandom(COST_COLORS);
+        const toLabel = toColor === 'skull' ? '[[Skulls]]' : TILE_LABEL[toColor];
+        if (!targeting) {
+          const radius = takeShape('area') ? 1 : 0;
+          if (radius === 0) takeShape('tile');
+          targeting = { targeting: 'board_tile', area: { radius } };
+          effects.push({ effectType: 'convert_tile', convertTile: { type: toColor } });
+          const what = radius > 0 ? '[[tiles]] in a 3x3 area' : 'a [[tile]]';
+          lines.push(`[[Change]] ${what} into ${toLabel}`);
+          power += radius > 0 ? POWER.convertArea : POWER.convertTile;
+        } else {
+          const fromType = pickRandom(COST_COLORS.filter((c) => c !== toColor));
+          effects.push({ effectType: 'convert_tiles_by_type', convertByType: { from: fromType, to: toColor } });
+          lines.push(`[[Change]] all ${TILE_LABEL[fromType]} [[tiles]] into ${toLabel}`);
+          power += POWER.convertByType;
+        }
+        break;
+      }
       case 'destroy':
       case 'explode': {
         const isExplode = action === 'explode';
@@ -727,7 +850,14 @@ export function synthesize(recipe) {
     // Joined form for consumers that take a single string (tooltips, scenes).
     description: lines.join('\n') || 'It does... something?',
     icon: null, // filled by SkillWeaveScene from the procedural spell icon
-    sound: ACTION_SOUND[primaryAction] || DEFAULT_SOUND,
+    // Resolve SFX — walk the bag's actions for the first with a generic-pool
+    // clip (random version), chosen once here and reused for the run. A verb-
+    // less bag lashes out as damage, so voice it from the damage family.
+    sound: pickSkillSound(
+      actions.length ? actions : (effects.some((e) => e.effectType === 'damage') ? ['damage'] : []),
+      effects,
+      costColor,
+    ),
     cost,
     ...(targeting || {}),
     effects,
