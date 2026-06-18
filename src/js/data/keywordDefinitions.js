@@ -122,6 +122,13 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Skulls',
     description: 'Skull tiles deal [[Damage]] to the enemy when matched or destroyed.',
   },
+  // Singular form — a real entry (not an alias) so [[Skull]] renders "Skull",
+  // not "Skulls" (a label resolved via alias would show the plural entry's label).
+  skull: {
+    id: 'skull',
+    label: 'Skull',
+    description: 'A Skull tile deals [[Damage]] to the enemy when matched or destroyed.',
+  },
   mana: {
     id: 'mana',
     label: 'Mana',
@@ -212,7 +219,7 @@ export const KEYWORD_DEFINITIONS = {
  * Keys must be normalized (lowercase, single-spaced).
  */
 export const KEYWORD_ALIASES = {
-  skull: 'skulls',
+  // (no skull→skulls alias: `skull` is now its own singular entry)
   gem: 'tile',
   gems: 'tiles',
   damages: 'damage',

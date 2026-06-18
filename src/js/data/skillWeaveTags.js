@@ -98,7 +98,12 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
 
   // ── Modifiers (alter the spell as a whole) ──
   extra_turn: { id: 'extra_turn', label: 'Extra Turn', category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.LEGENDARY, icon: 'weave_icon_extra_turn' },
+  // `wild` reads as a TILE TYPE in synthesis (a create/convert/change target);
+  // its floor is "create Wild tiles", so it never fizzles.
   wild:       { id: 'wild',       label: 'Wild',       category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.LEGENDARY, icon: null },
+  // `all` is a scope qualifier: it upgrades `change`→mass convert, `destroy`+a
+  // color→board-wide color wipe, and boosts `create`'s tile count.
+  all:        { id: 'all',        label: 'All',        category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
 
   // ── Status effects (synthesized into apply_status effects — debuffs hit the
   //    enemy, buffs (intangible/berserk/barrier) buff the caster) ──

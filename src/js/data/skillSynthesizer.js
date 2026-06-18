@@ -7,29 +7,36 @@
  * targeting?, area?, effects[] }) — the icon asset key is filled in by the
  * scene (procedural spell icons, §4.8); everything else is decided here.
  *
- * ── Rule model ──────────────────────────────────────────────────────────────
- * Tags are consumed by ROLE, walking the bag's ACTION tags in pick order:
- *   - The FIRST action is the PRIMARY action (drives name flavor, cost-color
- *     affinity, and owns the skill's single targeting configuration).
- *   - Actions consume compatible ELEMENT / SHAPE / MODIFIER tags as they
- *     resolve. `convert` is by-type by DEFAULT (2 elements → all <el1> into
- *     <el2>; 1 element → all <random other color> into <el>); the precise
- *     targeted single-tile convert happens only when the `tile` shape was
- *     explicitly woven (area → targeted 3×3 convert).
- *   - STATUS tags always resolve to apply_status effects (buffs target self,
- *     debuffs the opponent), with rolled durations.
- *   - `extra_turn` appends an extra_turn effect LAST (a create_tiles cascade
- *     resets the flag, so ordering is load-bearing — decision #4).
+ * ── Reading grammar ──────────────────────────────────────────────────────────
+ * The recipe reads as a sentence and the sentence IS the spell — structure is
+ * resolved DETERMINISTICALLY from the tags (RNG only sets magnitudes + cost).
+ * Binding is ORDER-TOLERANT: a verb binds to the tile-types/shapes present
+ * wherever they sit (`convert red yellow` ≡ `red convert yellow`); only
+ * conversion DIRECTION uses relative type order.
+ *   - TILE TYPES = the 5 colors + `skull` + `wild`. Consumed by tile-verbs
+ *     (create/convert/change); a color used by no verb is "dangling" → it only
+ *     pays the COST; `wild`/`skull` can't be cost, so their floor is "create"
+ *     (they never fizzle).
+ *   - convert (MASS by-type) / change (TARGETED single) read "… → destination",
+ *     where the LAST woven type is the destination and the preceding one the
+ *     source (rolled at synthesis if absent). `change + all` → mass convert; a
+ *     `tile`/`area` shape on convert → targeted; `area` on change → 3×3.
+ *   - destroy/explode + shape → shaped targeted destruction (`+tile` = one tile
+ *     for a cascade). `skull + destroy` (no shape) → destroy N Skulls;
+ *     `destroy + all + <color>` → board-wide color wipe.
+ *   - `skull + damage` → damage ALSO scales per Skull on the board.
+ *   - `all` boosts `create`'s count; STATUS tags → apply_status (buff→self,
+ *     debuff→opponent); `extra_turn` appends LAST (decision #4); `random` pulls
+ *     a bonus from the non-color pool (never wasted).
  *
  * ── Choice-driven downsides (NO injection) ───────────────────────────────────
- * Redundant / incompatible picks DETERMINISTICALLY contribute nothing (pure
- * opportunity cost) and are reported in `wastedReasons` (tag id → reason),
- * surfaced on the result screen so a weak weave reads as "I could have picked
- * better", not a dice roll:
- *   - `wild` with no create        → wasted ("no Create for Wild to empower")
- *   - orphan shape (row/col/area/tile/random) → wasted ("no action used …")
- *   - a 2nd targeted action        → wasted ("only one targeted effect")
- *   - an element no effect/cost used → wasted ("no effect or cost used …")
+ * Only genuine contradictions DETERMINISTICALLY contribute nothing (pure
+ * opportunity cost), reported in `wastedReasons` (tag id → reason) and surfaced
+ * on the result screen so a weak weave reads as "I could have picked better":
+ *   - an orphan shape (no verb used it)  → "no action used this shape"
+ *   - a 2nd targeted action              → "only one targeted effect"
+ *   - `all` with nothing to amplify      → "no Change/Destroy/Create to amplify"
+ *   - a color no effect/cost could use   → "no effect or cost used this color"
  * The old "weave surges" injection (which rescued mistakes with free effects
  * and silently inflated power) is GONE — `injectedTags` is retained but stays
  * empty.
@@ -171,7 +178,19 @@ const POWER = Object.freeze({
   perBuffTurn: 4,
   extraTurn: 8,
   shuffleBoard: 10,       // whole-board reshuffle (always paired with an extra turn)
+  perSkullDamage: 0.5,    // `skull + damage`: weight per "+N per Skull" (× est. skulls)
+  destroySkull: 2,        // `skull + destroy`: weight per Skull tile destroyed
+  destroyByColor: 9,      // `destroy + all + color`: board-wide color wipe
 });
+
+/** Tile types a tile-verb (create/convert/change) can operate on — the 5 mana
+ *  colors + skull + wild. Membership-based so synthesis is order-tolerant and
+ *  independent of TAG_CATEGORY (wild/skull read as types here). */
+const TILE_TYPE_IDS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple', 'skull', 'wild']);
+/** Targeting shapes a destroy/convert verb can consume. */
+const SHAPE_IDS = Object.freeze(['row', 'column', 'area', 'tile']);
+/** Assumed Skull count for power-weighting `skull + damage` (board varies). */
+const EST_SKULLS_ON_BOARD = 4;
 
 // ── Name generation pools ──
 // Plenty of variety on purpose: adjectives per element × nouns per action ×
@@ -576,26 +595,60 @@ export function synthesize(recipe) {
   let power = 0;
   let targeting = null;  // { targeting: 'board_tile', area } — one per skill
   let forceExtraTurn = false; // set by `shuffle` (always grants an extra turn)
-  const elements = groups[TAG_CATEGORY.ELEMENT].slice();
+  const elements = groups[TAG_CATEGORY.ELEMENT].slice(); // colors + skull (for name flavor + cost fallback)
   const shapes = new Set(groups[TAG_CATEGORY.SHAPE]);
   const modifiers = new Set(groups[TAG_CATEGORY.MODIFIER]);
+  // Tile types in PICK ORDER (colors + skull + wild) — membership-based so the
+  // grammar is order-tolerant and reads wild/skull as types, not dangling tags.
+  const tileTypes = tagIds.filter((id) => TILE_TYPE_IDS.includes(id));
 
-  /** Take the next unconsumed element (optionally excluding skull). */
-  const takeElement = ({ allowSkull = true } = {}) => {
-    for (const el of elements) {
-      if (used.has(el)) continue;
-      if (!allowSkull && el === 'skull') continue;
-      used.add(el);
-      return el;
+  /** Take the FIRST unconsumed tile type (create's single type). */
+  const takeType = () => {
+    for (const t of tileTypes) if (!used.has(t)) { used.add(t); return t; }
+    return null;
+  };
+  /** Take the LAST unconsumed tile type — used for conversion DESTINATION, since
+   *  the last type "reads" as the target ("convert red → yellow"). Call again
+   *  for the source (now-last). */
+  const takeLastType = () => {
+    for (let i = tileTypes.length - 1; i >= 0; i--) {
+      const t = tileTypes[i];
+      if (!used.has(t)) { used.add(t); return t; }
     }
     return null;
   };
-  /** Consume a shape tag if present and unconsumed. */
+  /** Take the first unconsumed COLOR type (skull/wild excluded). */
+  const takeColorType = () => {
+    for (const t of tileTypes) if (!used.has(t) && COST_COLORS.includes(t)) { used.add(t); return t; }
+    return null;
+  };
+  /** Consume the `all` qualifier if present (first verb to want it wins). */
+  const consumeAll = () => {
+    if (tagIds.includes('all') && !used.has('all')) { used.add('all'); return true; }
+    return false;
+  };
+  /** Is there an unconsumed targeting shape (row/column/area/tile) in the bag? */
+  const anyUnusedShape = () => SHAPE_IDS.some((s) => shapes.has(s) && !used.has(s));
+  /** Consume a shape tag if present and unconsumed (in candidate order). */
   const takeShape = (...candidates) => {
     for (const s of candidates) {
       if (shapes.has(s) && !used.has(s)) { used.add(s); return s; }
     }
     return null;
+  };
+  /** Label for a conversion SOURCE ("all <X>") — always the plural/tiles form. */
+  const srcLabel = (t) => {
+    if (t === 'skull') return '[[Skulls]]';
+    if (t === 'wild') return '[[Wild]] [[tiles]]';
+    return `${TILE_LABEL[t]} [[tiles]]`;
+  };
+  /** Label for a conversion DESTINATION ("into <X>"). plural=true when MANY tiles
+   *  become it (mass / 3×3) → "Skulls"; a single tile → "Skull". Colors and wild
+   *  read the same either way (a destination never trails "tiles"). */
+  const destLabel = (t, plural = false) => {
+    if (t === 'skull') return plural ? '[[Skulls]]' : '[[Skull]]';
+    if (t === 'wild') return '[[Wild]]';
+    return TILE_LABEL[t];
   };
 
   /** Emit a create_tiles effect (shared by the action and injections). */
@@ -702,9 +755,18 @@ export function synthesize(recipe) {
     switch (action) {
       case 'damage': {
         const amount = roll('damage', 5);
-        effects.push({ effectType: 'damage', damage: { amount } });
-        lines.push(`Deal ${amount} [[damage]]`);
-        power += amount * POWER.perDamage;
+        // skull + damage → ALSO "+N per Skull on the board" (read at cast).
+        let perSkull = 0;
+        if (tileTypes.includes('skull') && !used.has('skull')) {
+          used.add('skull');
+          perSkull = Math.random() < 0.35 ? 2 : 1;
+        }
+        const dmg = perSkull > 0 ? { amount, perSkull } : { amount };
+        effects.push({ effectType: 'damage', damage: dmg });
+        lines.push(perSkull > 0
+          ? `Deal ${amount} [[damage]], plus ${perSkull} per [[Skull]] on the board`
+          : `Deal ${amount} [[damage]]`);
+        power += amount * POWER.perDamage + perSkull * EST_SKULLS_ON_BOARD * POWER.perSkullDamage;
         break;
       }
       case 'armor': {
@@ -739,105 +801,101 @@ export function synthesize(recipe) {
         break;
       }
       case 'drain': {
-        // With an element: drain that color. Without: drain EVERY color
-        // (stronger, weighted accordingly in the power score).
+        // Color-agnostic: drains EVERY color. A color woven alongside doesn't
+        // target the drain — it's dangling and simply influences the cost.
         const amount = roll('drain', 2);
-        const color = takeElement({ allowSkull: false });
-        const drainMana = color ? { amount, color } : { amount };
-        effects.push({ effectType: 'drain_mana', drainMana });
-        lines.push(color
-          ? `Drain ${amount} ${TILE_LABEL[color]} [[mana]] from the enemy`
-          : `Drain ${amount} [[mana]] of every color from the enemy`);
-        power += amount * (color ? POWER.perManaDrainedOneColor : POWER.perManaDrainedAllColors);
+        effects.push({ effectType: 'drain_mana', drainMana: { amount } });
+        lines.push(`Drain ${amount} [[mana]] of every color from the enemy`);
+        power += amount * POWER.perManaDrainedAllColors;
         break;
       }
       case 'create': {
-        // wild + create → WILD tiles (the standard player joker — Malakor's
-        // Thrall is the enemy-flavored variant). Otherwise the element's tile
-        // type (skull allowed — creating Skulls is a real strategy); with
-        // neither, a color is rolled once now.
-        const amount = roll('create', 3);
-        let type;
-        if (modifiers.has('wild') && !used.has('wild')) {
-          used.add('wild');
-          type = 'wild';
-        } else {
-          type = takeElement() || pickRandom(COST_COLORS);
-        }
+        // Create tiles of the woven type (any tile type — color, skull, or
+        // wild); none → a rolled color. `all` boosts the count.
+        let amount = roll('create', 3);
+        if (consumeAll()) amount += Math.max(2, Math.round(amount * 0.5));
+        const type = takeType() || pickRandom(COST_COLORS);
         emitCreate(amount, type);
         break;
       }
       case 'convert': {
-        // By-type conversion is the DEFAULT read of "convert": with two
-        // elements all <el1> become <el2> (pick order); with one element a
-        // random other color becomes it. The precise targeted convert only
-        // happens when the player explicitly wove a `tile` (single) or
-        // `area` (3×3) shape.
-        const from = takeElement();
-        const wantsTargeted = (shapes.has('tile') && !used.has('tile'))
-          || (shapes.has('area') && !used.has('area'));
-        if (wantsTargeted && !targeting) {
-          const toColor = from || pickRandom(COST_COLORS);
-          const radius = takeShape('area') ? 1 : 0;
-          if (radius === 0) takeShape('tile');
+        // MASS by-type conversion. Reads "convert all <source> → <destination>":
+        // the LAST woven tile-type is the destination, the preceding one the
+        // source (rolled at synthesis if absent). A `tile`/`area` shape makes it
+        // a targeted recolor instead of board-wide.
+        const dest = takeLastType() || pickRandom(COST_COLORS);
+        const shape = !targeting ? takeShape('tile', 'area') : null;
+        if (shape) {
+          const radius = shape === 'area' ? 1 : 0;
           targeting = { targeting: 'board_tile', area: { radius } };
-          effects.push({ effectType: 'convert_tile', convertTile: { type: toColor } });
+          effects.push({ effectType: 'convert_tile', convertTile: { type: dest } });
           const what = radius > 0 ? '[[tiles]] in a 3x3 area' : 'a [[tile]]';
-          lines.push(`[[Change]] ${what} into ${toColor === 'skull' ? '[[Skulls]]' : TILE_LABEL[toColor]}`);
+          lines.push(`[[Change]] ${what} into ${destLabel(dest, radius > 0)}`);
           power += radius > 0 ? POWER.convertArea : POWER.convertTile;
         } else {
-          const second = takeElement();
-          let fromType = from;
-          let toType = second;
-          if (fromType && !toType) {
-            // One element: it's the DESTINATION; convert a random other color.
-            toType = fromType;
-            fromType = pickRandom(COST_COLORS.filter((c) => c !== toType));
-          } else if (!fromType) {
-            // No elements: roll both (distinct).
-            toType = pickRandom(COST_COLORS);
-            fromType = pickRandom(COST_COLORS.filter((c) => c !== toType));
-          }
-          effects.push({ effectType: 'convert_tiles_by_type', convertByType: { from: fromType, to: toType } });
-          lines.push(`[[Change]] all ${fromType === 'skull' ? '[[Skulls]]' : `${TILE_LABEL[fromType]} [[tiles]]`} into ${toType === 'skull' ? '[[Skulls]]' : TILE_LABEL[toType]}`);
+          let from = takeLastType();
+          if (!from) from = pickRandom([...COST_COLORS, 'skull'].filter((c) => c !== dest));
+          effects.push({ effectType: 'convert_tiles_by_type', convertByType: { from, to: dest } });
+          lines.push(`[[Change]] all ${srcLabel(from)} into ${destLabel(dest, true)}`);
           power += POWER.convertByType;
         }
         break;
       }
       case 'change': {
-        // Targeted single-tile recolor (à la the Mage's Arcane Inscription).
-        // The destination COLOR is influenced by a woven element (else rolled);
-        // an `area` shape widens it to a 3×3. If the single targeting slot is
-        // already claimed, it degrades to a by-type recolor (no targeting).
-        const toColor = takeElement({ allowSkull: true }) || pickRandom(COST_COLORS);
-        const toLabel = toColor === 'skull' ? '[[Skulls]]' : TILE_LABEL[toColor];
-        if (!targeting) {
-          const radius = takeShape('area') ? 1 : 0;
-          if (radius === 0) takeShape('tile');
-          targeting = { targeting: 'board_tile', area: { radius } };
-          effects.push({ effectType: 'convert_tile', convertTile: { type: toColor } });
-          const what = radius > 0 ? '[[tiles]] in a 3x3 area' : 'a [[tile]]';
-          lines.push(`[[Change]] ${what} into ${toLabel}`);
-          power += radius > 0 ? POWER.convertArea : POWER.convertTile;
-        } else {
-          const fromType = pickRandom(COST_COLORS.filter((c) => c !== toColor));
-          effects.push({ effectType: 'convert_tiles_by_type', convertByType: { from: fromType, to: toColor } });
-          lines.push(`[[Change]] all ${TILE_LABEL[fromType]} [[tiles]] into ${toLabel}`);
+        // TARGETED single-tile recolor → the LAST woven tile-type. An `area`
+        // shape widens it to 3×3; `all` promotes it to a mass by-type conversion
+        // (≈ convert). Direction reads exactly as written: last type = target.
+        const dest = takeLastType() || pickRandom(COST_COLORS);
+        if (consumeAll()) {
+          let from = takeLastType();
+          if (!from) from = pickRandom([...COST_COLORS, 'skull'].filter((c) => c !== dest));
+          effects.push({ effectType: 'convert_tiles_by_type', convertByType: { from, to: dest } });
+          lines.push(`[[Change]] all ${srcLabel(from)} into ${destLabel(dest, true)}`);
           power += POWER.convertByType;
+          break;
         }
+        if (targeting) {
+          used.delete('change');
+          markWasted('change', 'spell can have only one targeted effect');
+          break;
+        }
+        const radius = takeShape('area', 'tile') === 'area' ? 1 : 0;
+        targeting = { targeting: 'board_tile', area: { radius } };
+        effects.push({ effectType: 'convert_tile', convertTile: { type: dest } });
+        const what = radius > 0 ? '[[tiles]] in a 3x3 area' : 'a [[tile]]';
+        lines.push(`[[Change]] ${what} into ${destLabel(dest, radius > 0)}`);
+        power += radius > 0 ? POWER.convertArea : POWER.convertTile;
         break;
       }
       case 'destroy':
       case 'explode': {
+        const isExplode = action === 'explode';
+        // all + color → board-wide color wipe (non-targeted), reads "destroy all Red".
+        if (!isExplode && tagIds.includes('all') && !used.has('all')) {
+          const color = takeColorType();
+          if (color) {
+            used.add('all');
+            effects.push({ effectType: 'destroy_tiles_by_type', destroyByType: { type: color } });
+            lines.push(`[[Destroy]] all ${TILE_LABEL[color]} [[tiles]]`);
+            power += POWER.destroyByColor;
+            break;
+          }
+        }
+        // skull + destroy (and NO shape to consume) → destroy N Skull tiles.
+        if (!isExplode && tileTypes.includes('skull') && !used.has('skull') && !anyUnusedShape()) {
+          used.add('skull');
+          const n = 3 + Math.floor(Math.random() * 4); // 3..6
+          effects.push({ effectType: 'destroy_tiles_by_type', destroyByType: { type: 'skull', amount: n } });
+          lines.push(`[[Destroy]] ${n} [[Skulls]]`);
+          power += n * POWER.destroySkull;
+          break;
+        }
+        // Otherwise a shaped, TARGETED destruction (one targeting slot only).
         if (targeting) {
-          // A spell has only ONE targeted slot — a second targeted action is a
-          // wasted pick (a downside the player could have avoided), NOT a free
-          // vent into damage.
           used.delete(action);
           markWasted(action, 'spell can have only one targeted effect');
           break;
         }
-        const isExplode = action === 'explode';
         const shape = takeShape(...(isExplode ? ['area'] : ['row', 'column', 'area', 'tile'])) || 'default';
         emitDestroyShaped(shape === 'default' ? 'area-default' : shape, isExplode);
         break;
@@ -846,6 +904,19 @@ export function synthesize(recipe) {
         used.delete(action);
         break;
     }
+  }
+
+  // ── Tile-type floors: `wild` ALWAYS at least creates Wild tiles, and a lone
+  //    `skull` creates Skulls — neither can be a cost color, so creation is
+  //    their irreducible minimum (they never just fizzle). Only fires when a
+  //    verb didn't already consume them. ──
+  if (tileTypes.includes('wild') && !used.has('wild')) {
+    used.add('wild');
+    emitCreate(2 + Math.floor(Math.random() * 3), 'wild'); // 2..4 Wild tiles
+  }
+  if (tileTypes.includes('skull') && !used.has('skull')) {
+    used.add('skull');
+    emitCreate(2 + Math.floor(Math.random() * 3), 'skull'); // 2..4 Skulls
   }
 
   // ── `random` wildcard: ALWAYS pulls a BONUS effect from the non-color tag
@@ -914,27 +985,28 @@ export function synthesize(recipe) {
   // spells are genuinely harder to fund. With no element tag, the color is the
   // weighted affinity roll.
   const total = computeManaCostTotal(power);
-  const elementColors = elements.filter((c) => COST_COLORS.includes(c)); // pick order, skull excluded
-  let cost = buildCost(total, elementColors);
+  // Only DANGLING colors (not consumed by a tile-verb) pay the cost — one word,
+  // one job. Split in pick order (first dangling color pays most).
+  const danglingColors = tileTypes.filter((t) => COST_COLORS.includes(t) && !used.has(t));
+  let cost = buildCost(total, danglingColors);
   if (!cost) cost = { [rollCostColor(elements, primaryAction)]: total };
-  // Paying with a color COUNTS as using that element tag (it isn't wasted).
-  for (const c of Object.keys(cost)) if (elements.includes(c)) used.add(c);
+  // Paying with a color COUNTS as using it (it isn't wasted).
+  for (const c of Object.keys(cost)) if (tileTypes.includes(c)) used.add(c);
   // Dominant (most-paid) cost color — drives the resolve-sound color + logging.
   const costColor = Object.entries(cost).sort((a, b) => b[1] - a[1])[0][0];
 
   // ── Choice-driven downsides: redundant/incompatible picks contribute NOTHING
   //    (opportunity cost) and are surfaced with a reason. Deterministic, so a
-  //    weak weave reads as "I could have picked better", not a dice roll. ──
-  if (modifiers.has('wild') && !used.has('wild')) {
-    markWasted('wild', 'no Create for Wild to empower');
-  }
-  for (const shape of ['row', 'column', 'area', 'tile']) {
+  //    weak weave reads as "I could have picked better", not a dice roll.
+  //    (wild/skull are floored above, so they never reach here.) ──
+  for (const shape of SHAPE_IDS) {
     if (shapes.has(shape) && !used.has(shape)) markWasted(shape, 'no action used this shape');
   }
-  for (const el of elements) {
-    if (!used.has(el)) {
-      markWasted(el, el === 'skull' ? 'Skull cannot pay a cost' : 'no effect or cost used this color');
-    }
+  if (tagIds.includes('all') && !used.has('all')) {
+    markWasted('all', 'no Change/Destroy/Create to amplify');
+  }
+  for (const t of tileTypes) {
+    if (!used.has(t)) markWasted(t, 'no effect or cost used this color');
   }
 
   // ── Assemble ──

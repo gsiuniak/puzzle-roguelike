@@ -32,6 +32,14 @@ export const SKILL_EFFECT_TYPES = {
   CREATE_TILES: 'create_tiles',
   CONVERT_TILE: 'convert_tile',
   CONVERT_TILES_BY_TYPE: 'convert_tiles_by_type',
+  // Destroys tiles of a given type board-wide (non-targeted). Payload
+  // destroyByType: { type, amount? } — omit `amount` to destroy ALL of that
+  // type, or set it to destroy up to N random ones. Routes through the same
+  // destroy/cascade path as destroy_tiles (mana + skull damage as normal).
+  // Synthesized by the weave grammar: `skull + destroy` (destroy N Skulls) and
+  // `destroy + all + <color>` (destroy all of that color). Resolved in
+  // BattleController._resolveEffect.
+  DESTROY_TILES_BY_TYPE: 'destroy_tiles_by_type',
   HEAL: 'heal',
   EXTRA_TURN: 'extra_turn',
   // Permanently increases the caster's attack for the rest of the battle

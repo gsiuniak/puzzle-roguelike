@@ -62,8 +62,10 @@ function tableKeys(tagId) {
   const fx = one.skill.effects.find((e) => e.effectType === 'convert_tiles_by_type');
   check('single-element convert is by-type', !!fx, JSON.stringify(one.skill.effects));
   if (fx) {
-    eq('single element is the DESTINATION', fx.convertByType.to, 'green');
-    check('source is a different color', fx.convertByType.from !== 'green' && COST_COLORS.includes(fx.convertByType.from));
+    eq('single type is the DESTINATION (last type)', fx.convertByType.to, 'green');
+    // Source is rolled at synthesis from colors + skull (≠ destination).
+    check('source is a different tile type',
+      fx.convertByType.from !== 'green' && (COST_COLORS.includes(fx.convertByType.from) || fx.convertByType.from === 'skull'));
   }
 
   const none = synthesize(['convert', 'damage']);
@@ -107,12 +109,11 @@ function tableKeys(tagId) {
 
 // ── 4. Choice-driven downsides (NO injection — wasted picks contribute nothing) ──
 {
-  // wild without create → WASTED (no free wild tiles), with a reason.
+  // wild FLOORS to creating Wild tiles (never fizzles) — so it's used, not wasted.
   const wild = synthesize(['damage', 'wild']);
-  check('wild without create makes no tiles',
-    !wild.skill.effects.some((e) => e.effectType === 'create_tiles'), JSON.stringify(wild.skill.effects));
-  check('wild is wasted (unused)', wild.unusedTags.includes('wild'));
-  check('wasted wild carries a reason', typeof wild.wastedReasons.wild === 'string' && wild.wastedReasons.wild.length > 0);
+  const wfx = wild.skill.effects.find((e) => e.effectType === 'create_tiles');
+  check('wild floors to creating Wild tiles', !!wfx && wfx.createTiles.type === 'wild', JSON.stringify(wild.skill.effects));
+  check('wild is used (floored), not wasted', wild.usedTags.includes('wild') && !wild.unusedTags.includes('wild'));
 
   // orphan shape → WASTED (no free destroy), with a reason.
   const orphan = synthesize(['red', 'row']);
@@ -154,6 +155,45 @@ function tableKeys(tagId) {
     if (r.skill.effects.some((e) => !VALID_EFFECT_TYPES.has(e.effectType))) ok = false;
   }
   check('random-only bag always yields a valid skill (random used)', ok);
+}
+
+// ── 4c. Reading grammar: tags read as a sentence; order-tolerant; last = dest ──
+{
+  // convert: LAST type = destination, preceding = source.
+  const c = synthesize(['convert', 'yellow', 'red']).skill.effects.find((e) => e.effectType === 'convert_tiles_by_type');
+  check('convert: last type is destination', c && c.convertByType.to === 'red' && c.convertByType.from === 'yellow', JSON.stringify(c));
+
+  // Order-tolerant: verb position is irrelevant — same source→dest.
+  const c2 = synthesize(['red', 'convert', 'yellow']).skill.effects.find((e) => e.effectType === 'convert_tiles_by_type');
+  check('convert is order-tolerant (verb anywhere)', c2 && c2.convertByType.from === 'red' && c2.convertByType.to === 'yellow', JSON.stringify(c2));
+
+  // change is targeted single-tile → destination = last type (incl. WILD — the headline fix).
+  const cw = synthesize(['change', 'wild']);
+  const cwf = cw.skill.effects.find((e) => e.effectType === 'convert_tile');
+  check('change + wild → change a tile INTO wild', cwf && cwf.convertTile.type === 'wild', JSON.stringify(cw.skill.effects));
+  check('change+wild does not waste wild', !cw.unusedTags.includes('wild'));
+
+  // change + all → promoted to a MASS by-type conversion (yellow → red).
+  const ca = synthesize(['change', 'all', 'yellow', 'red']);
+  const caf = ca.skill.effects.find((e) => e.effectType === 'convert_tiles_by_type');
+  check('change + all → mass convert', !!caf && caf.convertByType.to === 'red' && caf.convertByType.from === 'yellow', JSON.stringify(ca.skill.effects));
+  check('all consumed by change+all', !ca.unusedTags.includes('all'));
+
+  // skull + damage → per-Skull scaling damage.
+  let sawPerSkull = false;
+  for (let i = 0; i < 20 && !sawPerSkull; i++) {
+    const d = synthesize(['skull', 'damage']).skill.effects.find((e) => e.effectType === 'damage');
+    if (d && typeof d.damage.perSkull === 'number' && d.damage.perSkull > 0) sawPerSkull = true;
+  }
+  check('skull + damage → per-Skull damage', sawPerSkull);
+
+  // skull + destroy (no shape) → destroy N Skull tiles.
+  const sd = synthesize(['skull', 'destroy']).skill.effects.find((e) => e.effectType === 'destroy_tiles_by_type');
+  check('skull + destroy → destroy N skulls', sd && sd.destroyByType.type === 'skull' && typeof sd.destroyByType.amount === 'number', JSON.stringify(sd));
+
+  // destroy + all + color → board-wide color wipe (no amount = all).
+  const da = synthesize(['destroy', 'all', 'red']).skill.effects.find((e) => e.effectType === 'destroy_tiles_by_type');
+  check('destroy + all + color → wipe all of that color', da && da.destroyByType.type === 'red' && da.destroyByType.amount === undefined, JSON.stringify(da));
 }
 
 // ── 5. Targeting shapes ──
@@ -268,10 +308,9 @@ function tableKeys(tagId) {
     const problems = [];
     if (!s || typeof s.id !== 'string' || !s.id) problems.push('bad id');
     if (!s.name) problems.push('no name');
-    else {
-      if (s.name.length > 20) problems.push(`name too long: "${s.name}"`);
-      if (/\bthe\b/i.test(s.name)) problems.push(`name contains "the": "${s.name}"`);
-    }
+    else if (s.name.length > 38) problems.push(`name too long: "${s.name}"`); // NAME_MAX_LENGTH
+    // (The old "name must not contain 'the'" assertion was dropped — several
+    //  shipped TAG_SUFFIXES legitimately contain "the", e.g. "of the Deep".)
     if (!s.description) problems.push('no description');
     if (!s.sound) problems.push('no sound');
     if (!s.effects.length) problems.push('no effects');

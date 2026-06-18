@@ -2070,9 +2070,15 @@ export default class BattleController {
 
     switch (effect.effectType) {
       case SKILL_EFFECT_TYPES.DAMAGE: {
-        const amount = (effect.damage && typeof effect.damage.amount === 'number')
+        const base = (effect.damage && typeof effect.damage.amount === 'number')
           ? effect.damage.amount
           : (src.attack || 1);
+        // `perSkull` (woven `skull + damage`): + N damage for every Skull tile
+        // currently on the board, read at cast time.
+        const perSkull = (effect.damage && typeof effect.damage.perSkull === 'number')
+          ? effect.damage.perSkull : 0;
+        const skullCount = perSkull > 0 ? this.board.getTilesOfType('skull').length : 0;
+        const amount = base + perSkull * skullCount;
         const r = this._applyDamage(tgt, amount);
         this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
         this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
@@ -2113,6 +2119,28 @@ export default class BattleController {
 
       case SKILL_EFFECT_TYPES.CONVERT_TILES_BY_TYPE: {
         this._executeConvertTilesByType(effect, side, skill.name);
+        return this.state === BattleState.RESOLVING;
+      }
+
+      case SKILL_EFFECT_TYPES.DESTROY_TILES_BY_TYPE: {
+        // Destroy tiles of a given type board-wide (non-targeted). `amount`
+        // omitted = ALL of that type; set = up to N random ones. Routes through
+        // the shared destroy path (mana + skull damage + cascade).
+        const cfg = effect.destroyByType || {};
+        const type = cfg.type;
+        if (!type || !TILE_TYPES[String(type).toUpperCase()]) {
+          console.warn(`[DESTROY_TILES_BY_TYPE] Unknown type "${type}". Skipping.`);
+          return false;
+        }
+        let positions = this.board.getTilesOfType(type);
+        if (typeof cfg.amount === 'number') {
+          positions = BoardModel.pickRandomTiles(positions, cfg.amount);
+        }
+        if (!positions.length) {
+          this.log.add(`${skill.name}: no ${type} tiles to destroy.`);
+          return false;
+        }
+        this._executeDestroyTiles(positions, positions[0].col, positions[0].row, skill.name);
         return this.state === BattleState.RESOLVING;
       }
 
