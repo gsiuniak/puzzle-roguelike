@@ -136,6 +136,11 @@ const SPRITESHEET_MAP = {
     json:  'assets/sprites/reward_screen/ui_spritesheet_reward_screen_elements.json',
     trim:  false, // sprite names match the reward-screen keys directly (no aliases)
   },
+  ui_spritesheet_level_up_screen_elements: {
+    image: 'assets/sprites/level_up_screen/ui_spritesheet_level_up_screen_elements.png',
+    json:  'assets/sprites/level_up_screen/ui_spritesheet_level_up_screen_elements.json',
+    trim:  false, // sprite names match the `ui_level_up_*` keys directly (no aliases)
+  },
   ui_spritesheet_map_elements: {
     image: 'assets/sprites/map/ui_spritesheet_map_elements.png',
     json:  'assets/sprites/map/ui_spritesheet_map_elements.json',

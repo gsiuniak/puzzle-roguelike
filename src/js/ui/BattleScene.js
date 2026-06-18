@@ -14,26 +14,37 @@ import HarvestTendrilEffect from './HarvestTendrilEffect.js';
 import BloodSplashEffect from './BloodSplashEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
+import LevelUpOverlay from './LevelUpOverlay.js';
 import SkillLoadoutOverlay from './SkillLoadoutOverlay.js';
 import TooltipManager from '../systems/TooltipManager.js';
 import { BattleState } from '../game/BattleController.js';
 import { getTileType } from '../game/TileTypes.js';
-import { syncBattleResultsToRunState, applyRunModifier, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
+import { syncBattleResultsToRunState, applyRunModifier, getEffectivePlayerStats, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
+import { getCharacterById } from '../data/characters/index.js';
 import Metrics from '../engine/Metrics.js';
 import { generateRelicRewardOptions } from '../data/relics/relicRewards.js';
 import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
 
-// ── Post-victory growth (PLACEHOLDER) ────────────────────
-// Auto-applied stat growth granted on won battles. Temporary stand-in for a
-// future player-facing "growth screen" (like the reward screen) where the player
-// will CHOOSE a stat increase. Tuned from the sim (docs/balance-findings.md):
-// Attack is the dominant lever, so it grows SLOWLY — +1 Attack every 2nd victory
-// (≈ +0.5/floor) lands Attack ≈ 3 by mid-act and ~5-6 by the boss, matching the
-// sim's reference curve. (+1 Attack EVERY win over-scaled DPT — too much.)
-// HP grows every win (cheap survivability). All values tunable.
-const HP_GROWTH_PER_VICTORY = 4;          // +Max HP per won battle
-const ATTACK_GROWTH_AMOUNT = 1;           // +Attack granted...
-const ATTACK_GROWTH_EVERY_N_VICTORIES = 2; // ...once every N wins
+// ── Post-victory LEVEL UP growth ─────────────────────────
+// On a won battle the player picks ONE attribute on the Level Up overlay (which
+// shows BEFORE the relic reward overlay). Each grants this much (the mock's
+// values; all tunable). Replaces the old auto-growth on victory.
+const LEVEL_UP_GROWTH = Object.freeze({ attack: 1, magic: 1, maxHp: 6 });
+// attribute key → runState statModifier path (applyRunModifier).
+const LEVEL_UP_STAT_PATH = Object.freeze({
+  attack: 'startingAttack', magic: 'startingMagic', maxHp: 'maxHp',
+});
+// attribute key → display name, reused stat icon, and glow color (matches the mock).
+const LEVEL_UP_CARDS = Object.freeze([
+  { key: 'attack', name: 'Attack', iconKey: 'icon_attack', glowColor: '#ffb060' },
+  { key: 'magic', name: 'Magic', iconKey: 'icon_magic', glowColor: '#c77dff' },
+  { key: 'maxHp', name: 'Max HP', iconKey: 'character_select_heart', glowColor: '#ff5b5b' },
+]);
+
+// ── Legacy auto-growth constants (no longer applied — see _applyVictoryGrowth) ──
+const HP_GROWTH_PER_VICTORY = 4;
+const ATTACK_GROWTH_AMOUNT = 1;
+const ATTACK_GROWTH_EVERY_N_VICTORIES = 2;
 
 // ── Tunable layout constants ─────────────────────────────
 const MAIN_ROW_MAX_WIDTH = 1820;
@@ -258,6 +269,10 @@ export default class BattleScene extends UIPanel {
     /** @type {RewardOverlay|null} */
     this._rewardOverlay = null;
 
+    // ── Level Up overlay (post-battle attribute pick — shows BEFORE rewards) ──
+    /** @type {LevelUpOverlay|null} */
+    this._levelUpOverlay = null;
+
     // ── Tooltip manager (hover / touch-hold tooltips on UI elements) ──
     /** @type {TooltipManager|null} */
     this._tooltipManager = null;
@@ -462,6 +477,17 @@ export default class BattleScene extends UIPanel {
     this._rewardOverlay.reset();
     this._rewardOverlayShown = false;
 
+    // ── Level Up overlay (shows BEFORE the reward overlay on victory) ──
+    // Picking an attribute applies the growth, then onDismiss opens rewards.
+    if (!this._levelUpOverlay) {
+      this._levelUpOverlay = new LevelUpOverlay({
+        assetManager: this._assetManager,
+        onAttributeSelected: (key) => this._applyLevelUp(key),
+        onDismiss: () => this._showRewardOverlay(),
+      });
+    }
+    this._levelUpOverlay.reset();
+
     // ── Tooltip manager (created on first entry; cleared on each entry) ──
     if (!this._tooltipManager) {
       this._tooltipManager = new TooltipManager({
@@ -574,7 +600,10 @@ export default class BattleScene extends UIPanel {
       this._mapView.resetOverlay();
     }
 
-    // Reset reward overlay (ensure clean state on next entry)
+    // Reset post-battle overlays (ensure clean state on next entry)
+    if (this._levelUpOverlay) {
+      this._levelUpOverlay.reset();
+    }
     if (this._rewardOverlay) {
       this._rewardOverlay.reset();
     }
@@ -650,6 +679,10 @@ export default class BattleScene extends UIPanel {
   _handleMouseDown(x, y) {
     if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
       this._loadoutOverlay.handleMouseDown(x, y);
+      return;
+    }
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) {
+      this._levelUpOverlay.handleMouseDown(x, y);
       return;
     }
     if (this._rewardOverlay && this._rewardOverlay.isActive()) {
@@ -729,6 +762,10 @@ export default class BattleScene extends UIPanel {
       this._loadoutOverlay.handleMouseMove(x, y);
       return;
     }
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) {
+      this._levelUpOverlay.handleMouseMove(x, y);
+      return;
+    }
     if (this._rewardOverlay && this._rewardOverlay.isActive()) {
       this._rewardOverlay.handleMouseMove(x, y);
       return;
@@ -771,6 +808,7 @@ export default class BattleScene extends UIPanel {
       this._loadoutOverlay.handleMouseUp(x, y);
       return;
     }
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) return;
     if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._tooltipManager) this._tooltipManager.onMouseUp(x, y);
@@ -827,6 +865,7 @@ export default class BattleScene extends UIPanel {
 
   _handleContextMenu(e) {
     e.preventDefault();
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) return;
     if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._isTargeting()) {
@@ -840,6 +879,7 @@ export default class BattleScene extends UIPanel {
       this._loadoutOverlay.handleWheel(x, y, deltaY);
       return;
     }
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) return;
     if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     if (this._playerSkillsPane && this._playerSkillsPane.handleWheel(x, y, deltaY)) return;
@@ -850,6 +890,10 @@ export default class BattleScene extends UIPanel {
     // ── Loadout modal: ESC closes, blocks all other input ──
     if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
       this._loadoutOverlay.handleKeyDown(e);
+      return;
+    }
+    // ── Level Up overlay: mandatory pick — blocks all input, no ESC skip ──
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) {
       return;
     }
     // ── Reward overlay: ESC dismisses, blocks all other input ──
@@ -1357,7 +1401,10 @@ export default class BattleScene extends UIPanel {
       this._mapView.updateOverlayAnimation(dt);
     }
 
-    // ── Update reward overlay animation (placeholder for future transitions) ──
+    // ── Update post-battle overlay animations ──
+    if (this._levelUpOverlay) {
+      this._levelUpOverlay.update(dt);
+    }
     if (this._rewardOverlay) {
       this._rewardOverlay.update(dt);
     }
@@ -1370,6 +1417,7 @@ export default class BattleScene extends UIPanel {
     // ── Tooltip manager: gate by modal overlays + advance hold timer ──
     if (this._tooltipManager) {
       const overlayActive =
+        (this._levelUpOverlay && this._levelUpOverlay.isActive()) ||
         (this._rewardOverlay && this._rewardOverlay.isActive()) ||
         (this._loadoutOverlay && this._loadoutOverlay.isActive()) ||
         (this._mapView && this._mapView.isOverlayActive());
@@ -1404,20 +1452,9 @@ export default class BattleScene extends UIPanel {
           return;
         }
 
-        // ── Victory: show the relic reward overlay. ──
-        if (this._rewardOverlay) {
-          const runState = this.userData ? this.userData.runState : null;
-          // Authoritative "already owned" set = the relics resolved onto the
-          // battle player (character starting relics + run-acquired relics),
-          // so neither can be offered again as a reward.
-          const playerRelics = (this._battleController && this._battleController.playerState)
-            ? this._battleController.playerState.relics || []
-            : [];
-          const ownedRelicIds = playerRelics.map((r) => r && r.id).filter(Boolean);
-          const rewardRelics = generateRelicRewardOptions({ count: 3, playerRunState: runState, ownedRelicIds });
-          this._rewardOverlay.prepareRewards(rewardRelics);
-          this._rewardOverlay.show();
-        }
+        // ── Victory: show the LEVEL UP overlay first (its onDismiss then opens
+        //    the relic reward overlay; see _showRewardOverlay). ──
+        this._showLevelUpOverlay();
       }
     }
 
@@ -1469,6 +1506,13 @@ export default class BattleScene extends UIPanel {
 
     if (this._mapView && this._mapView.isOverlayActive()) {
       this._mapView.renderOverlay(ctx, w, h, 16, sm._app);
+    }
+
+    // Level Up overlay (post-victory, shows before rewards) — same dimmed
+    // backdrop treatment; the battle stays visible behind it.
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) {
+      sm._app.fillFullCanvas(`rgba(0, 0, 0, ${this._levelUpOverlay.getBackdropAlpha()})`);
+      this._levelUpOverlay.render(ctx, w, h);
     }
 
     if (this._rewardOverlay && this._rewardOverlay.isActive()) {
@@ -1537,6 +1581,7 @@ export default class BattleScene extends UIPanel {
 
   /** Draw the two stacked corner buttons. Hidden while an overlay is active. */
   _renderCornerButtons(ctx) {
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) return;
     if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
     if (this._mapView && this._mapView.isOverlayActive()) return;
     const rects = this._getCornerButtonRects();
@@ -1960,6 +2005,61 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
+   * Show the post-victory LEVEL UP overlay. Builds the three attribute cards
+   * (current → upgraded, from the run's effective stats + LEVEL_UP_GROWTH) and
+   * begins the entrance. Picking a card applies the growth (_applyLevelUp) then
+   * opens the reward overlay (_showRewardOverlay via onDismiss).
+   */
+  _showLevelUpOverlay() {
+    if (!this._levelUpOverlay) { this._showRewardOverlay(); return; }
+    const runState = this.userData ? this.userData.runState : null;
+    const characterDef = runState ? getCharacterById(runState.characterId) : null;
+    const eff = (characterDef && runState) ? getEffectivePlayerStats(characterDef, runState) : null;
+    const current = eff
+      ? { attack: eff.startingAttack, magic: eff.startingMagic, maxHp: eff.maxHp }
+      : { attack: 0, magic: 0, maxHp: 0 };
+    const cards = LEVEL_UP_CARDS.map((c) => ({
+      ...c,
+      current: current[c.key],
+      upgraded: current[c.key] + (LEVEL_UP_GROWTH[c.key] || 0),
+    }));
+    this._levelUpOverlay.prepareLevelUp(cards);
+    this._levelUpOverlay.show();
+  }
+
+  /**
+   * Apply the chosen Level Up attribute to the persistent run state, then the
+   * overlay's onDismiss opens the reward overlay.
+   * @param {'attack'|'magic'|'maxHp'} key
+   */
+  _applyLevelUp(key) {
+    const runState = this.userData ? this.userData.runState : null;
+    const path = LEVEL_UP_STAT_PATH[key];
+    const amount = LEVEL_UP_GROWTH[key];
+    if (runState && path && amount) {
+      runState.victories = (runState.victories || 0) + 1;
+      applyRunModifier(runState, path, amount);
+      console.log(`[BattleScene] Level Up: +${amount} ${key} (victory #${runState.victories}).`);
+    }
+  }
+
+  /**
+   * Open the relic reward overlay (after the Level Up pick). Generates the
+   * reward options excluding already-owned relics.
+   */
+  _showRewardOverlay() {
+    if (!this._rewardOverlay) { this._returnToMap(); return; }
+    const runState = this.userData ? this.userData.runState : null;
+    const playerRelics = (this._battleController && this._battleController.playerState)
+      ? this._battleController.playerState.relics || []
+      : [];
+    const ownedRelicIds = playerRelics.map((r) => r && r.id).filter(Boolean);
+    const rewardRelics = generateRelicRewardOptions({ count: 3, playerRunState: runState, ownedRelicIds });
+    this._rewardOverlay.prepareRewards(rewardRelics);
+    this._rewardOverlay.show();
+  }
+
+  /**
    * Transition back to the MapScene after battle ends.
    * Called when the reward overlay is dismissed (via onDismiss callback).
    * Calls _onBattleComplete so the map/run controller can update
@@ -2002,10 +2102,8 @@ export default class BattleScene extends UIPanel {
         syncBattleResultsToRunState(mapData.runState, this._battleController.playerState);
         // Apply post-battle healing
         this._applyPostBattleHealing(mapData.runState, this._battleController.playerState);
-        // Auto-apply victory growth (placeholder for a future growth screen).
-        if (winner === 'player') {
-          this._applyVictoryGrowth(mapData.runState);
-        }
+        // NOTE: victory stat growth is now PLAYER-CHOSEN on the Level Up overlay
+        // (_applyLevelUp), shown before the reward overlay — no auto-growth here.
         mapScene.setRunState(mapData.runState, null);
       }
     }
@@ -2051,10 +2149,8 @@ export default class BattleScene extends UIPanel {
    * @param {object} playerBattleState — player state from the concluded battle
    */
   /**
-   * Auto-apply stat growth after a won battle. PLACEHOLDER — will be replaced
-   * by a player-facing "growth screen" (choose a stat) analogous to the reward
-   * overlay. Mutates runState.statModifiers via the centralized applyRunModifier,
-   * so growth persists and seeds the next battle's effective stats.
+   * DEPRECATED / UNUSED — superseded by the player-chosen Level Up overlay
+   * (_showLevelUpOverlay / _applyLevelUp). Kept for reference; no longer called.
    * @param {object} runState — player run state (mutated in place)
    */
   _applyVictoryGrowth(runState) {
