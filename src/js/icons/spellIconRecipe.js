@@ -42,7 +42,12 @@ const baseKeyPrefix = (color) => `${color}_base`;
  * Some effect tags share authored foreground art with another tag (no dedicated
  * sprite of their own). `change` (the single-tile recolor) reuses `convert`'s.
  */
-const EFFECT_SPRITE_ALIAS = Object.freeze({ change: 'convert' });
+const EFFECT_SPRITE_ALIAS = Object.freeze({
+  change: 'convert',
+  // The two damage TYPES reuse the shared damage foreground until dedicated art lands.
+  physical: 'damage',
+  magical: 'damage',
+});
 /** Sprite-key prefix for an effect tag's foreground (variants are `<prefix>_<n>`). */
 const effectKeyPrefix = (tag) => `foreground_${EFFECT_SPRITE_ALIAS[tag] || tag}`;
 
@@ -67,7 +72,7 @@ const ELEMENT_TO_COLOR = Object.freeze({
  */
 const EFFECT_TAG_PRIORITY = Object.freeze({
   // actions (the readable subject)
-  explode: 100, damage: 96, attack: 92, destroy: 90, convert: 86,
+  explode: 100, physical: 96, magical: 96, damage: 96, attack: 92, destroy: 90, convert: 86,
   change: 85, shuffle: 84, create: 83, heal: 82, armor: 80, drain: 76,
   // statuses (distinct subjects, secondary to a hard action)
   bleed: 60, frozen: 58, barrier: 57, berserk: 56, silence: 54,

@@ -61,7 +61,12 @@ import {
   pickWeightedEntry,
   COST_COLOR_WEIGHTS,
   MANA_COST_CONFIG,
+  rollDamageScalingPreset,
+  DAMAGE_SCALING_POWER,
+  DAMAGE_COLOR_SKEW,
+  GREATER_CONFIG,
 } from './weaveConfig.js';
+import { DAMAGE_SCALING_PRESETS, DAMAGE_SCALE_PER_POINT } from './scalingConfig.js';
 import { SKILL_WEAVE_TAGS, getTag, getTagLabel, TAG_CATEGORY } from './skillWeaveTags.js';
 
 // ═══════════════════════════════════════════════════════════
@@ -94,14 +99,43 @@ const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
  */
 const NON_COLOR_BONUS_TAGS = Object.freeze(
   Object.values(SKILL_WEAVE_TAGS)
-    .filter((t) => t.category !== TAG_CATEGORY.ELEMENT && t.id !== 'random')
+    // `greater` is a qualifier (no standalone effect), so it's never a `random` bonus.
+    .filter((t) => t.category !== TAG_CATEGORY.ELEMENT && t.id !== 'random' && t.id !== 'greater')
     .map((t) => t.id),
 );
 
+/** The two damage tags (each rolls a scaling multiplier on its stat). */
+const DAMAGE_TAGS = Object.freeze(['physical', 'magical']);
+/** Damage tag → the stat its rolled scaling multiplier applies to. */
+const DAMAGE_TAG_STAT = Object.freeze({ physical: 'attack', magical: 'magic' });
+/** Damage tag → the inline keyword used in the description ("Deal <<n>> [[mag]]"). */
+const DAMAGE_TAG_KEYWORD = Object.freeze({ physical: '[[phys]]', magical: '[[mag]]' });
+
+/**
+ * Primary action → curated SYNERGY pool for the `greater` surge (one is rolled
+ * and emitted as a bonus when Greater surges). Falls back to the generic
+ * non-color bonus pool for actions not listed.
+ */
+const SYNERGY_BY_ACTION = Object.freeze({
+  physical: ['attack', 'bleed', 'extra_turn'],
+  magical:  ['extra_turn', 'brittle', 'drain'],
+  create:   ['wild', 'extra_turn'],
+  armor:    ['barrier', 'heal'],
+  heal:     ['armor', 'extra_turn'],
+  destroy:  ['extra_turn', 'physical'],
+  explode:  ['extra_turn', 'magical'],
+  convert:  ['extra_turn', 'create'],
+  change:   ['create', 'extra_turn'],
+  drain:    ['enfeeble', 'magical'],
+  attack:   ['physical', 'extra_turn'],
+});
+
 /** Primary action → cost-color AFFINITY (a weight, not a rule — see
  *  COST_COLOR_WEIGHTS in weaveConfig). */
+// NOTE: the two damage tags (physical/magical) use the gradient DAMAGE_COLOR_SKEW
+// (weaveConfig) in rollCostColor instead of a single affinity color.
 const ACTION_COST_AFFINITY = Object.freeze({
-  damage: 'red', attack: 'blue', explode: 'red', destroy: 'red',
+  attack: 'blue', explode: 'red', destroy: 'red',
   armor: 'blue', heal: 'green', create: 'green',
   convert: 'purple', change: 'purple', drain: 'purple', shuffle: 'yellow',
 });
@@ -113,7 +147,7 @@ const ACTION_COST_AFFINITY = Object.freeze({
  * pickSkillSound + GENERIC_SOUND_BY_ACTION below).
  */
 const ACTION_SOUND = Object.freeze({
-  damage: 'skill_bash', attack: 'skill_encroach',
+  physical: 'skill_bash', magical: 'skill_bash', damage: 'skill_bash', attack: 'skill_encroach',
   armor: 'skill_defend', heal: 'skill_oungan',
   create: 'skill_oungan', destroy: 'skill_fracture',
   explode: 'skill_explode', convert: 'skill_explode', change: 'skill_explode',
@@ -143,6 +177,8 @@ const GENERIC_CREATE_FLAVORS = Object.freeze(['red', 'blue', 'green', 'yellow', 
  * Actions NOT listed (heal/attack/drain/shuffle) have no generic clip → ACTION_SOUND.
  */
 const GENERIC_SOUND_BY_ACTION = Object.freeze({
+  physical: { family: 'damage', versions: 3, colored: true },
+  magical:  { family: 'damage', versions: 3, colored: true },
   damage:  { family: 'damage',  versions: 3, colored: true },
   explode: { family: 'destroy', versions: 5 },
   destroy: { family: 'destroy', versions: 5 },
@@ -230,13 +266,18 @@ const ELEMENT_ADJ = Object.freeze({
   ],
 });
 
+/** Shared damage-family noun pool (used by both physical + magical tags). */
+const DAMAGE_NOUNS = Object.freeze([
+  'Strike', 'Lash', 'Rend', 'Reckoning', 'Scourge', 'Sundering', 'Spike', 'Verdict',
+  'Smite', 'Onslaught', 'Lance', 'Wrath', 'Cleave', 'Havoc', 'Punishment', 'Blow',
+  'Laceration', 'Maul', 'Skewer', 'Judgment', 'Impalement', 'Carnage',
+]);
+
 /** Primary action → name noun candidates. */
 const ACTION_NOUNS = Object.freeze({
-  damage: [
-    'Strike', 'Lash', 'Rend', 'Reckoning', 'Scourge', 'Sundering', 'Spike', 'Verdict',
-    'Smite', 'Onslaught', 'Lance', 'Wrath', 'Cleave', 'Havoc', 'Punishment', 'Blow',
-    'Laceration', 'Maul', 'Skewer', 'Judgment', 'Impalement', 'Carnage',
-  ],
+  physical: DAMAGE_NOUNS,
+  magical: DAMAGE_NOUNS,
+  damage: DAMAGE_NOUNS,
   armor: [
     'Bulwark', 'Aegis', 'Ward', 'Carapace', 'Rampart', 'Shell', 'Vigil', 'Bastion',
     'Mantle', 'Fortress', 'Redoubt', 'Guardian', 'Palisade', 'Barricade', 'Aegida',
@@ -306,6 +347,8 @@ const TAG_SUFFIXES = Object.freeze({
   purple:     ['of Shadows', 'of the Void', 'of Whispers', 'of Dusk'],
   skull:      ['of Graves', 'of Bone', 'of the Dead', 'of Rot'],
   // Actions.
+  physical:   ['of Wrath', 'Unleashed', 'of Ruin'],
+  magical:    ['of Power', 'Arcane', 'of the Arcane'],
   damage:     ['of Wrath', 'Unleashed', 'of Ruin'],
   armor:      ['of Wardens', 'Enduring', 'of Vigil'],
   heal:       ['of Mercy', 'Restoring', 'of Grace'],
@@ -317,6 +360,7 @@ const TAG_SUFFIXES = Object.freeze({
   attack:     ['of Fury', 'Rising', 'of Bloodlust'],
   explode:    ['of Cataclysm', 'Bursting', 'of the Blast'],
   // Modifiers / shapes / statuses.
+  greater:    ['Greater', 'Empowered', 'of Might'],
   extra_turn: ['of Haste', 'of Tempo', 'Quickening'],
   wild:       ['Unbound', 'of Chaos', 'of the Wyld'],
   shuffle:    ['of Chaos', 'Scattering', 'of Upheaval'],
@@ -465,8 +509,15 @@ function rollCostColor(elements, primaryAction) {
     weights[el] += first ? COST_COLOR_WEIGHTS.firstElement : COST_COLOR_WEIGHTS.otherElement;
     first = false;
   }
-  const affinity = ACTION_COST_AFFINITY[primaryAction];
-  if (affinity) weights[affinity] += COST_COLOR_WEIGHTS.actionAffinity;
+  // Damage tags gradient the whole color spread (Physical→red…purple,
+  // Magical→purple…red); other actions add a single affinity color's weight.
+  const skew = DAMAGE_COLOR_SKEW[primaryAction];
+  if (skew) {
+    for (const c of COST_COLORS) weights[c] += skew[c] || 0;
+  } else {
+    const affinity = ACTION_COST_AFFINITY[primaryAction];
+    if (affinity) weights[affinity] += COST_COLOR_WEIGHTS.actionAffinity;
+  }
   return pickWeightedEntry(Object.entries(weights)) || pickRandom(COST_COLORS);
 }
 
@@ -627,6 +678,18 @@ export function synthesize(recipe) {
     if (tagIds.includes('all') && !used.has('all')) { used.add('all'); return true; }
     return false;
   };
+  /** Consume the `greater` qualifier if present (first magnitude verb wins). */
+  let greaterUsed = false;
+  const consumeGreater = () => {
+    if (tagIds.includes('greater') && !used.has('greater')) {
+      used.add('greater'); greaterUsed = true; return true;
+    }
+    return false;
+  };
+  /** Greater's magnitude boost — always at least +1 so small gains still grow. */
+  const greaterBoost = (a) => Math.max((a || 0) + 1, Math.round((a || 0) * GREATER_CONFIG.damageMult));
+  /** Provenance: damage tag id → rolled scaling preset key (e.g. '_150'). */
+  const scalingRolls = {};
   /** Is there an unconsumed targeting shape (row/column/area/tile) in the bag? */
   const anyUnusedShape = () => SHAPE_IDS.some((s) => shapes.has(s) && !used.has(s));
   /** Consume a shape tag if present and unconsumed (in candidate order). */
@@ -660,6 +723,43 @@ export function synthesize(recipe) {
     else lines.push(`[[Create]] ${amount} ${TILE_LABEL[type]} [[tiles]]`);
     const isWildType = type === 'wild' || type === 'thrall';
     power += amount * POWER.perTileCreated * (isWildType ? POWER.thrallTileMult : 1);
+  };
+
+  /**
+   * Emit a damage effect of a given TYPE (physical → Attack scaling, magical →
+   * Magic scaling). The scaling MULTIPLIER is rolled from a weighted preset; the
+   * description uses `<<amount>>` (live computed value) + the [[phys]]/[[mag]]
+   * keyword. Cost rises with the multiplier but non-linearly (a random luck
+   * discount on the scaling's power contribution). `perSkull` adds the board-
+   * dependent "+N per Skull" rider (not reflected in the dynamic value).
+   * @param {'physical'|'magical'} type
+   * @param {number} amount — base damage (already greater-multiplied if applicable)
+   * @param {{perSkull?:number}} [opts]
+   */
+  const emitDamage = (type, amount, opts = {}) => {
+    const presetKey = rollDamageScalingPreset();
+    const mult = DAMAGE_SCALING_PRESETS[presetKey] != null
+      ? DAMAGE_SCALING_PRESETS[presetKey] : DAMAGE_SCALE_PER_POINT;
+    const stat = DAMAGE_TAG_STAT[type] || 'magic';
+    const scaling = { [stat]: mult };
+    scalingRolls[type] = presetKey;
+
+    const dmg = { amount, scaling };
+    const perSkull = opts.perSkull || 0;
+    if (perSkull > 0) dmg.perSkull = perSkull;
+    effects.push({ effectType: 'damage', damage: dmg });
+
+    const kw = DAMAGE_TAG_KEYWORD[type] || '[[mag]]';
+    lines.push(perSkull > 0
+      ? `Deal <<${amount}>> ${kw}, plus ${perSkull} per [[Skull]] on the board`
+      : `Deal <<${amount}>> ${kw}`);
+
+    // Power = flat base + estimated scaled contribution (× a random cost-luck
+    // factor so a big multiplier can land under-priced) + per-Skull rider.
+    const sp = DAMAGE_SCALING_POWER;
+    const luck = sp.luckMin + Math.random() * Math.max(0, sp.luckMax - sp.luckMin);
+    const scaledPower = mult * sp.estStat * sp.perScaledPoint * luck;
+    power += amount * POWER.perDamage + scaledPower + perSkull * EST_SKULLS_ON_BOARD * POWER.perSkullDamage;
   };
 
   /**
@@ -705,7 +805,7 @@ export function synthesize(recipe) {
    */
   const emitRandomBonus = (tag) => {
     switch (tag) {
-      case 'damage': { const a = rollTagValue('damage') || 5; effects.push({ effectType: 'damage', damage: { amount: a } }); lines.push(`Deal ${a} [[damage]]`); power += a * POWER.perDamage; return true; }
+      case 'physical': case 'magical': { emitDamage(tag, rollTagValue(tag) || 5); return true; }
       case 'armor': { const a = rollTagValue('armor') || 5; effects.push({ effectType: 'armor', armor: { amount: a } }); lines.push(`Gain ${a} [[armor]]`); power += a * POWER.perArmor; return true; }
       case 'heal': { const a = rollTagValue('heal') || 5; effects.push({ effectType: 'heal', heal: { amount: a } }); lines.push(`[[Heal]] ${a} HP`); power += a * POWER.perHeal; return true; }
       case 'attack': { const a = rollTagValue('attack') || 1; effects.push({ effectType: 'gain_attack', gainAttack: { amount: a } }); lines.push(`Gain ${a} [[attack]]`); power += a * POWER.perAttack; return true; }
@@ -753,38 +853,39 @@ export function synthesize(recipe) {
   for (const action of actions) {
     used.add(action);
     switch (action) {
-      case 'damage': {
-        const amount = roll('damage', 5);
+      case 'physical':
+      case 'magical': {
+        let amount = roll(action, 5);
+        // `greater` multiplies the base amount (and may surge a synergy later).
+        if (consumeGreater()) amount = greaterBoost(amount);
         // skull + damage → ALSO "+N per Skull on the board" (read at cast).
         let perSkull = 0;
         if (tileTypes.includes('skull') && !used.has('skull')) {
           used.add('skull');
           perSkull = Math.random() < 0.35 ? 2 : 1;
         }
-        const dmg = perSkull > 0 ? { amount, perSkull } : { amount };
-        effects.push({ effectType: 'damage', damage: dmg });
-        lines.push(perSkull > 0
-          ? `Deal ${amount} [[damage]], plus ${perSkull} per [[Skull]] on the board`
-          : `Deal ${amount} [[damage]]`);
-        power += amount * POWER.perDamage + perSkull * EST_SKULLS_ON_BOARD * POWER.perSkullDamage;
+        emitDamage(action, amount, { perSkull });
         break;
       }
       case 'armor': {
-        const amount = roll('armor', 5);
+        let amount = roll('armor', 5);
+        if (consumeGreater()) amount = greaterBoost(amount);
         effects.push({ effectType: 'armor', armor: { amount } });
         lines.push(`Gain ${amount} [[armor]]`);
         power += amount * POWER.perArmor;
         break;
       }
       case 'heal': {
-        const amount = roll('heal', 5);
+        let amount = roll('heal', 5);
+        if (consumeGreater()) amount = greaterBoost(amount);
         effects.push({ effectType: 'heal', heal: { amount } });
         lines.push(`[[Heal]] ${amount} HP`);
         power += amount * POWER.perHeal;
         break;
       }
       case 'attack': {
-        const amount = roll('attack', 1);
+        let amount = roll('attack', 1);
+        if (consumeGreater()) amount = greaterBoost(amount);
         effects.push({ effectType: 'gain_attack', gainAttack: { amount } });
         lines.push(`Gain ${amount} [[attack]]`);
         power += amount * POWER.perAttack;
@@ -803,7 +904,8 @@ export function synthesize(recipe) {
       case 'drain': {
         // Color-agnostic: drains EVERY color. A color woven alongside doesn't
         // target the drain — it's dangling and simply influences the cost.
-        const amount = roll('drain', 2);
+        let amount = roll('drain', 2);
+        if (consumeGreater()) amount = greaterBoost(amount);
         effects.push({ effectType: 'drain_mana', drainMana: { amount } });
         lines.push(`Drain ${amount} [[mana]] of every color from the enemy`);
         power += amount * POWER.perManaDrainedAllColors;
@@ -814,6 +916,7 @@ export function synthesize(recipe) {
         // wild); none → a rolled color. `all` boosts the count.
         let amount = roll('create', 3);
         if (consumeAll()) amount += Math.max(2, Math.round(amount * 0.5));
+        if (consumeGreater()) amount = Math.round(amount * GREATER_CONFIG.createMult);
         const type = takeType() || pickRandom(COST_COLORS);
         emitCreate(amount, type);
         break;
@@ -919,6 +1022,23 @@ export function synthesize(recipe) {
     emitCreate(2 + Math.floor(Math.random() * 3), 'skull'); // 2..4 Skulls
   }
 
+  // ── `greater` SURGE: consuming Greater can ALSO emit one extra synergistic
+  //    effect — a controlled re-introduction of "the weave surges", gated by the
+  //    Greater tag (not random injection). The bonus is drawn from a curated
+  //    synergy pool for the primary action (falls back to the generic pool), and
+  //    recorded in `injected` for provenance. ──
+  if (greaterUsed && Math.random() < GREATER_CONFIG.surgeChance) {
+    const synergyPool = (SYNERGY_BY_ACTION[primaryAction] || NON_COLOR_BONUS_TAGS).slice();
+    for (let i = synergyPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [synergyPool[i], synergyPool[j]] = [synergyPool[j], synergyPool[i]];
+    }
+    for (const t of synergyPool) {
+      if (t === 'greater' || t === 'random') continue;
+      if (emitRandomBonus(t)) { injected.add(t); break; }
+    }
+  }
+
   // ── `random` wildcard: ALWAYS pulls a BONUS effect from the non-color tag
   //    pool (actions / shapes / modifiers / statuses). One tag is rolled (the
   //    pool is shuffled and the first that can apply wins, so a destroy/shape
@@ -934,10 +1054,7 @@ export function synthesize(recipe) {
     let emitted = false;
     for (const t of pool) { if (emitRandomBonus(t)) { emitted = true; break; } }
     if (!emitted) { // safety: only destroy/shape rolled AND targeting taken
-      const a = rollTagValue('damage') || 4;
-      effects.push({ effectType: 'damage', damage: { amount: a } });
-      lines.push(`Deal ${a} [[damage]]`);
-      power += a * POWER.perDamage;
+      emitDamage(pickRandom(DAMAGE_TAGS), rollTagValue('damage') || 4);
     }
   }
 
@@ -964,10 +1081,7 @@ export function synthesize(recipe) {
   // ── Fallback: a verb-less bag (the round-0 action guarantee is SOFT) still
   //    has to do SOMETHING — the raw weave lashes out. ──
   if (effects.length === 0) {
-    const amount = rollTagValue('damage') || 4; // fresh roll — 'damage' isn't in the bag
-    effects.push({ effectType: 'damage', damage: { amount } });
-    lines.push(`Deal ${amount} [[damage]]`);
-    power += amount * POWER.perDamage;
+    emitDamage(pickRandom(DAMAGE_TAGS), rollTagValue('damage') || 4);
   }
 
   // ── extra_turn LAST (create_tiles' cascade resets the flag — decision #4).
@@ -1005,6 +1119,9 @@ export function synthesize(recipe) {
   if (tagIds.includes('all') && !used.has('all')) {
     markWasted('all', 'no Change/Destroy/Create to amplify');
   }
+  if (tagIds.includes('greater') && !used.has('greater')) {
+    markWasted('greater', 'no magnitude effect (Create/damage/gain) to amplify');
+  }
   for (const t of tileTypes) {
     if (!used.has(t)) markWasted(t, 'no effect or cost used this color');
   }
@@ -1040,7 +1157,7 @@ export function synthesize(recipe) {
     effects,
     // Synthesis provenance — lets the icon be regenerated and the skill be
     // inspected later (not read by battle logic).
-    woven: { recipe: tagIds, rolledValues, power, injectedTags },
+    woven: { recipe: tagIds, rolledValues, power, injectedTags, scalingRolls },
   };
 
   const summary = tagIds

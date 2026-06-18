@@ -74,7 +74,11 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   skull:  { id: 'skull',  label: 'Skull',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_skull' },
 
   // ── Actions (the verb the skill performs) ──
-  damage:  { id: 'damage',  label: 'Damage',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_damage' },
+  // Damage comes in two TYPES: Physical scales with Attack, Magical with Magic
+  // (the scaling MULTIPLIER is rolled at synthesis — see weaveConfig
+  // DAMAGE_SCALING_WEIGHTS). Both reuse the damage icon for now.
+  physical: { id: 'physical', label: 'Physical', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
+  magical:  { id: 'magical',  label: 'Magical',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
   armor:   { id: 'armor',   label: 'Armor',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_armor' },
   create:  { id: 'create',  label: 'Create',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_create' },
   destroy: { id: 'destroy', label: 'Destroy', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
@@ -104,6 +108,10 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // `all` is a scope qualifier: it upgrades `change`→mass convert, `destroy`+a
   // color→board-wide color wipe, and boosts `create`'s tile count.
   all:        { id: 'all',        label: 'All',        category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
+  // `greater` is a magnitude qualifier: it multiplies a magnitude verb's output
+  // (Create / Physical / Magical / Attack / Armor / Heal / Drain) AND has a
+  // chance to surge (add an extra synergistic effect).
+  greater:    { id: 'greater',    label: 'Greater',    category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
 
   // ── Status effects (synthesized into apply_status effects — debuffs hit the
   //    enemy, buffs (intangible/berserk/barrier) buff the caster) ──

@@ -83,13 +83,21 @@ export const TAGS_PER_ROUND_WEIGHTS = Object.freeze({
  * Tune freely — add a tag id with its own {value: weight} map to give it a
  * hidden roll; a tag absent from this table has no hidden value (magnitude 1).
  */
+// Base-damage roll shared by the two damage tags (`physical` / `magical`) and
+// the internal `damage` fallback. The stat-SCALING multiplier rides on top of
+// this base (see DAMAGE_SCALING_WEIGHTS) and is what makes the spell grow.
+const DAMAGE_ROLL = { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 };
+
 export const TAG_VALUE_TABLES = Object.freeze({
   // `create N tiles` — small rolls common, a 12 is a jackpot.
   create: { 3: 18, 4: 26, 5: 16, 6: 13, 7: 10, 8: 7, 9: 5, 10: 3, 11: 1.5, 12: 0.5 },
 
   // ── Action magnitudes ──
-  // `deal N damage` / `gain N armor` / `heal N HP` — mid rolls common.
-  damage: { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
+  // `deal N physical/magical` — mid rolls common (same base for both types; the
+  // damage TYPE only changes which stat it scales with + the keyword shown).
+  physical: DAMAGE_ROLL,
+  magical:  DAMAGE_ROLL,
+  damage:   DAMAGE_ROLL, // internal fallback (verb-less bag / random safety)
   armor:  { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
   heal:   { 4: 16, 5: 20, 6: 20, 7: 15, 8: 11, 9: 8, 10: 5, 11: 3, 12: 2 },
   // `gain N mana` of a color.
@@ -143,6 +151,63 @@ export const COST_COLOR_WEIGHTS = Object.freeze({
   otherElement: 25,
   actionAffinity: 20,
   anyColor: 15,
+});
+
+/**
+ * Cost-color SKEW for the two damage tags, applied ONLY when no element tag
+ * dictates the cost color (the rollCostColor fallback — i.e. "without influence").
+ * These relative weights are ADDED to each color's baseline so the cost color
+ * gradients toward the type's flavor: Physical skews red→…→purple, Magical the
+ * reverse. Tune the spread freely.
+ */
+export const DAMAGE_COLOR_SKEW = Object.freeze({
+  physical: { red: 45, blue: 32, green: 22, yellow: 14, purple: 8 },
+  magical:  { purple: 45, yellow: 32, green: 22, blue: 14, red: 8 },
+});
+
+// ═══════════════════════════════════════════════════════════
+// 5b. Damage stat-scaling (woven damage tags) + the "Greater" qualifier
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Relative draw weights for the damage SCALING multiplier a woven Physical/
+ * Magical tag rolls. Keys MUST match DAMAGE_SCALING_PRESETS in scalingConfig.js
+ * (_33 = ×1/3 … _300 = ×3). Bigger multipliers are rarer — a high roll is a
+ * lucky score. Adjust freely to retune how punchy woven damage scales.
+ */
+export const DAMAGE_SCALING_WEIGHTS = Object.freeze({
+  _33: 30, _50: 26, _100: 22, _150: 12, _200: 6, _250: 3, _300: 1.5,
+});
+
+/**
+ * How a rolled scaling multiplier contributes to the spell's POWER (→ cost).
+ * Cost rises with the multiplier but NOT strictly linearly: the contribution is
+ * scaled by a random "cost luck" factor in [luckMin, luckMax], so a player can
+ * occasionally land a big multiplier that comes in under-priced.
+ *   estStat       — assumed Attack/Magic when power-costing the scaling mid-run
+ *   perScaledPoint— POWER per estimated scaled-damage point (≈ POWER.perDamage)
+ *   luckMin/luckMax — random discount window on the scaling's power
+ */
+export const DAMAGE_SCALING_POWER = Object.freeze({
+  estStat: 4,
+  perScaledPoint: 0.5,
+  luckMin: 0.5,
+  luckMax: 1.0,
+});
+
+/**
+ * The "Greater" qualifier tag: a magnitude multiplier for any magnitude verb
+ * (Create / Physical / Magical / Attack / Armor / Heal / Drain), which also has
+ * a chance to SURGE (emit one extra synergistic effect). The boost is always at
+ * least +1 so small gains (e.g. +1 Attack) still grow.
+ *   damageMult  — multiply a damage/attack/armor/heal/drain base amount
+ *   createMult  — multiply a create tag's tile count
+ *   surgeChance — probability that consuming Greater also adds a synergy effect
+ */
+export const GREATER_CONFIG = Object.freeze({
+  damageMult: 1.75,
+  createMult: 1.6,
+  surgeChance: 0.6,
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -237,6 +302,16 @@ export function rollRoundsPerWeave() {
 /** Roll the number of tag options for a single round (2–4). */
 export function rollTagsPerRound() {
   return Number(pickWeightedKey(TAGS_PER_ROUND_WEIGHTS)) || 2;
+}
+
+/**
+ * Roll a damage SCALING preset KEY (weighted). The synthesizer maps the key to
+ * its multiplier via DAMAGE_SCALING_PRESETS (scalingConfig.js). Falls back to
+ * the modest `_33` (×1/3) preset.
+ * @returns {string} a DAMAGE_SCALING_PRESETS key (e.g. '_100')
+ */
+export function rollDamageScalingPreset() {
+  return pickWeightedKey(DAMAGE_SCALING_WEIGHTS) || '_33';
 }
 
 /**

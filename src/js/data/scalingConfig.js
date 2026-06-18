@@ -38,7 +38,9 @@ export const DAMAGE_SCALE_PER_POINT = 1 / 3;
 
 export const DAMAGE_SCALING_PRESETS = {
   _300: 3,
+  _250: 2.5,
   _200: 2,
+  _150: 1.5,
   _100: 1,
   _50: 1 / 2,
   _33: 1/3

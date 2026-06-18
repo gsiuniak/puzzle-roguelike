@@ -9,6 +9,7 @@ import { TAG_RARITY, rollRoundsPerWeave, rollTagsPerRound } from '../data/weaveC
 import { synthesize } from '../data/skillSynthesizer.js';
 import { getSpellIcon } from '../icons/spellIcons.js';
 import HarvestTendrilEffect from '../ui/HarvestTendrilEffect.js';
+import KeywordText from '../ui/KeywordText.js';
 
 /**
  * SkillWeaveScene — the "Weave a Power" skill reward screen.
@@ -1344,15 +1345,33 @@ export default class SkillWeaveScene extends UIPanel {
       });
     }
 
-    // Description lines (strip [[keyword]] markup → plain visible labels)
-    const lines = String(skill.description || '').split('\n');
-    let y = RESULT_DESC_START_Y;
-    for (const line of lines) {
-      const plain = line.replace(/\[\[([^\]]+)\]\]/g, '$1');
-      this._drawText(ctx, plain, cx, y, {
-        size: RESULT_DESC_SIZE, color: RESULT_DESC_COLOR,
-        shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.7)',
+    // Description lines — rendered via KeywordText so [[keyword]] spans are
+    // colored (gold) and <<n>> dynamic values are colored (green), instead of
+    // dumping the raw markup. No battle caster here → <<n>> shows the base value.
+    // Cached per skill (the result screen is static once revealed).
+    const srcLines = (Array.isArray(skill.descriptionLines) && skill.descriptionLines.length)
+      ? skill.descriptionLines
+      : String(skill.description || '').split('\n');
+    if (this._resultDescSig !== skill.id) {
+      this._resultDescSig = skill.id;
+      this._resultDescKTs = srcLines.filter((l) => l && l.trim()).map((line) => {
+        const kt = new KeywordText(String(line).trim());
+        kt.setStyle({
+          fontSize: RESULT_DESC_SIZE, color: RESULT_DESC_COLOR,
+          alignH: 'center', alignV: 'center',
+          shadowColor: 'rgba(0,0,0,0.7)', shadowBlur: 6,
+        });
+        kt.visible = true;
+        return kt;
       });
+    }
+    let y = RESULT_DESC_START_Y;
+    for (const kt of (this._resultDescKTs || [])) {
+      kt.rect.x = 0;
+      kt.rect.y = y - RESULT_DESC_LINE_H / 2;
+      kt.rect.w = DESIGN_W;
+      kt.rect.h = RESULT_DESC_LINE_H;
+      kt.renderSelf(ctx);
       y += RESULT_DESC_LINE_H;
     }
 
