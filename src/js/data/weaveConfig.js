@@ -46,6 +46,14 @@ export const RARITY_WEIGHTS = Object.freeze({
   [TAG_RARITY.LEGENDARY]: 5,
 });
 
+/**
+ * Draw-weight multiplier applied to ELEMENT (color) tags that match the player's
+ * affinity — the colors of their character's starting skills (e.g. Warrior →
+ * red/blue, Mage → purple/yellow). A SLIGHT nudge so woven skills lean toward
+ * the colors the player already builds around, without locking the others out.
+ */
+export const COLOR_AFFINITY_WEIGHT = 1.6;
+
 // ═══════════════════════════════════════════════════════════
 // 2. Weave shape (rounds per weave, tags per round)
 // ═══════════════════════════════════════════════════════════
@@ -104,7 +112,7 @@ export const TAG_VALUE_TABLES = Object.freeze({
   gain:   { 3: 25, 4: 25, 5: 20, 6: 14, 7: 9, 8: 7 },
   // `drain N mana` from the opponent (drains EVERY color when un-elemented,
   // so the table stays modest).
-  drain:  { 2: 30, 3: 30, 4: 22, 5: 12, 6: 6 },
+  drain:  { 2: 0, 3: 40, 4: 32, 5: 12, 6: 6 },
   // `gain N attack` — permanent for the battle, so the rolls are small.
   attack: { 1: 55, 2: 33, 3: 12 },
 
@@ -115,7 +123,7 @@ export const TAG_VALUE_TABLES = Object.freeze({
   brittle:    { 2: 45, 3: 38, 4: 17 },
   bleed:      { 2: 45, 3: 35, 4: 20 },
   frozen:     { 2: 50, 3: 35, 4: 15 },
-  intangible: { 1: 60, 2: 30, 3: 10 },
+  intangible: { 1: 80, 2: 20, 3: 0  },
   berserk:    { 2: 55, 3: 33, 4: 12 },
   barrier:    { 2: 45, 3: 35, 4: 20 },
 });

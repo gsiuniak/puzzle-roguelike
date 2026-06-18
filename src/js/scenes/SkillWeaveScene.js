@@ -5,7 +5,7 @@ import {
   getTagLabel,
   getTagRarity,
 } from '../data/skillWeaveTags.js';
-import { TAG_RARITY, rollRoundsPerWeave, rollTagsPerRound } from '../data/weaveConfig.js';
+import { TAG_RARITY, rollRoundsPerWeave, rollTagsPerRound, COLOR_AFFINITY_WEIGHT } from '../data/weaveConfig.js';
 import { synthesize } from '../data/skillSynthesizer.js';
 import { getSpellIcon } from '../icons/spellIcons.js';
 import HarvestTendrilEffect from '../ui/HarvestTendrilEffect.js';
@@ -379,11 +379,14 @@ export default class SkillWeaveScene extends UIPanel {
    * @param {Function} [opts.onComplete] — invoked when the weave is confirmed
    * @param {string}   [opts.returnScene] — scene to fade to on finish
    * @param {string}   [opts.runSeed] — run seed for procedural spell icons
+   * @param {string[]} [opts.affinityColors] — the player's starting-skill colors;
+   *   element tags of these colors are drawn slightly more often (COLOR_AFFINITY_WEIGHT).
    */
-  configure({ onComplete = null, returnScene = 'MapScene', runSeed = '' } = {}) {
+  configure({ onComplete = null, returnScene = 'MapScene', runSeed = '', affinityColors = [] } = {}) {
     this._onComplete = typeof onComplete === 'function' ? onComplete : null;
     this._returnScene = returnScene || 'MapScene';
     this._runSeed = runSeed || '';
+    this._affinityColors = Array.isArray(affinityColors) ? affinityColors : [];
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -508,6 +511,10 @@ export default class SkillWeaveScene extends UIPanel {
   _rollAllSteps() {
     this._steps = [];
     if (!this._plan) return;
+    // Build a per-color draw bias from the player's affinity colors (a slight
+    // nudge so element tags lean toward the colors they already build around).
+    const colorBias = {};
+    for (const c of (this._affinityColors || [])) colorBias[c] = COLOR_AFFINITY_WEIGHT;
     const shown = [];
     for (let round = 0; round < this._plan.rounds; round++) {
       const count = this._plan.tagCounts[round] || 2;
@@ -516,6 +523,7 @@ export default class SkillWeaveScene extends UIPanel {
         chosen: shown,             // exclude tags already shown in earlier rounds
         count,
         guaranteeAction: round === 0,
+        colorBias,
       });
       this._steps[round] = { options };
       shown.push(...options);

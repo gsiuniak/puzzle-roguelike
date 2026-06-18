@@ -356,7 +356,7 @@ const SKILL_CATALOG = {
     sound: 'skill_infected_bite',
     cost: { red: 1 },
     effects: [
-      { effectType: 'damage', damage: { amount: 3, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
+      { effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
       { effectType: 'extra_turn' },
     ],
   },

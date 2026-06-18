@@ -77,6 +77,28 @@ function enemyAttackFloorBonus(depth) {
   return ENEMY_ATTACK_FLOOR_BONUS[Math.min(d, ENEMY_ATTACK_FLOOR_BONUS.length - 1)];
 }
 
+// ── Weave color affinity ─────────────────────────────────
+const AFFINITY_MANA_COLORS = ['red', 'blue', 'green', 'yellow', 'purple'];
+
+/**
+ * The mana colors of a character's STARTING skills, in first-seen order — used
+ * to bias the Skill Weave tag draw toward the colors the player builds around
+ * (Warrior → red/blue, Mage → purple/yellow, Witch Doctor → green/purple).
+ * @param {object} characterDef
+ * @returns {string[]}
+ */
+function startingSkillColors(characterDef) {
+  if (!characterDef || !Array.isArray(characterDef.skills)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const s of resolveSkillIds(characterDef.skills)) {
+    for (const c of Object.keys((s && s.cost) || {})) {
+      if (AFFINITY_MANA_COLORS.includes(c) && !seen.has(c)) { seen.add(c); out.push(c); }
+    }
+  }
+  return out;
+}
+
 export default class MapScene extends UIPanel {
   constructor() {
     super();
@@ -604,6 +626,8 @@ export default class MapScene extends UIPanel {
     weaveScene.configure({
       returnScene: 'MapScene',
       runSeed: this._seed,
+      // Nudge the tag draw toward the character's starting-skill colors.
+      affinityColors: startingSkillColors(this._characterDef),
       onComplete: ({ recipe, synthesis, icon }) => {
         // AWARD: the synthesized skill joins the run — createPlayerBattleState
         // appends runState.skills to the character's catalog skills each battle.

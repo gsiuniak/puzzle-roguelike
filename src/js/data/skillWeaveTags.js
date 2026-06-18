@@ -185,8 +185,14 @@ export function getTagRarity(id) {
  * @param {string[]} ids
  * @returns {string|null}
  */
-function pickByRarity(ids) {
-  const entries = ids.map((id) => [id, RARITY_WEIGHTS[getTagRarity(id)] || 0]);
+function pickByRarity(ids, colorBias = null) {
+  const entries = ids.map((id) => {
+    let w = RARITY_WEIGHTS[getTagRarity(id)] || 0;
+    // Slight per-color nudge toward the player's affinity colors (element tags
+    // only; non-color tags carry no bias entry → multiplier 1).
+    if (colorBias && colorBias[id]) w *= colorBias[id];
+    return [id, w];
+  });
   return pickWeightedEntry(entries);
 }
 
@@ -212,14 +218,17 @@ function shuffle(arr) {
  * @param {string[]} [opts.chosen=[]]     tag ids already committed (excluded)
  * @param {number}   [opts.count=3]       how many options to show (2–4)
  * @param {boolean}  [opts.guaranteeAction] force ≥1 action (defaults to round 0)
+ * @param {Object<string,number>} [opts.colorBias] per-color draw-weight multiplier
+ *   (element tag id → factor) — nudges the draw toward the player's affinity colors.
  * @returns {string[]} the drawn tag ids (shuffled display order)
  */
-export function drawTagsForRound({ roundIndex = 0, chosen = [], count = 3, guaranteeAction } = {}) {
+export function drawTagsForRound({ roundIndex = 0, chosen = [], count = 3, guaranteeAction, colorBias = null } = {}) {
   const exclude = new Set(chosen);
   const wantAction = guaranteeAction != null ? guaranteeAction : roundIndex === 0;
   const picks = [];
 
-  // Soft guarantee: seed one rarity-weighted ACTION tag first.
+  // Soft guarantee: seed one rarity-weighted ACTION tag first (no color bias —
+  // actions aren't colors).
   if (wantAction) {
     const actionPool = ALL_TAG_IDS.filter(
       (id) => !exclude.has(id) && SKILL_WEAVE_TAGS[id].category === TAG_CATEGORY.ACTION,
@@ -228,10 +237,10 @@ export function drawTagsForRound({ roundIndex = 0, chosen = [], count = 3, guara
     if (a) { picks.push(a); exclude.add(a); }
   }
 
-  // Fill the rest from the global pool.
+  // Fill the rest from the global pool (element tags nudged by colorBias).
   while (picks.length < count) {
     const pool = ALL_TAG_IDS.filter((id) => !exclude.has(id));
-    const id = pickByRarity(pool);
+    const id = pickByRarity(pool, colorBias);
     if (!id) break;
     picks.push(id);
     exclude.add(id);
