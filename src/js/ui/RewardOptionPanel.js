@@ -33,6 +33,7 @@ import UIPanel from './UIPanel.js';
 import UIImage from './UIImage.js';
 import UIText from './UIText.js';
 import KeywordText from './KeywordText.js';
+import { resolveDynamicText } from '../data/scalingConfig.js';
 
 // ── Tunable layout constants ───────────────────────────────
 /** Icon size as a fraction of the card's WIDTH (square, contain-fit) */
@@ -175,8 +176,11 @@ export default class RewardOptionPanel extends UIPanel {
   /**
    * Populate this card from a relic definition. Pass null to hide the card.
    * @param {object|null} relicDef — relic from relicCatalog (name/rarity/icon/description)
+   * @param {{attack?:number, magic?:number}|null} [ownerStats] — the player's
+   *   current stats, used to resolve the description's `<<n>>` dynamic damage
+   *   values so the card shows the relic's REAL (stat-scaled) numbers, not the base.
    */
-  setRelic(relicDef) {
+  setRelic(relicDef, ownerStats = null) {
     this._relic = relicDef || null;
     this.userData.relic = this._relic;
 
@@ -201,7 +205,10 @@ export default class RewardOptionPanel extends UIPanel {
       ? `reward_divider_${rarity}`
       : 'reward_divider_common';
 
-    this._descText.setStyle({ text: relicDef.description || '' });
+    // Resolve `<<n>>` dynamic damage values against the player's current stats
+    // so e.g. Thorned Rose shows its real Attack-scaled damage, not the base.
+    const desc = resolveDynamicText(relicDef.description || '', relicDef.effects, ownerStats);
+    this._descText.setStyle({ text: desc });
   }
 
   /**

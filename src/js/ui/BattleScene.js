@@ -29,7 +29,7 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 // On a won battle the player picks ONE attribute on the Level Up overlay (which
 // shows BEFORE the relic reward overlay). Each grants this much (the mock's
 // values; all tunable). Replaces the old auto-growth on victory.
-const LEVEL_UP_GROWTH = Object.freeze({ attack: 1, magic: 1, maxHp: 6 });
+const LEVEL_UP_GROWTH = Object.freeze({ attack: 1, magic: 1, maxHp: 8 });
 // attribute key → runState statModifier path (applyRunModifier).
 const LEVEL_UP_STAT_PATH = Object.freeze({
   attack: 'startingAttack', magic: 'startingMagic', maxHp: 'maxHp',
@@ -2055,7 +2055,12 @@ export default class BattleScene extends UIPanel {
       : [];
     const ownedRelicIds = playerRelics.map((r) => r && r.id).filter(Boolean);
     const rewardRelics = generateRelicRewardOptions({ count: 3, playerRunState: runState, ownedRelicIds });
-    this._rewardOverlay.prepareRewards(rewardRelics);
+    // Player's CURRENT effective stats (post Level-Up) so each reward card shows
+    // the relic's real stat-scaled `<<n>>` damage, not the base value.
+    const characterDef = runState ? getCharacterById(runState.characterId) : null;
+    const eff = (characterDef && runState) ? getEffectivePlayerStats(characterDef, runState) : null;
+    const ownerStats = eff ? { attack: eff.startingAttack, magic: eff.startingMagic } : null;
+    this._rewardOverlay.prepareRewards(rewardRelics, ownerStats);
     this._rewardOverlay.show();
   }
 

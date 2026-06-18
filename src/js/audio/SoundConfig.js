@@ -211,6 +211,10 @@ const SOUNDS = {
   // ── Rewards ─────────────────────────────────────────────
   sfx_rewards_open: { sprite: 'sfx_rewards_open', category: AudioCategory.SFX },
 
+  // ── Level Up ────────────────────────────────────────────
+  sfx_show_level_up_panel: { sprite: 'sfx_show_level_up_panel', category: AudioCategory.SFX },
+  sfx_confirm_level_up:    { sprite: 'sfx_confirm_level_up',    category: AudioCategory.SFX },
+
   // ── Skill Weave ("Weave a Power") ──────────────────────
   sfx_choose_tag:          { sprite: 'sfx_choose_tag',          category: AudioCategory.SFX },
   sfx_choose_tag_back:     { sprite: 'sfx_choose_tag_back',     category: AudioCategory.SFX },

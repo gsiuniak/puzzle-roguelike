@@ -15,7 +15,7 @@ const mage = {
 
   /** Immutable base stats — never modified during a run */
   baseStats: {
-    maxHp: 25,
+    maxHp: 18,
     startingAttack: 1,
     startingMagic: 3,
     startingArmor: 0,

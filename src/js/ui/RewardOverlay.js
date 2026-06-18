@@ -159,11 +159,13 @@ export default class RewardOverlay {
    * Assign relic definitions to the option cards. Call before show().
    * Cards beyond the supplied list are hidden. Safe to call repeatedly.
    * @param {object[]} relicDefs — relic definitions from the reward pool
+   * @param {{attack?:number, magic?:number}|null} [ownerStats] — player's current
+   *   stats, so each card resolves its `<<n>>` damage to the real scaled value.
    */
-  prepareRewards(relicDefs) {
+  prepareRewards(relicDefs, ownerStats = null) {
     const defs = Array.isArray(relicDefs) ? relicDefs : [];
     for (let i = 0; i < this._rewardOptions.length; i++) {
-      this._rewardOptions[i].setRelic(defs[i] || null);
+      this._rewardOptions[i].setRelic(defs[i] || null, ownerStats);
     }
   }
 

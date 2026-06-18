@@ -148,7 +148,7 @@ export default class LevelUpOverlay {
     this._hoveredIndex = -1;
     this._hoverAnimT = 0;
     this._isResolving = false;
-    AudioManager.playSfx('sfx_rewards_open');
+    AudioManager.playSfx('sfx_show_level_up_panel');
   }
 
   isActive() {
@@ -191,7 +191,7 @@ export default class LevelUpOverlay {
     const attr = this._attributes[index];
     if (!attr) return;
 
-    AudioManager.playSfx('sfx_map_click_node'); // "commit" cue, same as reward pick
+    AudioManager.playSfx('sfx_map_click_node'); // same "commit" cue as relic reward / node selection
     if (typeof this.onAttributeSelected === 'function') {
       this.onAttributeSelected(attr.key);
     }
