@@ -90,8 +90,13 @@ const HOVER_BORDER_RADIUS = 6;
 // ── Overlay animation constants ────────────────────────────
 /** Duration of the entrance/exit animation (ms) */
 const OVERLAY_FADE_DURATION = 170;
-/** Fraction of canvas height the panel slides up on entrance */
-const OVERLAY_SLIDE_FRACTION = 0.10;
+/**
+ * Scale the whole reward group GROWS from on entrance (fade + grow, about its
+ * center). Replaces the old slide-up so the Level Up → Reward handoff reads as
+ * a clean "previous panel shrinks away → this one grows in" crossfade over the
+ * steady backdrop.
+ */
+const OVERLAY_ENTER_FROM_SCALE = 0.90;
 
 // ── Overlay state enum ────────────────────────────────────
 /** @readonly @enum {string} */
@@ -209,7 +214,11 @@ export default class RewardOverlay {
    * @returns {number}
    */
   getBackdropAlpha() {
-    return OVERLAY_BACKDROP_ALPHA * this.getEntranceAlpha();
+    // Steady full backdrop while active. The reward overlay always follows the
+    // Level Up overlay (which already darkened the screen and keeps its backdrop
+    // up through its exit), so the backdrop must NOT re-ramp here — that would
+    // flicker the dark layer during the handoff. Only the panel grows/fades in.
+    return this._state === OverlayState.INACTIVE ? 0 : OVERLAY_BACKDROP_ALPHA;
   }
 
   /** Force-reset to INACTIVE without firing callbacks (scene-exit cleanup). */
@@ -374,14 +383,14 @@ export default class RewardOverlay {
   render(ctx, canvasW, canvasH) {
     if (this._state === OverlayState.INACTIVE) return;
 
-    // ── Entrance animation params ──
+    // ── Entrance animation params (fade + grow about center) ──
     let overlayAlpha = 1;
-    let containerSlideY = 0;
+    let enterScale = 1;
     if (this._state === OverlayState.ENTERING) {
       const rawT = Math.min(1, this._timer / OVERLAY_FADE_DURATION);
       const easedT = 1 - Math.pow(1 - rawT, 3); // ease-out cubic
       overlayAlpha = easedT;
-      containerSlideY = (1 - easedT) * canvasH * OVERLAY_SLIDE_FRACTION;
+      enterScale = OVERLAY_ENTER_FROM_SCALE + (1 - OVERLAY_ENTER_FROM_SCALE) * easedT;
     }
 
     const cardImg = this._assetManager
@@ -417,7 +426,17 @@ export default class RewardOverlay {
 
     // ── Vertically center the whole group ──
     const groupH = titleH + TITLE_GAP_BELOW + cardH + SKIP_REWARDS_BUTTON_Y_OFFSET + skipH;
-    const groupTop = (canvasH - groupH) / 2 + GROUP_Y_OFFSET + containerSlideY;
+    const groupTop = (canvasH - groupH) / 2 + GROUP_Y_OFFSET;
+
+    // Entrance grow: scale the whole group about its center (composes with the
+    // outer save's globalAlpha; restored by the matching ctx.restore()).
+    if (enterScale !== 1) {
+      const mcx = canvasW / 2;
+      const mcy = groupTop + groupH / 2;
+      ctx.translate(mcx, mcy);
+      ctx.scale(enterScale, enterScale);
+      ctx.translate(-mcx, -mcy);
+    }
 
     const titleX = (canvasW - titleW) / 2;
     const titleY = groupTop;

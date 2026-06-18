@@ -89,9 +89,14 @@ const HOVER_BORDER_COLOR = 'rgba(232, 207, 143, 0.9)';
 const HOVER_BORDER_WIDTH = 2;
 const HOVER_BORDER_RADIUS = 8;
 
-// ── Entrance/exit animation (matches RewardOverlay) ──
-const OVERLAY_FADE_DURATION = 170;
-const OVERLAY_SLIDE_FRACTION = 0.10;
+// ── Entrance / exit animation ──
+// The panel fades + scales (grows in / shrinks out) about its center. The dark
+// backdrop stays STEADY across the Level Up → Reward handoff (see
+// getBackdropAlpha) so only the panels crossfade — no jarring re-darken.
+const OVERLAY_FADE_DURATION = 160;  // grow-in
+const OVERLAY_EXIT_DURATION = 130;  // shrink-out (quick, then onDismiss → rewards)
+const ENTER_FROM_SCALE = 0.90;      // panel grows from this on entrance
+const EXIT_TO_SCALE = 0.88;         // panel shrinks to this on exit
 
 const OverlayState = Object.freeze({
   INACTIVE: 'inactive',
@@ -160,7 +165,12 @@ export default class LevelUpOverlay {
   }
 
   getBackdropAlpha() {
-    return OVERLAY_BACKDROP_ALPHA * this.getEntranceAlpha();
+    // Backdrop fades IN on entrance, then stays STEADY through ACTIVE and the
+    // shrink-out EXIT — so the dark layer doesn't flicker during the handoff to
+    // the reward overlay (only the panels crossfade).
+    if (this._state === OverlayState.INACTIVE) return 0;
+    if (this._state === OverlayState.ENTERING) return OVERLAY_BACKDROP_ALPHA * this.getEntranceAlpha();
+    return OVERLAY_BACKDROP_ALPHA;
   }
 
   reset() {
@@ -189,15 +199,18 @@ export default class LevelUpOverlay {
   }
 
   /**
-   * Single exit point: fire onDismiss (BattleScene opens the reward overlay in
-   * the SAME scene) then go INACTIVE immediately — there's no scene change to
-   * hide an exit animation, so lingering would draw behind the reward overlay.
+   * Single exit point: play the quick shrink-out, THEN (on completion, in
+   * update) fire onDismiss so BattleScene opens the reward overlay — giving a
+   * clean "this panel shrinks away → next panel grows in" crossfade over the
+   * steady backdrop, instead of the reward overlay jarringly sliding up.
    */
   proceedToNextScene() {
     if (this._isResolving) return;
     this._isResolving = true;
-    if (typeof this.onDismiss === 'function') this.onDismiss();
-    this.reset();
+    this._state = OverlayState.EXITING;
+    this._timer = 0;
+    this._hoveredIndex = -1;
+    this._hoverAnimT = 0;
   }
 
   // ── Per-frame update ───────────────────────────────────
@@ -206,13 +219,22 @@ export default class LevelUpOverlay {
     if (this._state === OverlayState.ENTERING) {
       this._timer += dt;
       if (this._timer >= OVERLAY_FADE_DURATION) this._state = OverlayState.ACTIVE;
+    } else if (this._state === OverlayState.EXITING) {
+      this._timer += dt;
+      this._hoverAnimT = 0;
+      if (this._timer >= OVERLAY_EXIT_DURATION) {
+        // Shrink-out done → hand off to the reward overlay, then go inactive so
+        // this panel stops drawing (the backdrop stays up — see getBackdropAlpha).
+        this._state = OverlayState.INACTIVE;
+        if (typeof this.onDismiss === 'function') this.onDismiss();
+      }
+      return;
     }
     if (this._state === OverlayState.ACTIVE && !this._isResolving) {
       const target = this._hoveredIndex >= 0 ? 1 : 0;
       const speed = Math.min(1, (dt / HOVER_ANIM_DURATION) * HOVER_ANIM_SPEED);
       this._hoverAnimT += (target - this._hoverAnimT) * speed;
     }
-    if (this._state === OverlayState.EXITING || this._isResolving) this._hoverAnimT = 0;
   }
 
   // ── Input (routed by BattleScene while active) ─────────
@@ -246,23 +268,35 @@ export default class LevelUpOverlay {
     const container = this._img('ui_level_up_container_panel');
     if (!container) return;
 
-    // Entrance fade + slide.
+    // Panel fade + scale (grow in on entrance, shrink out on exit), about center.
     let alpha = 1;
-    let slideY = 0;
+    let scale = 1;
     if (this._state === OverlayState.ENTERING) {
       const rawT = Math.min(1, this._timer / OVERLAY_FADE_DURATION);
       const eased = 1 - Math.pow(1 - rawT, 3);
       alpha = eased;
-      slideY = (1 - eased) * canvasH * OVERLAY_SLIDE_FRACTION;
+      scale = ENTER_FROM_SCALE + (1 - ENTER_FROM_SCALE) * eased;
+    } else if (this._state === OverlayState.EXITING) {
+      const rawT = Math.min(1, this._timer / OVERLAY_EXIT_DURATION);
+      const eased = 1 - Math.pow(1 - rawT, 3);
+      alpha = 1 - eased;
+      scale = 1 + (EXIT_TO_SCALE - 1) * eased;
     }
 
     const cw = canvasW * CONTAINER_WIDTH_FRAC;
     const ch = cw * (container.height / container.width);
     const cx = (canvasW - cw) / 2;
-    const cy = (canvasH - ch) / 2 + GROUP_Y_OFFSET + slideY;
+    const cy = (canvasH - ch) / 2 + GROUP_Y_OFFSET;
 
     ctx.save();
     ctx.globalAlpha = alpha;
+    if (scale !== 1) {
+      const mcx = canvasW / 2;
+      const mcy = cy + ch / 2;
+      ctx.translate(mcx, mcy);
+      ctx.scale(scale, scale);
+      ctx.translate(-mcx, -mcy);
+    }
 
     // Container frame (raised "LEVEL UP" plate is baked into the art's top).
     ctx.imageSmoothingEnabled = true;
