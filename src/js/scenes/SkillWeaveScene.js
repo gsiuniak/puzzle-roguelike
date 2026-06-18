@@ -681,8 +681,10 @@ export default class SkillWeaveScene extends UIPanel {
 
     const recipe = this._recipe.slice();
     // Synthesize the bag into a concrete skill (effects + rolled values +
-    // randomized mana cost + generated name/description).
-    const synthesis = synthesize(recipe);
+    // randomized mana cost + generated name/description). Pass the character's
+    // affinity colors so the cost leans toward (and off-color costs subsidize
+    // into) the colors they already build around.
+    const synthesis = synthesize(recipe, { affinityColors: this._affinityColors });
 
     // Composite the spell's icon from authored spritesheet layers (base orb by
     // mana color + 1-2 effect sprites + border). The canvas is registered with

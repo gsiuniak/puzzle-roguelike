@@ -65,6 +65,7 @@ import {
   DAMAGE_SCALING_POWER,
   DAMAGE_COLOR_SKEW,
   GREATER_CONFIG,
+  COST_AFFINITY_SUBSIDY,
 } from './weaveConfig.js';
 import { DAMAGE_SCALING_PRESETS, DAMAGE_SCALE_PER_POINT } from './scalingConfig.js';
 import { SKILL_WEAVE_TAGS, getTag, getTagLabel, TAG_CATEGORY } from './skillWeaveTags.js';
@@ -500,7 +501,7 @@ function capitalize(s) {
  * Only used as the FALLBACK when a bag has no cost-eligible element tag (a
  * multi-element bag's cost colors are deterministic — see buildCost).
  */
-function rollCostColor(elements, primaryAction) {
+function rollCostColor(elements, primaryAction, affinityColors = []) {
   const weights = {};
   for (const c of COST_COLORS) weights[c] = COST_COLOR_WEIGHTS.anyColor;
   let first = true;
@@ -518,7 +519,36 @@ function rollCostColor(elements, primaryAction) {
     const affinity = ACTION_COST_AFFINITY[primaryAction];
     if (affinity) weights[affinity] += COST_COLOR_WEIGHTS.actionAffinity;
   }
+  // CHARACTER affinity: lean the cost toward the colors the character generates
+  // (their starting-skill colors), so woven spells feel fundable for that class.
+  for (const c of affinityColors) {
+    if (COST_COLORS.includes(c)) weights[c] += COST_COLOR_WEIGHTS.characterAffinity;
+  }
   return pickWeightedEntry(Object.entries(weights)) || pickRandom(COST_COLORS);
+}
+
+/**
+ * Build the fallback cost (no woven element dictates it): roll an affinity-
+ * weighted primary color, then — if it landed OFF the character's affinity —
+ * SUBSIDIZE it by moving a fraction of the total into their primary affinity
+ * color, yielding an easier-to-fund 2-color cost. Single-color when the primary
+ * is already an affinity color, there's no affinity, or the total is small.
+ * @param {number} total
+ * @param {string[]} elements — bag element tags (cost-roll influence)
+ * @param {string} primaryAction
+ * @param {string[]} affinityColors — character's starting-skill colors, in order
+ * @returns {Object<string,number>}
+ */
+function buildAffinityCost(total, elements, primaryAction, affinityColors) {
+  const aff = (affinityColors || []).filter((c) => COST_COLORS.includes(c));
+  const primary = rollCostColor(elements, primaryAction, aff);
+  if (aff.includes(primary) || aff.length === 0 || total < COST_AFFINITY_SUBSIDY.minTotal) {
+    return { [primary]: total };
+  }
+  // Off-color → split a subsidy portion into the primary affinity color.
+  const subsidyColor = aff[0];
+  const subsidy = Math.max(1, Math.min(total - 1, Math.round(total * COST_AFFINITY_SUBSIDY.affinityFraction)));
+  return { [primary]: total - subsidy, [subsidyColor]: subsidy };
 }
 
 /**
@@ -608,6 +638,10 @@ function generateName(tagIds, groups, primaryAction) {
  * Synthesize a woven tag bag into a concrete skill.
  *
  * @param {string[]} recipe — committed tag ids, in pick order
+ * @param {object} [options]
+ * @param {string[]} [options.affinityColors] — the character's starting-skill
+ *   colors; the FALLBACK cost-color roll leans toward them and off-color costs
+ *   are subsidized into them (see buildAffinityCost). Empty → neutral (old behavior).
  * @returns {{
  *   recipe: string[],
  *   groups: Object<string, string[]>,
@@ -621,8 +655,9 @@ function generateName(tagIds, groups, primaryAction) {
  *   summary: string,
  * }}
  */
-export function synthesize(recipe) {
+export function synthesize(recipe, options = {}) {
   const tagIds = Array.isArray(recipe) ? recipe.slice() : [];
+  const affinityColors = Array.isArray(options.affinityColors) ? options.affinityColors : [];
   const groups = groupByCategory(tagIds);
 
   // Roll every hidden value up front (also exposed for inspection/debugging).
@@ -763,18 +798,18 @@ export function synthesize(recipe) {
   };
 
   /**
-   * Emit a heal effect. Healing scales with Magic at the fixed `_50` (×1/2)
-   * preset by default; the description uses `<<amount>>` (live computed value)
-   * + the [[Heal]] keyword.
+   * Emit a heal effect. Healing scales off BOTH Attack and Magic at the fixed
+   * `_50` (×1/2 each) preset; the description uses `<<amount>>` (live computed
+   * value) + the [[Heal]] keyword.
    * @param {number} amount — base heal (already greater-multiplied if applicable)
    */
   const emitHeal = (amount) => {
-    const scaling = { magic: DAMAGE_SCALING_PRESETS._50 };
+    const scaling = { attack: DAMAGE_SCALING_PRESETS._50, magic: DAMAGE_SCALING_PRESETS._50 };
     effects.push({ effectType: 'heal', heal: { amount, scaling } });
     lines.push(`[[Heal]] <<${amount}>> HP`);
-    // base + estimated Magic-scaled contribution (deterministic preset).
+    // base + estimated scaled contribution from both stats (deterministic preset).
     power += amount * POWER.perHeal
-      + scaling.magic * DAMAGE_SCALING_POWER.estStat * DAMAGE_SCALING_POWER.perScaledPoint;
+      + (scaling.attack + scaling.magic) * DAMAGE_SCALING_POWER.estStat * DAMAGE_SCALING_POWER.perScaledPoint;
   };
 
   /**
@@ -813,7 +848,9 @@ export function synthesize(recipe) {
       lines.push('[[Destroy]] a [[tile]]');
       power += POWER.destroyTile;
     } else {
-      const radius = isExplode && shape === 'area' ? 2 : 1;
+      let radius = isExplode && shape === 'area' ? 2 : 1;
+      // `greater` widens an area destruction from 3x3 (radius 1) to 5x5 (radius 2).
+      if (radius < 2 && consumeGreater()) radius = 2;
       targeting = { targeting: 'board_tile', area: { radius } };
       effects.push({ effectType: 'destroy_tiles' });
       lines.push(`[[Destroy]] [[tiles]] in a ${radius * 2 + 1}x${radius * 2 + 1} area`);
@@ -1127,7 +1164,9 @@ export function synthesize(recipe) {
   // one job. Split in pick order (first dangling color pays most).
   const danglingColors = tileTypes.filter((t) => COST_COLORS.includes(t) && !used.has(t));
   let cost = buildCost(total, danglingColors);
-  if (!cost) cost = { [rollCostColor(elements, primaryAction)]: total };
+  // No woven element dictates the cost → fall back to an affinity-weighted roll,
+  // subsidizing an off-color result into the character's primary color.
+  if (!cost) cost = buildAffinityCost(total, elements, primaryAction, affinityColors);
   // Paying with a color COUNTS as using it (it isn't wasted).
   for (const c of Object.keys(cost)) if (tileTypes.includes(c)) used.add(c);
   // Dominant (most-paid) cost color — drives the resolve-sound color + logging.
@@ -1144,7 +1183,7 @@ export function synthesize(recipe) {
     markWasted('all', 'no Change/Destroy/Create to amplify');
   }
   if (tagIds.includes('greater') && !used.has('greater')) {
-    markWasted('greater', 'no magnitude effect (Create/damage/gain) to amplify');
+    markWasted('greater', 'no magnitude effect (Create/damage/gain) or area to amplify');
   }
   for (const t of tileTypes) {
     if (!used.has(t)) markWasted(t, 'no effect or cost used this color');

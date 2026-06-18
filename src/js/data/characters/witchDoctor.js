@@ -15,7 +15,7 @@ const witchDoctor = {
 
   /** Immutable base stats — never modified during a run */
   baseStats: {
-    maxHp: 22,
+    maxHp: 25,
     startingAttack: 1,
     startingMagic: 1,
     startingArmor: 0,

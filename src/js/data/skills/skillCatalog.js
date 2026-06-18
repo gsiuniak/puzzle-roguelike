@@ -147,8 +147,8 @@ const SKILL_CATALOG = {
     cost: { green: 6 },
     effects: [
       // Heal 5→6: sim showed Oungan was the most under-budget player skill (~0.8 HPe/mana).
-      // Healing scales with Magic at the _50 (×1/2) preset by default.
-      { effectType: 'heal', heal: { amount: 6, scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
+      // Healing scales off BOTH Attack and Magic at the _50 (×1/2 each) preset.
+      { effectType: 'heal', heal: { amount: 6, scaling: { attack: DAMAGE_SCALING_PRESETS._50, magic: DAMAGE_SCALING_PRESETS._50 } } },
       { effectType: 'gain_attack', gainAttack: { amount: 2 } },
     ],
   },

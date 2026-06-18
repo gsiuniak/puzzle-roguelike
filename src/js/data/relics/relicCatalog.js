@@ -341,9 +341,9 @@ const RELIC_CATALOG = {
     icon: 'relic_alabaster_flask',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      // Heal scales with Magic at the _50 (×1/2) preset by default. (Amount
+      // Heal scales off BOTH Attack and Magic at the _50 (×1/2 each) preset. (Amount
       // aligned to the long-standing "2 HP" description; was previously 1.)
-      { trigger: 'onTurnStart', effectType: 'heal', heal: { amount: 2, scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
+      { trigger: 'onTurnStart', effectType: 'heal', heal: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._50, magic: DAMAGE_SCALING_PRESETS._50 } } },
     ],
   },
 
@@ -443,8 +443,8 @@ const RELIC_CATALOG = {
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
       // onDealDamage fires with side = the attacker, so heal restores the owner.
-      // Heal scales with Magic at the _50 (×1/2) preset by default.
-      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 3, scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
+      // Heal scales off BOTH Attack and Magic at the _50 (×1/2 each) preset.
+      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 3, scaling: { attack: DAMAGE_SCALING_PRESETS._50, magic: DAMAGE_SCALING_PRESETS._50 } } },
     ],
   },
 

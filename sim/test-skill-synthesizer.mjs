@@ -217,6 +217,11 @@ function tableKeys(tagId) {
   const plain = synthesize(['explode']);
   eq('explode alone → radius 1', plain.skill.area.radius, 1);
 
+  // Greater widens an area destruction from 3x3 (radius 1) to 5x5 (radius 2).
+  const gwide = synthesize(['destroy', 'area', 'greater']);
+  eq('greater + destroy + area → radius 2 (5x5)', gwide.skill.area.radius, 2);
+  check('greater consumed by the area widen', gwide.usedTags.includes('greater'), JSON.stringify(gwide.unusedTags));
+
   // Only ONE action claims targeting; the second destroyer is WASTED (a
   // choice-driven downside), NOT vented into free damage.
   const both = synthesize(['destroy', 'explode', 'row']);

@@ -109,8 +109,8 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // color→board-wide color wipe, and boosts `create`'s tile count.
   all:        { id: 'all',        label: 'All',        category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
   // `greater` is a magnitude qualifier: it multiplies a magnitude verb's output
-  // (Create / Physical / Magical / Attack / Armor / Heal / Drain) AND has a
-  // chance to surge (add an extra synergistic effect).
+  // (Create / Physical / Magical / Attack / Armor / Heal / Drain) OR widens an
+  // area destruction (3x3 → 5x5), AND has a chance to surge (extra synergy effect).
   greater:    { id: 'greater',    label: 'Greater',    category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
 
   // ── Status effects (synthesized into apply_status effects — debuffs hit the

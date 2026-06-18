@@ -165,7 +165,7 @@ export const KEYWORD_DEFINITIONS = {
   magic: {
     id: 'magic',
     label: 'Magic',
-    description: 'A spellcasting stat. Some skills and relics scale their [[Damage]] with Magic (e.g. +1 per 3 Magic).',
+    description: 'A spellcasting stat. Increases [[Mana]] gained from [[matching]] (+1 per 3 Magic), and some skills and relics scale their [[Damage]] with Magic.',
   },
   // Damage TYPES — convey which stat the damage scales with (the actual rate
   // lives on the effect's `scaling`). Used as the damage word itself, e.g.

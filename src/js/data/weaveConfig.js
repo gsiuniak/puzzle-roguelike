@@ -159,6 +159,24 @@ export const COST_COLOR_WEIGHTS = Object.freeze({
   otherElement: 25,
   actionAffinity: 20,
   anyColor: 15,
+  // Added to each of the CHARACTER's affinity colors (their starting-skill
+  // colors) in the fallback cost-color roll — so a woven spell's cost leans
+  // toward the colors the character actually generates. Strong enough to usually
+  // win, but not absolute. (Only the fallback path; an explicitly woven element
+  // still dictates its own cost color.)
+  characterAffinity: 50,
+});
+
+/**
+ * Off-color cost SUBSIDY. When the fallback cost color rolls OFF the character's
+ * affinity (a color they don't generate well), split the total so part is
+ * charged in their primary affinity color instead — a 2-color cost that's easier
+ * to fund. `affinityFraction` of the total moves to the affinity color (the
+ * off-color keeps the rest); costs below `minTotal` stay single-color.
+ */
+export const COST_AFFINITY_SUBSIDY = Object.freeze({
+  affinityFraction: 0.4,
+  minTotal: 4,
 });
 
 /**
@@ -205,9 +223,10 @@ export const DAMAGE_SCALING_POWER = Object.freeze({
 
 /**
  * The "Greater" qualifier tag: a magnitude multiplier for any magnitude verb
- * (Create / Physical / Magical / Attack / Armor / Heal / Drain), which also has
- * a chance to SURGE (emit one extra synergistic effect). The boost is always at
- * least +1 so small gains (e.g. +1 Attack) still grow.
+ * (Create / Physical / Magical / Attack / Armor / Heal / Drain) — OR, if there's
+ * no such verb to amplify, it widens an AREA destruction (3x3 → 5x5). Also has a
+ * chance to SURGE (emit one extra synergistic effect). The magnitude boost is
+ * always at least +1 so small gains (e.g. +1 Attack) still grow.
  *   damageMult  — multiply a damage/attack/armor/heal/drain base amount
  *   createMult  — multiply a create tag's tile count
  *   surgeChance — probability that consuming Greater also adds a synergy effect

@@ -40,6 +40,12 @@ const CascadePhase = {
 const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
 const ENEMY_BASE_DELAY = 400;
 const SWAP_BASE_DURATION = 120;
+/**
+ * Magic → bonus mana from matching: every this-many Magic adds +1 to the mana
+ * gained from each matched color (floor(magic / N)). Stacks with mana-gain
+ * relics (Bellows, etc.). Applied per matched color in _applyMatchBonuses.
+ */
+const MAGIC_MANA_PER_POINT = 3;
 /** Turn intro animation delay in ms (NOT scaled — presentation timing) */
 const TURN_INTRO_DURATION = 600;
 /**
@@ -494,11 +500,14 @@ export default class BattleController {
     if (!analysis || !state) return;
 
     const manaBonus = state._manaGainBonus || {};
+    // Magic boosts mana gained from matches: +1 per matched color for every
+    // MAGIC_MANA_PER_POINT Magic (stacks with per-color mana-gain relics).
+    const magicMana = Math.floor((state.magic || 0) / MAGIC_MANA_PER_POINT);
     if (analysis.mana) {
       for (const color of Object.keys(analysis.mana)) {
-        const b = manaBonus[color] || 0;
-        if (b > 0 && analysis.mana[color] > 0) {
-          analysis.mana[color] += b;
+        if (analysis.mana[color] > 0) {
+          const b = (manaBonus[color] || 0) + magicMana;
+          if (b > 0) analysis.mana[color] += b;
         }
       }
     }
