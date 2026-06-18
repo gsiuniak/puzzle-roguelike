@@ -53,12 +53,28 @@ const DEBUG_ALL_NODES_SKILL_WEAVE = false; // true;
 // budgeted as playerDPT × targetTurns, so HP tracks DPT. Regenerate with
 // `node sim/run-power.mjs` if the growth/relic model changes.
 // Index = node.depth (0-indexed; depth 0 = floor 1).
-const ENEMY_HP_FLOOR_MULT = [1.0, 1.18, 1.53, 1.71, 2.18, 2.47, 3.06, 3.47, 4.18, 4.65];
+// Bumped slightly over the old curve (front-loaded — the early floors were the
+// most trivial vs the buffed player) so fights last a bit longer.
+const ENEMY_HP_FLOOR_MULT = [1.15, 1.35, 1.7, 1.9, 2.35, 2.65, 3.2, 3.55, 4.25, 4.75];
 
 /** Per-floor HP multiplier for a 0-indexed map depth (clamps past the last floor). */
 function enemyHpFloorMult(depth) {
   const d = Math.max(0, depth | 0);
   return ENEMY_HP_FLOOR_MULT[Math.min(d, ENEMY_HP_FLOOR_MULT.length - 1)];
+}
+
+// ── Per-floor enemy ATTACK scaling ───────────────────────
+// Attack is the lethality knob (it drives BOTH skill damage and skull-match
+// damage, and now also scales enemy skills via their `scaling` field). It's
+// sharp, so it ramps as a small ADDITIVE step bonus (≈ +1 every 3 floors) on
+// top of the enemy's authored base attack — preserving per-enemy identity (a
+// base-3 brute always stays +1 over a base-2 minion). Index = node.depth.
+const ENEMY_ATTACK_FLOOR_BONUS = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3];
+
+/** Per-floor additive attack bonus for a 0-indexed map depth (clamps). */
+function enemyAttackFloorBonus(depth) {
+  const d = Math.max(0, depth | 0);
+  return ENEMY_ATTACK_FLOOR_BONUS[Math.min(d, ENEMY_ATTACK_FLOOR_BONUS.length - 1)];
 }
 
 export default class MapScene extends UIPanel {
@@ -477,11 +493,18 @@ export default class MapScene extends UIPanel {
 
     // Per-floor HP scaling: enemy maxHp in data is a floor-1-equivalent baseline;
     // scale it up by depth so it tracks the player's growing power (see
-    // ENEMY_HP_FLOOR_MULT). Attack is NOT auto-scaled (lethality is sharp — it's
-    // authored per enemy + roster floor-gating provides the attack ramp).
+    // ENEMY_HP_FLOOR_MULT).
     const hpMult = enemyHpFloorMult(node.depth);
     enemyData.maxHp = Math.round((enemyData.maxHp || 1) * hpMult);
     enemyData.hp = enemyData.maxHp;
+
+    // Per-floor ATTACK scaling: additive step bonus on the authored base attack
+    // (see ENEMY_ATTACK_FLOOR_BONUS). This raises raw lethality AND — because
+    // enemy skills now carry `scaling` — the damage of their skills, so later
+    // floors burst harder. A per-enemy `attackScale` (default 1) lets a designed
+    // exception opt out (0) or amplify the floor bonus.
+    const attackScale = typeof enemyData.attackScale === 'number' ? enemyData.attackScale : 1;
+    enemyData.attack = (enemyData.attack || 0) + Math.round(enemyAttackFloorBonus(node.depth) * attackScale);
 
     // Resolve enemy skill/relic IDs into full objects via the catalogs.
     // Characters/enemies store IDs; the BattleController operates on resolved

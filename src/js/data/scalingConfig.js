@@ -114,9 +114,11 @@ export function scaledAmount(baseAmount, scaling, caster) {
  */
 export function resolveDynamicText(raw, effects, caster, cursor = { i: 0 }) {
   if (raw == null) return raw;
-  // Scalable effects carry a `<<n>>` token in their line — today damage, heal,
-  // and armor (each player/woven instance is tokened; enemy ones are flat with
-  // no token, so pairing never misfires within a single skill).
+  // Scalable effect types — today damage, heal, armor. Each `<<n>>` token pairs
+  // (in order) with the next scalable effect. Authored data never places a
+  // non-tokened scalable effect BEFORE a tokened one in the same skill (skills
+  // with no `<<n>>` at all, e.g. boom_baby, are simply left untouched), so the
+  // by-order pairing never misfires.
   const scalable = (effects || [])
     .map((e) => scalablePayload(e))
     .filter(Boolean);

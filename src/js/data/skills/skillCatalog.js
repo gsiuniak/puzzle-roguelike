@@ -38,7 +38,10 @@
  * (`{ attack, magic }`) so its amount grows with the caster's stats — see
  * data/scalingConfig.js. Use `<<n>>` in the description (sibling of `[[kw]]`)
  * to show the LIVE computed amount; pair it with `[[phys]]`/`[[mag]]` to convey
- * the damage type. Character skills scale; enemy skills stay flat (no `scaling`).
+ * the damage type. BOTH character AND enemy skills scale (the bonus uses the
+ * effect OWNER's stats); enemy damage/armor skills carry `scaling` too so they
+ * ramp with the per-floor enemy-attack bonus (see MapScene). `boom_baby` stays
+ * flat (one-shot nuke).
  */
 
 import { DAMAGE_SCALE_PER_POINT, DAMAGE_SCALING_PRESETS } from '../scalingConfig.js';
@@ -155,15 +158,21 @@ const SKILL_CATALOG = {
   // extra_turn effect AFTER create_tiles — create_tiles' _beginResolving resets
   // the extra-turn flag, so it has to be (re)set afterward to survive the
   // cascade. Icons/sounds reuse existing keys until dedicated art exists.
+  // ── ENEMY SKILLS ──
+  // Enemy damage/armor skills SCALE the same way player skills do — via a
+  // `scaling` object on the effect (here Attack, which ramps per floor at spawn,
+  // see MapScene ENEMY_ATTACK_FLOOR_BONUS). `<<n>>` shows the live scaled value
+  // on the enemy Skills pane. Default damage scaling is _50 (×1/2), armor _33
+  // (×1/3) — bump per skill for harder bursts. `boom_baby` stays flat (one-shot).
   slash: {
     id: 'slash',
     name: 'Slash',
-    description: 'Deal 5 [[damage]].',
+    description: 'Deal <<5>> [[damage]].',
     icon: 'skill_slash',
     sound: 'skill_slash',
     cost: { red: 5 },
     effects: [
-      { effectType: 'damage', damage: { amount: 5 } },
+      { effectType: 'damage', damage: { amount: 5, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
     ],
   },
 
@@ -195,24 +204,24 @@ const SKILL_CATALOG = {
   boulder_throw: {
     id: 'boulder_throw',
     name: 'Boulder Throw',
-    description: 'Deal 10 [[damage]].\n[[Create]] 6 Green [[tiles]].',
+    description: 'Deal <<10>> [[damage]].\n[[Create]] 6 Green [[tiles]].',
     icon: 'skill_boulder_throw',
     sound: 'skill_boulder_throw',
     cost: { green: 6 },
     effects: [
-      { effectType: 'damage', damage: { amount: 10 } },
+      { effectType: 'damage', damage: { amount: 10, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
       { effectType: 'create_tiles', createTiles: { amount: 6, type: 'green' } },
     ],
   },
   smash: {
     id: 'smash',
     name: 'Smash',
-    description: 'Deal 10 [[damage]].\nGain an [[extra turn]]',
+    description: 'Deal <<10>> [[damage]].\nGain an [[extra turn]]',
     icon: 'skill_smash',
     sound: 'skill_smash',
     cost: { red: 6 },
     effects: [
-      { effectType: 'damage', damage: { amount: 10 } },
+      { effectType: 'damage', damage: { amount: 10, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
       { effectType: 'extra_turn' },
     ],
   },
@@ -234,12 +243,12 @@ const SKILL_CATALOG = {
   charge: {
     id: 'charge',
     name: 'Charge!',
-    description: 'Deal 10 [[damage]].\n[[Create]] 5 Red [[tiles]].\nGain an [[extra turn]]',
+    description: 'Deal <<10>> [[damage]].\n[[Create]] 5 Red [[tiles]].\nGain an [[extra turn]]',
     icon: 'skill_charge',
     sound: 'skill_charge',
     cost: { red: 8 },
     effects: [
-      { effectType: 'damage', damage: { amount: 10 } },
+      { effectType: 'damage', damage: { amount: 10, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
       { effectType: 'create_tiles', createTiles: { amount: 5, type: 'red' } },
       { effectType: 'extra_turn' },
     ],
@@ -247,12 +256,12 @@ const SKILL_CATALOG = {
   frenzy: {
     id: 'frenzy',
     name: 'Frenzy',
-    description: 'Gain 10 [[armor]].\nCreate 5 Blue [[tiles]].',
+    description: 'Gain <<10>> [[armor]].\nCreate 5 Blue [[tiles]].',
     icon: 'skill_frenzy',
     sound: 'skill_frenzy',
     cost: { blue: 8 },
     effects: [
-      { effectType: 'armor', armor: { amount: 10 } },
+      { effectType: 'armor', armor: { amount: 10, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
       { effectType: 'create_tiles', createTiles: { amount: 5, type: 'blue' } },
       // { effectType: 'extra_turn' },
     ],
@@ -342,12 +351,12 @@ const SKILL_CATALOG = {
   infected_bite: {
     id: 'infected_bite',
     name: 'Infected Bite',
-    description: 'Deal 3 [[damage]].\nGain an [[extra turn]].',
+    description: 'Deal <<3>> [[damage]].\nGain an [[extra turn]].',
     icon: 'skill_infected_bite',
     sound: 'skill_infected_bite',
     cost: { red: 1 },
     effects: [
-      { effectType: 'damage', damage: { amount: 3 } },
+      { effectType: 'damage', damage: { amount: 3, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
       { effectType: 'extra_turn' },
     ],
   },
@@ -368,13 +377,13 @@ const SKILL_CATALOG = {
   hound: {
     id: 'hound',
     name: 'Hound',
-    description: 'Gain +1 [[Attack]].\nDeal 2 [[damage]].',
+    description: 'Gain +1 [[Attack]].\nDeal <<2>> [[damage]].',
     icon: 'skill_hound',
     sound: 'skill_hound',
     cost: { red: 3 },
     effects: [
       { effectType: 'gain_attack', gainAttack: { amount: 1 } },
-      { effectType: 'damage', damage: { amount: 2 } },
+      { effectType: 'damage', damage: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
     ],
   },
 };

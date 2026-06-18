@@ -2080,8 +2080,8 @@ export default class BattleController {
           ? effect.damage.perSkull : 0;
         const skullCount = perSkull > 0 ? this.board.getTilesOfType('skull').length : 0;
         // Opt-in stat scaling (effect.damage.scaling): + floored Attack/Magic
-        // bonus from the caster. No `scaling` field → flat (unchanged). Today
-        // only character skills carry it; enemy skills stay flat.
+        // bonus from the caster. No `scaling` field → flat (unchanged). Both
+        // character AND enemy skills carry it (bonus uses the caster's stats).
         const scaleBonus = scaledBonus(effect.damage && effect.damage.scaling, src);
         const amount = base + perSkull * skullCount + scaleBonus;
         const r = this._applyDamage(tgt, amount);
