@@ -1,0 +1,55 @@
+{
+  "meta": {
+    "sheet_w": 885,
+    "sheet_h": 1183,
+    "sprite_count": 4,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "ui_level_up_container_panel": {
+      "x": 4,
+      "y": 4,
+      "w": 877,
+      "h": 494,
+      "index": 0,
+      "source_w": 877,
+      "source_h": 677,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_level_up_attribute_panel": {
+      "x": 4,
+      "y": 502,
+      "w": 515,
+      "h": 677,
+      "index": 1,
+      "source_w": 877,
+      "source_h": 677,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_level_up_flair_left": {
+      "x": 523,
+      "y": 502,
+      "w": 358,
+      "h": 22,
+      "index": 2,
+      "source_w": 877,
+      "source_h": 677,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "ui_level_up_flair_right": {
+      "x": 523,
+      "y": 528,
+      "w": 358,
+      "h": 22,
+      "index": 3,
+      "source_w": 877,
+      "source_h": 677,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}
