@@ -155,7 +155,7 @@ export const TAG_VALUE_TABLES = Object.freeze({
  * when they land on the same color).
  */
 export const COST_COLOR_WEIGHTS = Object.freeze({
-  firstElement: 60,
+  firstElement: 100,
   otherElement: 25,
   actionAffinity: 20,
   anyColor: 15,
@@ -164,7 +164,7 @@ export const COST_COLOR_WEIGHTS = Object.freeze({
   // toward the colors the character actually generates. Strong enough to usually
   // win, but not absolute. (Only the fallback path; an explicitly woven element
   // still dictates its own cost color.)
-  characterAffinity: 50,
+  characterAffinity: 70,
 });
 
 /**

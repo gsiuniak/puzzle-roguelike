@@ -300,6 +300,7 @@ export default class LevelUpOverlay {
 
     // Container frame (raised "LEVEL UP" plate is baked into the art's top).
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(container, Math.floor(cx), Math.floor(cy), Math.ceil(cw), Math.ceil(ch));
 
     // Title over the plate.
@@ -333,6 +334,8 @@ export default class LevelUpOverlay {
     });
 
     // Divider flairs immediately flanking the subtitle text.
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     const flL = this._img('ui_level_up_flair_left');
     const flR = this._img('ui_level_up_flair_right');
     const fw = containerW * FLAIR_WIDTH_FRAC;
@@ -399,22 +402,31 @@ export default class LevelUpOverlay {
     if (!attr) return;
     if (cardArt) {
       ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(cardArt, Math.floor(r.x), Math.floor(r.y), Math.ceil(r.w), Math.ceil(r.h));
     }
 
     // Glowing stat icon (reused character-panel / character-select icons).
     const icon = this._img(attr.iconKey);
     if (icon) {
-      const size = r.w * CARD_ICON_SIZE_FRAC;
-      const ix = r.x + r.w / 2 - size / 2;
-      const iy = r.y + r.h * CARD_ICON_CENTER_FRAC - size / 2;
+      // CONTAIN-fit inside a square box (preserve the icon's native aspect — the
+      // sprites aren't square; forcing them to a square squashed/softened them).
+      const box = r.w * CARD_ICON_SIZE_FRAC;
+      const aspect = (icon.width || 1) / (icon.height || 1);
+      let dw = box;
+      let dh = box / aspect;
+      if (dh > box) { dh = box; dw = box * aspect; }
+      const ix = r.x + r.w / 2 - dw / 2;
+      const iy = r.y + r.h * CARD_ICON_CENTER_FRAC - dh / 2;
       ctx.save();
+      // 'high' smoothing — the default 'low' produces a blurry up/down-scale.
       ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       if (attr.glowColor) {
         ctx.shadowColor = attr.glowColor;
         ctx.shadowBlur = CARD_ICON_GLOW_BLUR;
       }
-      ctx.drawImage(icon, ix, iy, size, size);
+      ctx.drawImage(icon, ix, iy, dw, dh);
       ctx.restore();
     }
 

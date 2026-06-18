@@ -88,32 +88,47 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html}'],
         navigateFallback: 'index.html',
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        // Take control + drop the old precache as soon as a new deploy's SW
+        // installs, so a returning device isn't stuck on an old app shell.
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         runtimeCaching: [
+          // Game media uses StaleWhileRevalidate (NOT CacheFirst): the cached copy
+          // is served instantly, but the SW ALSO re-fetches in the background so a
+          // CHANGED or previously-BROKEN asset self-heals on the next visit. Game
+          // assets live at STABLE URLs (assets/…/foo.png — no content hash), so
+          // CacheFirst would otherwise pin a stale/broken copy for up to 30 days.
+          // Only real 200s are cached (dropping status 0 avoids persisting a
+          // partial/opaque/broken response and then serving it forever).
+          //
+          // The SFX audio sprite (.ogg) + its offset map (.json) MUST share a
+          // strategy or they desync after a repack — both are SWR now.
           {
             urlPattern: ({ request }) => request.destination === 'image',
-            handler: 'CacheFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'game-images',
               expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
             urlPattern: ({ request }) => request.destination === 'audio',
-            handler: 'CacheFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'game-audio',
               expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
             urlPattern: ({ request }) => request.destination === 'font',
-            handler: 'CacheFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'game-fonts',
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
@@ -122,7 +137,7 @@ export default defineConfig({
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'game-data',
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           // NOTE: cutscene videos (.mp4) are intentionally NOT cached — they're
