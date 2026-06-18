@@ -263,7 +263,8 @@ export default class CharacterInfoPane extends UIPanel {
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
     statsRow.alignItems = 'center';
-    statsRow.gap = 14;
+    statsRow.gap = 10;
+    statsRow.padding = { right: 10 };
     statsRow.height = STATS_HEIGHT;
 
     statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
