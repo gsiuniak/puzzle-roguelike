@@ -17,7 +17,7 @@ const mage = {
   baseStats: {
     maxHp: 25,
     startingAttack: 1,
-    startingMagic: 1,
+    startingMagic: 3,
     startingArmor: 0,
     startingMana: {
       red: 0,
