@@ -17,6 +17,7 @@ const witchDoctor = {
   baseStats: {
     maxHp: 25,
     startingAttack: 1,
+    startingMagic: 1,
     startingArmor: 0,
     startingMana: {
       red: 0,

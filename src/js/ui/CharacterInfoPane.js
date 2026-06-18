@@ -105,7 +105,7 @@ const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
  *
  * Structure:
  *   Row 1:
- *     [portrait] [name / class / hp bar / attack-armor stats]
+ *     [portrait] [name / class / hp bar / attack-magic-armor stats]
  *   Row 2:
  *     [mana orb x5]
  *
@@ -147,6 +147,7 @@ export default class CharacterInfoPane extends UIPanel {
     this._nameText = null;
     this._healthBar = null;
     this._attackValue = null;
+    this._magicValue = null;
     this._armorValue = null;
     this._manaOrbs = { red: null, blue: null, green: null, yellow: null, purple: null };
     // Active status effects (buffs/debuffs), refreshed from updateFromState().
@@ -258,7 +259,7 @@ export default class CharacterInfoPane extends UIPanel {
     });
     info.addChild(this._healthBar);
 
-    // Stats row (attack | armor)
+    // Stats row (attack | magic | armor)
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
     statsRow.alignItems = 'center';
@@ -266,6 +267,7 @@ export default class CharacterInfoPane extends UIPanel {
     statsRow.height = STATS_HEIGHT;
 
     statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
+    statsRow.addChild(this._buildStatGroup('icon_magic',  () => this._magicValue,  (el) => { this._magicValue = el;  }, cd.magic  ?? 0));
     statsRow.addChild(this._buildStatGroup('icon_block',  () => this._armorValue,  (el) => { this._armorValue = el;  }, cd.armor  ?? 0));
 
     info.addChild(statsRow);
@@ -384,6 +386,7 @@ export default class CharacterInfoPane extends UIPanel {
     }
 
     if (this._attackValue) this._attackValue.text = String(state.attack ?? 0);
+    if (this._magicValue)  this._magicValue.text  = String(state.magic ?? 0);
     if (this._armorValue)  this._armorValue.text  = String(state.armor ?? 0);
 
     const manaData = state.mana || {};

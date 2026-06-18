@@ -1,4 +1,5 @@
 import KeywordText from './KeywordText.js';
+import { resolveDynamicText } from '../data/scalingConfig.js';
 
 /**
  * skillCard.js — SHARED legacy-style skill card renderer.
@@ -105,9 +106,14 @@ export function createCardModel(skill) {
     ? skill.descriptionLines
     : String(skill.description || '').split('\n');
   const effectKTs = [];
+  // The authored template per effect line (with `<<n>>` / `[[kw]]` markup intact)
+  // — parallel to effectKTs. measureCardModel re-resolves `<<n>>` from these each
+  // frame using the live caster, so the displayed damage stays current.
+  const lineTemplates = [];
   for (const raw of lines) {
     const line = ensureSentence(raw);
     if (!line) continue;
+    lineTemplates.push(line);
     const kt = new KeywordText(line);
     kt.setStyle({
       fontSize: DESC_FONT_SIZE,
@@ -119,7 +125,12 @@ export function createCardModel(skill) {
     kt.visible = true;
     effectKTs.push(kt);
   }
-  return { skill, effectKTs };
+
+  // Scalable damage effects, in order — paired with `<<n>>` tokens across the
+  // lines so each token shows its effect's live computed amount.
+  const dmgEffects = (skill.effects || []).filter(e => e && e.effectType === 'damage' && e.damage);
+
+  return { skill, effectKTs, lineTemplates, dmgEffects };
 }
 
 /**
@@ -156,7 +167,23 @@ function wrapWords(ctx, text, maxW) {
  * @returns {{ h:number, textX:number, textW:number, nameLines:string[],
  *             effectHeights:number[], effectsH:number }}
  */
-export function measureCardModel(ctx, model, cardW) {
+export function measureCardModel(ctx, model, cardW, opts = {}) {
+  // Live-resolve `<<n>>` dynamic damage values from the caster's current stats
+  // (run every frame so the shown amount tracks Attack/Magic). With no caster
+  // the base amount is shown. A shared cursor pairs tokens → damage effects in
+  // order across all lines.
+  if (model.lineTemplates) {
+    const caster = opts.caster || null;
+    const cursor = { i: 0 };
+    for (let k = 0; k < model.effectKTs.length; k++) {
+      const tmpl = model.lineTemplates[k];
+      if (tmpl == null) continue;
+      const resolved = resolveDynamicText(tmpl, model.dmgEffects, caster, cursor);
+      const kt = model.effectKTs[k];
+      if (kt.text !== resolved) kt.setStyle({ text: resolved });
+    }
+  }
+
   const textX = CARD_PAD.left + ICON_SIZE + ICON_GAP; // relative to card x
   // The cost lives on the icon badge — text gets the whole right side.
   const textW = Math.max(20, cardW - CARD_PAD.right - textX);

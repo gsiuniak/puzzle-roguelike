@@ -1,5 +1,6 @@
 import UIContainer from './UIContainer.js';
 import UIImage from './UIImage.js';
+import { resolveDynamicText } from '../data/scalingConfig.js';
 
 // ── Tunable layout constants ─────────────────────────────
 // These are the per-bar internals; the BattleScene owns the bar's
@@ -74,6 +75,10 @@ export default class RelicBar extends UIContainer {
     this.gap = ICON_GAP;
     this.padding = BAR_PADDING;
 
+    /** Owner stats ({ attack, magic }) for live `<<n>>` tooltip damage values. */
+    this._ownerStats = null;
+    /** Signature of the owner stats last baked into tooltips (re-attach gate). */
+    this._ownerStatsSig = '';
     /** Last set of relic ids — used to skip rebuilds when unchanged. */
     this._lastRelicSignature = '';
     /** Cached last relic list. */
@@ -139,6 +144,24 @@ export default class RelicBar extends UIContainer {
     if (signature === this._lastRelicSignature) return;
     this._lastRelicSignature = signature;
     this._lastRelics = list;
+    this._relayoutPage();
+  }
+
+  /**
+   * Owner stats ({ attack, magic }) used to live-resolve `<<n>>` dynamic damage
+   * values inside relic tooltips (e.g. a "Deal <<1>> [[mag]]" relic shows its
+   * real Magic-scaled amount). Idempotent — called every frame; only forces a
+   * tooltip re-attach when the stats actually change. Safe to omit (tooltips
+   * then show the base amount).
+   * @param {{attack?:number, magic?:number}|null} stats
+   */
+  setOwnerStats(stats) {
+    this._ownerStats = stats || null;
+    const sig = stats ? `${stats.attack || 0}|${stats.magic || 0}` : '';
+    if (sig === this._ownerStatsSig) return;
+    this._ownerStatsSig = sig;
+    // Re-bake the current page's tooltip text with the new stats.
+    this._builtSliceSig = null;
     this._relayoutPage();
   }
 
@@ -224,9 +247,12 @@ export default class RelicBar extends UIContainer {
       this.addChild(img);
 
       if (this._tooltipManager && (relic.description || relic.name)) {
+        // Resolve `<<n>>` dynamic damage values from the owner's current stats
+        // so a scaling relic's tooltip shows its real, stat-scaled amount.
+        const text = resolveDynamicText(relic.description || '', relic.effects, this._ownerStats);
         this._tooltipManager.attach(img, {
           title: relic.name || '',
-          text: relic.description || '',
+          text,
           scale: TOOLTIP_SCALE,
           offset: TOOLTIP_OFFSET,
           padding: TOOLTIP_PADDING,

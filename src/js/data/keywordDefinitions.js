@@ -34,6 +34,14 @@ export const KEYWORD_COLOR = '#ead431';
 /** Fallback color for keyword spans whose definition is missing. */
 export const KEYWORD_MISSING_COLOR = '#ff6b6b';
 
+/**
+ * Color for DYNAMIC VALUE spans — the `<<n>>` markup (sibling of `[[keyword]]`)
+ * that renders a skill/relic's actual computed damage instead of a static
+ * number. Distinct from the gold keyword color so the live value reads as "this
+ * is the real, stat-scaled amount". Change here to retint every dynamic value.
+ */
+export const KEYWORD_DYNAMIC_COLOR = '#8fe39b';
+
 /** @deprecated alias kept for back-compat; keywords use KEYWORD_COLOR now. */
 export const KEYWORD_DEFAULT_COLOR = KEYWORD_COLOR;
 
@@ -152,7 +160,25 @@ export const KEYWORD_DEFINITIONS = {
   attack: {
     id: 'attack',
     label: 'Attack',
-    description: 'Added to the [[Damage]] dealt by [[matching]] or [[destroying]] [[Skulls]] and by some skills.',
+    description: 'Added to the [[Damage]] dealt by [[matching]] or [[destroying]] [[Skulls]] and by some skills. Some skills and relics scale their damage with Attack.',
+  },
+  magic: {
+    id: 'magic',
+    label: 'Magic',
+    description: 'A spellcasting stat. Some skills and relics scale their [[Damage]] with Magic (e.g. +1 per 3 Magic).',
+  },
+  // Damage TYPES — convey which stat the damage scales with (the actual rate
+  // lives on the effect's `scaling`). Used as the damage word itself, e.g.
+  // "Deal <<5>> [[mag]]".
+  phys: {
+    id: 'phys',
+    label: 'Dmg',
+    description: 'Physical [[Damage]] — scales with the dealer\'s [[Attack]].',
+  },
+  mag: {
+    id: 'mag',
+    label: 'MDmg',
+    description: 'Magical [[Damage]] — scales with the dealer\'s [[Magic]].',
   },
   'extra turn': {
     id: 'extra turn',
@@ -226,6 +252,11 @@ export const KEYWORD_ALIASES = {
   healing: 'heal',
   'extra-turn': 'extra turn',
   'extra turns': 'extra turn',
+  // Damage-type alternate spellings.
+  physical: 'phys',
+  'physical damage': 'phys',
+  magical: 'mag',
+  'magic damage': 'mag',
   // Status effect alternate spellings (adjective / verb forms).
   silenced: 'silence',
   crippled: 'cripple',

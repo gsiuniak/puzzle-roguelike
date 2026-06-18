@@ -15,6 +15,7 @@ import EnemyAI from './EnemyAI.js';
 import { chooseEnemyAction } from './customEnemyAi.js';
 import { TILE_TYPES, isSkull, MANA_COLORS } from './TileTypes.js';
 import { getStatusDef } from '../data/statusEffects.js';
+import { scaledBonus } from '../data/scalingConfig.js';
 import PassiveSystem from '../systems/PassiveSystem.js';
 import TRIGGER_TYPES from '../systems/TriggerTypes.js';
 
@@ -515,7 +516,7 @@ export default class BattleController {
   _cloneState(d) {
     return {
       name: d.name, className: d.className, level: d.level,
-      hp: d.hp, maxHp: d.maxHp, attack: d.attack, armor: d.armor, block: 0,
+      hp: d.hp, maxHp: d.maxHp, attack: d.attack, magic: d.magic || 0, armor: d.armor, block: 0,
       mana: d.mana ? { ...d.mana } : {},
       portrait: d.portrait || '',
       skills: (d.skills || []).map(s => ({ ...s })),
@@ -2078,7 +2079,11 @@ export default class BattleController {
         const perSkull = (effect.damage && typeof effect.damage.perSkull === 'number')
           ? effect.damage.perSkull : 0;
         const skullCount = perSkull > 0 ? this.board.getTilesOfType('skull').length : 0;
-        const amount = base + perSkull * skullCount;
+        // Opt-in stat scaling (effect.damage.scaling): + floored Attack/Magic
+        // bonus from the caster. No `scaling` field → flat (unchanged). Today
+        // only character skills carry it; enemy skills stay flat.
+        const scaleBonus = scaledBonus(effect.damage && effect.damage.scaling, src);
+        const amount = base + perSkull * skullCount + scaleBonus;
         const r = this._applyDamage(tgt, amount);
         this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
         this._setShakeFromDamage(r.actualDamage, tgt.maxHp);

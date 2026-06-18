@@ -19,6 +19,7 @@ const warrior = {
   baseStats: {
     maxHp: 30,
     startingAttack: 1,
+    startingMagic: 1,
     startingArmor: 0,
     startingMana: {
       red: 0,

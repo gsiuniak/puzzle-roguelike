@@ -20,10 +20,12 @@ import {
   normalizeKeywordKey,
   KEYWORD_COLOR,
   KEYWORD_MISSING_COLOR,
+  KEYWORD_DYNAMIC_COLOR,
 } from '../data/keywordDefinitions.js';
 
-// Match [[ ... ]] where the inner text contains no brackets.
-const KEYWORD_TAG_RE = /\[\[([^\[\]]+)\]\]/g;
+// Match EITHER a [[keyword]] (group 1) OR a <<dynamic value>> token (group 2).
+// Both inner texts forbid their own bracket chars so the match is unambiguous.
+const TOKEN_RE = /\[\[([^\[\]]+)\]\]|<<([^<>]*)>>/g;
 
 /** Tokens already warned about, so the console isn't spammed each frame. */
 const _warned = new Set();
@@ -51,14 +53,20 @@ function warnMissingKeyword(rawToken) {
  * @property {string} label       — visible text (definition label, or raw token)
  * @property {string} color       — render color (keyword color or fallback)
  * @property {boolean} missing     — true when no definition was found
+ *
+ * @typedef {object} DynamicSegment
+ * @property {'dynamic'} type
+ * @property {string} text        — the value to display (the token's inner text)
+ * @property {string} color       — the dynamic-value color
  */
 
 /**
- * Parse text with [[Keyword]] markup into an ordered list of segments.
- * Text outside brackets becomes 'text' segments; bracket tokens become
- * 'keyword' segments. Returns a single empty array for empty input.
+ * Parse text with [[Keyword]] and <<value>> markup into an ordered list of
+ * segments. Text outside markup → 'text'; `[[...]]` → 'keyword'; `<<...>>` →
+ * 'dynamic' (a computed/scaled value, rendered in a distinct color and never a
+ * tooltip span). Returns a single empty array for empty input.
  * @param {string} raw
- * @returns {Array<TextSegment|KeywordSegment>}
+ * @returns {Array<TextSegment|KeywordSegment|DynamicSegment>}
  */
 export function parseKeywordText(raw) {
   const text = raw == null ? '' : String(raw);
@@ -67,10 +75,17 @@ export function parseKeywordText(raw) {
 
   let lastIndex = 0;
   let m;
-  KEYWORD_TAG_RE.lastIndex = 0;
-  while ((m = KEYWORD_TAG_RE.exec(text)) !== null) {
+  TOKEN_RE.lastIndex = 0;
+  while ((m = TOKEN_RE.exec(text)) !== null) {
     if (m.index > lastIndex) {
       segments.push({ type: 'text', text: text.slice(lastIndex, m.index) });
+    }
+
+    if (m[2] !== undefined) {
+      // <<value>> dynamic token — show its inner text in the dynamic color.
+      segments.push({ type: 'dynamic', text: m[2], color: KEYWORD_DYNAMIC_COLOR });
+      lastIndex = m.index + m[0].length;
+      continue;
     }
 
     const rawToken = m[1];

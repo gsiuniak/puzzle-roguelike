@@ -146,11 +146,13 @@ export default class SkillLoadoutOverlay {
    * @param {Function} opts.onChange — (equippedIds) => void, fired per mutation
    * @param {Function} [opts.onClose]
    */
-  show({ allSkills, equippedIds, maxEquipped, onChange, onClose = null }) {
+  show({ allSkills, equippedIds, maxEquipped, onChange, onClose = null, caster = null }) {
     this._all = allSkills || [];
     this._maxEquipped = maxEquipped || 6;
     this._onChange = onChange || null;
     this._onClose = onClose;
+    // Owner stats ({ attack, magic }) for live `<<n>>` dynamic damage values.
+    this._caster = caster || null;
 
     const byId = new Map(this._all.map((s) => [s.id, s]));
     this._equipped = [];
@@ -510,7 +512,7 @@ export default class SkillLoadoutOverlay {
       const model = this._models.get(this._drag.skill.id);
       if (model) {
         const ghostW = colW - COL_PAD * 2 - SCROLLBAR_GUTTER;
-        const m = measureCardModel(ctx, model, ghostW);
+        const m = measureCardModel(ctx, model, ghostW, { caster: this._caster });
         drawCardModel(ctx, model,
           { x: this._drag.x - ghostW / 2, y: this._drag.y - this._drag.offsetY, w: ghostW, h: m.h },
           m, { assetManager: this._assetManager, alpha: DRAG_GHOST_ALPHA });
@@ -554,7 +556,7 @@ export default class SkillLoadoutOverlay {
     let contentH = 0;
     for (const skill of skills) {
       const model = this._models.get(skill.id);
-      const m = measureCardModel(ctx, model, cardW);
+      const m = measureCardModel(ctx, model, cardW, { caster: this._caster });
       measures.push(m);
       contentH += m.h + CARD_GAP;
     }

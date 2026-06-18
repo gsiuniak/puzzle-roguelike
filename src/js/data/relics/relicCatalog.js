@@ -48,7 +48,16 @@
  *   modify_skull_damage — { skullDamage: { amount } }        (bonus matched-skull dmg)
  *   grant_starting_mana — { startingMana: { color, amount } }(one-time mana at setup)
  * These do NOT flow through EffectResolver (they need board / reward access).
+ *
+ * ── Damage scaling ──────────────────────────────────────────────────────────
+ * A `damage` effect may carry an individual `scaling` object (`{ attack, magic }`)
+ * so its amount grows with the OWNER's stats (see data/scalingConfig.js;
+ * `DAMAGE_SCALE_PER_POINT` = "+1 per 3 stat"). Descriptions use `<<n>>` to show
+ * the LIVE computed amount and `[[phys]]`/`[[mag]]` to convey the damage type
+ * (Physical scales with Attack, Magic with Magic).
  */
+
+import { DAMAGE_SCALE_PER_POINT } from '../scalingConfig.js';
 
 /**
  * Relic rarity tiers. Used for reward pools / drop weighting and UI framing.
@@ -283,11 +292,11 @@ const RELIC_CATALOG = {
   trebuchet: {
     id: 'trebuchet',
     name: 'Trebuchet',
-    description: 'Deal 1 [[damage]] to the opponent when [[matching]] 4+ [[tiles]].',
+    description: 'Deal <<1>> [[mag]] to the opponent when [[matching]] 4+ [[tiles]].',
     icon: 'relic_trebuchet',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onMatch4Plus', effectType: 'damage', damage: { amount: 1 } },
+      { trigger: 'onMatch4Plus', effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
@@ -316,11 +325,11 @@ const RELIC_CATALOG = {
   thorned_rose: {
     id: 'thorned_rose',
     name: 'Thorned Rose',
-    description: 'Deal 1 [[damage]] to the enemy whenever you take damage.',
+    description: 'Deal <<1>> [[phys]] to the enemy whenever you take damage.',
     icon: 'relic_thorned_rose',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1 } },
+      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
@@ -538,55 +547,55 @@ const RELIC_CATALOG = {
   flaming_arrow: {
     id: 'flaming_arrow',
     name: 'Flaming Arrow',
-    description: 'Deal 1 [[damage]] whenever you gain red [[mana]].',
+    description: 'Deal <<1>> [[mag]] whenever you gain red [[mana]].',
     icon: 'relic_flaming_arrow',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1 } },
+      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
   water_balloon: {
     id: 'water_balloon',
     name: 'Water Balloon',
-    description: 'Deal 1 [[damage]] whenever you gain blue [[mana]].',
+    description: 'Deal <<1>> [[mag]] whenever you gain blue [[mana]].',
     icon: 'relic_water_balloon',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1 } },
+      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
   thorned_branch: {
     id: 'thorned_branch',
     name: 'Thorned Branch',
-    description: 'Deal 1 [[damage]] whenever you gain green [[mana]].',
+    description: 'Deal <<1>> [[mag]] whenever you gain green [[mana]].',
     icon: 'relic_thorned_branch',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1 } },
+      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
   static_comb: {
     id: 'static_comb',
     name: 'Static Comb',
-    description: 'Deal 1 [[damage]] whenever you gain yellow [[mana]].',
+    description: 'Deal <<1>> [[mag]] whenever you gain yellow [[mana]].',
     icon: 'relic_static_comb',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1 } },
+      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
   tuning_rod: {
     id: 'tuning_rod',
     name: 'Tuning Rod',
-    description: 'Deal 1 [[damage]] whenever you gain purple [[mana]].',
+    description: 'Deal <<1>> [[mag]] whenever you gain purple [[mana]].',
     icon: 'relic_tuning_fork',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1 } },
+      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
@@ -653,11 +662,11 @@ const RELIC_CATALOG = {
   slingshot: {
     id: 'slingshot',
     name: 'Slingshot',
-    description: 'Deal 1 [[damage]] at the start of your turn.',
+    description: 'Deal <<1>> [[phys]] at the start of your turn.',
     icon: 'relic_slingshot',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 1 } },
+      { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 

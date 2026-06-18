@@ -105,6 +105,10 @@ export default class KeywordText extends UIElement {
     for (const seg of segs) {
       if (seg.type === 'text') {
         for (const ch of seg.text) chars.push({ ch, color: this.color, keywordId: null, label: '' });
+      } else if (seg.type === 'dynamic') {
+        // A computed/scaled value (`<<n>>`) — colored, but not a hoverable span.
+        const color = seg.color || this.color;
+        for (const ch of seg.text) chars.push({ ch, color, keywordId: null, label: '' });
       } else {
         const color = seg.missing ? this._missingColor : (seg.color || this.color);
         // Missing keywords aren't hoverable spans — render as fallback text only.

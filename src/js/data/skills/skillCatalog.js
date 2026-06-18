@@ -33,19 +33,31 @@
  *   area?:       number|{radius}   — optional, targeting area shape
  *   effects:     EffectDef[]       — list of effects (see MatchResolver.SKILL_EFFECT_TYPES)
  * }
+ *
+ * Damage scaling: a `damage` effect may carry an individual `scaling` object
+ * (`{ attack, magic }`) so its amount grows with the caster's stats — see
+ * data/scalingConfig.js. Use `<<n>>` in the description (sibling of `[[kw]]`)
+ * to show the LIVE computed amount; pair it with `[[phys]]`/`[[mag]]` to convey
+ * the damage type. Character skills scale; enemy skills stay flat (no `scaling`).
  */
+
+import { DAMAGE_SCALE_PER_POINT, DAMAGE_SCALING_PRESETS } from '../scalingConfig.js';
 
 const SKILL_CATALOG = {
   // ── Warrior ──────────────────────────────────────────
   bash: {
     id: 'bash',
     name: 'Bash',
-    description: 'Deal 5 [[damage]]\nGain an [[extra turn]]',
+    description: 'Deal <<5>> [[phys]]\nGain an [[extra turn]]',
     icon: 'skill_bash',
     sound: 'skill_bash',
     cost: { red: 5 },
     effects: [
-      { effectType: 'damage', damage: { amount: 5 } },
+      // `scaling` is an individual per-effect object (see data/scalingConfig.js):
+      // here +1 damage per 3 Magic. The `<<5>>` in the description shows the LIVE
+      // computed amount; `[[mag]]` tags it as Magic damage. Use `{ attack: ... }`
+      // for a physical (Attack-scaling) skill instead.
+      { effectType: 'damage', damage: { amount: 5, scaling: { attack: DAMAGE_SCALING_PRESETS._100 } } },
       { effectType: 'extra_turn' }
     ],
   },

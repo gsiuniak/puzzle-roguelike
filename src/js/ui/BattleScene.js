@@ -530,6 +530,8 @@ export default class BattleScene extends UIPanel {
       equippedIds: (ps.skills || []).map((s) => s.id),
       maxEquipped: MAX_EQUIPPED_SKILLS,
       onChange: (ids) => this._applyLoadout(ids),
+      // Live `<<n>>` dynamic damage values in the modal's cards.
+      caster: { attack: ps.attack, magic: ps.magic },
     });
   }
 
@@ -1035,13 +1037,20 @@ export default class BattleScene extends UIPanel {
     if (this._playerSkillsPane && state.playerState && state.playerState.mana) {
       this._playerSkillsPane.setManaState(state.playerState.mana);
     }
+    // Owner stats drive the live `<<n>>` dynamic damage values on skill cards
+    // and relic tooltips (Attack/Magic scaling).
+    if (this._playerSkillsPane && state.playerState) {
+      this._playerSkillsPane.setOwnerStats({ attack: state.playerState.attack, magic: state.playerState.magic });
+    }
     // Update top relic bar from player relics (no-op when unchanged)
     if (this._relicBar && state.playerState) {
       this._relicBar.setRelics(state.playerState.relics || []);
+      this._relicBar.setOwnerStats({ attack: state.playerState.attack, magic: state.playerState.magic });
     }
     // Update enemy relic bar from enemy relics (no-op when unchanged)
     if (this._enemyRelicBar && state.enemyState) {
       this._enemyRelicBar.setRelics(state.enemyState.relics || []);
+      this._enemyRelicBar.setOwnerStats({ attack: state.enemyState.attack, magic: state.enemyState.magic });
     }
 
     // Update enemy pane from real state
@@ -1050,6 +1059,9 @@ export default class BattleScene extends UIPanel {
     }
     if (this._enemySkillsPane && state.enemyState && state.enemyState.mana) {
       this._enemySkillsPane.setManaState(state.enemyState.mana);
+    }
+    if (this._enemySkillsPane && state.enemyState) {
+      this._enemySkillsPane.setOwnerStats({ attack: state.enemyState.attack, magic: state.enemyState.magic });
     }
 
     // Update combat log

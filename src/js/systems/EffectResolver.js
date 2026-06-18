@@ -26,6 +26,7 @@
  */
 
 import { MANA_COLORS } from '../game/TileTypes.js';
+import { scaledAmount } from '../data/scalingConfig.js';
 
 /** Effect type vocabulary supported by EffectResolver (atomic effects only). */
 export const EFFECT_TYPES = {
@@ -60,9 +61,12 @@ export function applyEffect(effect, ctx) {
         console.warn('[EffectResolver] damage effect requires ctx.resolver and ctx.target.');
         return true;
       }
-      const amount = (effect.damage && typeof effect.damage.amount === 'number')
+      const base = (effect.damage && typeof effect.damage.amount === 'number')
         ? effect.damage.amount
         : (caster && caster.attack) || 1;
+      // Opt-in stat scaling (effect.damage.scaling): adds a floored bonus from
+      // the OWNER's Attack/Magic. No `scaling` field → flat (unchanged).
+      const amount = scaledAmount(base, effect.damage && effect.damage.scaling, caster);
       const r = resolver.applyDamage(target, amount);
       if (log && caster && target) {
         log.add(`${caster.name} deals ${r.actualDamage} damage to ${target.name}.`);

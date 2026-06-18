@@ -175,6 +175,15 @@ export default class SkillsPane extends UIPanel {
     this._mana = manaState || null;
   }
 
+  /**
+   * The owning combatant's stats ({ attack, magic }) used to live-resolve a
+   * skill's `<<n>>` dynamic damage values. Idempotent — called every frame.
+   * @param {{attack?:number, magic?:number}|null} stats
+   */
+  setOwnerStats(stats) {
+    this._ownerStats = stats || null;
+  }
+
   /** Header indicator: "count / max" equipped. Pass null to hide. */
   setEquippedInfo(count, max) {
     this._equippedInfo = count != null && max != null ? { count, max } : null;
@@ -365,7 +374,7 @@ export default class SkillsPane extends UIPanel {
       let m = null;
       let h = GHOST_CARD_H;
       if (!row.locked) {
-        m = measureCardModel(ctx, row.model, cardW);
+        m = measureCardModel(ctx, row.model, cardW, { caster: this._ownerStats });
         h = m.h;
       }
       measures.push({ m, h });

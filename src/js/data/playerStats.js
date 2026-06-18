@@ -92,6 +92,7 @@ export function createDefaultStatModifiers() {
     },
     startingArmor: 0,
     startingAttack: 0,
+    startingMagic: 0,
     // Future extension points
     additive: {},
     multipliers: {},
@@ -134,6 +135,7 @@ export function getEffectivePlayerStats(characterDef, runState) {
     startingMana: resolvedMana,
     startingArmor: (base.startingArmor || 0) + ((mods && mods.startingArmor) ? mods.startingArmor : 0),
     startingAttack: (base.startingAttack || 0) + ((mods && mods.startingAttack) ? mods.startingAttack : 0),
+    startingMagic: (base.startingMagic || 0) + ((mods && mods.startingMagic) ? mods.startingMagic : 0),
   };
 }
 
@@ -174,6 +176,7 @@ export function createPlayerBattleState(characterDef, runState) {
     mana: { ...effective.startingMana },
     armor: effective.startingArmor,
     attack: effective.startingAttack,
+    magic: effective.startingMagic,
     block: 0,
 
     // The EQUIPPED battle loadout (resolved skill objects, deep-cloned per
@@ -224,6 +227,7 @@ export function syncBattleResultsToRunState(runState, battleState) {
  *   'maxHp'             → statModifiers.maxHp += amount
  *   'startingArmor'     → statModifiers.startingArmor += amount
  *   'startingAttack'    → statModifiers.startingAttack += amount
+ *   'startingMagic'     → statModifiers.startingMagic += amount
  *   'startingMana.red'  → statModifiers.startingMana.red += amount
  *   'startingMana.blue' → etc.
  *
@@ -242,7 +246,7 @@ export function applyRunModifier(runState, statPath, amount) {
   const mods = runState.statModifiers;
 
   if (parts.length === 1) {
-    // Top-level stat: maxHp, startingArmor, startingAttack
+    // Top-level stat: maxHp, startingArmor, startingAttack, startingMagic
     const key = parts[0];
     if (typeof mods[key] === 'number') {
       mods[key] += amount;
@@ -275,5 +279,6 @@ function _zeroedEffectiveStats() {
     startingMana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
     startingArmor: 0,
     startingAttack: 0,
+    startingMagic: 0,
   };
 }
