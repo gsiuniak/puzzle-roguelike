@@ -92,9 +92,12 @@ export function applyEffect(effect, ctx) {
 
     case EFFECT_TYPES.HEAL: {
       if (!caster) return true;
-      const amount = (effect.heal && typeof effect.heal.amount === 'number')
+      const base = (effect.heal && typeof effect.heal.amount === 'number')
         ? effect.heal.amount
         : 0;
+      // Opt-in stat scaling (effect.heal.scaling): + floored Magic/Attack bonus
+      // from the healer. No `scaling` field → flat (unchanged).
+      const amount = scaledAmount(base, effect.heal && effect.heal.scaling, caster);
       if (amount <= 0) return true;
       const before = caster.hp;
       caster.hp = Math.min(caster.maxHp, caster.hp + amount);

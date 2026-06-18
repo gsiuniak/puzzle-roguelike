@@ -57,7 +57,7 @@
  * (Physical scales with Attack, Magic with Magic).
  */
 
-import { DAMAGE_SCALE_PER_POINT } from '../scalingConfig.js';
+import { DAMAGE_SCALE_PER_POINT, DAMAGE_SCALING_PRESETS } from '../scalingConfig.js';
 
 /**
  * Relic rarity tiers. Used for reward pools / drop weighting and UI framing.
@@ -336,11 +336,13 @@ const RELIC_CATALOG = {
   alabaster_flask: {
     id: 'alabaster_flask',
     name: 'Alabaster Flask',
-    description: '[[Heal]] 2 HP at the start of each of your turns.',
+    description: '[[Heal]] <<2>> HP at the start of each of your turns.',
     icon: 'relic_alabaster_flask',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onTurnStart', effectType: 'heal', heal: { amount: 1 } },
+      // Heal scales with Magic at the _50 (×1/2) preset by default. (Amount
+      // aligned to the long-standing "2 HP" description; was previously 1.)
+      { trigger: 'onTurnStart', effectType: 'heal', heal: { amount: 2, scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
     ],
   },
 
@@ -435,12 +437,13 @@ const RELIC_CATALOG = {
   soul_eater: {
     id: 'soul_eater',
     name: 'Soul Eater',
-    description: '[[Heal]] +3 life whenever you deal [[damage]].',
+    description: '[[Heal]] <<3>> life whenever you deal [[damage]].',
     icon: 'relic_soul_eater',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
       // onDealDamage fires with side = the attacker, so heal restores the owner.
-      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 3 } },
+      // Heal scales with Magic at the _50 (×1/2) preset by default.
+      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 3, scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
     ],
   },
 

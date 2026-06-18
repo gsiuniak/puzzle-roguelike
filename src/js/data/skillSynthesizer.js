@@ -763,6 +763,21 @@ export function synthesize(recipe) {
   };
 
   /**
+   * Emit a heal effect. Healing scales with Magic at the fixed `_50` (×1/2)
+   * preset by default; the description uses `<<amount>>` (live computed value)
+   * + the [[Heal]] keyword.
+   * @param {number} amount — base heal (already greater-multiplied if applicable)
+   */
+  const emitHeal = (amount) => {
+    const scaling = { magic: DAMAGE_SCALING_PRESETS._50 };
+    effects.push({ effectType: 'heal', heal: { amount, scaling } });
+    lines.push(`[[Heal]] <<${amount}>> HP`);
+    // base + estimated Magic-scaled contribution (deterministic preset).
+    power += amount * POWER.perHeal
+      + scaling.magic * DAMAGE_SCALING_POWER.estStat * DAMAGE_SCALING_POWER.perScaledPoint;
+  };
+
+  /**
    * Emit a shaped board destruction, claiming the skill's single targeting
    * slot (shared by destroy/explode actions and the orphan-shape injection).
    * @returns {boolean} false when the targeting slot was already taken
@@ -807,7 +822,7 @@ export function synthesize(recipe) {
     switch (tag) {
       case 'physical': case 'magical': { emitDamage(tag, rollTagValue(tag) || 5); return true; }
       case 'armor': { const a = rollTagValue('armor') || 5; effects.push({ effectType: 'armor', armor: { amount: a } }); lines.push(`Gain ${a} [[armor]]`); power += a * POWER.perArmor; return true; }
-      case 'heal': { const a = rollTagValue('heal') || 5; effects.push({ effectType: 'heal', heal: { amount: a } }); lines.push(`[[Heal]] ${a} HP`); power += a * POWER.perHeal; return true; }
+      case 'heal': { emitHeal(rollTagValue('heal') || 5); return true; }
       case 'attack': { const a = rollTagValue('attack') || 1; effects.push({ effectType: 'gain_attack', gainAttack: { amount: a } }); lines.push(`Gain ${a} [[attack]]`); power += a * POWER.perAttack; return true; }
       case 'drain': { const a = rollTagValue('drain') || 2; effects.push({ effectType: 'drain_mana', drainMana: { amount: a } }); lines.push(`Drain ${a} [[mana]] of every color from the enemy`); power += a * POWER.perManaDrainedAllColors; return true; }
       case 'create': { emitCreate(rollTagValue('create') || 3, pickRandom(COST_COLORS)); return true; }
@@ -878,9 +893,7 @@ export function synthesize(recipe) {
       case 'heal': {
         let amount = roll('heal', 5);
         if (consumeGreater()) amount = greaterBoost(amount);
-        effects.push({ effectType: 'heal', heal: { amount } });
-        lines.push(`[[Heal]] ${amount} HP`);
-        power += amount * POWER.perHeal;
+        emitHeal(amount);
         break;
       }
       case 'attack': {

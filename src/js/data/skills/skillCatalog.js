@@ -137,14 +137,15 @@ const SKILL_CATALOG = {
   oungan: {
     id: 'oungan',
     name: 'Oungan',
-    description: '[[Heal]] 6 HP\n[[Create]] 5 green [[tiles]].',
+    description: '[[Heal]] <<6>> HP\nGain 2 [[attack]].',
     icon: 'skill_oungan',
     sound: 'skill_oungan',
     cost: { green: 6 },
     effects: [
       // Heal 5→6: sim showed Oungan was the most under-budget player skill (~0.8 HPe/mana).
-      { effectType: 'heal', heal: { amount: 6 } },
-      { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
+      // Healing scales with Magic at the _50 (×1/2) preset by default.
+      { effectType: 'heal', heal: { amount: 6, scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
+      { effectType: 'gain_attack', gainAttack: { amount: 2 } },
     ],
   },
 

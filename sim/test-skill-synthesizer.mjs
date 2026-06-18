@@ -261,6 +261,16 @@ function tableKeys(tagId) {
   check('physical damage scales with Attack (preset multiplier)', physOk);
   check('magical damage scales with Magic (preset multiplier)', magOk);
 
+  // Healing scales with Magic at the _50 (×1/2) preset + carries <<n>> markup.
+  let healOk = true;
+  for (let i = 0; i < 30; i++) {
+    const h = synthesize(['heal']).skill.effects.find((e) => e.effectType === 'heal');
+    if (!h || !h.heal.scaling || h.heal.scaling.magic !== DAMAGE_SCALING_PRESETS._50) healOk = false;
+  }
+  check('woven heal scales with Magic at _50', healOk);
+  const hd = synthesize(['heal']).skill.description;
+  check('heal description has <<n>> + [[Heal]]', /<<\d+>>/.test(hd) && hd.includes('[[Heal]]'), hd);
+
   // Description carries the dynamic <<n>> value + the damage-type keyword.
   const pd = synthesize(['physical']).skill.description;
   check('physical description has <<n>> + [[phys]]', /<<\d+>>/.test(pd) && pd.includes('[[phys]]'), pd);

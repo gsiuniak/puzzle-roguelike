@@ -114,11 +114,29 @@ export function scaledAmount(baseAmount, scaling, caster) {
  */
 export function resolveDynamicText(raw, effects, caster, cursor = { i: 0 }) {
   if (raw == null) return raw;
-  const dmg = (effects || []).filter(e => e && e.effectType === 'damage' && e.damage);
+  // Scalable effects carry a `<<n>>` token in their line — today damage + heal.
+  // (armor stays flat / token-less, so it's excluded to keep token↔effect pairing.)
+  const scalable = (effects || [])
+    .map((e) => scalablePayload(e))
+    .filter(Boolean);
   return String(raw).replace(DYNAMIC_TOKEN_RE, (full, inner) => {
-    const eff = dmg[cursor.i++];
-    if (!eff) return full; // no effect to bind → leave authored base
-    const val = scaledAmount(eff.damage.amount || 0, eff.damage.scaling, caster);
+    const payload = scalable[cursor.i++];
+    if (!payload) return full; // no effect to bind → leave authored base
+    const val = scaledAmount(payload.amount || 0, payload.scaling, caster);
     return `<<${val}>>`;
   });
+}
+
+/**
+ * Extract the scalable `{ amount, scaling }` payload from an effect, or null if
+ * the effect isn't a scalable type. Keep this in sync with the effect types that
+ * use `<<n>>` markup (damage, heal).
+ * @param {object} e
+ * @returns {{amount?:number, scaling?:any}|null}
+ */
+function scalablePayload(e) {
+  if (!e) return null;
+  if (e.effectType === 'damage' && e.damage) return e.damage;
+  if (e.effectType === 'heal' && e.heal) return e.heal;
+  return null;
 }

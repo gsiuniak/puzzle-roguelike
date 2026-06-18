@@ -2102,13 +2102,15 @@ export default class BattleController {
       }
 
       case SKILL_EFFECT_TYPES.HEAL: {
-        const amount = (effect.heal && typeof effect.heal.amount === 'number')
+        const base = (effect.heal && typeof effect.heal.amount === 'number')
           ? effect.heal.amount
           : 0;
-        if (amount <= 0) {
+        if (base <= 0) {
           this.log.add(`${skill.name} has no heal amount configured.`);
           return false;
         }
+        // Opt-in stat scaling (effect.heal.scaling): + floored Magic bonus.
+        const amount = base + scaledBonus(effect.heal && effect.heal.scaling, src);
         const beforeHp = src.hp;
         src.hp = Math.min(src.maxHp, src.hp + amount);
         const actualHeal = src.hp - beforeHp;

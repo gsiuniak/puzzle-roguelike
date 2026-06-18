@@ -126,11 +126,7 @@ export function createCardModel(skill) {
     effectKTs.push(kt);
   }
 
-  // Scalable damage effects, in order — paired with `<<n>>` tokens across the
-  // lines so each token shows its effect's live computed amount.
-  const dmgEffects = (skill.effects || []).filter(e => e && e.effectType === 'damage' && e.damage);
-
-  return { skill, effectKTs, lineTemplates, dmgEffects };
+  return { skill, effectKTs, lineTemplates };
 }
 
 /**
@@ -170,15 +166,16 @@ function wrapWords(ctx, text, maxW) {
 export function measureCardModel(ctx, model, cardW, opts = {}) {
   // Live-resolve `<<n>>` dynamic damage values from the caster's current stats
   // (run every frame so the shown amount tracks Attack/Magic). With no caster
-  // the base amount is shown. A shared cursor pairs tokens → damage effects in
-  // order across all lines.
+  // the base amount is shown. A shared cursor pairs tokens → scalable effects
+  // (damage/heal) in order across all lines (resolveDynamicText filters).
   if (model.lineTemplates) {
     const caster = opts.caster || null;
     const cursor = { i: 0 };
+    const effects = (model.skill && model.skill.effects) || [];
     for (let k = 0; k < model.effectKTs.length; k++) {
       const tmpl = model.lineTemplates[k];
       if (tmpl == null) continue;
-      const resolved = resolveDynamicText(tmpl, model.dmgEffects, caster, cursor);
+      const resolved = resolveDynamicText(tmpl, effects, caster, cursor);
       const kt = model.effectKTs[k];
       if (kt.text !== resolved) kt.setStyle({ text: resolved });
     }
