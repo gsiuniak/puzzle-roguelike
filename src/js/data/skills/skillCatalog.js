@@ -64,13 +64,14 @@ const SKILL_CATALOG = {
   defend: {
     id: 'defend',
     name: 'Defend',
-    description: 'Gain 6 [[armor]]\n[[Create]] 3 Blue [[tiles]]',
+    description: 'Gain <<6>> [[armor]]\n[[Create]] 3 Blue [[tiles]]',
     icon: 'skill_defend',
     sound: 'skill_defend',
     cost: { blue: 5 },
     effects: [
       // Armor 5→6: sim showed Defend sat under the value curve (~1.2 HPe/mana).
-      { effectType: 'armor', armor: { amount: 6 } },
+      // Armor scales with Attack at the _33 (×1/3) preset by default.
+      { effectType: 'armor', armor: { amount: 6, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
       { effectType: 'create_tiles', createTiles: { amount: 3, type: 'blue' } },
       // { effectType: 'apply_status', applyStatus: { id: 'bleeding', target: 'opponent', turns: 3, attackValue: 1 } },
       // { effectType: 'apply_status', applyStatus: { id: 'berserk', target: 'self', turns: 3 } }

@@ -314,11 +314,12 @@ const RELIC_CATALOG = {
   aegis: {
     id: 'aegis',
     name: 'Aegis',
-    description: 'Gain 1 [[Armor]] at the start of each turn.',
+    description: 'Gain <<1>> [[Armor]] at the start of each turn.',
     icon: 'relic_aegis',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 1 } },
+      // Armor scales with Attack at the _33 (×1/3) preset by default.
+      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
     ],
   },
 

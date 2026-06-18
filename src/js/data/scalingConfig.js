@@ -114,8 +114,9 @@ export function scaledAmount(baseAmount, scaling, caster) {
  */
 export function resolveDynamicText(raw, effects, caster, cursor = { i: 0 }) {
   if (raw == null) return raw;
-  // Scalable effects carry a `<<n>>` token in their line — today damage + heal.
-  // (armor stays flat / token-less, so it's excluded to keep token↔effect pairing.)
+  // Scalable effects carry a `<<n>>` token in their line — today damage, heal,
+  // and armor (each player/woven instance is tokened; enemy ones are flat with
+  // no token, so pairing never misfires within a single skill).
   const scalable = (effects || [])
     .map((e) => scalablePayload(e))
     .filter(Boolean);
@@ -138,5 +139,6 @@ function scalablePayload(e) {
   if (!e) return null;
   if (e.effectType === 'damage' && e.damage) return e.damage;
   if (e.effectType === 'heal' && e.heal) return e.heal;
+  if (e.effectType === 'armor' && e.armor) return e.armor;
   return null;
 }

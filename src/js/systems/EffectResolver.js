@@ -81,9 +81,11 @@ export function applyEffect(effect, ctx) {
 
     case EFFECT_TYPES.ARMOR: {
       if (!caster) return true;
-      const amount = (effect.armor && typeof effect.armor.amount === 'number')
+      const base = (effect.armor && typeof effect.armor.amount === 'number')
         ? effect.armor.amount
         : (caster.attack || 1);
+      // Opt-in stat scaling (effect.armor.scaling): + floored Attack bonus.
+      const amount = scaledAmount(base, effect.armor && effect.armor.scaling, caster);
       caster.armor = (caster.armor || 0) + amount;
       if (amount > 0 && ctx.onStatChange) ctx.onStatChange({ kind: 'armor', target: caster, amount });
       if (log) log.add(`${caster.name} gains ${amount} armor.`);

@@ -271,6 +271,16 @@ function tableKeys(tagId) {
   const hd = synthesize(['heal']).skill.description;
   check('heal description has <<n>> + [[Heal]]', /<<\d+>>/.test(hd) && hd.includes('[[Heal]]'), hd);
 
+  // Armor gain scales with Attack at the _33 (×1/3) preset + carries <<n>> markup.
+  let armorOk = true;
+  for (let i = 0; i < 30; i++) {
+    const ar = synthesize(['armor']).skill.effects.find((e) => e.effectType === 'armor');
+    if (!ar || !ar.armor.scaling || ar.armor.scaling.attack !== DAMAGE_SCALING_PRESETS._33) armorOk = false;
+  }
+  check('woven armor scales with Attack at _33', armorOk);
+  const ad = synthesize(['armor']).skill.description;
+  check('armor description has <<n>> + [[armor]]', /<<\d+>>/.test(ad) && ad.includes('[[armor]]'), ad);
+
   // Description carries the dynamic <<n>> value + the damage-type keyword.
   const pd = synthesize(['physical']).skill.description;
   check('physical description has <<n>> + [[phys]]', /<<\d+>>/.test(pd) && pd.includes('[[phys]]'), pd);

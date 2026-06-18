@@ -2092,9 +2092,11 @@ export default class BattleController {
       }
 
       case SKILL_EFFECT_TYPES.ARMOR: {
-        const amount = (effect.armor && typeof effect.armor.amount === 'number')
+        const base = (effect.armor && typeof effect.armor.amount === 'number')
           ? effect.armor.amount
           : (src.attack || 1);
+        // Opt-in stat scaling (effect.armor.scaling): + floored Attack bonus.
+        const amount = base + scaledBonus(effect.armor && effect.armor.scaling, src);
         src.armor += amount;
         this._emitFloatingStat(side, 'armor', amount);
         this.log.add(`${src.name} gains ${amount} armor.`);

@@ -778,6 +778,19 @@ export function synthesize(recipe) {
   };
 
   /**
+   * Emit an armor effect. Armor gain scales with Attack at the fixed `_33`
+   * (×1/3) preset by default; the description uses `<<amount>>` + [[armor]].
+   * @param {number} amount — base armor (already greater-multiplied if applicable)
+   */
+  const emitArmor = (amount) => {
+    const scaling = { attack: DAMAGE_SCALING_PRESETS._33 };
+    effects.push({ effectType: 'armor', armor: { amount, scaling } });
+    lines.push(`Gain <<${amount}>> [[armor]]`);
+    power += amount * POWER.perArmor
+      + scaling.attack * DAMAGE_SCALING_POWER.estStat * DAMAGE_SCALING_POWER.perScaledPoint;
+  };
+
+  /**
    * Emit a shaped board destruction, claiming the skill's single targeting
    * slot (shared by destroy/explode actions and the orphan-shape injection).
    * @returns {boolean} false when the targeting slot was already taken
@@ -821,7 +834,7 @@ export function synthesize(recipe) {
   const emitRandomBonus = (tag) => {
     switch (tag) {
       case 'physical': case 'magical': { emitDamage(tag, rollTagValue(tag) || 5); return true; }
-      case 'armor': { const a = rollTagValue('armor') || 5; effects.push({ effectType: 'armor', armor: { amount: a } }); lines.push(`Gain ${a} [[armor]]`); power += a * POWER.perArmor; return true; }
+      case 'armor': { emitArmor(rollTagValue('armor') || 5); return true; }
       case 'heal': { emitHeal(rollTagValue('heal') || 5); return true; }
       case 'attack': { const a = rollTagValue('attack') || 1; effects.push({ effectType: 'gain_attack', gainAttack: { amount: a } }); lines.push(`Gain ${a} [[attack]]`); power += a * POWER.perAttack; return true; }
       case 'drain': { const a = rollTagValue('drain') || 2; effects.push({ effectType: 'drain_mana', drainMana: { amount: a } }); lines.push(`Drain ${a} [[mana]] of every color from the enemy`); power += a * POWER.perManaDrainedAllColors; return true; }
@@ -885,9 +898,7 @@ export function synthesize(recipe) {
       case 'armor': {
         let amount = roll('armor', 5);
         if (consumeGreater()) amount = greaterBoost(amount);
-        effects.push({ effectType: 'armor', armor: { amount } });
-        lines.push(`Gain ${amount} [[armor]]`);
-        power += amount * POWER.perArmor;
+        emitArmor(amount);
         break;
       }
       case 'heal': {
