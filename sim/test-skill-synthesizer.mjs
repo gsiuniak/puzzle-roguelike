@@ -4,11 +4,12 @@
  *
  *   node sim/test-skill-synthesizer.mjs
  *
- * Covers: special combo rules (red+convert+green), tag consumption / inert
- * tags, hidden value rolls landing inside their tables, randomized mana costs
- * inside the power-tiered band, targeting shapes, effect ordering (extra_turn
- * last), status mapping, and a 500-bag random sweep validating every emitted
- * skill against the battle-side effect-type registry.
+ * Covers: special combo rules (red+convert+green), tag consumption, CHOICE-
+ * DRIVEN wasted tags (redundant/incompatible picks contribute nothing + carry a
+ * reason — no injection), hidden value rolls landing inside their tables,
+ * CONTINUOUS mana costs split across colors, targeting shapes, effect ordering
+ * (extra_turn last), status mapping, and a 500-bag random sweep validating every
+ * emitted skill against the battle-side effect-type registry.
  */
 
 import { synthesize } from '../src/js/data/skillSynthesizer.js';
@@ -34,7 +35,9 @@ function eq(name, actual, expected) {
 
 const VALID_EFFECT_TYPES = new Set(Object.values(SKILL_EFFECT_TYPES));
 const COST_COLORS = ['red', 'blue', 'green', 'yellow', 'purple'];
-const MAX_COST = MANA_COST_CONFIG.baseCeiling + MANA_COST_CONFIG.powerTierThresholds.length;
+const MIN_COST = MANA_COST_CONFIG.min;         // total across all colors
+const MAX_COST = MANA_COST_CONFIG.max;         // total across all colors
+const MAX_COLORS = MANA_COST_CONFIG.maxColors;
 
 function tableKeys(tagId) {
   return Object.keys(TAG_VALUE_TABLES[tagId] || {}).map(Number);
@@ -83,8 +86,8 @@ function tableKeys(tagId) {
       check('damage roll inside its table', false, String(fx.damage.amount));
       break;
     }
-    const cost = Object.values(r.skill.cost)[0];
-    if (cost < MANA_COST_CONFIG.baseFloor || cost > MAX_COST) {
+    const cost = Object.values(r.skill.cost).reduce((a, b) => a + b, 0);
+    if (cost < MIN_COST || cost > MAX_COST) {
       check('cost inside the global band', false, String(cost));
       break;
     }
@@ -102,40 +105,55 @@ function tableKeys(tagId) {
   check('create count from table', tableKeys('create').includes(fx.createTiles.amount), String(fx.createTiles.amount));
 }
 
-// ── 4. Injection rules ("the weave surges") ──
+// ── 4. Choice-driven downsides (NO injection — wasted picks contribute nothing) ──
 {
-  // wild without create → conjures Wild tiles anyway
+  // wild without create → WASTED (no free wild tiles), with a reason.
   const wild = synthesize(['damage', 'wild']);
-  const wfx = wild.skill.effects.find((e) => e.effectType === 'create_tiles');
-  check('wild injects wild-tile creation', !!wfx && wfx.createTiles.type === 'wild', JSON.stringify(wild.skill.effects));
-  check('wild counts as used', wild.usedTags.includes('wild'));
+  check('wild without create makes no tiles',
+    !wild.skill.effects.some((e) => e.effectType === 'create_tiles'), JSON.stringify(wild.skill.effects));
+  check('wild is wasted (unused)', wild.unusedTags.includes('wild'));
+  check('wasted wild carries a reason', typeof wild.wastedReasons.wild === 'string' && wild.wastedReasons.wild.length > 0);
 
-  // orphan shape → injects a destroy of that shape
+  // orphan shape → WASTED (no free destroy), with a reason.
   const orphan = synthesize(['red', 'row']);
-  check('orphan row injects row destruction',
-    orphan.skill.effects.some((e) => e.effectType === 'destroy_tiles_row'), JSON.stringify(orphan.skill.effects));
-  eq('injected destroy claims targeting', orphan.skill.targeting, 'board_tile');
-  check('row counts as used', orphan.usedTags.includes('row'));
+  check('orphan row makes no destruction',
+    !orphan.skill.effects.some((e) => e.effectType === 'destroy_tiles_row'), JSON.stringify(orphan.skill.effects));
+  check('row is wasted (unused)', orphan.unusedTags.includes('row'));
+  check('wasted row carries a reason', !!orphan.wastedReasons.row);
+  check('element red still pays the cost (used)', orphan.usedTags.includes('red'));
 
-  // pure damage → surges an extra turn at least sometimes (75% default)
-  let surgedCount = 0;
+  // pure damage → NO free extra turn anymore (just a cheap damage spell).
+  let etCount = 0;
   for (let i = 0; i < 40; i++) {
-    const r = synthesize(['damage']);
-    const et = r.skill.effects.map((e) => e.effectType);
-    if (et.includes('extra_turn')) {
-      surgedCount++;
-      eq('surged extra_turn is last', et[et.length - 1], 'extra_turn');
-    }
+    if (synthesize(['damage']).skill.effects.some((e) => e.effectType === 'extra_turn')) etCount++;
   }
-  check('pure damage surges extra turns sometimes', surgedCount > 0);
+  eq('pure damage never surges an extra turn', etCount, 0);
 
-  // unconsumed element → conjures its tiles (statistical: 2 elements + damage)
-  let createSeen = 0;
-  for (let i = 0; i < 30; i++) {
-    const r = synthesize(['damage', 'red', 'blue']);
-    if (r.skill.effects.some((e) => e.effectType === 'create_tiles')) createSeen++;
+  // Two elements → both become COST colors (split), neither wasted, no create.
+  const two = synthesize(['damage', 'red', 'blue']);
+  const colors = Object.keys(two.skill.cost);
+  check('both elements become cost colors', colors.includes('red') && colors.includes('blue'), JSON.stringify(two.skill.cost));
+  check('no element conjures tiles', !two.skill.effects.some((e) => e.effectType === 'create_tiles'));
+  eq('no elements wasted when they pay the cost', two.unusedTags.length, 0);
+}
+
+// ── 4b. `random` is a wildcard — ALWAYS pulls a bonus, never wasted ──
+{
+  let everWasted = false;
+  for (let i = 0; i < 80 && !everWasted; i++) {
+    if (synthesize(['damage', 'random']).unusedTags.includes('random')) everWasted = true;
   }
-  check('unconsumed elements conjure tiles', createSeen > 0);
+  check('random is never wasted', !everWasted);
+
+  // Even a random-only bag yields a valid, castable skill with random consumed.
+  let ok = true;
+  for (let i = 0; i < 60 && ok; i++) {
+    const r = synthesize(['random']);
+    if (!r.skill.effects.length) ok = false;
+    if (r.unusedTags.includes('random')) ok = false;
+    if (r.skill.effects.some((e) => !VALID_EFFECT_TYPES.has(e.effectType))) ok = false;
+  }
+  check('random-only bag always yields a valid skill (random used)', ok);
 }
 
 // ── 5. Targeting shapes ──
@@ -158,14 +176,15 @@ function tableKeys(tagId) {
   const plain = synthesize(['explode']);
   eq('explode alone → radius 1', plain.skill.area.radius, 1);
 
-  // Only ONE action claims targeting; the second destroyer VENTS as damage.
+  // Only ONE action claims targeting; the second destroyer is WASTED (a
+  // choice-driven downside), NOT vented into free damage.
   const both = synthesize(['destroy', 'explode', 'row']);
   const targeted = both.skill.effects.filter((e) =>
     ['destroy_tiles', 'destroy_tiles_row', 'destroy_tiles_column', 'convert_tile'].includes(e.effectType));
   eq('only one targeted effect', targeted.length, 1);
-  check('losing destroyer vents as damage',
-    both.skill.effects.some((e) => e.effectType === 'damage'), JSON.stringify(both.skill.effects));
-  check('vented damage reported as injected', both.injectedTags.includes('damage'));
+  check('losing destroyer is wasted',
+    both.unusedTags.includes('explode') || both.unusedTags.includes('destroy'), JSON.stringify(both.unusedTags));
+  check('no free vented damage', !both.skill.effects.some((e) => e.effectType === 'damage'), JSON.stringify(both.skill.effects));
 }
 
 // ── 5b. Name variety + soft cost color ──
@@ -174,10 +193,15 @@ function tableKeys(tagId) {
   for (let i = 0; i < 60; i++) names.add(synthesize(['red', 'damage', 'frozen']).skill.name);
   check('names vary (>8 distinct in 60)', names.size > 8, `got ${names.size}`);
 
+  // A single woven element now DETERMINISTICALLY sets the cost color (it pays
+  // for the spell) — pick order / color choice is a real, legible decision.
   const colors = new Set();
-  for (let i = 0; i < 60; i++) colors.add(Object.keys(synthesize(['blue', 'damage']).skill.cost)[0]);
-  check('element usually influences cost color', colors.has('blue'));
-  check('cost color is NOT a hard rule', colors.size > 1, [...colors].join(','));
+  for (let i = 0; i < 60; i++) {
+    const keys = Object.keys(synthesize(['blue', 'damage']).skill.cost);
+    keys.forEach((k) => colors.add(k));
+  }
+  eq('single element pins the cost color', colors.size, 1);
+  check('that color is the woven element', colors.has('blue'), [...colors].join(','));
 }
 
 // ── 6. extra_turn is always the LAST effect (cascade ordering, decision #4) ──
@@ -256,11 +280,16 @@ function tableKeys(tagId) {
       if (e.effectType === 'apply_status' && !getStatusDef(e.applyStatus.id)) problems.push(`bad status ${e.applyStatus.id}`);
     }
     const costEntries = Object.entries(s.cost || {});
-    if (costEntries.length !== 1) problems.push('cost must be one color');
-    else {
-      const [color, amount] = costEntries[0];
-      if (!COST_COLORS.includes(color)) problems.push(`bad cost color ${color}`);
-      if (amount < MANA_COST_CONFIG.baseFloor || amount > MAX_COST) problems.push(`cost ${amount} out of band`);
+    if (costEntries.length < 1 || costEntries.length > MAX_COLORS) {
+      problems.push(`cost color count ${costEntries.length}`);
+    } else {
+      let costSum = 0;
+      for (const [color, amount] of costEntries) {
+        if (!COST_COLORS.includes(color)) problems.push(`bad cost color ${color}`);
+        if (!(amount >= 1)) problems.push(`cost part ${amount} < 1`);
+        costSum += amount;
+      }
+      if (costSum < MIN_COST || costSum > MAX_COST) problems.push(`cost total ${costSum} out of band`);
     }
     if (s.targeting && s.targeting !== 'board_tile') problems.push('bad targeting');
     if (s.targeting && !(typeof s.area === 'number' || (s.area && typeof s.area.radius === 'number'))) {

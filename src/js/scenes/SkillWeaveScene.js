@@ -1329,13 +1329,17 @@ export default class SkillWeaveScene extends UIPanel {
       letterSpacing: 2, shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.7)',
     });
 
-    // Cost — single color today ({ red: 6 } shape)
-    const [costColor, costAmount] = Object.entries(skill.cost || {})[0] || [null, 0];
-    if (costColor) {
-      const colorName = costColor.charAt(0).toUpperCase() + costColor.slice(1);
-      this._drawText(ctx, `Cost: ${costAmount} ${colorName} Mana`, cx, RESULT_COST_Y, {
-        size: RESULT_COST_SIZE,
-        color: MANA_TEXT_COLORS[costColor] || SUBTITLE_COLOR,
+    // Cost — may be MULTI-color for multi-element spells ({ blue:6, red:3 }).
+    const costEntries = Object.entries(skill.cost || {});
+    if (costEntries.length) {
+      const parts = costEntries.map(([c, a]) => `${a} ${c.charAt(0).toUpperCase() + c.slice(1)}`);
+      // Single color keeps its mana tint; a split cost uses the neutral subtitle
+      // color (one text run can't carry two mana colors).
+      const tint = costEntries.length === 1
+        ? (MANA_TEXT_COLORS[costEntries[0][0]] || SUBTITLE_COLOR)
+        : SUBTITLE_COLOR;
+      this._drawText(ctx, `Cost: ${parts.join(' + ')} Mana`, cx, RESULT_COST_Y, {
+        size: RESULT_COST_SIZE, color: tint,
         letterSpacing: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.7)',
       });
     }
@@ -1364,15 +1368,22 @@ export default class SkillWeaveScene extends UIPanel {
       y += RESULT_DESC_LINE_H - 8;
     }
 
-    // Inert tags (chosen but not woven into the spell — rare by design)
+    // Wasted threads — picks that contributed NOTHING, shown WITH the reason so
+    // the player sees the choice-driven downside (what a better weave avoids).
     const unused = (this._result.synthesis.unusedTags || []);
+    const reasons = this._result.synthesis.wastedReasons || {};
     if (unused.length) {
       y += surged.length ? 0 : RESULT_INERT_GAP;
-      const labels = unused.map((id) => getTagLabel(id)).join(', ');
-      this._drawText(ctx, `Inert threads: ${labels}`, cx, y, {
-        size: RESULT_INERT_SIZE, color: RESULT_INERT_COLOR,
-        shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.7)',
-      });
+      // One line per wasted tag: "Wild — no Create for Wild to empower".
+      for (const id of unused) {
+        const reason = reasons[id];
+        const text = reason ? `Wasted ${getTagLabel(id)} — ${reason}` : `Wasted: ${getTagLabel(id)}`;
+        this._drawText(ctx, text, cx, y, {
+          size: RESULT_INERT_SIZE, color: RESULT_INERT_COLOR,
+          shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.7)',
+        });
+        y += RESULT_DESC_LINE_H - 8;
+      }
     }
 
     ctx.restore();

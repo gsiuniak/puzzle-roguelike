@@ -21,29 +21,28 @@
  *   - `extra_turn` appends an extra_turn effect LAST (a create_tiles cascade
  *     resets the flag, so ordering is load-bearing — decision #4).
  *
- * ── Injection ("the weave surges") ──────────────────────────────────────────
- * Tags should almost never go inert — when a tag has nothing to attach to, the
- * weave INJECTS a complementary effect instead (per-rule chances live in
- * weaveConfig.INJECTION_CONFIG):
- *   - `wild` with no create        → conjures Thrall tiles anyway
- *   - orphan shape (row/col/area/tile) → injects a destroy of that shape
- *   - orphan `random`              → chaotic surge: gain rolled-color mana
- *   - element used by NOTHING (not even the cost color) → conjures its tiles
- *   - a 2nd targeted action        → vents as direct damage instead
- *   - a PURE damage spell          → surges an Extra Turn (damage alone feels
- *                                    weak — the surge makes it tempo-positive)
- * Injected contributions are reported in `injectedTags` (shown as "The weave
- * surged" on the result screen); whatever still resolves to nothing lands in
- * `unusedTags` ("Inert threads") — rare by design.
+ * ── Choice-driven downsides (NO injection) ───────────────────────────────────
+ * Redundant / incompatible picks DETERMINISTICALLY contribute nothing (pure
+ * opportunity cost) and are reported in `wastedReasons` (tag id → reason),
+ * surfaced on the result screen so a weak weave reads as "I could have picked
+ * better", not a dice roll:
+ *   - `wild` with no create        → wasted ("no Create for Wild to empower")
+ *   - orphan shape (row/col/area/tile/random) → wasted ("no action used …")
+ *   - a 2nd targeted action        → wasted ("only one targeted effect")
+ *   - an element no effect/cost used → wasted ("no effect or cost used …")
+ * The old "weave surges" injection (which rescued mistakes with free effects
+ * and silently inflated power) is GONE — `injectedTags` is retained but stays
+ * empty.
  *
- * ── RNG ─────────────────────────────────────────────────────────────────────
- * All magnitudes are HIDDEN per-tag rolls from weaveConfig.TAG_VALUE_TABLES
- * (the "high-roll" layer — e.g. create rolls 3–12). The mana cost AMOUNT is
- * rolled from weaveConfig.MANA_COST_CONFIG (5..8 band, floor+ceiling rise with
- * the computed POWER score). The cost COLOR is a weighted roll
- * (weaveConfig.COST_COLOR_WEIGHTS): bag elements weigh heavily and the primary
- * action's affinity moderately, but neither is a hard rule. Rolls happen
- * exactly once, here — the resulting skill is a plain stored object.
+ * ── RNG / cost ───────────────────────────────────────────────────────────────
+ * Magnitudes are HIDDEN per-tag rolls from weaveConfig.TAG_VALUE_TABLES (e.g.
+ * create rolls 3–12). The TOTAL mana cost is CONTINUOUS in the spell's POWER —
+ * weaveConfig.computeManaCostTotal ≈ clamp(round(power / K)), calibrated against
+ * the authored catalog so woven spells share their power-per-mana band. The
+ * total is SPLIT across the woven element colors in PICK ORDER (the first
+ * element pays the most — see buildCost), so multi-element spells are genuinely
+ * harder to fund and color order matters; a bag with no element tag falls back
+ * to the weighted COST_COLOR_WEIGHTS roll. Rolls happen once, here.
  *
  * Power weights / name tables / cost-color affinities are the tunable
  * constants below; all probability tables live in weaveConfig.js.
@@ -51,12 +50,12 @@
 
 import {
   rollTagValue,
-  rollManaCost,
+  computeManaCostTotal,
   pickWeightedEntry,
-  INJECTION_CONFIG,
   COST_COLOR_WEIGHTS,
+  MANA_COST_CONFIG,
 } from './weaveConfig.js';
-import { getTag, getTagLabel, TAG_CATEGORY } from './skillWeaveTags.js';
+import { SKILL_WEAVE_TAGS, getTag, getTagLabel, TAG_CATEGORY } from './skillWeaveTags.js';
 
 // ═══════════════════════════════════════════════════════════
 // Tunables
@@ -80,6 +79,17 @@ const SELF_STATUS_TAGS = new Set(['intangible', 'berserk', 'barrier']);
 
 /** The five mana colors a cost may be paid in (skull is never a cost). */
 const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
+
+/**
+ * The `random` tag draws its bonus from EVERY non-color tag (actions, shapes,
+ * modifiers, statuses — everything except elements and `random` itself). See
+ * synthesize() `emitRandomBonus`.
+ */
+const NON_COLOR_BONUS_TAGS = Object.freeze(
+  Object.values(SKILL_WEAVE_TAGS)
+    .filter((t) => t.category !== TAG_CATEGORY.ELEMENT && t.id !== 'random')
+    .map((t) => t.id),
+);
 
 /** Primary action → cost-color AFFINITY (a weight, not a rule — see
  *  COST_COLOR_WEIGHTS in weaveConfig). */
@@ -140,14 +150,14 @@ const GENERIC_SOUND_BY_ACTION = Object.freeze({
  * spell's POWER (which drives the mana-cost tier via MANA_COST_CONFIG).
  */
 const POWER = Object.freeze({
-  perDamage: 1,
-  perArmor: 0.9,
-  perHeal: 0.8,
-  perManaGained: 1,
+  perDamage: 0.5,
+  perArmor: 0.4,
+  perHeal: 0.3,
+  perManaGained: 0.5,
   perManaDrainedOneColor: 1,
   perManaDrainedAllColors: 2.5,
-  perAttack: 2,          // permanent for the battle
-  perTileCreated: 1,
+  perAttack: 1,          // permanent for the battle
+  perTileCreated: 1.5,
   thrallTileMult: 1.5,   // wild tiles are worth more per tile
   destroyTile: 2,        // single-tile snipe
   destroyRow: 8,
@@ -156,11 +166,11 @@ const POWER = Object.freeze({
   destroyAreaWide: 16,   // 5×5 (explode + area)
   convertByType: 8,      // all of one color → another
   convertTile: 3,        // targeted single tile
-  convertArea: 7,        // targeted 3×3
+  convertArea: 8,        // targeted 3×3
   perDebuffTurn: 4,
-  perBuffTurn: 3,
+  perBuffTurn: 4,
   extraTurn: 8,
-  shuffleBoard: 6,       // whole-board reshuffle (always paired with an extra turn)
+  shuffleBoard: 10,       // whole-board reshuffle (always paired with an extra turn)
 });
 
 // ── Name generation pools ──
@@ -417,11 +427,6 @@ function pickSkillSound(actions, effects, costColor) {
   return ACTION_SOUND[list[0]] || DEFAULT_SOUND;
 }
 
-/** Roll a 0–100 percentage chance from INJECTION_CONFIG. */
-function chance(pct) {
-  return Math.random() * 100 < pct;
-}
-
 function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
@@ -429,6 +434,8 @@ function capitalize(s) {
 /**
  * Weighted cost-color roll: every color gets a baseline weight; bag elements
  * and the primary action's affinity ADD weight (influence, not a hard rule).
+ * Only used as the FALLBACK when a bag has no cost-eligible element tag (a
+ * multi-element bag's cost colors are deterministic — see buildCost).
  */
 function rollCostColor(elements, primaryAction) {
   const weights = {};
@@ -442,6 +449,51 @@ function rollCostColor(elements, primaryAction) {
   const affinity = ACTION_COST_AFFINITY[primaryAction];
   if (affinity) weights[affinity] += COST_COLOR_WEIGHTS.actionAffinity;
   return pickWeightedEntry(Object.entries(weights)) || pickRandom(COST_COLORS);
+}
+
+/**
+ * Split a total mana cost across the woven element colors, in PICK ORDER — the
+ * FIRST element pays the most, so color order is a real decision and multi-color
+ * spells are genuinely harder to fund. Capped at MANA_COST_CONFIG.maxColors, and
+ * naturally at `total` (each color pays ≥1). Returns a { color: amount } cost,
+ * or null when there is no cost-eligible element color (caller falls back to the
+ * weighted single-color roll).
+ *
+ * @param {number} total — the computed total cost
+ * @param {string[]} elementColorsInOrder — woven element tags, in pick order
+ * @returns {Object<string,number>|null}
+ */
+function buildCost(total, elementColorsInOrder) {
+  const colors = [];
+  for (const c of elementColorsInOrder) {
+    if (COST_COLORS.includes(c) && !colors.includes(c)) colors.push(c); // skull excluded
+  }
+  if (!colors.length) return null;
+  const maxColors = MANA_COST_CONFIG.maxColors || 1;
+  const use = colors.slice(0, Math.max(1, Math.min(maxColors, total)));
+  if (use.length === 1) return { [use[0]]: total };
+
+  const n = use.length;
+  const weights = use.map((_, i) => n - i); // [n, n-1, …, 1] — first element heaviest
+  const wsum = weights.reduce((a, b) => a + b, 0);
+  const alloc = use.map((_, i) => Math.max(1, Math.round((total * weights[i]) / wsum)));
+
+  // Reconcile rounding so the parts sum to EXACTLY `total`.
+  let diff = total - alloc.reduce((a, b) => a + b, 0);
+  let guard = 0;
+  while (diff !== 0 && guard++ < 999) {
+    if (diff > 0) { alloc[0] += 1; diff--; }              // surplus → the primary color
+    else {
+      let trimmed = false;                                 // deficit → trim lowest-priority spare
+      for (let i = n - 1; i >= 0; i--) {
+        if (alloc[i] > 1) { alloc[i] -= 1; diff++; trimmed = true; break; }
+      }
+      if (!trimmed) break;
+    }
+  }
+  const cost = {};
+  use.forEach((c, i) => { cost[c] = alloc[i]; });
+  return cost;
 }
 
 /**
@@ -492,6 +544,7 @@ function generateName(tagIds, groups, primaryAction) {
  *   rolledValues: Object<string, number>,
  *   usedTags: string[],
  *   unusedTags: string[],
+ *   wastedReasons: Object<string, string>,
  *   injectedTags: string[],
  *   power: number,
  *   skill: object,
@@ -512,7 +565,12 @@ export function synthesize(recipe) {
 
   // ── Consumption state ──
   const used = new Set();
-  const injected = new Set(); // tag ids describing what the weave injected
+  const injected = new Set(); // retained for compat; stays empty (no injection)
+  const wastedReasons = {};   // tag id → WHY it contributed nothing (choice-driven downside)
+  /** Flag a picked tag as wasted with a player-facing reason (first reason wins). */
+  const markWasted = (tagId, reason) => {
+    if (!used.has(tagId) && !(tagId in wastedReasons)) wastedReasons[tagId] = reason;
+  };
   const effects = [];
   const lines = [];      // description lines
   let power = 0;
@@ -581,6 +639,58 @@ export function synthesize(recipe) {
       power += radius === 2 ? POWER.destroyAreaWide : POWER.destroyArea;
     }
     return true;
+  };
+
+  /**
+   * Emit a self-contained BONUS effect for one non-color tag — the payload of
+   * the `random` wildcard. Returns false when the tag can't apply right now
+   * (a destroy/shape when the single targeting slot is already taken), so the
+   * caller can try another rolled tag. `extra_turn`/`shuffle` only set the flag;
+   * the extra_turn effect is appended later (kept LAST — decision #4).
+   * @param {string} tag — a NON_COLOR_BONUS_TAGS id
+   * @returns {boolean} whether a bonus was emitted
+   */
+  const emitRandomBonus = (tag) => {
+    switch (tag) {
+      case 'damage': { const a = rollTagValue('damage') || 5; effects.push({ effectType: 'damage', damage: { amount: a } }); lines.push(`Deal ${a} [[damage]]`); power += a * POWER.perDamage; return true; }
+      case 'armor': { const a = rollTagValue('armor') || 5; effects.push({ effectType: 'armor', armor: { amount: a } }); lines.push(`Gain ${a} [[armor]]`); power += a * POWER.perArmor; return true; }
+      case 'heal': { const a = rollTagValue('heal') || 5; effects.push({ effectType: 'heal', heal: { amount: a } }); lines.push(`[[Heal]] ${a} HP`); power += a * POWER.perHeal; return true; }
+      case 'attack': { const a = rollTagValue('attack') || 1; effects.push({ effectType: 'gain_attack', gainAttack: { amount: a } }); lines.push(`Gain ${a} [[attack]]`); power += a * POWER.perAttack; return true; }
+      case 'drain': { const a = rollTagValue('drain') || 2; effects.push({ effectType: 'drain_mana', drainMana: { amount: a } }); lines.push(`Drain ${a} [[mana]] of every color from the enemy`); power += a * POWER.perManaDrainedAllColors; return true; }
+      case 'create': { emitCreate(rollTagValue('create') || 3, pickRandom(COST_COLORS)); return true; }
+      case 'wild': { emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.75)), 'wild'); return true; }
+      case 'convert':
+      case 'change': {
+        const to = pickRandom(COST_COLORS);
+        const from = pickRandom(COST_COLORS.filter((c) => c !== to));
+        effects.push({ effectType: 'convert_tiles_by_type', convertByType: { from, to } });
+        lines.push(`[[Change]] all ${TILE_LABEL[from]} [[tiles]] into ${TILE_LABEL[to]}`);
+        power += POWER.convertByType;
+        return true;
+      }
+      case 'shuffle': { effects.push({ effectType: 'shuffle' }); lines.push('[[Shuffle]] the board'); forceExtraTurn = true; power += POWER.shuffleBoard; return true; }
+      case 'extra_turn': { forceExtraTurn = true; return true; }
+      case 'destroy': case 'explode': {
+        const shape = pickRandom(tag === 'explode' ? ['area'] : ['row', 'column', 'area', 'tile']);
+        return emitDestroyShaped(shape, tag === 'explode'); // false if targeting taken
+      }
+      case 'row': case 'column': case 'area': case 'tile': {
+        return emitDestroyShaped(tag); // a bare shape's bonus is a destroy of it
+      }
+      default: {
+        const statusId = STATUS_TAG_TO_ID[tag];
+        if (!statusId) return false;
+        const turns = rollTagValue(tag) || 2;
+        const isSelf = SELF_STATUS_TAGS.has(tag);
+        const applyStatus = { id: statusId, target: isSelf ? 'self' : 'opponent', turns };
+        if (statusId === 'crippled') applyStatus.attackValue = 1;
+        effects.push({ effectType: 'apply_status', applyStatus });
+        const turnsText = turns === 1 ? '1 turn' : `${turns} turns`;
+        lines.push(isSelf ? `Gain [[${capitalize(tag)}]] for ${turnsText}` : `Apply [[${capitalize(tag)}]] for ${turnsText}`);
+        power += turns * (isSelf ? POWER.perBuffTurn : POWER.perDebuffTurn);
+        return true;
+      }
+    }
   };
 
   // ── Actions, in pick order (first = primary) ──
@@ -719,21 +829,17 @@ export function synthesize(recipe) {
       }
       case 'destroy':
       case 'explode': {
+        if (targeting) {
+          // A spell has only ONE targeted slot — a second targeted action is a
+          // wasted pick (a downside the player could have avoided), NOT a free
+          // vent into damage.
+          used.delete(action);
+          markWasted(action, 'spell can have only one targeted effect');
+          break;
+        }
         const isExplode = action === 'explode';
         const shape = takeShape(...(isExplode ? ['area'] : ['row', 'column', 'area', 'tile'])) || 'default';
-        if (!emitDestroyShaped(shape === 'default' ? 'area-default' : shape, isExplode)) {
-          // Targeting slot already claimed → the destruction VENTS as raw
-          // damage instead of fizzling (injection rule).
-          if (chance(INJECTION_CONFIG.ventedActionDamages)) {
-            const amount = Math.max(3, Math.round((rollTagValue('damage') || 5) * 0.75));
-            effects.push({ effectType: 'damage', damage: { amount } });
-            lines.push(`Deal ${amount} [[damage]]`);
-            power += amount * POWER.perDamage;
-            injected.add('damage');
-          } else {
-            used.delete(action);
-          }
-        }
+        emitDestroyShaped(shape === 'default' ? 'area-default' : shape, isExplode);
         break;
       }
       default:
@@ -742,49 +848,30 @@ export function synthesize(recipe) {
     }
   }
 
-  // ── Injection pass ("the weave surges") — see file header ──
-
-  // wild with no create → conjures Wild tiles anyway.
-  if (modifiers.has('wild') && !used.has('wild') && chance(INJECTION_CONFIG.wildCreates)) {
-    used.add('wild');
-    injected.add('create');
-    emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.75)), 'wild');
-  }
-
-  // Orphan shapes → inject a destroy of that shape (first one wins targeting).
-  for (const shape of ['row', 'column', 'area', 'tile']) {
-    if (!shapes.has(shape) || used.has(shape) || targeting) continue;
-    if (!chance(INJECTION_CONFIG.orphanShapeDestroys)) continue;
-    used.add(shape);
-    injected.add('destroy');
-    emitDestroyShaped(shape);
-    break;
-  }
-
-  // Orphan `random` → chaotic mana surge.
-  if (shapes.has('random') && !used.has('random') && chance(INJECTION_CONFIG.orphanRandomGains)) {
+  // ── `random` wildcard: ALWAYS pulls a BONUS effect from the non-color tag
+  //    pool (actions / shapes / modifiers / statuses). One tag is rolled (the
+  //    pool is shuffled and the first that can apply wins, so a destroy/shape
+  //    that needs the already-taken targeting slot simply rerolls). This is the
+  //    tag's function — not a "mistake", so it's never wasted. ──
+  if (shapes.has('random') && !used.has('random')) {
     used.add('random');
-    injected.add('gain');
-    const amount = Math.max(2, Math.round((rollTagValue('gain') || 3) * 0.6));
-    const color = pickRandom(COST_COLORS);
-    effects.push({ effectType: 'gain_mana', gainMana: { color, amount } });
-    lines.push(`Gain ${amount} ${TILE_LABEL[color]} [[mana]]`);
-    power += amount * POWER.perManaGained;
+    const pool = NON_COLOR_BONUS_TAGS.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    let emitted = false;
+    for (const t of pool) { if (emitRandomBonus(t)) { emitted = true; break; } }
+    if (!emitted) { // safety: only destroy/shape rolled AND targeting taken
+      const a = rollTagValue('damage') || 4;
+      effects.push({ effectType: 'damage', damage: { amount: a } });
+      lines.push(`Deal ${a} [[damage]]`);
+      power += a * POWER.perDamage;
+    }
   }
 
-  // ── Cost COLOR (weighted roll — elements/affinity influence, not dictate) ──
-  const costColor = rollCostColor(elements, primaryAction);
-  // An element whose job is coloring the cost counts as used.
-  if (elements.includes(costColor)) used.add(costColor);
-
-  // Elements consumed by NOTHING (not an action, not the cost) → conjure
-  // their own tiles instead of going inert.
-  for (const el of elements) {
-    if (used.has(el) || !chance(INJECTION_CONFIG.unusedElementCreates)) continue;
-    used.add(el);
-    injected.add('create');
-    emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.6)), el);
-  }
+  // (No injection pass otherwise — other redundant/incompatible picks become
+  //  CHOICE-DRIVEN downsides surfaced after the cost is known; see below.)
 
   // ── Statuses (always used; buffs → self, debuffs → opponent) ──
   for (const tag of groups[TAG_CATEGORY.STATUS]) {
@@ -812,15 +899,6 @@ export function synthesize(recipe) {
     power += amount * POWER.perDamage;
   }
 
-  // ── Pure damage spells surge an Extra Turn (damage alone is weak tempo) ──
-  const isPureDamage = effects.length > 0 && effects.every((e) => e.effectType === 'damage');
-  if (isPureDamage && !modifiers.has('extra_turn') && !forceExtraTurn && chance(INJECTION_CONFIG.pureDamageExtraTurn)) {
-    injected.add('extra_turn');
-    effects.push({ effectType: 'extra_turn' });
-    lines.push('Gain an [[extra turn]]');
-    power += POWER.extraTurn;
-  }
-
   // ── extra_turn LAST (create_tiles' cascade resets the flag — decision #4).
   //    Granted by the extra_turn modifier OR forced by `shuffle`. ──
   if (modifiers.has('extra_turn') || forceExtraTurn) {
@@ -830,14 +908,41 @@ export function synthesize(recipe) {
     power += POWER.extraTurn;
   }
 
-  // ── Cost AMOUNT from the final power score ──
-  const costRoll = rollManaCost(power);
-  const cost = { [costColor]: costRoll.cost };
+  // ── Cost: continuous TOTAL from the final POWER, SPLIT across woven colors ──
+  // Total ≈ round(power / K), clamped; a multi-element bag divides it across its
+  // colors in PICK ORDER (first element pays the most), so big multi-color
+  // spells are genuinely harder to fund. With no element tag, the color is the
+  // weighted affinity roll.
+  const total = computeManaCostTotal(power);
+  const elementColors = elements.filter((c) => COST_COLORS.includes(c)); // pick order, skull excluded
+  let cost = buildCost(total, elementColors);
+  if (!cost) cost = { [rollCostColor(elements, primaryAction)]: total };
+  // Paying with a color COUNTS as using that element tag (it isn't wasted).
+  for (const c of Object.keys(cost)) if (elements.includes(c)) used.add(c);
+  // Dominant (most-paid) cost color — drives the resolve-sound color + logging.
+  const costColor = Object.entries(cost).sort((a, b) => b[1] - a[1])[0][0];
+
+  // ── Choice-driven downsides: redundant/incompatible picks contribute NOTHING
+  //    (opportunity cost) and are surfaced with a reason. Deterministic, so a
+  //    weak weave reads as "I could have picked better", not a dice roll. ──
+  if (modifiers.has('wild') && !used.has('wild')) {
+    markWasted('wild', 'no Create for Wild to empower');
+  }
+  for (const shape of ['row', 'column', 'area', 'tile']) {
+    if (shapes.has(shape) && !used.has(shape)) markWasted(shape, 'no action used this shape');
+  }
+  for (const el of elements) {
+    if (!used.has(el)) {
+      markWasted(el, el === 'skull' ? 'Skull cannot pay a cost' : 'no effect or cost used this color');
+    }
+  }
 
   // ── Assemble ──
   const name = generateName(tagIds, groups, primaryAction);
   const usedTags = tagIds.filter((id) => used.has(id));
   const unusedTags = tagIds.filter((id) => !used.has(id));
+  // Every unused tag gets a reason (generic fallback for anything not flagged).
+  for (const id of unusedTags) if (!(id in wastedReasons)) wastedReasons[id] = 'found no synergy in this weave';
   const injectedTags = [...injected];
   const id = `woven_${tagIds.join('_')}_${Date.now().toString(36)}`;
 
@@ -869,10 +974,9 @@ export function synthesize(recipe) {
   const summary = tagIds
     .map((tid) => (tid in rolledValues ? `${getTagLabel(tid)}(${rolledValues[tid]})` : getTagLabel(tid)))
     .join(' + ');
-  console.log(`[SkillSynth] Woven "${name}" — [${summary}] → power ${Math.round(power)}, `
-    + `cost ${costRoll.cost} ${costColor}`
-    + (injectedTags.length ? `, surged: ${injectedTags.join(', ')}` : '')
-    + (unusedTags.length ? `, inert: ${unusedTags.join(', ')}` : ''));
+  const costStr = Object.entries(cost).map(([c, a]) => `${a} ${c}`).join(' + ');
+  console.log(`[SkillSynth] Woven "${name}" — [${summary}] → power ${Math.round(power)}, cost ${costStr}`
+    + (unusedTags.length ? `, wasted: ${unusedTags.map((t) => `${t} (${wastedReasons[t]})`).join('; ')}` : ''));
 
-  return { recipe: tagIds, groups, rolledValues, usedTags, unusedTags, injectedTags, power, skill, summary };
+  return { recipe: tagIds, groups, rolledValues, usedTags, unusedTags, wastedReasons, injectedTags, power, skill, summary };
 }

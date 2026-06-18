@@ -56,8 +56,8 @@ export const RARITY_WEIGHTS = Object.freeze({
  */
 export const ROUNDS_PER_WEAVE_WEIGHTS = Object.freeze({
   // 2: 70,
-  3: 80,
-  4: 20,
+  3: 60,
+  4: 30,
 });
 
 /**
@@ -65,9 +65,9 @@ export const ROUNDS_PER_WEAVE_WEIGHTS = Object.freeze({
  * Rolled independently for each round. Baseline ≈ 50 / 35 / 15.
  */
 export const TAGS_PER_ROUND_WEIGHTS = Object.freeze({
-  2: 20,
+  // 2: 20,
   3: 60,
-  4: 20,
+  4: 40,
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -113,29 +113,18 @@ export const TAG_VALUE_TABLES = Object.freeze({
 });
 
 // ═══════════════════════════════════════════════════════════
-// 4. Tag injection ("the weave surges")
+// 4. Downsides are CHOICE-DRIVEN (no random injection)
 // ═══════════════════════════════════════════════════════════
-
-/**
- * Chance (0–100, %) for each tag-INJECTION rule in the synthesizer. Injection
- * is the anti-"inert tag" mechanism: instead of a picked tag doing nothing, the
- * weave conjures a complementary effect the player didn't pick. Tune each rule
- * independently; 0 disables a rule (the tag goes inert instead).
- */
-export const INJECTION_CONFIG = Object.freeze({
-  /** `wild` with no `create` → conjures Thrall tiles anyway. */
-  wildCreates: 100,
-  /** A shape with no destroyer/converter → injects a destroy of that shape. */
-  orphanShapeDestroys: 100,
-  /** `random` with nothing to randomize → a chaotic surge of rolled mana. */
-  orphanRandomGains: 100,
-  /** An element consumed by nothing (not even the cost) → conjures its tiles. */
-  unusedElementCreates: 90,
-  /** A 2nd targeted action (targeting slot taken) → vents as direct damage. */
-  ventedActionDamages: 100,
-  /** A PURE damage spell (every effect is damage) → surges an Extra Turn. */
-  pureDamageExtraTurn: 75,
-});
+//
+// The old "the weave surges" INJECTION_CONFIG is GONE. Previously a tag with
+// nothing to attach to (an orphan shape, `wild` without `create`, an unused
+// element, a 2nd targeted action) was rescued by injecting a free complementary
+// effect — which both removed the intended "sometimes a bad result" texture and
+// silently inflated power. Now those redundant/incompatible picks DETERMINISTIC-
+// ALLY contribute nothing (pure opportunity cost) and are surfaced to the player
+// with a reason on the result screen — a "bad weave" you could have avoided, not
+// a dice roll. The rule + reason strings live in skillSynthesizer.js
+// (`wastedReasons`); there is no probability table to tune here.
 
 // ═══════════════════════════════════════════════════════════
 // 5. Cost color weights (synthesized-skill cost color)
@@ -163,43 +152,46 @@ export const COST_COLOR_WEIGHTS = Object.freeze({
 /**
  * Synthesized-skill mana cost configuration.
  *
- * A spell's cost is rolled from a FLOOR..CEILING band. The base band is
- * 5..8; every POWER threshold the spell's computed power score passes raises
- * BOTH the floor and the ceiling by 1, so stronger spells cost more while
- * keeping the same roll spread.
+ * Cost is CONTINUOUS in the spell's POWER score, not a tiered band:
  *
- * `spreadWeights` sets the relative chance of each offset WITHIN the band
- * (key 0 = the floor, key (ceiling−floor) = the ceiling) — tweak any single
- * number to bias rolls cheap or expensive.
+ *     total ≈ clamp(round(power / powerPerMana) + jitter, min, max)
+ *
+ * so a more powerful spell costs proportionally more, with no cheap ceiling for
+ * a stacked spell to hide under (the old flat 4-tier band capped at ~11 and
+ * badly undercut authored skills).
+ *
+ *  - `powerPerMana` (K) is the target POWER-PER-MANA ratio, CALIBRATED against
+ *    the authored catalog skills so woven spells sit in the same band. Catalog
+ *    skills run ~1.0–2.6 power/mana, averaging ~1.85 (Bash/Fracture 2.6, Summon
+ *    Dead 2.0, Defend 1.7, Oungan 1.3, Arcane Inscription 1.0). K is set a touch
+ *    BELOW that average → woven spells are slightly pricier than the average
+ *    authored skill, fair given their flexibility + hidden high-rolls.
+ *  - `min`/`max` clamp the TOTAL cost (summed across colors). A big spell should
+ *    hurt — the ceiling is intentionally high.
+ *  - `jitterWeights` is a small ± offset for texture (offset → relative weight).
+ *  - `maxColors` caps how many colors a multi-element bag's cost is split across
+ *    (see skillSynthesizer.buildCost).
  */
 export const MANA_COST_CONFIG = Object.freeze({
-  baseFloor: 4,
-  baseCeiling: 8,
-  /** Power score thresholds; each one passed → +1 floor AND +1 ceiling. */
-  powerTierThresholds: Object.freeze([14, 22, 32]),
-  /** Offset-from-floor → relative weight (cheap rolls slightly favored). */
-  spreadWeights: Object.freeze({ 0: 30, 1: 30, 2: 25, 3: 15 }),
+  powerPerMana: 1.7,
+  min: 3,
+  max: 15,
+  jitterWeights: Object.freeze({ '-1': 22, 0: 56, 1: 22 }),
+  maxColors: 2,
 });
 
 /**
- * Roll a synthesized skill's mana cost from its power score.
+ * Compute a synthesized skill's TOTAL mana cost from its power score
+ * (continuous, clamped, with a small jitter). The synthesizer then splits this
+ * across the woven colors (skillSynthesizer.buildCost).
  * @param {number} power — the synthesizer's computed power score
- * @returns {{ cost: number, floor: number, ceiling: number, tier: number }}
+ * @returns {number} total cost (summed across all colors)
  */
-export function rollManaCost(power = 0) {
+export function computeManaCostTotal(power = 0) {
   const cfg = MANA_COST_CONFIG;
-  let tier = 0;
-  for (const t of cfg.powerTierThresholds) if (power >= t) tier++;
-  const floor = cfg.baseFloor + tier;
-  const ceiling = cfg.baseCeiling + tier;
-  const bandWidth = ceiling - floor;
-  const entries = [];
-  for (let off = 0; off <= bandWidth; off++) {
-    entries.push([off, cfg.spreadWeights[off] != null ? cfg.spreadWeights[off] : 1]);
-  }
-  const off = pickWeightedEntry(entries);
-  const cost = floor + (off == null ? 0 : Number(off));
-  return { cost, floor, ceiling, tier };
+  const base = Math.round(Math.max(0, power || 0) / cfg.powerPerMana);
+  const jitter = Number(pickWeightedKey(cfg.jitterWeights)) || 0;
+  return Math.max(cfg.min, Math.min(cfg.max, base + jitter));
 }
 
 // ═══════════════════════════════════════════════════════════
