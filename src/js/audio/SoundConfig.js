@@ -199,6 +199,17 @@ const SOUNDS = {
   sfx_thrall_summon:  { sprite: 'sfx_thrall_summon',     category: AudioCategory.SFX },
   skill_exsanguinate: { sprite: 'sfx_skill_exsanguinate', category: AudioCategory.SFX },
 
+  // ── Sanguine Phoenix (Act 1 elite) ──────────────────────
+  // Two skill resolve sounds + two transform sounds. The "spawn" clip is
+  // misspelled "sanguin" (no 'e') in the sprite sheet — the sprite name matches
+  // it; the key stays clean (same handling as Lord Malakor's "descecrate").
+  skill_anemic_feast: { sprite: 'sfx_skill_anemic_feast', category: AudioCategory.SFX },
+  skill_blood_gorge:  { sprite: 'sfx_skill_blood_gorge',  category: AudioCategory.SFX },
+  // Death→Egg transform (Sanguine Egg relic) and Egg→Phoenix rebirth
+  // (Sanguine Chrysalis relic); played via the transform `sound` payloads.
+  sfx_sanguine_egg_spawn: { sprite: 'sfx_sanguin_egg_spawn',  category: AudioCategory.SFX },
+  sfx_sanguine_egg_hatch: { sprite: 'sfx_sanguine_egg_hatch', category: AudioCategory.SFX },
+
   // ── Character Select ────────────────────────────────────
   character_select_pick:    { sprite: 'character_select_pick',    category: AudioCategory.SFX },
   character_select_confirm: { sprite: 'character_select_confirm', category: AudioCategory.SFX },

@@ -183,15 +183,13 @@ const ASSET_ALIASES = {
   tile_disease: 'diseased_tile',
   tile_thrall:  'thrall_tile',
   tile_wild:    'wild_tile',
-  // Sanguine Egg tiles (the Sanguine Phoenix's wild tile) — PLACEHOLDER: reuse
-  // the standard wild art until dedicated egg art is packed into the tiles sheet.
-  tile_sanguine_egg: 'wild_tile',
-  // Sanguine Phoenix / Egg battle portraits — PLACEHOLDERS reusing existing
-  // enemy portrait sprites. When real art is added to the enemy-portraits sheet
-  // (sprite names `portrait_sanguine_phoenix` / `portrait_sanguine_egg`), REMOVE
-  // these two aliases (an alias shadows a same-named real sprite).
-  portrait_sanguine_phoenix: 'portrait_acolyte',
-  portrait_sanguine_egg:     'portrait_abomination',
+  // Sanguine Egg tiles (the Sanguine Phoenix's wild tile) — dedicated art lives
+  // in the tiles sheet as `phoenix_egg_tile`; the board requests `tile_<type>`.
+  tile_sanguine_egg: 'phoenix_egg_tile',
+  // (Sanguine Phoenix / Egg portraits resolve directly from the enemy-portraits
+  // sheet: the Phoenix def's `portrait: 'sanguine_phoenix'` → `portrait_sanguine_phoenix`,
+  // the Egg def's `portrait: 'sanguine_phoenix_egg'` → `portrait_sanguine_phoenix_egg`.
+  // No aliases needed.)
 };
 
 // ── Game viewport configuration ─────────────────────────

@@ -1055,6 +1055,10 @@ export default class BattleScene extends UIPanel {
     if (state.enemyTransformed) {
       this.setEnemyData(state.enemyTransformed);
     }
+    // Transform SFX (egg spawn / hatch), set from the relic's `sound` payload.
+    if (state.transformSfx && this._audioManager) {
+      this._audioManager.playSfx(state.transformSfx);
+    }
 
     // ── Board-shuffle animation (SHUFFLE skill effect) ──
     // The board model is already reshuffled; the BoardPlaceholder plays a

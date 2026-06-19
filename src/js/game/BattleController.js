@@ -83,6 +83,11 @@ export default class BattleController {
      */
     this._enemyTransformed = null;
 
+    /** One-shot SFX key to play on the next transform (egg spawn / hatch),
+     *  taken from the relic's transform/chrysalis `sound` payload. Read &
+     *  cleared via getState(). @type {string|null} */
+    this._pendingTransformSfx = null;
+
     /** Re-entry guard while dispatching onDeath (a transform that leaves HP at
      *  0 must not re-trigger onDeath forever). @type {boolean} */
     this._deathTransformFiring = false;
@@ -645,6 +650,10 @@ export default class BattleController {
     const enemyTransformed = this._enemyTransformed;
     this._enemyTransformed = null;
 
+    // One-shot transform SFX (egg spawn / hatch), cleared on read.
+    const transformSfx = this._pendingTransformSfx;
+    this._pendingTransformSfx = null;
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -664,6 +673,7 @@ export default class BattleController {
       thrallSummoned,
       boardShuffled,
       enemyTransformed,
+      transformSfx,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -2945,6 +2955,8 @@ export default class BattleController {
     this.enemyState._chrysalisGrace =
       typeof cfg.incubateTurns === 'number' ? cfg.incubateTurns : 0;
 
+    if (cfg.sound) this._pendingTransformSfx = cfg.sound; // egg-spawn SFX
+
     // Seed the egg tiles in place (no cascade) — mirrors the Thrall-summon path.
     if (cfg.createTiles) {
       this._applyPassiveCreateTiles(
@@ -2992,6 +3004,7 @@ export default class BattleController {
     }
 
     // Eggs remain — explode them (blood only, no tendrils) and be reborn.
+    if (cfg.sound) this._pendingTransformSfx = cfg.sound; // egg-hatch SFX
     const side = (payload && payload.side) || 'enemy';
     this._harvestEvents.push({
       side,

@@ -38,7 +38,7 @@ const sanguineEgg = {
   // No starting mana of its own — the Phoenix's mana is carried across the
   // transform in place (see BattleController._transformInto).
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
-  portrait: 'sanguine_egg', // placeholder alias → portrait_abomination (see main.js)
+  portrait: 'sanguine_phoenix_egg', // → portrait_sanguine_phoenix_egg (enemy-portraits sheet)
   music: {
     trackKey: 'battle_theme',
     persistAfterBattle: true,

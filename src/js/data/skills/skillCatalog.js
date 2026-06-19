@@ -381,8 +381,8 @@ const SKILL_CATALOG = {
     id: 'blood_gorge',
     name: 'Blood Gorge',
     description: 'Drain 5 of all [[mana]] from the enemy.\nGain 10 Max HP.\n[[Heal]] 10 HP.',
-    icon: 'skill_soul_burn',  // placeholder — reuses Soul Burn's drain-themed icon
-    sound: 'skill_soul_burn', // placeholder
+    icon: 'skill_blood_gorge',  // dedicated icon (enemy-skills sheet)
+    sound: 'skill_blood_gorge', // dedicated SFX
     cost: { purple: 6 },
     effects: [
       { effectType: 'drain_mana', drainMana: { amount: 5 } },
@@ -397,8 +397,8 @@ const SKILL_CATALOG = {
     // Worded like the synthesizer's `skull + damage` line (skillSynthesizer
     // emitDamage): "Deal <<n>> <type>, plus N per [[Skull]] on the board".
     description: 'Deal <<10>> [[mag]], plus 1 per [[Skull]] on the board.\nGain 6 purple.\nGain an [[extra turn]].',
-    icon: 'skill_doomsong',  // placeholder — reuses Doomsong's icon
-    sound: 'skill_doomsong', // placeholder
+    icon: 'skill_anemic_feast',  // dedicated icon (enemy-skills sheet)
+    sound: 'skill_anemic_feast', // dedicated SFX
     cost: { red: 10 },
     effects: [
       // perSkull adds the live board Skull count at cast; magic scaling keeps it

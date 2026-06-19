@@ -20,8 +20,10 @@
  * which swaps the enemy identity in place on transform (see decision in
  * AGENT_ENTRYPOINT). Uses the standard EnemyAI.
  *
- * Portrait/skill/relic art reuse existing keys as PLACEHOLDERS (see main.js
- * portrait aliases + the skill/relic icon fields) until dedicated art is packed.
+ * All art is dedicated: portraits (portrait_sanguine_phoenix /
+ * portrait_sanguine_phoenix_egg), skill icons (skill_blood_gorge /
+ * skill_anemic_feast), relic icons (relic_sanguine_egg /
+ * relic_sanguine_chrysalis), the phoenix_egg_tile, and the four SFX.
  *
  * See act1/goblin.js for the full field documentation.
  */
@@ -35,16 +37,18 @@ const sanguinePhoenix = {
 
   act: 1,
   rarity: 'common',
-  type: 'elite',
-  floors: [4, 5, 6, 7, 8, 9],
+  type: 'minion',
+  floors: [1, 2, 3, 4, 5, 6],
+  // type: 'elite',
+  // floors: [4, 5, 6, 7, 8, 9],
 
-  hp: 30, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 30,
-  attack: 3,
+  hp: 1, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 1,
+  attack: 1,
   armor: 0,
   // No starting mana — it must match the board to fuel Blood Gorge / Anemic Feast.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
-  portrait: 'sanguine_phoenix', // placeholder alias → portrait_acolyte (see main.js)
+  portrait: 'sanguine_phoenix', // → portrait_sanguine_phoenix (enemy-portraits sheet)
   music: {
     trackKey: 'battle_theme',
     persistAfterBattle: true,

@@ -207,7 +207,7 @@ const ENEMY_RELIC_CATALOG = {
     id: 'sanguine_egg',
     name: 'Sanguine Egg',
     description: 'Upon death, transform into a [[Sanguine Egg]].\n[[Create]] 2 Sanguine Egg [[tiles]].',
-    icon: 'relic_barons_signet', // placeholder — reuses Baron's Signet (tile-create theme)
+    icon: 'relic_sanguine_egg',
     rarity: RELIC_RARITY.RARE,
     effects: [
       {
@@ -217,6 +217,7 @@ const ENEMY_RELIC_CATALOG = {
           intoEnemyId: 'sanguineEgg',
           incubateTurns: 1,
           createTiles: { type: 'sanguine_egg', amount: 2, avoidMatches: true },
+          sound: 'sfx_sanguine_egg_spawn',
         },
       },
     ],
@@ -234,13 +235,18 @@ const ENEMY_RELIC_CATALOG = {
     id: 'sanguine_chrysalis',
     name: 'Sanguine Chrysalis',
     description: 'At the start of turn, [[Harvest]] all [[Sanguine Egg]] tiles and transform into a [[Sanguine Phoenix]].\nIf no Sanguine Eggs remain, perish.',
-    icon: 'relic_heart_of_usurper', // placeholder — reuses Usurper's Heart (harvest theme)
+    icon: 'relic_sanguine_chrysalis',
     rarity: RELIC_RARITY.RARE,
     effects: [
       {
         trigger: 'onTurnStart',
         effectType: 'chrysalis',
-        chrysalis: { eggType: 'sanguine_egg', intoEnemyId: 'sanguinePhoenix', tendrilColor: '#a01a2a' },
+        chrysalis: {
+          eggType: 'sanguine_egg',
+          intoEnemyId: 'sanguinePhoenix',
+          tendrilColor: '#a01a2a',
+          sound: 'sfx_sanguine_egg_hatch',
+        },
       },
     ],
   },
