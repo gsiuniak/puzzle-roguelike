@@ -6,14 +6,19 @@
  * Sanguine Egg relic swaps into it on death. MapScene still registers it so the
  * id resolves when pre-building the Phoenix's transform forms.
  *
- * A 999-HP wall the player cannot realistically kill: the goal during the Egg
- * phase is to clear the 2 wild Sanguine Egg TILES (created on the Phoenix's
- * death) before the Egg's Sanguine Chrysalis relic blooms. It has no skills and
- * inherits the Phoenix's mana across the transform. Uses the standard EnemyAI
- * (it can only swap tiles — there is no skill to cast).
+ * A KILLABLE second health bar — the Egg's Sanguine Chrysalis relic fires on the
+ * Egg's DEATH (not a turn trigger): if any wild Sanguine Egg tiles remain it is
+ * reborn as a full-life Phoenix; if the player cleared them all first, it
+ * perishes. So the player must clear both egg tiles BEFORE landing the killing
+ * blow on the Egg. It has no skills and inherits the Phoenix's mana across the
+ * transform; it is DORMANT (passes its turns — see BattleController._doEnemyTurn)
+ * so it never moves tiles.
  *
- * `attackScale: 0` opts the Egg out of the per-floor attack bonus so it stays a
- * near-harmless wall regardless of depth.
+ * `hp` is the second-bar size — tune it. It must be high enough that the
+ * Phoenix-killing cascade doesn't immediately also kill the Egg (else the Egg
+ * phase is skipped) but low enough to grind down over a couple of turns while
+ * clearing the eggs. `attackScale: 0` opts the Egg out of the per-floor attack
+ * bonus (it never attacks anyway, being dormant).
  *
  * See act1/goblin.js for the full field documentation.
  */
@@ -30,10 +35,10 @@ const sanguineEgg = {
   type: 'elite',
   floors: [], // never spawns on its own — reached only via the Phoenix's transform
 
-  hp: 999,
-  maxHp: 999,
+  hp: 20,  // killable second health bar (floor-scaled like any enemy) — tunable
+  maxHp: 20,
   attack: 1,
-  attackScale: 0, // a wall: don't add the per-floor attack bonus
+  attackScale: 0, // dormant — never attacks; opt out of the per-floor attack bonus
   armor: 0,
   // No starting mana of its own — the Phoenix's mana is carried across the
   // transform in place (see BattleController._transformInto).

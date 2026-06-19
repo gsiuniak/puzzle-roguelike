@@ -3,13 +3,14 @@
  * vampire built entirely from data-driven parts (no bespoke boss code):
  *
  *   - Sanguine Egg relic (onDeath): instead of dying, the Phoenix TRANSFORMS
- *     into the Sanguine Egg enemy (999 HP, no skills, keeps its mana) and seeds
- *     the board with 2 wild Sanguine Egg tiles.
- *   - The Egg's Sanguine Chrysalis relic (onTurnStart): if any egg tiles still
- *     remain, they burst (liquid blood) and the Egg is REBORN as a full-life
- *     Phoenix; if the player has cleared every egg, the chrysalis withers and
- *     the enemy finally dies. The Egg skips its FIRST chrysalis check
- *     (incubateTurns) so the player gets one turn to clear the wild eggs.
+ *     into the dormant, KILLABLE Sanguine Egg enemy (its own HP bar, no skills,
+ *     keeps its mana) and seeds the board with 2 wild Sanguine Egg tiles.
+ *   - The Egg's Sanguine Chrysalis relic (also onDeath — fires when the EGG is
+ *     killed): if any egg tiles still remain, they burst (liquid blood) and the
+ *     Egg is REBORN as a full-life Phoenix; if the player cleared every egg
+ *     first, it perishes. So clear BOTH egg tiles before the killing blow. Both
+ *     transforms run through the same onDeath path — deterministic, no turn
+ *     trigger, no incubation (which mis-behaved with extra turns).
  *   - Blood Gorge (6 Purple): drain 5 of every enemy mana, +10 Max HP, heal 10
  *     — a snowballing HP pool that punishes a slow kill.
  *   - Anemic Feast (10 Red): skull-fed Magic nuke that refuels Purple and gains

@@ -88,6 +88,12 @@ export default class BattleController {
      *  cleared via getState(). @type {string|null} */
     this._pendingTransformSfx = null;
 
+    /** Deferred egg-spawn from a death-transform (Sanguine Egg). Set by
+     *  _applyTransform, drained in _endTurn so the eggs land on a SETTLED board
+     *  (creating them mid-killing-cascade let the cascade sweep them — the "eggs
+     *  don't always drop" bug). `{ createTiles, side, sound }` or null. */
+    this._pendingEggSpawn = null;
+
     /** Re-entry guard while dispatching onDeath (a transform that leaves HP at
      *  0 must not re-trigger onDeath forever). @type {boolean} */
     this._deathTransformFiring = false;
@@ -1584,6 +1590,18 @@ export default class BattleController {
   }
 
   _endTurn(side) {
+    // Drain a deferred egg-spawn (Sanguine Egg death-transform) onto the now-
+    // settled board. Deferred from _applyTransform so the in-flight killing
+    // cascade can't sweep the wild eggs before they settle, and so they're
+    // created exactly once (the first turn-end after the transform — the
+    // player's killing turn). avoidMatches keeps them from auto-resolving.
+    if (this._pendingEggSpawn) {
+      const pending = this._pendingEggSpawn;
+      this._pendingEggSpawn = null;
+      this._applyPassiveCreateTiles({ createTiles: pending.createTiles }, { side: pending.side });
+      if (pending.sound) this._pendingTransformSfx = pending.sound;
+    }
+
     // Dispatch onTurnEnd BEFORE we mutate state for the next turn so
     // relic effects see the correct active-side context.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_END, { side });
@@ -1646,15 +1664,6 @@ export default class BattleController {
     // Dispatch onTurnStart AFTER state is set so relic effects can
     // observe the active side correctly.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_START, { side });
-
-    // A turn-start passive can be lethal (the Sanguine Chrysalis kills the Egg
-    // when no eggs remain). Re-check game over so the dead side doesn't go on to
-    // act. (A chrysalis that REVIVES instead leaves the enemy alive, so this is
-    // a no-op and the new Phoenix proceeds to take its turn.)
-    if (this._checkGameOver()) {
-      if (this.onStateChange) this.onStateChange();
-      return;
-    }
 
     if (this.onStateChange) this.onStateChange();
   }
@@ -1903,7 +1912,19 @@ export default class BattleController {
   // ── Enemy ─────────────────────────────────────────────
 
   _doEnemyTurn() {
-    // ── 0. Silence: skip ALL skill casting (custom + standard AI) and fall
+    // ── 0a. Dormant Sanguine Egg: it has no skills and must NOT act — it simply
+    //    passes its turn. Its only per-turn behavior is the Sanguine Chrysalis
+    //    relic fires on the Egg's own onDeath (hatch / perish), never on a turn.
+    //    Without this it would fall through to _doEnemySwap and shuffle the board
+    //    — moving tiles, matching away its own eggs, and even stealing extra
+    //    turns off a 4+ match.
+    if (this.enemyState._isDormantEgg) {
+      this.log.add(`The ${this.enemyState.name} lies dormant.`);
+      this._endTurn('enemy');
+      return;
+    }
+
+    // ── 0b. Silence: skip ALL skill casting (custom + standard AI) and fall
     //    straight to the swap path. Forward-looking guard — no content silences
     //    the enemy yet, but this keeps the status uniform across both sides.
     const silenced = this._isSilenced(this.enemyState);
@@ -2440,6 +2461,14 @@ export default class BattleController {
    * @returns {{actualDamage:number, blocked:number, armorDamage:number}}
    */
   _applyDamage(target, amount, opts = {}) {
+    // The Sanguine Egg is INVULNERABLE while it is still "forming" — between the
+    // Phoenix's death and the eggs settling (`_pendingEggSpawn` set, drained in
+    // _endTurn). This guarantees the Egg phase actually happens: a big killing
+    // cascade can't also chew through the new Egg before the player gets to act.
+    if (target === this.enemyState && this._pendingEggSpawn) {
+      return { actualDamage: 0, blocked: 0, armorDamage: 0 };
+    }
+
     const side = target === this.playerState ? 'player' : 'enemy';
     const attackerSide = opts.attackerSide || (side === 'player' ? 'enemy' : 'player');
     const attacker = this._getStateBySide(attackerSide);
@@ -2914,7 +2943,7 @@ export default class BattleController {
     e.aiBehavior = cloned.aiBehavior;
     e.statuses = [];               // a fresh body — clear any debuffs
     e._defeated = false;
-    e._chrysalisGrace = 0;
+    e._isDormantEgg = false;       // cleared here; the Egg form re-sets it (below)
     e.mana = keptMana;             // mana carries across the transform
 
     // Reset per-side static-modifier bookkeeping for the new relic set. The
@@ -2939,12 +2968,14 @@ export default class BattleController {
 
   /**
    * Death-transform board effect (Sanguine Egg relic, onDeath): swap the enemy
-   * into its alternate form and seed the board with the configured tiles. The
-   * form arrives at full life so the post-dispatch _checkGameOver sees it alive
-   * and the battle continues. `incubateTurns` makes the new form skip its first
-   * chrysalis check so the player gets a turn to clear the seeded tiles.
+   * into its DORMANT, KILLABLE Egg form (which passes its turns — see
+   * _doEnemyTurn) and DEFER seeding the egg tiles to the next settled board
+   * (drained in _endTurn, so the in-flight killing cascade can't sweep them). The
+   * Egg arrives at its own full HP so the post-dispatch _checkGameOver sees it
+   * alive and the battle continues; the player must then kill the Egg AGAIN
+   * (after clearing the egg tiles) to win — see _applyChrysalis (also onDeath).
    *
-   * @param {object} effect — { transform: { intoEnemyId, incubateTurns?, createTiles? } }
+   * @param {object} effect — { transform: { intoEnemyId, createTiles?, sound? } }
    * @param {object} payload — { side } (the dying side)
    * @returns {boolean} always true (effect recognized/handled)
    */
@@ -2952,32 +2983,37 @@ export default class BattleController {
     const cfg = (effect && effect.transform) || {};
     if (!cfg.intoEnemyId || !this._transformInto(cfg.intoEnemyId)) return true;
 
-    this.enemyState._chrysalisGrace =
-      typeof cfg.incubateTurns === 'number' ? cfg.incubateTurns : 0;
+    const e = this.enemyState;
+    e._isDormantEgg = true; // the Egg form does nothing on its turns but pass
 
-    if (cfg.sound) this._pendingTransformSfx = cfg.sound; // egg-spawn SFX
-
-    // Seed the egg tiles in place (no cascade) — mirrors the Thrall-summon path.
+    // Defer the egg-tile creation to the next settled board (see _endTurn). The
+    // spawn SFX rides along so it plays as the eggs actually appear.
     if (cfg.createTiles) {
-      this._applyPassiveCreateTiles(
-        { createTiles: cfg.createTiles },
-        { side: (payload && payload.side) || 'enemy' }
-      );
+      this._pendingEggSpawn = {
+        createTiles: cfg.createTiles,
+        side: (payload && payload.side) || 'enemy',
+        sound: cfg.sound || null,
+      };
+    } else if (cfg.sound) {
+      this._pendingTransformSfx = cfg.sound;
     }
-    this.log.add(`${this.enemyState.name} emerges!`);
+    this.log.add(`${e.name} emerges!`);
     return true;
   }
 
   /**
-   * Chrysalis board effect (Sanguine Egg form, onTurnStart): if any egg tiles
-   * remain, they EXPLODE (liquid blood, no tendrils) and the enemy is reborn as
-   * a full-life Sanguine Phoenix; if NONE remain, the chrysalis withers and the
-   * enemy perishes (the post-onTurnStart _checkGameOver ends the battle).
+   * Chrysalis board effect (Sanguine Egg form, onDeath): dispatched when the Egg
+   * is killed (HP→0), via _tryEnemyDeathTransform — the SAME path the Phoenix's
+   * death uses. If any egg tiles remain, they BURST (liquid blood, no tendrils)
+   * and the enemy is reborn as a full-life Sanguine Phoenix (cheating death — it's
+   * no longer at 0 HP, so the battle continues). If NONE remain, it does nothing:
+   * the enemy stays dead and _checkGameOver declares victory.
    *
-   * The first check after laying is skipped via `_chrysalisGrace` (set by the
-   * death-transform) so the player gets a turn to clear the eggs first.
+   * On-death (not a turn trigger) keeps the revive/die deterministic and means
+   * the Egg never has to "pass" a turn to resolve. The player must clear both egg
+   * tiles BEFORE landing the killing blow on the Egg.
    *
-   * @param {object} effect — { chrysalis: { eggType, intoEnemyId, tendrilColor? } }
+   * @param {object} effect — { chrysalis: { eggType, intoEnemyId, tendrilColor?, sound? } }
    * @param {object} payload — { side } (the egg's side)
    * @returns {boolean} always true (effect recognized/handled)
    */
@@ -2985,25 +3021,22 @@ export default class BattleController {
     const cfg = (effect && effect.chrysalis) || {};
     const eggType = cfg.eggType || 'sanguine_egg';
     const intoEnemyId = cfg.intoEnemyId || 'sanguinePhoenix';
-    const e = this.enemyState;
-
-    // Incubation — skip the first turn-start so the player has a clearing turn.
-    if (e._chrysalisGrace && e._chrysalisGrace > 0) {
-      e._chrysalisGrace -= 1;
-      this.log.add(`The ${e.name} pulses ominously...`);
-      return true;
-    }
 
     const eggs = this.board.getTilesOfType(eggType);
     if (eggs.length === 0) {
-      // No eggs — the chrysalis withers. _checkGameOver (after onTurnStart) wins.
-      e.hp = 0;
-      e._defeated = true;
-      this.log.add(`The chrysalis withers — no eggs remain. ${e.name} perishes!`);
+      // No eggs remain — the chrysalis withers. The enemy is already at 0 HP from
+      // the killing blow, so we simply DON'T revive it: _tryEnemyDeathTransform
+      // reports no revive and _checkGameOver declares victory. Drop any pending
+      // egg-spawn defensively (a freak same-cascade double-kill never spawns eggs
+      // for a dead enemy).
+      this._pendingEggSpawn = null;
+      this.log.add(`The chrysalis withers — no eggs remain. ${this.enemyState.name} perishes!`);
       return true;
     }
 
-    // Eggs remain — explode them (blood only, no tendrils) and be reborn.
+    // Eggs remain — they BURST (blood only, no tendrils) and the enemy is reborn
+    // as a full-life Sanguine Phoenix. _transformInto restores full HP and clears
+    // _defeated, so the battle continues (the Egg cheated death).
     if (cfg.sound) this._pendingTransformSfx = cfg.sound; // egg-hatch SFX
     const side = (payload && payload.side) || 'enemy';
     this._harvestEvents.push({
@@ -3012,7 +3045,6 @@ export default class BattleController {
       color: cfg.tendrilColor || '#a01a2a',
       bloodOnly: true,
     });
-    if (side === 'enemy') this._extraEnemyTurnDelay += HARVEST_ANIM_DELAY;
 
     // Remove the eggs in place (each → a random mana color, no cascade) so they
     // vanish without gifting a free match. Surface a conversion shimmer too.

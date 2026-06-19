@@ -196,13 +196,12 @@ const ENEMY_RELIC_CATALOG = {
   },
 
   // Death-transform engine (Sanguine Phoenix). When the owner would die, it does
-  // NOT die — it transforms into the Sanguine Egg enemy (999 HP, no skills, keeps
-  // its mana) and seeds the board with 2 wild Sanguine Egg tiles. Board/state-
-  // touching, so it routes through BattleController._handlePassiveBoardEffect via
-  // the `transform` path (which swaps the enemy identity in place and creates the
-  // egg tiles). Fires on the NEW `onDeath` trigger, dispatched from _checkGameOver
-  // before victory is declared. `incubateTurns` makes the egg skip its first
-  // chrysalis check so the player gets a turn to clear the eggs (see Chrysalis).
+  // NOT die — it transforms into the Sanguine Egg enemy (a killable second
+  // health bar, no skills, keeps its mana) and seeds the board with 2 wild
+  // Sanguine Egg tiles. Board/state-touching → BattleController
+  // ._handlePassiveBoardEffect via the `transform` path (swaps the enemy identity
+  // in place + defers the egg-tile spawn). Fires on the `onDeath` trigger,
+  // dispatched from _checkGameOver before victory is declared.
   sanguine_egg: {
     id: 'sanguine_egg',
     name: 'Sanguine Egg',
@@ -215,7 +214,6 @@ const ENEMY_RELIC_CATALOG = {
         effectType: 'transform',
         transform: {
           intoEnemyId: 'sanguineEgg',
-          incubateTurns: 1,
           createTiles: { type: 'sanguine_egg', amount: 2, avoidMatches: true },
           sound: 'sfx_sanguine_egg_spawn',
         },
@@ -223,23 +221,23 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
-  // Rebirth engine (Sanguine Egg form). At the START of the egg's turn it checks
-  // the board: if any Sanguine Egg tiles remain, they EXPLODE (liquid-blood, no
-  // tendrils — see _spawnHarvestTendrils bloodOnly) and the egg transforms back
-  // into a full-life Sanguine Phoenix (original relics/skills, kept mana). If NO
-  // eggs remain, the chrysalis withers and the enemy perishes (battle over).
-  // Board/state-touching → BattleController._handlePassiveBoardEffect `chrysalis`
-  // path. The egg's first turn is skipped by `incubateTurns` (see Sanguine Egg)
-  // so the player has one turn to clear the eggs first.
+  // Rebirth engine (Sanguine Egg form). Also an `onDeath` check — when the EGG is
+  // killed it inspects the board: if any Sanguine Egg tiles remain they BURST
+  // (liquid-blood, no tendrils — see _spawnHarvestTendrils bloodOnly) and the egg
+  // transforms back into a full-life Sanguine Phoenix (original relics/skills,
+  // kept mana); if NO eggs remain it simply stays dead (battle over). Using
+  // onDeath (not a turn trigger) keeps the revive/die deterministic and avoids
+  // the egg ever needing to "pass" a turn to resolve. The player wins by clearing
+  // both egg tiles BEFORE landing the killing blow on the egg.
   sanguine_chrysalis: {
     id: 'sanguine_chrysalis',
     name: 'Sanguine Chrysalis',
-    description: 'At the start of turn, [[Harvest]] all [[Sanguine Egg]] tiles and transform into a [[Sanguine Phoenix]].\nIf no Sanguine Eggs remain, perish.',
+    description: 'Upon death, [[Harvest]] all [[Sanguine Egg]] tiles and transform into a [[Sanguine Phoenix]].\nIf no Sanguine Eggs remain, perish.',
     icon: 'relic_sanguine_chrysalis',
     rarity: RELIC_RARITY.RARE,
     effects: [
       {
-        trigger: 'onTurnStart',
+        trigger: 'onDeath',
         effectType: 'chrysalis',
         chrysalis: {
           eggType: 'sanguine_egg',
