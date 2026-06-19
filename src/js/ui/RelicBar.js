@@ -6,9 +6,26 @@ import { resolveDynamicText } from '../data/scalingConfig.js';
 // These are the per-bar internals; the BattleScene owns the bar's
 // outer width/height/margins so the layout offset stays in one place.
 // No background or border — relics float over the battle background.
-const BAR_PADDING = { top: 30, right: 55, bottom: 0, left: 0 };
+//
+// Positioning model: the icon COLUMN is anchored to the PANEL-side edge of the
+// bar (the side set via setGradientDarkSide — 'right' for the player bar, 'left'
+// for the enemy bar). The icon-column center sits ICON_INSET_FROM_PANEL px in
+// from that edge, and the first icon ICON_TOP_MARGIN px down from the bar's top.
+// Tweak these two to move the whole relic stack; the backdrop gradient anchors
+// to the actual icon rects, so it follows automatically.
 const ICON_SIZE = 70;
 const ICON_GAP = 13;
+/** First icon's top offset from the bar's top edge. */
+const ICON_TOP_MARGIN = 30;
+/**
+ * Icon-column CENTER distance from the panel-side edge of the bar. NOTE the bar
+ * (RELIC_COL_WIDTH 90) overlaps the panel by ~MAIN_ROW_GAP (40px), so a value
+ * near the full width parks the stack in the visible band just outside the
+ * panel. Raise to push icons further into the open battle area, lower to tuck
+ * them tighter against (under) the panel.
+ */
+const ICON_INSET_FROM_PANEL = 75;
+const BAR_PADDING = { top: ICON_TOP_MARGIN, right: 0, bottom: 0, left: 0 };
 
 // ── Pagination (page-flip arrows when relics overflow the column) ─────────
 // When more relics are collected than fit in the column height, the list is
@@ -29,6 +46,16 @@ const ARROW_SHADOW = 'rgba(0, 0, 0, 0.6)';
 const JIGGLE_AMPLITUDE_DEG = 10;   // peak rotation to each side (±degrees)
 const JIGGLE_OSCILLATIONS  = 3;    // number of full back-and-forth swings
 const JIGGLE_DURATION_MS   = 420;  // total animation length
+
+// ── Backdrop gradient ────────────────────────────────────
+// A subtle black gradient behind the floating relic icons to lift them off the
+// battle background: darkest (semi-transparent) at the edge nearest the
+// character panel, fading to fully transparent away from it. Anchored to the
+// ACTUAL icon rects (position + count) so it always aligns with the stack.
+const GRADIENT_DARK_ALPHA = 0.42;    // black alpha at the panel-side edge
+const GRADIENT_WIDTH = 20;          // px width of the fade band
+const GRADIENT_DARK_OVERHANG = 12;   // how far past the icons (toward panel) the dark edge sits
+const GRADIENT_V_PAD = 12;           // vertical padding above/below the icon stack
 
 // Tooltip layout for relic icons. Tweak here, not at call sites.
 const TOOLTIP_SCALE   = 1.0;
@@ -75,6 +102,12 @@ export default class RelicBar extends UIContainer {
     this.gap = ICON_GAP;
     this.padding = BAR_PADDING;
 
+    /**
+     * Which edge of the bar the backdrop gradient is darkest at — the side that
+     * abuts the character panel. 'right' (default, player bar) | 'left' (enemy
+     * bar) | null (no gradient). Set via setGradientDarkSide().
+     */
+    this._gradientDarkSide = 'right';
     /** Owner stats ({ attack, magic }) for live `<<n>>` tooltip damage values. */
     this._ownerStats = null;
     /** Signature of the owner stats last baked into tooltips (re-attach gate). */
@@ -263,12 +296,24 @@ export default class RelicBar extends UIContainer {
   }
 
   /**
-   * Position the current page's icons (stacked, centered on the column) and
+   * The icon-column center X — anchored ICON_INSET_FROM_PANEL in from the
+   * panel-side edge of the bar (the side set via setGradientDarkSide), so the
+   * stack tucks against the character panel and mirrors correctly per side.
+   */
+  _iconColumnCenterX() {
+    const r = this.rect;
+    return this._gradientDarkSide === 'left'
+      ? r.x + ICON_INSET_FROM_PANEL              // enemy bar — panel on the left
+      : r.x + r.w - ICON_INSET_FROM_PANEL;       // player bar — panel on the right
+  }
+
+  /**
+   * Position the current page's icons (stacked, anchored to the panel side) and
    * compute the up/down arrow hit-rects for this page.
    * @param {import('./Rect.js').default} content — content rect (inside padding)
    */
   _positionPage(content) {
-    const centerX = content.x + content.w / 2;
+    const centerX = this._iconColumnCenterX();
     const rowH = ICON_SIZE + ICON_GAP;
 
     // Icons always start at the top of the content area — the up-arrow floats
@@ -361,13 +406,55 @@ export default class RelicBar extends UIContainer {
     }
   }
 
+  /**
+   * Set which edge the backdrop gradient is darkest at (the panel side).
+   * @param {'left'|'right'|null} side
+   */
+  setGradientDarkSide(side) {
+    this._gradientDarkSide = side;
+  }
+
   // ── Render ───────────────────────────────────────────
   render(ctx) {
     if (!this.visible) return;
+    // this._renderBackdropGradient(ctx); // behind the icons
     super.render(ctx); // draws the icon children at their positioned rects
     if (this._upArrowRect)   this._drawArrow(ctx, this._upArrowRect, 'up');
     if (this._downArrowRect) this._drawArrow(ctx, this._downArrowRect, 'down');
   }
+
+  /**
+   * Draw the subtle black gradient behind the icons. It's anchored to the ACTUAL
+   * icon rects (so it always aligns with the stack regardless of bar padding):
+   * a vertical band spanning the icon stack (+GRADIENT_V_PAD), darkest just past
+   * the icons toward the panel and fading to transparent away from it. No icons
+   * → no gradient.
+   */
+  // _renderBackdropGradient(ctx) {
+  //   if (!this._gradientDarkSide || this._iconImages.length === 0) return;
+  //   const first = this._iconImages[0].rect;
+  //   const last = this._iconImages[this._iconImages.length - 1].rect;
+  //   if (!first || first.w <= 0) return;
+
+  //   const cx = first.x + first.w / 2;          // icon column center (icons share x)
+  //   const top = first.y - GRADIENT_V_PAD;
+  //   const h = (last.y + last.h + GRADIENT_V_PAD) - top;
+
+  //   const darkLeft = this._gradientDarkSide === 'left';
+  //   // Dark edge sits just past the icons toward the panel; fade GRADIENT_WIDTH out.
+  //   const darkX = darkLeft
+  //     ? cx - ICON_SIZE / 2 - GRADIENT_DARK_OVERHANG
+  //     : cx + ICON_SIZE / 2 + GRADIENT_DARK_OVERHANG;
+  //   const clearX = darkLeft ? darkX + GRADIENT_WIDTH : darkX - GRADIENT_WIDTH;
+
+  //   const grad = ctx.createLinearGradient(darkX, 0, clearX, 0);
+  //   grad.addColorStop(0, `rgba(0, 0, 0, ${GRADIENT_DARK_ALPHA})`);
+  //   grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  //   ctx.save();
+  //   ctx.fillStyle = grad;
+  //   ctx.fillRect(Math.min(darkX, clearX), top, GRADIENT_WIDTH, h);
+  //   ctx.restore();
+  // }
 
   /** Draw a single filled triangle arrow within `r`, pointing `dir`. */
   _drawArrow(ctx, r, dir) {

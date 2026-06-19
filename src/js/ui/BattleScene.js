@@ -91,15 +91,12 @@ const RELIC_COL_WIDTH = 90;
 
 // ── Enemy relic column (mirror of the player bar, on the RIGHT) ──
 // Mounted as the LAST child of MainRow, *after* the enemy column, so it
-// floats to the immediate right of the enemy panel. Same float trick as the
-// player bar but mirrored: the MainRow negative gap pulls this rect left into
-// the enemy column, and the bar's padding hugs the icons toward the panel.
-// The player bar (RelicBar's internal BAR_PADDING) uses right padding so its
-// centered icons sit toward the player panel on its right; the enemy bar
-// mirrors that with LEFT padding so its icons sit toward the enemy panel on
-// its left. Tweak these to fit; left padding ≈ the player bar's right padding.
+// floats to the immediate right of the enemy panel (the MainRow negative gap
+// pulls this rect left into the enemy column). The horizontal icon hug + the
+// backdrop gradient are now handled INSIDE RelicBar via setGradientDarkSide
+// (which anchors the icon column to the panel-side edge — see RelicBar
+// ICON_INSET_FROM_PANEL), so no per-side padding hack is needed here.
 const ENEMY_RELIC_COL_WIDTH = 90;
-const ENEMY_RELIC_BAR_PADDING = { top: 30, right: 0, bottom: 0, left: 60 };
 
 // ── Corner action buttons (skip / map) ───────────────────
 // Two 60×60 icons stacked vertically in the FAR top-right corner of the
@@ -322,6 +319,8 @@ export default class BattleScene extends UIPanel {
     // which keeps the icons hugging the player panel's transparent margin.
     this._relicBar = new RelicBar(this._assetManager);
     this._relicBar.setStyle({ width: RELIC_COL_WIDTH });
+    // Backdrop gradient darkest toward the player panel (on the bar's right).
+    this._relicBar.setGradientDarkSide('right');
     mainRow.addChild(this._relicBar);
 
     // ── LEFT: compact stacked player column ───────────
@@ -383,10 +382,9 @@ export default class BattleScene extends UIPanel {
     // Floats to the immediate right of the enemy panel; icons hug leftward
     // toward the panel via the mirrored LEFT padding.
     this._enemyRelicBar = new RelicBar(this._assetManager);
-    this._enemyRelicBar.setStyle({
-      width: ENEMY_RELIC_COL_WIDTH,
-      padding: ENEMY_RELIC_BAR_PADDING,
-    });
+    this._enemyRelicBar.setStyle({ width: ENEMY_RELIC_COL_WIDTH });
+    // Mirror: icons hug + gradient darkens toward the enemy panel (bar's left).
+    this._enemyRelicBar.setGradientDarkSide('left');
     mainRow.addChild(this._enemyRelicBar);
 
     this.addChild(mainRow);
