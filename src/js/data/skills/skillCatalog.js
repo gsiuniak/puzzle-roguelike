@@ -354,7 +354,7 @@ const SKILL_CATALOG = {
     description: 'Deal <<3>> [[damage]].\nGain an [[extra turn]].',
     icon: 'skill_infected_bite',
     sound: 'skill_infected_bite',
-    cost: { red: 1 },
+    cost: { red: 2 },
     effects: [
       { effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
       { effectType: 'extra_turn' },

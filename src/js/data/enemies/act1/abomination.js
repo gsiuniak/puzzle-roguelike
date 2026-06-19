@@ -28,13 +28,13 @@ const abomination = {
   type: 'minion',
   floors: [7, 8, 9],
 
-  hp: 30, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 30,
-  attack: 3,
+  hp: 28, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 28,
+  attack: 2,
   armor: 0,
   // Starts with 1 Red so it can Infected Bite on turn one; builds Green via
   // board matches toward Cyst Burst's 10-green cost.
-  mana: { red: 1, blue: 0, green: 0, yellow: 0, purple: 0 },
+  mana: { red: 2, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'abomination', // maps to 'portrait_abomination' asset key
   music: {
     trackKey: 'battle_theme',

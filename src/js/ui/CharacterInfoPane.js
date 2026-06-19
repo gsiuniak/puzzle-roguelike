@@ -73,6 +73,15 @@ const STATUS_DEBUFF_COUNT_OFFSET = { x: 0, y: 0.24 }; // on the debuff X's centr
 
 const HEALTH_BAR_HEIGHT = 36;
 const HEALTH_LABEL_FONT_SIZE = 20;
+
+// ── Armor badge (shield + "+N" beside the centered HP label) ──
+// The armor VALUE shows here (always exact, even when the blue bar overlay is
+// capped at the full bar width); the overlay itself lives on UIProgressBar.
+const ARMOR_BADGE_GAP = 8;          // gap from the HP label to the badge
+const ARMOR_BADGE_ICON_FRAC = 0.66; // shield icon height as a fraction of bar height
+const ARMOR_BADGE_ICON_GAP = 3;     // gap between shield and "+N"
+const ARMOR_BADGE_FONT = 18;
+const ARMOR_BADGE_COLOR = '#bcdcff'; // light blue, matches the bar's armor overlay
 const STATS_HEIGHT = 22;
 const STAT_ICON_SIZE = 28;
 const STAT_VALUE_FONT_SIZE = 22;
@@ -269,7 +278,10 @@ export default class CharacterInfoPane extends UIPanel {
 
     statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
     statsRow.addChild(this._buildStatGroup('icon_magic',  () => this._magicValue,  (el) => { this._magicValue = el;  }, cd.magic  ?? 0));
-    statsRow.addChild(this._buildStatGroup('icon_block',  () => this._armorValue,  (el) => { this._armorValue = el;  }, cd.armor  ?? 0));
+    // Armor moved to the HP bar (blue overlay + shield "+N" badge), so it's no
+    // longer shown in this row. (updateFromState guards on `this._armorValue`,
+    // so leaving it unbuilt is safe.) Uncomment to restore the inline armor stat.
+    // statsRow.addChild(this._buildStatGroup('icon_block',  () => this._armorValue,  (el) => { this._armorValue = el;  }, cd.armor  ?? 0));
 
     info.addChild(statsRow);
     header.addChild(info);
@@ -329,6 +341,9 @@ export default class CharacterInfoPane extends UIPanel {
     // early-returns so they show regardless of name/flair state.
     this._renderStatusOverlays(ctx);
 
+    // Armor shield badge beside the HP label (also before the flair early-returns).
+    this._renderArmorBadge(ctx);
+
     if (!this._nameText || !this._flair) return;
     if (!this._nameText.text) return;
 
@@ -382,8 +397,11 @@ export default class CharacterInfoPane extends UIPanel {
     if (this._healthBar) {
       this._healthBar.value = state.hp ?? 0;
       this._healthBar.maxValue = state.maxHp ?? 100;
-      const blockLabel = (state.block && state.block > 0) ? ` [${state.block}]` : '';
-      this._healthBar.label = `${state.hp ?? 0} / ${state.maxHp ?? 0}${blockLabel}`;
+      // Armor renders as the blue overlay on the bar (UIProgressBar.armorValue);
+      // the exact number shows in the shield badge beside the centered HP label
+      // (see _renderArmorBadge), so the label itself is just "hp / maxHp".
+      this._healthBar.armorValue = state.armor ?? 0;
+      this._healthBar.label = `${state.hp ?? 0} / ${state.maxHp ?? 0}`;
     }
 
     if (this._attackValue) this._attackValue.text = String(state.attack ?? 0);
@@ -414,6 +432,63 @@ export default class CharacterInfoPane extends UIPanel {
     const r = this._portrait && this._portrait.rect;
     if (!r || r.w <= 0) return null;
     return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  }
+
+  /**
+   * Draw the armor shield badge ("🛡 +N") just to the right of the centered HP
+   * label. Shows the EXACT armor value (the blue bar overlay caps its visible
+   * width at the full bar, so the number is the source of truth). Hidden at 0
+   * armor. Clamped to stay inside the bar.
+   */
+  _renderArmorBadge(ctx) {
+    const bar = this._healthBar && this._healthBar.rect;
+    if (!bar || bar.w <= 0) return;
+    const armor = this._healthBar.armorValue || 0;
+    if (armor <= 0) return;
+
+    // Width of the centered "hp / maxHp" label, so the badge sits beside it.
+    ctx.save();
+    ctx.font = `${HEALTH_LABEL_FONT_SIZE}px "Marcellus SC", Georgia, "Times New Roman", serif`;
+    const labelW = ctx.measureText(this._healthBar.label || '').width;
+    ctx.restore();
+
+    const cy = bar.y + bar.h / 2;
+    const iconBox = bar.h * ARMOR_BADGE_ICON_FRAC;
+    const text = `+${armor}`;
+
+    ctx.save();
+    ctx.font = `bold ${ARMOR_BADGE_FONT}px "Marcellus SC", Georgia, "Times New Roman", serif`;
+    const textW = ctx.measureText(text).width;
+
+    // Shield icon (reuse the stat icon), contain-fit to the badge box.
+    const icon = this._assetManager ? this._assetManager.get('icon_block') : null;
+    let iconW = 0;
+    let iconH = 0;
+    if (icon && icon.complete !== false && icon.width) {
+      const aspect = icon.width / icon.height;
+      iconH = iconBox; iconW = iconBox * aspect;
+      if (iconW > iconBox) { iconW = iconBox; iconH = iconBox / aspect; }
+    }
+
+    const groupW = (iconW ? iconW + ARMOR_BADGE_ICON_GAP : 0) + textW;
+    let x = bar.x + bar.w / 2 + labelW / 2 + ARMOR_BADGE_GAP;
+    // Keep the badge inside the bar.
+    x = Math.min(x, bar.x + bar.w - groupW - 4);
+    x = Math.max(x, bar.x + 4);
+
+    if (iconW) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(icon, x, cy - iconH / 2, iconW, iconH);
+      x += iconW + ARMOR_BADGE_ICON_GAP;
+    }
+    ctx.fillStyle = ARMOR_BADGE_COLOR;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    ctx.shadowBlur = 3;
+    ctx.fillText(text, x, cy + 1);
+    ctx.restore();
   }
 
   /**

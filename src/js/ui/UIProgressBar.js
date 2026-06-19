@@ -26,6 +26,18 @@ export default class UIProgressBar extends UIElement {
     this.maxValue = 100;
     this.fillColor = '#cc3333';
     this.backgroundColor = '#222222';
+    /**
+     * Armor overlay (semi-transparent blue) drawn OVER the fill, hugging the
+     * right edge of current health: it first fills the empty-health region
+     * (forward), then — if armor exceeds the missing health — extends BACKWARD
+     * over the red fill as a translucent overlay (so the padded "effective HP"
+     * reads on a fixed-width bar). Visible width is capped at the full bar; the
+     * exact number is shown elsewhere. 0 = no overlay.
+     */
+    this.armorValue = 0;
+    this.armorColor = '#4aa3ff';
+    this.armorFillAlpha = 0.78;     // forward part, over empty health
+    this.armorOverlayAlpha = 0.42;  // backward part, over the red fill
     this.label = '';
     this.labelColor = '#ffffff';
     this.labelFontSize = 18;
@@ -60,6 +72,34 @@ export default class UIProgressBar extends UIElement {
       this._roundRectPath(ctx, r.x, r.y, r.w, r.h, cr);
       ctx.clip();
       ctx.fillRect(r.x, r.y, fillW, r.h);
+      ctx.restore();
+    }
+
+    // Armor overlay (blue), clipped to the rounded bar so it respects the shape.
+    // Drawn after the red fill, before the border + label (so the label stays on
+    // top). Hugs the right edge of current health: forward over empty, then
+    // backward over red. Total visible width is naturally capped at the full bar
+    // (forward ≤ missing, backward ≤ current health).
+    if (this.armorValue > 0 && this.maxValue > 0) {
+      const pxPerUnit = r.w / this.maxValue;
+      const hp = Math.min(this.maxValue, Math.max(0, this.value));
+      const hpRightX = r.x + hp * pxPerUnit;
+      const missing = this.maxValue - hp;
+      const forward = Math.min(this.armorValue, missing);
+      const backward = Math.min(Math.max(0, this.armorValue - missing), hp);
+      ctx.save();
+      ctx.beginPath();
+      this._roundRectPath(ctx, r.x, r.y, r.w, r.h, cr);
+      ctx.clip();
+      ctx.fillStyle = this.armorColor;
+      if (backward > 0) {
+        ctx.globalAlpha = this.armorOverlayAlpha;
+        ctx.fillRect(hpRightX - backward * pxPerUnit, r.y, backward * pxPerUnit, r.h);
+      }
+      if (forward > 0) {
+        ctx.globalAlpha = this.armorFillAlpha;
+        ctx.fillRect(hpRightX, r.y, forward * pxPerUnit, r.h);
+      }
       ctx.restore();
     }
 
@@ -119,6 +159,10 @@ export default class UIProgressBar extends UIElement {
     if (props.maxValue !== undefined) this.maxValue = props.maxValue;
     if (props.fillColor !== undefined) this.fillColor = props.fillColor;
     if (props.backgroundColor !== undefined) this.backgroundColor = props.backgroundColor;
+    if (props.armorValue !== undefined) this.armorValue = props.armorValue;
+    if (props.armorColor !== undefined) this.armorColor = props.armorColor;
+    if (props.armorFillAlpha !== undefined) this.armorFillAlpha = props.armorFillAlpha;
+    if (props.armorOverlayAlpha !== undefined) this.armorOverlayAlpha = props.armorOverlayAlpha;
     if (props.label !== undefined) this.label = props.label;
     if (props.labelColor !== undefined) this.labelColor = props.labelColor;
     if (props.labelFontSize !== undefined) this.labelFontSize = props.labelFontSize;
