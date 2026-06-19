@@ -38,6 +38,11 @@ export const TILE_TYPES = {
   //   THRALL — Lord Malakor's wild tile (Baron's Signet / Usurper's Heart)
   WILD:   { id: 'wild',   isSkull: false, isWild: true, color: '#c9a84c', particleColor: '#ffe28a', spawnWeight: 0 },
   THRALL: { id: 'thrall', isSkull: false, isWild: true, color: '#b0392f', particleColor: '#e2452f', spawnWeight: 0 },
+  // SANGUINE_EGG — the Sanguine Phoenix's wild tile (its Sanguine Egg relic seeds
+  // them on death; the Sanguine Chrysalis relic harvests them to be reborn). Like
+  // every wild it matches as any adjacent concrete type, so the player WANTS to
+  // clear them — every egg left when the chrysalis blooms revives the boss.
+  SANGUINE_EGG: { id: 'sanguine_egg', isSkull: false, isWild: true, color: '#a01a2a', particleColor: '#e23a4a', spawnWeight: 0 },
 };
 
 /** Quick array of mana color IDs (non-skull) */

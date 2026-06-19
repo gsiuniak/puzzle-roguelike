@@ -29,7 +29,7 @@ import MapView from '../map/MapView.js';
 import AudioManager from '../audio/AudioManager.js';
 import BattleController from '../game/BattleController.js';
 import BattleScene from '../ui/BattleScene.js';
-import { selectEnemyForNode, markEnemySeen } from '../data/enemies/index.js';
+import { selectEnemyForNode, markEnemySeen, getEnemyById } from '../data/enemies/index.js';
 import { createPlayerBattleState, syncBattleResultsToRunState, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
 import { createRunState } from '../data/runState.js';
 import { resolveSkillIds } from '../data/skills/skillCatalog.js';
@@ -479,6 +479,30 @@ export default class MapScene extends UIPanel {
    * Transition to the BattleScene for combat nodes.
    * @param {import('../map/MapNode.js').default} node
    */
+  /**
+   * Deep-clone an enemy definition and turn it into floor-scaled, resolved
+   * battle data: maxHp scaled by depth (ENEMY_HP_FLOOR_MULT), an additive
+   * per-floor attack bonus (ENEMY_ATTACK_FLOOR_BONUS × the enemy's attackScale),
+   * and skill/relic IDs resolved into full objects (enemy relics from the
+   * ENEMY-ONLY pool). Shared by the primary enemy AND every transform form so
+   * an enemy that swaps identity mid-battle scales consistently.
+   *
+   * @param {object} def — enemy definition (shared catalog ref; cloned here)
+   * @param {number} depth — map node depth (0-indexed)
+   * @returns {object} resolved battle data
+   */
+  _resolveEnemyBattleData(def, depth) {
+    const data = JSON.parse(JSON.stringify(def));
+    const hpMult = enemyHpFloorMult(depth);
+    data.maxHp = Math.round((data.maxHp || 1) * hpMult);
+    data.hp = data.maxHp;
+    const attackScale = typeof data.attackScale === 'number' ? data.attackScale : 1;
+    data.attack = (data.attack || 0) + Math.round(enemyAttackFloorBonus(depth) * attackScale);
+    data.skills = resolveSkillIds(data.skills || []);
+    data.relics = resolveEnemyRelicIds(data.relics || []);
+    return data;
+  }
+
   _transitionToBattle(node) {
     if (this._transitioning) return;
     this._transitioning = true;
@@ -511,28 +535,32 @@ export default class MapScene extends UIPanel {
     });
     // Record the pick so later nodes this act avoid repeating it.
     markEnemySeen(this._runState, enemyDef);
-    const enemyData = JSON.parse(JSON.stringify(enemyDef));
+    // Deep-clone + floor-scale + resolve the enemy into battle data.
+    const enemyData = this._resolveEnemyBattleData(enemyDef, node.depth);
 
-    // Per-floor HP scaling: enemy maxHp in data is a floor-1-equivalent baseline;
-    // scale it up by depth so it tracks the player's growing power (see
-    // ENEMY_HP_FLOOR_MULT).
-    const hpMult = enemyHpFloorMult(node.depth);
-    enemyData.maxHp = Math.round((enemyData.maxHp || 1) * hpMult);
-    enemyData.hp = enemyData.maxHp;
-
-    // Per-floor ATTACK scaling: additive step bonus on the authored base attack
-    // (see ENEMY_ATTACK_FLOOR_BONUS). This raises raw lethality AND — because
-    // enemy skills now carry `scaling` — the damage of their skills, so later
-    // floors burst harder. A per-enemy `attackScale` (default 1) lets a designed
-    // exception opt out (0) or amplify the floor bonus.
-    const attackScale = typeof enemyData.attackScale === 'number' ? enemyData.attackScale : 1;
-    enemyData.attack = (enemyData.attack || 0) + Math.round(enemyAttackFloorBonus(node.depth) * attackScale);
-
-    // Resolve enemy skill/relic IDs into full objects via the catalogs.
-    // Characters/enemies store IDs; the BattleController operates on resolved
-    // objects. Enemy relics resolve against the ENEMY-ONLY relic pool.
-    enemyData.skills = resolveSkillIds(enemyData.skills || []);
-    enemyData.relics = resolveEnemyRelicIds(enemyData.relics || []);
+    // Pre-resolve any mid-battle TRANSFORM forms (Sanguine Phoenix ⇄ Egg). An
+    // enemy that can transform lists the alternate enemy ids it may become in
+    // `transformForms`; we gather the whole reachable set (BFS, including the
+    // primary so a form can revert to a full-life primary) and resolve each the
+    // SAME way, then hand the map to the BattleController via `_forms`. Normal
+    // enemies have no `transformForms`, so `_forms` stays absent for them.
+    if (Array.isArray(enemyDef.transformForms) && enemyDef.transformForms.length) {
+      const forms = {};
+      const seen = new Set();
+      const queue = [enemyDef.id, ...enemyDef.transformForms];
+      while (queue.length) {
+        const id = queue.shift();
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const fdef = getEnemyById(id);
+        if (!fdef) continue;
+        forms[id] = this._resolveEnemyBattleData(fdef, node.depth);
+        for (const next of (fdef.transformForms || [])) {
+          if (!seen.has(next)) queue.push(next);
+        }
+      }
+      enemyData._forms = forms;
+    }
 
     // Create battle controller and scene
     const battleController = new BattleController(

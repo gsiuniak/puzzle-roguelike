@@ -195,6 +195,56 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
+  // Death-transform engine (Sanguine Phoenix). When the owner would die, it does
+  // NOT die — it transforms into the Sanguine Egg enemy (999 HP, no skills, keeps
+  // its mana) and seeds the board with 2 wild Sanguine Egg tiles. Board/state-
+  // touching, so it routes through BattleController._handlePassiveBoardEffect via
+  // the `transform` path (which swaps the enemy identity in place and creates the
+  // egg tiles). Fires on the NEW `onDeath` trigger, dispatched from _checkGameOver
+  // before victory is declared. `incubateTurns` makes the egg skip its first
+  // chrysalis check so the player gets a turn to clear the eggs (see Chrysalis).
+  sanguine_egg: {
+    id: 'sanguine_egg',
+    name: 'Sanguine Egg',
+    description: 'Upon death, transform into a [[Sanguine Egg]].\n[[Create]] 2 Sanguine Egg [[tiles]].',
+    icon: 'relic_barons_signet', // placeholder — reuses Baron's Signet (tile-create theme)
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      {
+        trigger: 'onDeath',
+        effectType: 'transform',
+        transform: {
+          intoEnemyId: 'sanguineEgg',
+          incubateTurns: 1,
+          createTiles: { type: 'sanguine_egg', amount: 2, avoidMatches: true },
+        },
+      },
+    ],
+  },
+
+  // Rebirth engine (Sanguine Egg form). At the START of the egg's turn it checks
+  // the board: if any Sanguine Egg tiles remain, they EXPLODE (liquid-blood, no
+  // tendrils — see _spawnHarvestTendrils bloodOnly) and the egg transforms back
+  // into a full-life Sanguine Phoenix (original relics/skills, kept mana). If NO
+  // eggs remain, the chrysalis withers and the enemy perishes (battle over).
+  // Board/state-touching → BattleController._handlePassiveBoardEffect `chrysalis`
+  // path. The egg's first turn is skipped by `incubateTurns` (see Sanguine Egg)
+  // so the player has one turn to clear the eggs first.
+  sanguine_chrysalis: {
+    id: 'sanguine_chrysalis',
+    name: 'Sanguine Chrysalis',
+    description: 'At the start of turn, [[Harvest]] all [[Sanguine Egg]] tiles and transform into a [[Sanguine Phoenix]].\nIf no Sanguine Eggs remain, perish.',
+    icon: 'relic_heart_of_usurper', // placeholder — reuses Usurper's Heart (harvest theme)
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      {
+        trigger: 'onTurnStart',
+        effectType: 'chrysalis',
+        chrysalis: { eggType: 'sanguine_egg', intoEnemyId: 'sanguinePhoenix', tendrilColor: '#a01a2a' },
+      },
+    ],
+  },
+
   // Turn-start board control — converts up to 2 random Skull tiles into Green
   // in place (no cascade). Board-touching, so it's handled by
   // BattleController._handlePassiveBoardEffect via the onBoardEffect path.

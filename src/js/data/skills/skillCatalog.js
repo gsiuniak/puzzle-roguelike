@@ -372,6 +372,43 @@ const SKILL_CATALOG = {
     ],
   },
 
+  // ── Sanguine Phoenix (Act 1 elite) ──────────────────
+  // A self-sustaining vampire. Blood Gorge starves the player of mana while
+  // permanently growing the Phoenix's HP pool; Anemic Feast is its skull-fed
+  // nuke that refuels Purple and chains turns. Icons/sounds reuse existing
+  // enemy-skill keys as placeholders until dedicated art is packed.
+  blood_gorge: {
+    id: 'blood_gorge',
+    name: 'Blood Gorge',
+    description: 'Drain 5 of all [[mana]] from the enemy.\nGain 10 Max HP.\n[[Heal]] 10 HP.',
+    icon: 'skill_soul_burn',  // placeholder — reuses Soul Burn's drain-themed icon
+    sound: 'skill_soul_burn', // placeholder
+    cost: { purple: 6 },
+    effects: [
+      { effectType: 'drain_mana', drainMana: { amount: 5 } },
+      // Raises the ceiling first, then the heal fills into the new space.
+      { effectType: 'gain_max_hp', gainMaxHp: { amount: 10 } },
+      { effectType: 'heal', heal: { amount: 10 } },
+    ],
+  },
+  anemic_feast: {
+    id: 'anemic_feast',
+    name: 'Anemic Feast',
+    // Worded like the synthesizer's `skull + damage` line (skillSynthesizer
+    // emitDamage): "Deal <<n>> <type>, plus N per [[Skull]] on the board".
+    description: 'Deal <<10>> [[mag]], plus 1 per [[Skull]] on the board.\nGain 6 purple.\nGain an [[extra turn]].',
+    icon: 'skill_doomsong',  // placeholder — reuses Doomsong's icon
+    sound: 'skill_doomsong', // placeholder
+    cost: { red: 10 },
+    effects: [
+      // perSkull adds the live board Skull count at cast; magic scaling keeps it
+      // consistent with the [[mag]] tag (enemy Magic is 0, so <<10>> shows 10).
+      { effectType: 'damage', damage: { amount: 10, perSkull: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
+      { effectType: 'gain_mana', gainMana: { color: 'purple', amount: 6 } },
+      { effectType: 'extra_turn' },
+    ],
+  },
+
   // Goresnout Trackers — ramps attack while chipping damage. Pairs with the
   // Goresnout Collars relic (echoes the 2 damage for 4 total).
   hound: {

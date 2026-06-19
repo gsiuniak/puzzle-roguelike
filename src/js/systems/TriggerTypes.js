@@ -88,6 +88,17 @@
  *                        Fires when a combatant deals damage. `side` is
  *                        the SIDE THAT DEALT damage. Fires for the same
  *                        event as onTakeDamage but from the attacker's view.
+ *
+ *   onDeath              payload: { side }
+ *                        Fires when a combatant's HP reaches 0, BEFORE the
+ *                        battle is declared over (dispatched from
+ *                        BattleController._checkGameOver). A relic effect may
+ *                        REVIVE/TRANSFORM the owner (e.g. the Sanguine Phoenix's
+ *                        Sanguine Egg relic swaps the enemy into the Egg form);
+ *                        if after dispatch the owner is no longer dead, the
+ *                        battle continues instead of ending. `side` is the side
+ *                        that died. Guarded against re-entry so a transform that
+ *                        leaves HP at 0 can't loop.
  */
 
 const TRIGGER_TYPES = {
@@ -102,6 +113,7 @@ const TRIGGER_TYPES = {
   ON_INCOMING_DAMAGE:  'onIncomingDamage',
   ON_TAKE_DAMAGE:      'onTakeDamage',
   ON_DEAL_DAMAGE:      'onDealDamage',
+  ON_DEATH:            'onDeath',
 };
 
 export default TRIGGER_TYPES;

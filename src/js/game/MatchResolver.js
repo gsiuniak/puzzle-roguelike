@@ -41,6 +41,10 @@ export const SKILL_EFFECT_TYPES = {
   // BattleController._resolveEffect.
   DESTROY_TILES_BY_TYPE: 'destroy_tiles_by_type',
   HEAL: 'heal',
+  // Permanently raises the caster's MAX HP (does NOT heal — pair with a HEAL
+  // effect to also fill the new space). Payload gainMaxHp: { amount }. Resolved
+  // in BattleController._resolveEffect (e.g. the Sanguine Phoenix's Blood Gorge).
+  GAIN_MAX_HP: 'gain_max_hp',
   EXTRA_TURN: 'extra_turn',
   // Permanently increases the caster's attack for the rest of the battle
   // (e.g. Chokeweed's "Encroach"). Resolved in BattleController._resolveEffect;

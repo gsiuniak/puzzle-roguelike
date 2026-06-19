@@ -65,6 +65,28 @@ export default class BattleController {
     this.playerState = this._cloneState(playerData);
     this.enemyState = this._cloneState(enemyData);
 
+    /**
+     * Pre-resolved alternate enemy battle-data forms keyed by enemy id, for
+     * mid-battle transforms (Sanguine Phoenix ⇄ Sanguine Egg). MapScene scales
+     * + resolves every reachable form (`transformForms`) the SAME way as the
+     * primary enemy and attaches them here, so a transform is a pure in-place
+     * identity swap (see _transformInto). null for enemies that never transform.
+     * @type {Object<string, object>|null}
+     */
+    this._enemyForms = (enemyData && enemyData._forms) || null;
+
+    /**
+     * One-shot transform signal. Set to the new enemy state when the enemy
+     * transforms (death→Egg or chrysalis→Phoenix) so the scene rebuilds the
+     * enemy portrait + skills pane. Read & cleared via getState().
+     * @type {object|null}
+     */
+    this._enemyTransformed = null;
+
+    /** Re-entry guard while dispatching onDeath (a transform that leaves HP at
+     *  0 must not re-trigger onDeath forever). @type {boolean} */
+    this._deathTransformFiring = false;
+
     this.enemyAI = null;
 
     /** @type {BattleState} */
@@ -618,6 +640,11 @@ export default class BattleController {
     const boardShuffled = this._boardShuffled;
     this._boardShuffled = false;
 
+    // One-shot enemy-transform signal (Sanguine Phoenix ⇄ Egg): the new enemy
+    // state so the scene rebuilds the portrait + skills pane. Cleared on read.
+    const enemyTransformed = this._enemyTransformed;
+    this._enemyTransformed = null;
+
     return {
       state: this.state, activeSide: this.activeSide,
       playerState: this.playerState, enemyState: this.enemyState,
@@ -636,6 +663,7 @@ export default class BattleController {
       harvestEvents,
       thrallSummoned,
       boardShuffled,
+      enemyTransformed,
       gameOver: this.state === BattleState.GAME_OVER,
       winner: this._winner(),
       highlightCells: this.highlightCells,
@@ -1609,6 +1637,15 @@ export default class BattleController {
     // observe the active side correctly.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_START, { side });
 
+    // A turn-start passive can be lethal (the Sanguine Chrysalis kills the Egg
+    // when no eggs remain). Re-check game over so the dead side doesn't go on to
+    // act. (A chrysalis that REVIVES instead leaves the enemy alive, so this is
+    // a no-op and the new Phoenix proceeds to take its turn.)
+    if (this._checkGameOver()) {
+      if (this.onStateChange) this.onStateChange();
+      return;
+    }
+
     if (this.onStateChange) this.onStateChange();
   }
 
@@ -2130,6 +2167,18 @@ export default class BattleController {
         return false;
       }
 
+      case SKILL_EFFECT_TYPES.GAIN_MAX_HP: {
+        // Permanently raise the caster's MAX HP. Does NOT heal — a paired HEAL
+        // effect fills the new space (e.g. Blood Gorge: +10 max HP, then heal 10).
+        const amount = (effect.gainMaxHp && typeof effect.gainMaxHp.amount === 'number')
+          ? effect.gainMaxHp.amount : 0;
+        if (amount !== 0) {
+          src.maxHp = Math.max(1, (src.maxHp || 0) + amount);
+          this.log.add(`${src.name} gains ${amount} max HP.`);
+        }
+        return false;
+      }
+
       case SKILL_EFFECT_TYPES.CREATE_TILES: {
         this._executeCreateTiles(effect, side, skill.name);
         return this.state === BattleState.RESOLVING;
@@ -2313,12 +2362,34 @@ export default class BattleController {
       return true;
     }
     if (this.enemyState.hp <= 0 || this.enemyState._defeated) {
+      // Death-transform (Sanguine Egg relic): the enemy may cheat death by
+      // transforming instead of dying. If it does, the battle continues.
+      if (this._tryEnemyDeathTransform()) return false;
       this.state = BattleState.GAME_OVER;
       this.log.add(`Victory! ${this.enemyState.name} has been slain!`);
       if (this.onStateChange) this.onStateChange();
       return true;
     }
     return false;
+  }
+
+  /**
+   * Give the enemy a chance to transform-on-death (Sanguine Phoenix's Sanguine
+   * Egg relic) before victory is declared. Dispatches the `onDeath` trigger; a
+   * `transform` board-effect swaps the enemy identity in place and restores its
+   * HP, so afterward the enemy is no longer dead and the battle continues.
+   *
+   * Re-entry guarded: the swap leaves the NEW form alive, but the guard also
+   * stops a hypothetical transform that left HP at 0 from looping. Returns true
+   * iff the enemy is no longer dead after the dispatch.
+   * @returns {boolean}
+   */
+  _tryEnemyDeathTransform() {
+    if (this._deathTransformFiring) return false;
+    this._deathTransformFiring = true;
+    this.passives.dispatch(TRIGGER_TYPES.ON_DEATH, { side: 'enemy' });
+    this._deathTransformFiring = false;
+    return !(this.enemyState.hp <= 0 || this.enemyState._defeated);
   }
 
   // ── Passive Trigger Dispatch ─────────────────────────
@@ -2531,6 +2602,10 @@ export default class BattleController {
         return this._applyPassiveCreateTiles(effect, payload);
       case 'harvest_tiles':
         return this._applyPassiveHarvest(effect, payload);
+      case 'transform':
+        return this._applyTransform(effect, payload);
+      case 'chrysalis':
+        return this._applyChrysalis(effect, payload);
       case 'echo_damage':
         return this._applyPassiveEchoDamage(effect, payload);
       case 'destroy_random_skulls': {
@@ -2785,6 +2860,160 @@ export default class BattleController {
     this._convertedTilePositions = (this._convertedTilePositions || []).concat(converted);
 
     this.log.add(`${harvester.name} harvests ${count} Thrall(s), gaining ${attackGain} Attack.`);
+    return true;
+  }
+
+  /**
+   * Swap the enemy's identity to a pre-resolved alternate form IN PLACE
+   * (Sanguine Phoenix ⇄ Sanguine Egg). The new form arrives at FULL life and
+   * keeps the current mana; everything else (name, portrait, HP pool, skills,
+   * relics, AI) is replaced from the form data MapScene pre-resolved into
+   * `_enemyForms`.
+   *
+   * In-place mutation is REQUIRED: PassiveSystem caches the exact `enemyState`
+   * object reference, so replacing the object would orphan the dispatcher. We
+   * mutate fields instead and signal the scene (via _enemyTransformed) to
+   * rebuild the portrait + skills pane; the relic bar re-reads relics each frame.
+   *
+   * @param {string} intoEnemyId — key into _enemyForms
+   * @returns {boolean} true if the swap happened
+   */
+  _transformInto(intoEnemyId) {
+    const form = this._enemyForms && this._enemyForms[intoEnemyId];
+    if (!form) {
+      console.warn(`[transform] No pre-resolved form "${intoEnemyId}". Skipping.`);
+      return false;
+    }
+    const cloned = this._cloneState(form); // fresh resolved state at full HP
+    const e = this.enemyState;
+    const keptMana = e.mana ? { ...e.mana } : {};
+
+    e.name = cloned.name;
+    e.className = cloned.className;
+    e.level = cloned.level;
+    e.maxHp = cloned.maxHp;
+    e.hp = cloned.maxHp;            // the new form arrives at full life
+    e.attack = cloned.attack;
+    e.magic = cloned.magic || 0;
+    e.armor = cloned.armor || 0;
+    e.block = 0;
+    e.portrait = cloned.portrait;
+    e.skills = cloned.skills;
+    e.allSkills = cloned.allSkills;
+    e.relics = cloned.relics;
+    e.aiBehavior = cloned.aiBehavior;
+    e.statuses = [];               // a fresh body — clear any debuffs
+    e._defeated = false;
+    e._chrysalisGrace = 0;
+    e.mana = keptMana;             // mana carries across the transform
+
+    // Reset per-side static-modifier bookkeeping for the new relic set. The
+    // transform forms carry no onBattleStart static relics, so a clean slate is
+    // correct; re-aggregating (over BOTH sides) would double-apply the player's
+    // static modifiers, so we deliberately don't.
+    e._manaGainBonus = {};
+    e._skullDamageBonus = 0;
+    e._attackPerManaRules = [];
+    e._lastDynamicAttack = 0;
+
+    // One-shot scene signal: rebuild the enemy portrait + skills pane. Carry the
+    // form's portraitVideo (dropped by _cloneState) so a future video form works.
+    this._enemyTransformed = {
+      name: e.name,
+      portrait: e.portrait,
+      portraitVideo: form.portraitVideo || null,
+      skills: e.skills,
+    };
+    return true;
+  }
+
+  /**
+   * Death-transform board effect (Sanguine Egg relic, onDeath): swap the enemy
+   * into its alternate form and seed the board with the configured tiles. The
+   * form arrives at full life so the post-dispatch _checkGameOver sees it alive
+   * and the battle continues. `incubateTurns` makes the new form skip its first
+   * chrysalis check so the player gets a turn to clear the seeded tiles.
+   *
+   * @param {object} effect — { transform: { intoEnemyId, incubateTurns?, createTiles? } }
+   * @param {object} payload — { side } (the dying side)
+   * @returns {boolean} always true (effect recognized/handled)
+   */
+  _applyTransform(effect, payload) {
+    const cfg = (effect && effect.transform) || {};
+    if (!cfg.intoEnemyId || !this._transformInto(cfg.intoEnemyId)) return true;
+
+    this.enemyState._chrysalisGrace =
+      typeof cfg.incubateTurns === 'number' ? cfg.incubateTurns : 0;
+
+    // Seed the egg tiles in place (no cascade) — mirrors the Thrall-summon path.
+    if (cfg.createTiles) {
+      this._applyPassiveCreateTiles(
+        { createTiles: cfg.createTiles },
+        { side: (payload && payload.side) || 'enemy' }
+      );
+    }
+    this.log.add(`${this.enemyState.name} emerges!`);
+    return true;
+  }
+
+  /**
+   * Chrysalis board effect (Sanguine Egg form, onTurnStart): if any egg tiles
+   * remain, they EXPLODE (liquid blood, no tendrils) and the enemy is reborn as
+   * a full-life Sanguine Phoenix; if NONE remain, the chrysalis withers and the
+   * enemy perishes (the post-onTurnStart _checkGameOver ends the battle).
+   *
+   * The first check after laying is skipped via `_chrysalisGrace` (set by the
+   * death-transform) so the player gets a turn to clear the eggs first.
+   *
+   * @param {object} effect — { chrysalis: { eggType, intoEnemyId, tendrilColor? } }
+   * @param {object} payload — { side } (the egg's side)
+   * @returns {boolean} always true (effect recognized/handled)
+   */
+  _applyChrysalis(effect, payload) {
+    const cfg = (effect && effect.chrysalis) || {};
+    const eggType = cfg.eggType || 'sanguine_egg';
+    const intoEnemyId = cfg.intoEnemyId || 'sanguinePhoenix';
+    const e = this.enemyState;
+
+    // Incubation — skip the first turn-start so the player has a clearing turn.
+    if (e._chrysalisGrace && e._chrysalisGrace > 0) {
+      e._chrysalisGrace -= 1;
+      this.log.add(`The ${e.name} pulses ominously...`);
+      return true;
+    }
+
+    const eggs = this.board.getTilesOfType(eggType);
+    if (eggs.length === 0) {
+      // No eggs — the chrysalis withers. _checkGameOver (after onTurnStart) wins.
+      e.hp = 0;
+      e._defeated = true;
+      this.log.add(`The chrysalis withers — no eggs remain. ${e.name} perishes!`);
+      return true;
+    }
+
+    // Eggs remain — explode them (blood only, no tendrils) and be reborn.
+    const side = (payload && payload.side) || 'enemy';
+    this._harvestEvents.push({
+      side,
+      positions: eggs.map((p) => ({ col: p.col, row: p.row })),
+      color: cfg.tendrilColor || '#a01a2a',
+      bloodOnly: true,
+    });
+    if (side === 'enemy') this._extraEnemyTurnDelay += HARVEST_ANIM_DELAY;
+
+    // Remove the eggs in place (each → a random mana color, no cascade) so they
+    // vanish without gifting a free match. Surface a conversion shimmer too.
+    const converted = [];
+    for (const p of eggs) {
+      const color = MANA_COLORS[Math.floor(Math.random() * MANA_COLORS.length)];
+      if (this.board.convertTilesToType([p], color) > 0) {
+        converted.push({ col: p.col, row: p.row, typeId: color });
+      }
+    }
+    this._convertedTilePositions = (this._convertedTilePositions || []).concat(converted);
+
+    this._transformInto(intoEnemyId);
+    this.log.add(`${this.enemyState.name} bursts from its chrysalis, reborn!`);
     return true;
   }
 

@@ -55,6 +55,16 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Change',
     description: 'Turns a specified [[Tile]] into a specific type.',
   },
+  'sanguine egg': {
+    id: 'sanguine egg',
+    label: 'Sanguine Egg',
+    description: 'A wild [[Tile]] — matches as any color. Left on the board when the Sanguine Phoenix is slain; clear them all before its chrysalis blooms or it is reborn.',
+  },
+  'sanguine phoenix': {
+    id: 'sanguine phoenix',
+    label: 'Sanguine Phoenix',
+    description: 'A reborn horror. When slain it becomes a [[Sanguine Egg]]; if any of its eggs remain at the start of its turn, it [[Harvest]]s them and rises again at full life.',
+  },
   convert: {
     id: 'convert',
     label: 'Convert',

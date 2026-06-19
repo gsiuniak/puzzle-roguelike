@@ -1048,6 +1048,14 @@ export default class BattleScene extends UIPanel {
       this._audioManager.playSfx('sfx_thrall_summon');
     }
 
+    // ── Enemy transform (Sanguine Phoenix ⇄ Egg) ──
+    // Rebuild the enemy portrait + skills pane for the new identity. The relic
+    // bar and HP/mana refresh from state.enemyState each frame below, so only
+    // the portrait/name + skills need an explicit rebuild here.
+    if (state.enemyTransformed) {
+      this.setEnemyData(state.enemyTransformed);
+    }
+
     // ── Board-shuffle animation (SHUFFLE skill effect) ──
     // The board model is already reshuffled; the BoardPlaceholder plays a
     // cosmetic fly-in over the new arrangement (the skill's own resolve SFX
@@ -1299,10 +1307,6 @@ export default class BattleScene extends UIPanel {
    */
   _spawnHarvestTendrils(ev) {
     if (!ev || !ev.positions || ev.positions.length === 0) return;
-    const pane = ev.side === 'player' ? this._playerPane : this._enemyPane;
-    if (!pane || typeof pane.getPortraitCenter !== 'function') return;
-    const target = pane.getPortraitCenter();
-    if (!target) return;
 
     const sources = ev.positions
       .map((p) => this._cellToScreen(p))
@@ -1312,7 +1316,7 @@ export default class BattleScene extends UIPanel {
     // Harvest sound effect — once per harvest event.
     if (this._audioManager) this._audioManager.playSfx('sfx_thrall_harvest');
 
-    // Dramatic liquid-blood splash from each harvested Thrall's location.
+    // Dramatic liquid-blood splash from each harvested tile's location.
     const cellSize = this._board.getCellMetrics().cellSize;
     const bloodScale = Math.max(0.5, cellSize / 80);
     for (const src of sources) {
@@ -1321,6 +1325,13 @@ export default class BattleScene extends UIPanel {
       );
     }
 
+    // Energy tendrils to the harvester's portrait. Skipped for `bloodOnly`
+    // events (the Sanguine Chrysalis egg-burst: blood splash, no beams).
+    if (ev.bloodOnly) return;
+    const pane = ev.side === 'player' ? this._playerPane : this._enemyPane;
+    if (!pane || typeof pane.getPortraitCenter !== 'function') return;
+    const target = pane.getPortraitCenter();
+    if (!target) return;
     this._floatingEffects.push(
       new HarvestTendrilEffect(sources, target, { color: ev.color || '#d22a2a' })
     );

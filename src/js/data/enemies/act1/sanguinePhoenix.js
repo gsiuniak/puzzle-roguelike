@@ -1,0 +1,61 @@
+/**
+ * Sanguine Phoenix — Act 1 ELITE (floors 4-9). A two-phase, near-immortal
+ * vampire built entirely from data-driven parts (no bespoke boss code):
+ *
+ *   - Sanguine Egg relic (onDeath): instead of dying, the Phoenix TRANSFORMS
+ *     into the Sanguine Egg enemy (999 HP, no skills, keeps its mana) and seeds
+ *     the board with 2 wild Sanguine Egg tiles.
+ *   - The Egg's Sanguine Chrysalis relic (onTurnStart): if any egg tiles still
+ *     remain, they burst (liquid blood) and the Egg is REBORN as a full-life
+ *     Phoenix; if the player has cleared every egg, the chrysalis withers and
+ *     the enemy finally dies. The Egg skips its FIRST chrysalis check
+ *     (incubateTurns) so the player gets one turn to clear the wild eggs.
+ *   - Blood Gorge (6 Purple): drain 5 of every enemy mana, +10 Max HP, heal 10
+ *     — a snowballing HP pool that punishes a slow kill.
+ *   - Anemic Feast (10 Red): skull-fed Magic nuke that refuels Purple and gains
+ *     an extra turn.
+ *
+ * `transformForms` lists the alternate enemy ids this fight can become; MapScene
+ * pre-resolves each (same floor scaling) and hands them to the BattleController,
+ * which swaps the enemy identity in place on transform (see decision in
+ * AGENT_ENTRYPOINT). Uses the standard EnemyAI.
+ *
+ * Portrait/skill/relic art reuse existing keys as PLACEHOLDERS (see main.js
+ * portrait aliases + the skill/relic icon fields) until dedicated art is packed.
+ *
+ * See act1/goblin.js for the full field documentation.
+ */
+const sanguinePhoenix = {
+  id: 'sanguinePhoenix',
+  name: 'Sanguine Phoenix',
+  aiBehavior: null, // standard AI
+
+  className: 'Elite',
+  level: 1,
+
+  act: 1,
+  rarity: 'common',
+  type: 'elite',
+  floors: [4, 5, 6, 7, 8, 9],
+
+  hp: 30, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 30,
+  attack: 3,
+  armor: 0,
+  // No starting mana — it must match the board to fuel Blood Gorge / Anemic Feast.
+  mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
+  portrait: 'sanguine_phoenix', // placeholder alias → portrait_acolyte (see main.js)
+  music: {
+    trackKey: 'battle_theme',
+    persistAfterBattle: true,
+    isSpecialTrack: false,
+  },
+
+  // Alternate forms this enemy can become mid-battle (pre-resolved by MapScene).
+  transformForms: ['sanguineEgg'],
+
+  skills: ['blood_gorge', 'anemic_feast'],
+  relics: ['sanguine_egg'],
+};
+
+export default sanguinePhoenix;
