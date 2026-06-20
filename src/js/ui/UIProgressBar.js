@@ -38,6 +38,15 @@ export default class UIProgressBar extends UIElement {
     this.armorColor = '#4aa3ff';
     this.armorFillAlpha = 0.78;     // forward part, over empty health
     this.armorOverlayAlpha = 0.42;  // backward part, over the red fill
+    /**
+     * Barrier overlay (semi-transparent PURPLE) — a second "temporary HP" shield
+     * drawn the same way as the armor overlay, but stacked OUTWARD beyond armor
+     * (health | armor | barrier). Barrier is the one-round magic shield. 0 = none.
+     */
+    this.barrierValue = 0;
+    this.barrierColor = '#a24dff';
+    this.barrierFillAlpha = 0.6;    // forward part, over empty health
+    this.barrierOverlayAlpha = 0.34; // backward part, over the red fill
     this.label = '';
     this.labelColor = '#ffffff';
     this.labelFontSize = 18;
@@ -75,30 +84,49 @@ export default class UIProgressBar extends UIElement {
       ctx.restore();
     }
 
-    // Armor overlay (blue), clipped to the rounded bar so it respects the shape.
-    // Drawn after the red fill, before the border + label (so the label stays on
-    // top). Hugs the right edge of current health: forward over empty, then
-    // backward over red. Total visible width is naturally capped at the full bar
-    // (forward ≤ missing, backward ≤ current health).
-    if (this.armorValue > 0 && this.maxValue > 0) {
+    // Shield overlays (armor = blue, barrier = purple), clipped to the rounded
+    // bar so they respect the shape. Drawn after the red fill, before the border +
+    // label (so the label stays on top). Each shield hugs the right edge of
+    // current health, stacking OUTWARD in order (armor first, then barrier):
+    // forward over the empty-health region at fillAlpha, then — when it exceeds
+    // the empty space — backward over the red fill at overlayAlpha. Total visible
+    // width is naturally capped at the full bar. With armor only, this is
+    // identical to the original single-overlay behavior.
+    const shields = [];
+    if (this.armorValue > 0) {
+      shields.push({ v: this.armorValue, color: this.armorColor, fa: this.armorFillAlpha, oa: this.armorOverlayAlpha });
+    }
+    if (this.barrierValue > 0) {
+      shields.push({ v: this.barrierValue, color: this.barrierColor, fa: this.barrierFillAlpha, oa: this.barrierOverlayAlpha });
+    }
+    if (shields.length > 0 && this.maxValue > 0) {
       const pxPerUnit = r.w / this.maxValue;
       const hp = Math.min(this.maxValue, Math.max(0, this.value));
       const hpRightX = r.x + hp * pxPerUnit;
-      const missing = this.maxValue - hp;
-      const forward = Math.min(this.armorValue, missing);
-      const backward = Math.min(Math.max(0, this.armorValue - missing), hp);
       ctx.save();
       ctx.beginPath();
       this._roundRectPath(ctx, r.x, r.y, r.w, r.h, cr);
       ctx.clip();
-      ctx.fillStyle = this.armorColor;
-      if (backward > 0) {
-        ctx.globalAlpha = this.armorOverlayAlpha;
-        ctx.fillRect(hpRightX - backward * pxPerUnit, r.y, backward * pxPerUnit, r.h);
-      }
-      if (forward > 0) {
-        ctx.globalAlpha = this.armorFillAlpha;
-        ctx.fillRect(hpRightX, r.y, forward * pxPerUnit, r.h);
+      let fwdX = hpRightX;                   // forward cursor (into empty health)
+      let fwdRemaining = this.maxValue - hp; // units of empty space left
+      let bwdX = hpRightX;                   // backward cursor (over the red fill)
+      for (const s of shields) {
+        ctx.fillStyle = s.color;
+        let val = s.v;
+        const fwd = Math.min(val, fwdRemaining);
+        if (fwd > 0) {
+          ctx.globalAlpha = s.fa;
+          ctx.fillRect(fwdX, r.y, fwd * pxPerUnit, r.h);
+          fwdX += fwd * pxPerUnit; fwdRemaining -= fwd; val -= fwd;
+        }
+        if (val > 0) {
+          const bwd = Math.min(val, (bwdX - r.x) / pxPerUnit); // cap at the left edge
+          if (bwd > 0) {
+            ctx.globalAlpha = s.oa;
+            ctx.fillRect(bwdX - bwd * pxPerUnit, r.y, bwd * pxPerUnit, r.h);
+            bwdX -= bwd * pxPerUnit;
+          }
+        }
       }
       ctx.restore();
     }
@@ -163,6 +191,10 @@ export default class UIProgressBar extends UIElement {
     if (props.armorColor !== undefined) this.armorColor = props.armorColor;
     if (props.armorFillAlpha !== undefined) this.armorFillAlpha = props.armorFillAlpha;
     if (props.armorOverlayAlpha !== undefined) this.armorOverlayAlpha = props.armorOverlayAlpha;
+    if (props.barrierValue !== undefined) this.barrierValue = props.barrierValue;
+    if (props.barrierColor !== undefined) this.barrierColor = props.barrierColor;
+    if (props.barrierFillAlpha !== undefined) this.barrierFillAlpha = props.barrierFillAlpha;
+    if (props.barrierOverlayAlpha !== undefined) this.barrierOverlayAlpha = props.barrierOverlayAlpha;
     if (props.label !== undefined) this.label = props.label;
     if (props.labelColor !== undefined) this.labelColor = props.labelColor;
     if (props.labelFontSize !== undefined) this.labelFontSize = props.labelFontSize;

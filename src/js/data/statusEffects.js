@@ -89,13 +89,10 @@ export const STATUS_EFFECTS = {
     icon: 'buff_berserk',
     description: 'Deal double [[Damage]] and ignore all effects, but take double [[Damage]].',
   },
-  barrier: {
-    id: 'barrier',
-    kind: STATUS_KIND.BUFF,
-    name: 'Barrier',
-    icon: 'buff_barrier',
-    description: 'Blocks the next instance of [[Skull]] [[Damage]].',
-  },
+  // NOTE: Barrier is NO LONGER a status effect. It is now a one-round numeric
+  // shield pool (state.barrier) that absorbs damage like armor and renders as a
+  // purple "temporary HP" bar overlay — NOT a portrait overlay. See decision #38
+  // (BattleController barrier handling, UIProgressBar/CharacterInfoPane rendering).
 };
 
 /**

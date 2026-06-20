@@ -583,6 +583,9 @@ export default class BattleController {
     return {
       name: d.name, className: d.className, level: d.level,
       hp: d.hp, maxHp: d.maxHp, attack: d.attack, magic: d.magic || 0, armor: d.armor, block: 0,
+      // One-round magic shield pool (absorbs damage like armor; expires at the
+      // owner's next turn start). Runtime-only — always starts at 0. See decision #38.
+      barrier: 0,
       mana: d.mana ? { ...d.mana } : {},
       portrait: d.portrait || '',
       skills: (d.skills || []).map(s => ({ ...s })),
@@ -1709,6 +1712,18 @@ export default class BattleController {
       return;
     }
 
+    // Barrier (one-round magic shield) expires here at the START of the owner's
+    // turn. It's granted mid-turn (after this intro), so it survives the owner's
+    // turn + the opponent's turn and is cleared one full round later. Placed
+    // BEFORE the onTurnStart dispatch so a future turn-start grant survives. Extra
+    // turns bypass _completeTurnIntro, so barrier doesn't expire mid-chain. See
+    // decision #38.
+    const turnState = this._getStateBySide(side);
+    if (turnState && turnState.barrier > 0) {
+      this.log.add(`${turnState.name}'s Barrier fades.`);
+      turnState.barrier = 0;
+    }
+
     // Dispatch onTurnStart AFTER state is set so relic effects can
     // observe the active side correctly.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_START, { side });
@@ -2228,6 +2243,23 @@ export default class BattleController {
         return false;
       }
 
+      case SKILL_EFFECT_TYPES.BARRIER: {
+        // One-round magic shield. Default scaling is Magic (twice as effective as
+        // armor's Attack scaling — see scalingConfig _66). Absorbs damage like
+        // armor (MatchResolver.applyDamage) and expires at the caster's next turn
+        // start (_completeTurnIntro). See decision #38.
+        const base = (effect.barrier && typeof effect.barrier.amount === 'number')
+          ? effect.barrier.amount
+          : 0;
+        const amount = base + scaledBonus(effect.barrier && effect.barrier.scaling, src);
+        if (amount > 0) {
+          src.barrier = (src.barrier || 0) + amount;
+          this._emitFloatingStat(side, 'barrier', amount);
+          this.log.add(`${src.name} gains ${amount} barrier.`);
+        }
+        return false;
+      }
+
       case SKILL_EFFECT_TYPES.HEAL: {
         const base = (effect.heal && typeof effect.heal.amount === 'number')
           ? effect.heal.amount
@@ -2499,7 +2531,7 @@ export default class BattleController {
    * portrait. Read & cleared each frame via getState(). No-op for amount <= 0.
    *
    * @param {'player'|'enemy'} side — the affected combatant
-   * @param {'damage'|'heal'|'armor'} kind — drives color & sign in BattleScene
+   * @param {'damage'|'heal'|'armor'|'barrier'} kind — drives color & sign in BattleScene
    * @param {number} amount — magnitude shown (always positive)
    */
   _emitFloatingStat(side, kind, amount) {
@@ -2543,11 +2575,12 @@ export default class BattleController {
 
     // ── Status-effect damage modifiers ──
     // Order: a Berserk ATTACKER deals double and "ignores all effects" (bypasses
-    // the target's defensive statuses: Brittle/Intangible/Barrier). Otherwise the
-    // target's mitigations apply (Brittle ×1.5, then Intangible clamps to 1 — it
-    // wins over Brittle; Barrier blocks a skull-damage instance). A Berserk TARGET
-    // always takes double (its own downside, can't be ignored). Berserk is not yet
-    // applied by any content — these multipliers are tunable.
+    // the target's defensive statuses: Brittle/Intangible). Otherwise the target's
+    // mitigations apply (Brittle ×1.5, then Intangible clamps to 1 — it wins over
+    // Brittle). A Berserk TARGET always takes double (its own downside, can't be
+    // ignored). Berserk is not yet applied by any content — these multipliers are
+    // tunable. (Barrier is NOT a status — it's a numeric shield pool absorbed in
+    // resolver.applyDamage AFTER this mitigation, alongside armor. See decision #38.)
     let dmg = Math.max(0, payload.amount | 0);
     const attackerBerserk = !!attacker && this._hasStatus(attacker, 'berserk');
     if (attackerBerserk) {
@@ -2555,11 +2588,6 @@ export default class BattleController {
     } else {
       if (this._hasStatus(target, 'brittle'))    dmg = Math.round(dmg * 1.5);
       if (this._hasStatus(target, 'intangible')) dmg = Math.min(dmg, 1);
-      if (opts.isSkull && dmg > 0 && this._hasStatus(target, 'barrier')) {
-        dmg = 0;
-        this._removeStatus(target, 'barrier');
-        this.log.add(`${target.name}'s Barrier blocks the skull damage!`);
-      }
     }
     if (this._hasStatus(target, 'berserk')) dmg *= 2;
 
@@ -2995,6 +3023,7 @@ export default class BattleController {
     e.magic = cloned.magic || 0;
     e.armor = cloned.armor || 0;
     e.block = 0;
+    e.barrier = 0;                 // a fresh body — clear any magic shield
     e.portrait = cloned.portrait;
     e.skills = cloned.skills;
     e.allSkills = cloned.allSkills;

@@ -41,6 +41,12 @@ export const SKILL_EFFECT_TYPES = {
   // BattleController._resolveEffect.
   DESTROY_TILES_BY_TYPE: 'destroy_tiles_by_type',
   HEAL: 'heal',
+  // A one-round magic shield: adds to the caster's `barrier` pool, which absorbs
+  // incoming damage like armor (see MatchResolver.applyDamage) but expires at the
+  // caster's next turn start. Payload barrier: { amount, scaling? } — scales with
+  // Magic (twice as effectively as armor scales with Attack). Resolved in
+  // BattleController._resolveEffect (and EffectResolver for relics). See decision #38.
+  BARRIER: 'barrier',
   // Permanently raises the caster's MAX HP (does NOT heal — pair with a HEAL
   // effect to also fill the new space). Payload gainMaxHp: { amount }. Resolved
   // in BattleController._resolveEffect (e.g. the Sanguine Phoenix's Blood Gorge).
@@ -220,17 +226,29 @@ export default class MatchResolver {
   }
 
   /**
-   * Apply damage respecting armor → block → HP.
+   * Apply damage respecting barrier → armor → block → HP.
    * Mutates the target state object.
    *
-   * @param {object} target - { hp, armor, block }
+   * Barrier (a one-round magic shield) absorbs FIRST — it's the expiring
+   * resource, so spending it before permanent armor preserves the armor. Like
+   * armor, barrier-absorbed damage still counts toward `actualDamage` (the hit
+   * "landed" for trigger/feedback purposes); only `block` fully negates.
+   *
+   * @param {object} target - { hp, barrier, armor, block }
    * @param {number} amount - raw damage amount
-   * @returns {{ actualDamage: number, blocked: number, armorDamage: number }}
+   * @returns {{ actualDamage: number, blocked: number, armorDamage: number, barrierDamage: number }}
    */
   applyDamage(target, amount) {
     let remaining = amount;
     let blocked = 0;
     let armorDamage = 0;
+    let barrierDamage = 0;
+
+    if (target.barrier > 0) {
+      barrierDamage = Math.min(target.barrier, remaining);
+      target.barrier -= barrierDamage;
+      remaining -= barrierDamage;
+    }
 
     if (target.armor > 0) {
       armorDamage = Math.min(target.armor, remaining);
@@ -247,7 +265,7 @@ export default class MatchResolver {
     const actualDamage = amount - blocked;
     target.hp = Math.max(0, target.hp - remaining);
 
-    return { actualDamage, blocked, armorDamage };
+    return { actualDamage, blocked, armorDamage, barrierDamage };
   }
 
   /**

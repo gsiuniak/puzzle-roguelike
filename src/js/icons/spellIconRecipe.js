@@ -73,9 +73,9 @@ const ELEMENT_TO_COLOR = Object.freeze({
 const EFFECT_TAG_PRIORITY = Object.freeze({
   // actions (the readable subject)
   explode: 100, strike: 96, blast: 96, damage: 96, attack: 92, magic: 92, destroy: 90, convert: 86,
-  change: 85, shuffle: 84, create: 83, heal: 82, armor: 80, drain: 76,
+  change: 85, shuffle: 84, create: 83, heal: 82, armor: 80, barrier: 79, drain: 76,
   // statuses (distinct subjects, secondary to a hard action)
-  bleed: 60, frozen: 58, barrier: 57, berserk: 56, silence: 54,
+  bleed: 60, frozen: 58, berserk: 56, silence: 54,
   cripple: 52, enfeeble: 50, brittle: 48, intangible: 46,
   // shapes (read well as the embedded minor layer)
   area: 40, row: 36, column: 36, tile: 30,

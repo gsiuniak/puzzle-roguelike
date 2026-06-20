@@ -1276,9 +1276,10 @@ export default class BattleScene extends UIPanel {
     if (!center) return;
 
     const STAT_TEXT_STYLE = {
-      damage: { color: '#e23b3b', sign: '-' },
-      heal:   { color: '#3fbf3f', sign: '+' },
-      armor:  { color: '#4aa3ff', sign: '+' },
+      damage:  { color: '#e23b3b', sign: '-' },
+      heal:    { color: '#3fbf3f', sign: '+' },
+      armor:   { color: '#4aa3ff', sign: '+' },
+      barrier: { color: '#a24dff', sign: '+' },
     };
     const style = STAT_TEXT_STYLE[ev.kind];
     if (!style) return;

@@ -107,6 +107,9 @@ export const TAG_VALUE_TABLES = Object.freeze({
   blast:   DAMAGE_ROLL,
   damage:   DAMAGE_ROLL, // internal fallback (verb-less bag / random safety)
   armor:  { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
+  // `gain N barrier` — a one-round magic shield (an ACTION now, not a status).
+  // Base magnitude mirrors armor; the Magic scaling (×2/3) is applied at synth.
+  barrier: { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
   heal:   { 4: 16, 5: 20, 6: 20, 7: 15, 8: 11, 9: 8, 10: 5, 11: 3, 12: 2 },
   // `gain N mana` of a color.
   gain:   { 3: 25, 4: 25, 5: 20, 6: 14, 7: 9, 8: 7 },
@@ -116,7 +119,7 @@ export const TAG_VALUE_TABLES = Object.freeze({
   // `gain N attack` — permanent for the battle, so the rolls are small.
   attack: { 1: 53, 2: 37, 3: 9, 4: 1 },
   // `gain N magic` — counterpart to attack, same small permanent-stat rolls.
-  magic:  { 1: 53, 2: 37, 3: 9, 4: 1 },
+  magic:  { 2: 53, 4: 37, 6: 9, 8: 1 },
 
   // ── Status durations (turn cycles) ──
   silence:    { 2: 50, 3: 35, 4: 15 },
@@ -127,7 +130,6 @@ export const TAG_VALUE_TABLES = Object.freeze({
   frozen:     { 2: 50, 3: 35, 4: 15 },
   intangible: { 1: 80, 2: 20, 3: 0  },
   berserk:    { 2: 55, 3: 33, 4: 12 },
-  barrier:    { 2: 45, 3: 35, 4: 20 },
 });
 
 // ═══════════════════════════════════════════════════════════

@@ -84,11 +84,12 @@ const STATUS_TAG_TO_ID = Object.freeze({
   frozen: 'frozen',
   intangible: 'intangible',
   berserk: 'berserk',
-  barrier: 'barrier',
+  // NOTE: `barrier` is NOT here — it's no longer a status. It's an ACTION that
+  // emits a `barrier` shield effect (see emitBarrier / the action switch).
 });
 
 /** Status tags that BUFF the caster (apply_status target 'self'). */
-const SELF_STATUS_TAGS = new Set(['intangible', 'berserk', 'barrier']);
+const SELF_STATUS_TAGS = new Set(['intangible', 'berserk']);
 
 /** The five mana colors a cost may be paid in (skull is never a cost). */
 const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
@@ -122,6 +123,7 @@ const SYNERGY_BY_ACTION = Object.freeze({
   blast:    ['extra_turn', 'brittle', 'drain'],
   create:   ['wild', 'extra_turn'],
   armor:    ['barrier', 'heal'],
+  barrier:  ['armor', 'heal'],
   heal:     ['armor', 'extra_turn'],
   destroy:  ['extra_turn', 'strike'],
   explode:  ['extra_turn', 'blast'],
@@ -151,7 +153,7 @@ const ACTION_COST_AFFINITY = Object.freeze({
 const ACTION_SOUND = Object.freeze({
   strike: 'skill_bash', blast: 'skill_bash', damage: 'skill_bash',
   attack: 'skill_encroach', magic: 'skill_encroach',
-  armor: 'skill_defend', heal: 'skill_oungan',
+  armor: 'skill_defend', barrier: 'skill_defend', heal: 'skill_oungan',
   create: 'skill_oungan', destroy: 'skill_fracture',
   explode: 'skill_explode', convert: 'skill_explode', change: 'skill_explode',
   drain: 'skill_doomsong', shuffle: 'skill_fracture',
@@ -186,6 +188,7 @@ const GENERIC_SOUND_BY_ACTION = Object.freeze({
   explode: { family: 'destroy', versions: 5 },
   destroy: { family: 'destroy', versions: 5 },
   armor:   { family: 'armor',   versions: 2 },
+  barrier: { family: 'armor',   versions: 2 },
   convert: { family: 'convert', versions: 3 },
   change:  { family: 'change',  versions: 3 },
   create:  { family: 'create',  versions: 2, create: true },
@@ -286,6 +289,11 @@ const ACTION_NOUNS = Object.freeze({
     'Bulwark', 'Aegis', 'Ward', 'Carapace', 'Rampart', 'Shell', 'Vigil', 'Bastion',
     'Mantle', 'Fortress', 'Redoubt', 'Guardian', 'Palisade', 'Barricade', 'Aegida',
     'Buttress', 'Sanctuary', 'Embrace', 'Phalanx',
+  ],
+  // Barrier is a MAGIC shield — lean arcane/ethereal vs armor's martial nouns.
+  barrier: [
+    'Barrier', 'Ward', 'Aegis', 'Veil', 'Bubble', 'Membrane', 'Bastion', 'Mantle',
+    'Shroud', 'Sphere', 'Bulwark', 'Sanctuary', 'Aura', 'Halo', 'Nimbus',
   ],
   heal: [
     'Mending', 'Renewal', 'Restoration', 'Blessing', 'Salve', 'Communion', 'Respite',
@@ -830,6 +838,21 @@ export function synthesize(recipe, options = {}) {
   };
 
   /**
+   * Emit a barrier effect — a one-round MAGIC shield. Like armor it's a temporary
+   * HP pool that absorbs damage, but it scales with Magic at the `_66` (×2/3)
+   * preset (twice as effectively as armor scales with Attack) and expires at the
+   * caster's next turn. Description uses `<<amount>>` (live value) + [[barrier]].
+   * @param {number} amount — base barrier (already greater-multiplied if applicable)
+   */
+  const emitBarrier = (amount) => {
+    const scaling = { magic: DAMAGE_SCALING_PRESETS._66 };
+    effects.push({ effectType: 'barrier', barrier: { amount, scaling } });
+    lines.push(`Gain <<${amount}>> [[barrier]]`);
+    power += amount * POWER.perArmor
+      + scaling.magic * DAMAGE_SCALING_POWER.estStat * DAMAGE_SCALING_POWER.perScaledPoint;
+  };
+
+  /**
    * Emit a shaped board destruction, claiming the skill's single targeting
    * slot (shared by destroy/explode actions and the orphan-shape injection).
    * @returns {boolean} false when the targeting slot was already taken
@@ -876,6 +899,7 @@ export function synthesize(recipe, options = {}) {
     switch (tag) {
       case 'strike': case 'blast': { emitDamage(tag, rollTagValue(tag) || 5); return true; }
       case 'armor': { emitArmor(rollTagValue('armor') || 5); return true; }
+      case 'barrier': { emitBarrier(rollTagValue('barrier') || 5); return true; }
       case 'heal': { emitHeal(rollTagValue('heal') || 5); return true; }
       case 'attack': { const a = rollTagValue('attack') || 1; effects.push({ effectType: 'gain_attack', gainAttack: { amount: a } }); lines.push(`Gain ${a} [[attack]]`); power += a * POWER.perAttack; return true; }
       case 'magic': { const a = rollTagValue('magic') || 1; effects.push({ effectType: 'gain_magic', gainMagic: { amount: a } }); lines.push(`Gain ${a} [[magic]]`); power += a * POWER.perMagic; return true; }
@@ -941,6 +965,12 @@ export function synthesize(recipe, options = {}) {
         let amount = roll('armor', 5);
         if (consumeGreater()) amount = greaterBoost(amount);
         emitArmor(amount);
+        break;
+      }
+      case 'barrier': {
+        let amount = roll('barrier', 5);
+        if (consumeGreater()) amount = greaterBoost(amount);
+        emitBarrier(amount);
         break;
       }
       case 'heal': {

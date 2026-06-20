@@ -82,6 +82,11 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   strike: { id: 'strike', label: 'Strike', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
   blast:  { id: 'blast',  label: 'Blast',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
   armor:   { id: 'armor',   label: 'Armor',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_armor' },
+  // `barrier` is a one-round MAGIC shield (an ACTION, not a status): like armor
+  // it absorbs damage as a temporary-HP pool, but scales with Magic (twice as
+  // effectively as armor scales with Attack) and expires at the caster's next
+  // turn. Synthesized into a `barrier` effect. No dedicated icon yet → placeholder.
+  barrier: { id: 'barrier', label: 'Barrier', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   create:  { id: 'create',  label: 'Create',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_create' },
   destroy: { id: 'destroy', label: 'Destroy', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   convert: { id: 'convert', label: 'Convert', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: 'weave_icon_convert' },
@@ -120,7 +125,7 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   greater:    { id: 'greater',    label: 'Greater',    category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
 
   // ── Status effects (synthesized into apply_status effects — debuffs hit the
-  //    enemy, buffs (intangible/berserk/barrier) buff the caster) ──
+  //    enemy, buffs (intangible/berserk) buff the caster) ──
   silence:    { id: 'silence',    label: 'Silence',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
   cripple:    { id: 'cripple',    label: 'Cripple',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
   enfeeble:   { id: 'enfeeble',   label: 'Enfeeble',   category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
@@ -129,7 +134,6 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   berserk:    { id: 'berserk',    label: 'Berserk',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.LEGENDARY, icon: null },
   bleed:      { id: 'bleed',      label: 'Bleed',      category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
   frozen:     { id: 'frozen',     label: 'Frozen',     category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
-  barrier:    { id: 'barrier',    label: 'Barrier',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.UNCOMMON,  icon: null },
 });
 
 /** Default tag-icon asset key (gold flame placeholder from the mock). */

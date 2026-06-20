@@ -82,6 +82,8 @@ const ARMOR_BADGE_ICON_FRAC = 0.66; // shield icon height as a fraction of bar h
 const ARMOR_BADGE_ICON_GAP = 3;     // gap between shield and "+N"
 const ARMOR_BADGE_FONT = 18;
 const ARMOR_BADGE_COLOR = '#bcdcff'; // light blue, matches the bar's armor overlay
+const BARRIER_BADGE_COLOR = '#d6b8ff'; // light purple, matches the bar's barrier overlay
+const BARRIER_BADGE_ICON = 'icon_barrier'; // sprite in ui_spritesheet_character_pane
 const STATS_HEIGHT = 22;
 const STAT_ICON_SIZE = 28;
 const STAT_VALUE_FONT_SIZE = 22;
@@ -341,8 +343,9 @@ export default class CharacterInfoPane extends UIPanel {
     // early-returns so they show regardless of name/flair state.
     this._renderStatusOverlays(ctx);
 
-    // Armor shield badge beside the HP label (also before the flair early-returns).
-    this._renderArmorBadge(ctx);
+    // Shield badges (armor, then barrier) beside the HP label (also before the
+    // flair early-returns).
+    this._renderShieldBadges(ctx);
 
     if (!this._nameText || !this._flair) return;
     if (!this._nameText.text) return;
@@ -401,6 +404,9 @@ export default class CharacterInfoPane extends UIPanel {
       // the exact number shows in the shield badge beside the centered HP label
       // (see _renderArmorBadge), so the label itself is just "hp / maxHp".
       this._healthBar.armorValue = state.armor ?? 0;
+      // Barrier renders as the purple overlay stacked beyond armor (its exact
+      // value shows in the barrier badge beside the HP label). See decision #38.
+      this._healthBar.barrierValue = state.barrier ?? 0;
       this._healthBar.label = `${state.hp ?? 0} / ${state.maxHp ?? 0}`;
     }
 
@@ -435,18 +441,24 @@ export default class CharacterInfoPane extends UIPanel {
   }
 
   /**
-   * Draw the armor shield badge ("🛡 +N") just to the right of the centered HP
-   * label. Shows the EXACT armor value (the blue bar overlay caps its visible
-   * width at the full bar, so the number is the source of truth). Hidden at 0
-   * armor. Clamped to stay inside the bar.
+   * Draw the shield badges ("🛡 +N") just to the right of the centered HP label:
+   * armor (blue, icon_block) first, then barrier (purple, icon_barrier) stacked
+   * to its right. Each shows the EXACT value (the bar overlays cap their visible
+   * width at the full bar, so the numbers are the source of truth). Hidden at 0.
+   * The whole group is clamped to stay inside the bar.
    */
-  _renderArmorBadge(ctx) {
+  _renderShieldBadges(ctx) {
     const bar = this._healthBar && this._healthBar.rect;
     if (!bar || bar.w <= 0) return;
     const armor = this._healthBar.armorValue || 0;
-    if (armor <= 0) return;
+    const barrier = this._healthBar.barrierValue || 0;
 
-    // Width of the centered "hp / maxHp" label, so the badge sits beside it.
+    const badges = [];
+    if (armor > 0)   badges.push({ value: armor,   iconKey: 'icon_block',       color: ARMOR_BADGE_COLOR });
+    if (barrier > 0) badges.push({ value: barrier, iconKey: BARRIER_BADGE_ICON, color: BARRIER_BADGE_COLOR });
+    if (badges.length === 0) return;
+
+    // Width of the centered "hp / maxHp" label, so the group sits beside it.
     ctx.save();
     ctx.font = `${HEALTH_LABEL_FONT_SIZE}px "Marcellus SC", Georgia, "Times New Roman", serif`;
     const labelW = ctx.measureText(this._healthBar.label || '').width;
@@ -454,40 +466,51 @@ export default class CharacterInfoPane extends UIPanel {
 
     const cy = bar.y + bar.h / 2;
     const iconBox = bar.h * ARMOR_BADGE_ICON_FRAC;
-    const text = `+${armor}`;
 
     ctx.save();
     ctx.font = `bold ${ARMOR_BADGE_FONT}px "Marcellus SC", Georgia, "Times New Roman", serif`;
-    const textW = ctx.measureText(text).width;
 
-    // Shield icon (reuse the stat icon), contain-fit to the badge box.
-    const icon = this._assetManager ? this._assetManager.get('icon_block') : null;
-    let iconW = 0;
-    let iconH = 0;
-    if (icon && icon.complete !== false && icon.width) {
-      const aspect = icon.width / icon.height;
-      iconH = iconBox; iconW = iconBox * aspect;
-      if (iconW > iconBox) { iconW = iconBox; iconH = iconBox / aspect; }
+    // Measure each badge (icon + "+N") and the total group width.
+    let groupW = 0;
+    for (const b of badges) {
+      b.text = `+${b.value}`;
+      b.textW = ctx.measureText(b.text).width;
+      const icon = this._assetManager ? this._assetManager.get(b.iconKey) : null;
+      b.icon = icon; b.iconW = 0; b.iconH = 0;
+      if (icon && icon.complete !== false && icon.width) {
+        const aspect = icon.width / icon.height;
+        b.iconH = iconBox; b.iconW = iconBox * aspect;
+        if (b.iconW > iconBox) { b.iconW = iconBox; b.iconH = iconBox / aspect; }
+      }
+      b.w = (b.iconW ? b.iconW + ARMOR_BADGE_ICON_GAP : 0) + b.textW;
+      groupW += b.w;
     }
+    groupW += ARMOR_BADGE_GAP * (badges.length - 1); // gaps between badges
 
-    const groupW = (iconW ? iconW + ARMOR_BADGE_ICON_GAP : 0) + textW;
     let x = bar.x + bar.w / 2 + labelW / 2 + ARMOR_BADGE_GAP;
-    // Keep the badge inside the bar.
+    // Keep the whole group inside the bar.
     x = Math.min(x, bar.x + bar.w - groupW - 4);
     x = Math.max(x, bar.x + 4);
 
-    if (iconW) {
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(icon, x, cy - iconH / 2, iconW, iconH);
-      x += iconW + ARMOR_BADGE_ICON_GAP;
-    }
-    ctx.fillStyle = ARMOR_BADGE_COLOR;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    ctx.shadowBlur = 3;
-    ctx.fillText(text, x, cy + 1);
+    for (let i = 0; i < badges.length; i++) {
+      const b = badges[i];
+      if (i > 0) x += ARMOR_BADGE_GAP;
+      if (b.iconW) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.shadowColor = 'transparent';
+        ctx.drawImage(b.icon, x, cy - b.iconH / 2, b.iconW, b.iconH);
+        x += b.iconW + ARMOR_BADGE_ICON_GAP;
+      }
+      ctx.fillStyle = b.color;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+      ctx.shadowBlur = 3;
+      ctx.fillText(b.text, x, cy + 1);
+      ctx.shadowColor = 'transparent';
+      x += b.textW;
+    }
     ctx.restore();
   }
 

@@ -32,6 +32,7 @@ import { scaledAmount } from '../data/scalingConfig.js';
 export const EFFECT_TYPES = {
   DAMAGE:        'damage',
   ARMOR:         'armor',
+  BARRIER:       'barrier',
   HEAL:          'heal',
   GAIN_MANA:     'gain_mana',
   DRAIN_MANA:    'drain_mana',
@@ -90,6 +91,23 @@ export function applyEffect(effect, ctx) {
       caster.armor = (caster.armor || 0) + amount;
       if (amount > 0 && ctx.onStatChange) ctx.onStatChange({ kind: 'armor', target: caster, amount });
       if (log) log.add(`${caster.name} gains ${amount} armor.`);
+      return true;
+    }
+
+    case EFFECT_TYPES.BARRIER: {
+      // A one-round magic shield (absorbs like armor, expires at the caster's
+      // next turn — see BattleController). Scales with Magic by default (twice as
+      // effectively as armor scales with Attack). Expiry is owned by
+      // BattleController._completeTurnIntro regardless of how barrier was granted.
+      if (!caster) return true;
+      const base = (effect.barrier && typeof effect.barrier.amount === 'number')
+        ? effect.barrier.amount
+        : 0;
+      const amount = scaledAmount(base, effect.barrier && effect.barrier.scaling, caster);
+      if (amount <= 0) return true;
+      caster.barrier = (caster.barrier || 0) + amount;
+      if (ctx.onStatChange) ctx.onStatChange({ kind: 'barrier', target: caster, amount });
+      if (log) log.add(`${caster.name} gains ${amount} barrier.`);
       return true;
     }
 

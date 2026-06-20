@@ -42,6 +42,7 @@ export const DAMAGE_SCALING_PRESETS = {
   _200: 2,
   _150: 1.5,
   _100: 1,
+  _66: 2 / 3, // "+1 per 1.5 of the stat" — twice as effective as _33 (Barrier/Magic)
   _50: 1 / 2,
   _33: 1/3
 }
@@ -133,7 +134,7 @@ export function resolveDynamicText(raw, effects, caster, cursor = { i: 0 }) {
 /**
  * Extract the scalable `{ amount, scaling }` payload from an effect, or null if
  * the effect isn't a scalable type. Keep this in sync with the effect types that
- * use `<<n>>` markup (damage, heal).
+ * use `<<n>>` markup (damage, heal, armor, barrier).
  * @param {object} e
  * @returns {{amount?:number, scaling?:any}|null}
  */
@@ -142,5 +143,6 @@ function scalablePayload(e) {
   if (e.effectType === 'damage' && e.damage) return e.damage;
   if (e.effectType === 'heal' && e.heal) return e.heal;
   if (e.effectType === 'armor' && e.armor) return e.armor;
+  if (e.effectType === 'barrier' && e.barrier) return e.barrier;
   return null;
 }

@@ -245,7 +245,7 @@ export const KEYWORD_DEFINITIONS = {
   barrier: {
     id: 'barrier',
     label: 'Barrier',
-    description: 'A buff: blocks the next instance of [[Skull]] [[Damage]].',
+    description: 'A temporary magic shield that absorbs [[Damage]] like [[Armor]], but lasts only one round. Scales with [[Magic]].',
   }
 };
 
