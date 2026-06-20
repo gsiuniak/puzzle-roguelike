@@ -1,13 +1,13 @@
 {
   "meta": {
-    "sheet_w": 1233,
+    "sheet_w": 1264,
     "sheet_h": 1020,
-    "sprite_count": 16,
+    "sprite_count": 18,
     "mode": "bin_pack",
     "padding": 4
   },
   "sprites": {
-    "skill_cyst_burst": {
+    "skill_anemic_feast": {
       "x": 4,
       "y": 4,
       "w": 248,
@@ -18,7 +18,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_infected_bite": {
+    "skill_blood_gorge": {
       "x": 256,
       "y": 4,
       "w": 248,
@@ -29,7 +29,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_desecrate": {
+    "skill_cyst_burst": {
       "x": 508,
       "y": 4,
       "w": 248,
@@ -40,7 +40,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_soul_burn": {
+    "skill_infected_bite": {
       "x": 760,
       "y": 4,
       "w": 248,
@@ -51,9 +51,9 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_harvest": {
-      "x": 4,
-      "y": 258,
+    "skill_desecrate": {
+      "x": 1012,
+      "y": 4,
       "w": 248,
       "h": 250,
       "index": 4,
@@ -62,8 +62,8 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_exsanguinate": {
-      "x": 256,
+    "skill_soul_burn": {
+      "x": 4,
       "y": 258,
       "w": 248,
       "h": 250,
@@ -73,8 +73,8 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_hound": {
-      "x": 508,
+    "skill_harvest": {
+      "x": 256,
       "y": 258,
       "w": 248,
       "h": 250,
@@ -84,12 +84,34 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_encroach": {
-      "x": 760,
+    "skill_exsanguinate": {
+      "x": 508,
       "y": 258,
       "w": 248,
       "h": 250,
       "index": 7,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skill_hound": {
+      "x": 760,
+      "y": 258,
+      "w": 248,
+      "h": 250,
+      "index": 8,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skill_encroach": {
+      "x": 1012,
+      "y": 258,
+      "w": 248,
+      "h": 250,
+      "index": 9,
       "source_w": 248,
       "source_h": 250,
       "trim_x": 0,
@@ -100,7 +122,7 @@
       "y": 512,
       "w": 248,
       "h": 250,
-      "index": 8,
+      "index": 10,
       "source_w": 248,
       "source_h": 250,
       "trim_x": 0,
@@ -111,7 +133,7 @@
       "y": 512,
       "w": 248,
       "h": 250,
-      "index": 9,
+      "index": 11,
       "source_w": 248,
       "source_h": 250,
       "trim_x": 0,
@@ -122,7 +144,7 @@
       "y": 512,
       "w": 248,
       "h": 250,
-      "index": 10,
+      "index": 12,
       "source_w": 248,
       "source_h": 250,
       "trim_x": 0,
@@ -133,37 +155,15 @@
       "y": 512,
       "w": 248,
       "h": 250,
-      "index": 11,
-      "source_w": 248,
-      "source_h": 250,
-      "trim_x": 0,
-      "trim_y": 0
-    },
-    "skill_charge": {
-      "x": 4,
-      "y": 766,
-      "w": 248,
-      "h": 250,
-      "index": 12,
-      "source_w": 248,
-      "source_h": 250,
-      "trim_x": 0,
-      "trim_y": 0
-    },
-    "skill_doomsong": {
-      "x": 256,
-      "y": 766,
-      "w": 248,
-      "h": 250,
       "index": 13,
       "source_w": 248,
       "source_h": 250,
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_boom_baby": {
-      "x": 508,
-      "y": 766,
+    "skill_charge": {
+      "x": 1012,
+      "y": 512,
       "w": 248,
       "h": 250,
       "index": 14,
@@ -172,12 +172,34 @@
       "trim_x": 0,
       "trim_y": 0
     },
+    "skill_doomsong": {
+      "x": 4,
+      "y": 766,
+      "w": 248,
+      "h": 250,
+      "index": 15,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skill_boom_baby": {
+      "x": 256,
+      "y": 766,
+      "w": 248,
+      "h": 250,
+      "index": 16,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 0
+    },
     "skill_slash": {
-      "x": 1012,
-      "y": 4,
+      "x": 508,
+      "y": 766,
       "w": 217,
       "h": 228,
-      "index": 15,
+      "index": 17,
       "source_w": 248,
       "source_h": 250,
       "trim_x": 0,

@@ -3,536 +3,572 @@
     "sfx_audio_sprite.ogg"
   ],
   "sprite": {
-    "sfx_show_level_up_panel": [
+    "sfx_skill_anemic_feast": [
       0,
       2000
     ],
-    "sfx_confirm_level_up": [
+    "sfx_sanguine_egg_hatch": [
       2020,
       2000
     ],
-    "sfx_map_click_node": [
+    "sfx_sanguin_egg_spawn": [
       4040,
+      2000
+    ],
+    "sfx_skill_blood_gorge": [
+      6060,
+      1480
+    ],
+    "sfx_show_level_up_panel": [
+      7560,
+      2000
+    ],
+    "sfx_confirm_level_up": [
+      9580,
+      2000
+    ],
+    "sfx_map_click_node": [
+      11600,
       1515
     ],
     "character_select_confirm": [
-      5575,
+      13135,
       940
     ],
     "extra_turn": [
-      6536,
+      14096,
       2038
     ],
     "sfx_crucible": [
-      8593,
+      16153,
       3000
     ],
     "sfx_choose_tags_confirm": [
-      11613,
+      19173,
       2000
     ],
     "sfx_choose_tag": [
-      13633,
+      21193,
       2000
     ],
     "sfx_choose_tag_back": [
-      15653,
+      23213,
       2000
     ],
     "sfx_thrall_summon": [
-      17673,
+      25233,
       1515
     ],
     "sfx_thrall_harvest": [
-      19208,
+      26768,
       2247
     ],
     "sfx_thrall_harvest_old": [
-      21475,
+      29035,
       2200
     ],
     "sfx_skill_infected_bite": [
-      23695,
+      31255,
       1480
     ],
     "sfx_skill_cyst_burst": [
-      25195,
+      32755,
       1760
     ],
     "sfx_skill_descecrate": [
-      26975,
+      34535,
       1760
     ],
     "sfx_skill_exsanguinate": [
-      28755,
+      36315,
       1760
     ],
     "sfx_skill_soul_burn": [
-      30535,
+      38095,
       1760
     ],
     "sfx_skill_harvest": [
-      32315,
+      39875,
       1760
     ],
     "sfx_skill_boulder_throw": [
-      34095,
+      41655,
       1200
     ],
     "sfx_skill_charge": [
-      35315,
+      42875,
       1000
     ],
     "sfx_skill_frenzy": [
-      36335,
+      43895,
       1480
     ],
     "sfx_hound": [
-      37835,
+      45395,
       2000
     ],
     "sfx_smash": [
-      39855,
+      47415,
       2000
     ],
     "sfx_skill_encroach": [
-      41875,
+      49435,
       2000
     ],
     "sfx_skill_boom_baby": [
-      43895,
+      51455,
       2000
     ],
     "sfx_skill_ignition": [
-      45915,
+      53475,
       2000
     ],
     "sfx_skill_doomsong": [
-      47935,
+      55495,
       2000
     ],
     "sfx_reward_choose": [
-      49955,
+      57515,
       2000
     ],
     "sfx_rewards_open": [
-      51975,
+      59535,
       2000
     ],
     "sfx_map_overlay_open": [
-      53995,
+      61555,
       1000
     ],
     "sfx_map_overlay_close": [
-      55015,
+      62575,
       1000
     ],
     "skill_oungan": [
-      56035,
+      63595,
       2000
     ],
     "skill_transform_skull": [
-      58055,
+      65615,
       2760
     ],
     "skill_create_skull": [
-      60835,
+      68395,
       2880
     ],
     "skill_create_purple": [
-      63735,
+      71295,
       2000
     ],
     "skill_create_yellow": [
-      65755,
+      73315,
       2000
     ],
     "skill_create_green": [
-      67775,
+      75335,
       2000
     ],
     "skill_create_blue": [
-      69795,
+      77355,
       2000
     ],
     "skill_create_red": [
-      71815,
+      79375,
       2000
     ],
     "skill_transform_purple": [
-      73835,
+      81395,
       2000
     ],
     "skill_transform_blue": [
-      75855,
+      83415,
       2000
     ],
     "skill_transform_yellow": [
-      77875,
+      85435,
       2000
     ],
     "skill_transform_green": [
-      79895,
+      87455,
       2000
     ],
     "skill_transform_red": [
-      81915,
+      89475,
       2000
     ],
     "character_select_pick": [
-      83935,
+      91495,
       2000
     ],
     "skill_explode": [
-      85955,
+      93515,
       2000
     ],
     "skill_fracture": [
-      87975,
+      95535,
       2000
     ],
     "weapon_skill": [
-      89995,
+      97555,
       1000
     ],
     "skull_damage": [
-      91015,
+      98575,
       1000
     ],
     "skill_bash": [
-      92035,
+      99595,
       1000
     ],
     "new_turn": [
-      93055,
+      100615,
       1000
     ],
     "skill_defend": [
-      94075,
+      101635,
       1000
     ],
     "gain_armor": [
-      95095,
+      102655,
       1000
     ],
     "tile_hover": [
-      96115,
+      103675,
       1000
     ],
     "match_3": [
-      97135,
+      104695,
       1000
     ],
     "match_4": [
-      98155,
+      105715,
       1000
     ],
     "match_5": [
-      99175,
+      106735,
       1000
     ],
     "tile_destroy": [
-      100195,
+      107755,
       1000
     ]
   },
   "_meta": {
-    "total_duration_ms": 101195,
+    "total_duration_ms": 108755,
     "sample_rate": 44100,
     "channels": 2,
     "gap_ms": 20,
-    "clip_count": 58
+    "clip_count": 62
   },
   "_sprites_detail": {
-    "sfx_show_level_up_panel": {
+    "sfx_skill_anemic_feast": {
       "start": 0,
       "duration": 2000,
       "end": 2000
     },
-    "sfx_confirm_level_up": {
+    "sfx_sanguine_egg_hatch": {
       "start": 2020,
       "duration": 2000,
       "end": 4020
     },
-    "sfx_map_click_node": {
+    "sfx_sanguin_egg_spawn": {
       "start": 4040,
+      "duration": 2000,
+      "end": 6040
+    },
+    "sfx_skill_blood_gorge": {
+      "start": 6060,
+      "duration": 1480,
+      "end": 7540
+    },
+    "sfx_show_level_up_panel": {
+      "start": 7560,
+      "duration": 2000,
+      "end": 9560
+    },
+    "sfx_confirm_level_up": {
+      "start": 9580,
+      "duration": 2000,
+      "end": 11580
+    },
+    "sfx_map_click_node": {
+      "start": 11600,
       "duration": 1515,
-      "end": 5555
+      "end": 13115
     },
     "character_select_confirm": {
-      "start": 5575,
+      "start": 13135,
       "duration": 940,
-      "end": 6515
+      "end": 14075
     },
     "extra_turn": {
-      "start": 6536,
+      "start": 14096,
       "duration": 2038,
-      "end": 8574
+      "end": 16134
     },
     "sfx_crucible": {
-      "start": 8593,
+      "start": 16153,
       "duration": 3000,
-      "end": 11593
+      "end": 19153
     },
     "sfx_choose_tags_confirm": {
-      "start": 11613,
+      "start": 19173,
       "duration": 2000,
-      "end": 13613
+      "end": 21173
     },
     "sfx_choose_tag": {
-      "start": 13633,
+      "start": 21193,
       "duration": 2000,
-      "end": 15633
+      "end": 23193
     },
     "sfx_choose_tag_back": {
-      "start": 15653,
+      "start": 23213,
       "duration": 2000,
-      "end": 17653
+      "end": 25213
     },
     "sfx_thrall_summon": {
-      "start": 17673,
+      "start": 25233,
       "duration": 1515,
-      "end": 19188
+      "end": 26748
     },
     "sfx_thrall_harvest": {
-      "start": 19208,
+      "start": 26768,
       "duration": 2247,
-      "end": 21455
+      "end": 29015
     },
     "sfx_thrall_harvest_old": {
-      "start": 21475,
+      "start": 29035,
       "duration": 2200,
-      "end": 23675
+      "end": 31235
     },
     "sfx_skill_infected_bite": {
-      "start": 23695,
+      "start": 31255,
       "duration": 1480,
-      "end": 25175
+      "end": 32735
     },
     "sfx_skill_cyst_burst": {
-      "start": 25195,
+      "start": 32755,
       "duration": 1760,
-      "end": 26955
+      "end": 34515
     },
     "sfx_skill_descecrate": {
-      "start": 26975,
+      "start": 34535,
       "duration": 1760,
-      "end": 28735
+      "end": 36295
     },
     "sfx_skill_exsanguinate": {
-      "start": 28755,
+      "start": 36315,
       "duration": 1760,
-      "end": 30515
+      "end": 38075
     },
     "sfx_skill_soul_burn": {
-      "start": 30535,
+      "start": 38095,
       "duration": 1760,
-      "end": 32295
+      "end": 39855
     },
     "sfx_skill_harvest": {
-      "start": 32315,
+      "start": 39875,
       "duration": 1760,
-      "end": 34075
+      "end": 41635
     },
     "sfx_skill_boulder_throw": {
-      "start": 34095,
+      "start": 41655,
       "duration": 1200,
-      "end": 35295
+      "end": 42855
     },
     "sfx_skill_charge": {
-      "start": 35315,
+      "start": 42875,
       "duration": 1000,
-      "end": 36315
-    },
-    "sfx_skill_frenzy": {
-      "start": 36335,
-      "duration": 1480,
-      "end": 37815
-    },
-    "sfx_hound": {
-      "start": 37835,
-      "duration": 2000,
-      "end": 39835
-    },
-    "sfx_smash": {
-      "start": 39855,
-      "duration": 2000,
-      "end": 41855
-    },
-    "sfx_skill_encroach": {
-      "start": 41875,
-      "duration": 2000,
       "end": 43875
     },
-    "sfx_skill_boom_baby": {
+    "sfx_skill_frenzy": {
       "start": 43895,
+      "duration": 1480,
+      "end": 45375
+    },
+    "sfx_hound": {
+      "start": 45395,
       "duration": 2000,
-      "end": 45895
+      "end": 47395
+    },
+    "sfx_smash": {
+      "start": 47415,
+      "duration": 2000,
+      "end": 49415
+    },
+    "sfx_skill_encroach": {
+      "start": 49435,
+      "duration": 2000,
+      "end": 51435
+    },
+    "sfx_skill_boom_baby": {
+      "start": 51455,
+      "duration": 2000,
+      "end": 53455
     },
     "sfx_skill_ignition": {
-      "start": 45915,
+      "start": 53475,
       "duration": 2000,
-      "end": 47915
+      "end": 55475
     },
     "sfx_skill_doomsong": {
-      "start": 47935,
+      "start": 55495,
       "duration": 2000,
-      "end": 49935
+      "end": 57495
     },
     "sfx_reward_choose": {
-      "start": 49955,
+      "start": 57515,
       "duration": 2000,
-      "end": 51955
+      "end": 59515
     },
     "sfx_rewards_open": {
-      "start": 51975,
+      "start": 59535,
       "duration": 2000,
-      "end": 53975
+      "end": 61535
     },
     "sfx_map_overlay_open": {
-      "start": 53995,
+      "start": 61555,
       "duration": 1000,
-      "end": 54995
+      "end": 62555
     },
     "sfx_map_overlay_close": {
-      "start": 55015,
+      "start": 62575,
       "duration": 1000,
-      "end": 56015
+      "end": 63575
     },
     "skill_oungan": {
-      "start": 56035,
+      "start": 63595,
       "duration": 2000,
-      "end": 58035
+      "end": 65595
     },
     "skill_transform_skull": {
-      "start": 58055,
+      "start": 65615,
       "duration": 2760,
-      "end": 60815
+      "end": 68375
     },
     "skill_create_skull": {
-      "start": 60835,
+      "start": 68395,
       "duration": 2880,
-      "end": 63715
+      "end": 71275
     },
     "skill_create_purple": {
-      "start": 63735,
+      "start": 71295,
       "duration": 2000,
-      "end": 65735
+      "end": 73295
     },
     "skill_create_yellow": {
-      "start": 65755,
+      "start": 73315,
       "duration": 2000,
-      "end": 67755
+      "end": 75315
     },
     "skill_create_green": {
-      "start": 67775,
+      "start": 75335,
       "duration": 2000,
-      "end": 69775
+      "end": 77335
     },
     "skill_create_blue": {
-      "start": 69795,
+      "start": 77355,
       "duration": 2000,
-      "end": 71795
+      "end": 79355
     },
     "skill_create_red": {
-      "start": 71815,
+      "start": 79375,
       "duration": 2000,
-      "end": 73815
+      "end": 81375
     },
     "skill_transform_purple": {
-      "start": 73835,
+      "start": 81395,
       "duration": 2000,
-      "end": 75835
+      "end": 83395
     },
     "skill_transform_blue": {
-      "start": 75855,
+      "start": 83415,
       "duration": 2000,
-      "end": 77855
+      "end": 85415
     },
     "skill_transform_yellow": {
-      "start": 77875,
+      "start": 85435,
       "duration": 2000,
-      "end": 79875
+      "end": 87435
     },
     "skill_transform_green": {
-      "start": 79895,
+      "start": 87455,
       "duration": 2000,
-      "end": 81895
+      "end": 89455
     },
     "skill_transform_red": {
-      "start": 81915,
+      "start": 89475,
       "duration": 2000,
-      "end": 83915
+      "end": 91475
     },
     "character_select_pick": {
-      "start": 83935,
+      "start": 91495,
       "duration": 2000,
-      "end": 85935
+      "end": 93495
     },
     "skill_explode": {
-      "start": 85955,
+      "start": 93515,
       "duration": 2000,
-      "end": 87955
+      "end": 95515
     },
     "skill_fracture": {
-      "start": 87975,
+      "start": 95535,
       "duration": 2000,
-      "end": 89975
+      "end": 97535
     },
     "weapon_skill": {
-      "start": 89995,
+      "start": 97555,
       "duration": 1000,
-      "end": 90995
+      "end": 98555
     },
     "skull_damage": {
-      "start": 91015,
+      "start": 98575,
       "duration": 1000,
-      "end": 92015
+      "end": 99575
     },
     "skill_bash": {
-      "start": 92035,
+      "start": 99595,
       "duration": 1000,
-      "end": 93035
+      "end": 100595
     },
     "new_turn": {
-      "start": 93055,
+      "start": 100615,
       "duration": 1000,
-      "end": 94055
+      "end": 101615
     },
     "skill_defend": {
-      "start": 94075,
+      "start": 101635,
       "duration": 1000,
-      "end": 95075
+      "end": 102635
     },
     "gain_armor": {
-      "start": 95095,
+      "start": 102655,
       "duration": 1000,
-      "end": 96095
+      "end": 103655
     },
     "tile_hover": {
-      "start": 96115,
+      "start": 103675,
       "duration": 1000,
-      "end": 97115
+      "end": 104675
     },
     "match_3": {
-      "start": 97135,
+      "start": 104695,
       "duration": 1000,
-      "end": 98135
+      "end": 105695
     },
     "match_4": {
-      "start": 98155,
+      "start": 105715,
       "duration": 1000,
-      "end": 99155
+      "end": 106715
     },
     "match_5": {
-      "start": 99175,
+      "start": 106735,
       "duration": 1000,
-      "end": 100175
+      "end": 107735
     },
     "tile_destroy": {
-      "start": 100195,
+      "start": 107755,
       "duration": 1000,
-      "end": 101195
+      "end": 108755
     }
   }
 }
