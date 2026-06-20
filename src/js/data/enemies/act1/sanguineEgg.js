@@ -13,9 +13,11 @@
  *   - fail      → the leftover eggs burst and the Egg reverts to a full-life
  *                 Phoenix (which then forfeits that turn).
  * The Egg is INVULNERABLE (its HP bar is purely cosmetic — the win condition is
- * the tiles, NOT damage), has no skills/relics, inherits the Phoenix's mana, and
- * is DORMANT (its turns drive the grace/deadline of the minigame — see
- * BattleController._doEnemyTurn / _resolveEggDeadline). So it never moves tiles.
+ * the tiles, NOT damage), has no skills, inherits the Phoenix's mana, and is
+ * DORMANT (it never acts/moves tiles). Its only relic, `sanguine_chrysalis`, is
+ * DISPLAY-ONLY (no effects) — it just shows the player why the Egg is invulnerable
+ * and what to do; the win/revert is hardcoded in the BattleController egg phase
+ * (_resolveEggPhaseAtTurnEnd).
  *
  * `hp` / `attack` are cosmetic only (the Egg is invulnerable and never acts).
  * `attackScale: 0` opts it out of the per-floor attack bonus.
@@ -51,12 +53,14 @@ const sanguineEgg = {
   },
 
   // Reverts to the full-life Phoenix if the player fails to clear the egg tiles
-  // in time (BattleController._resolveEggDeadline). No relics — the revert/win is
-  // purely turn-based, driven by the Phoenix's sanguine_egg transform config.
+  // in time (BattleController._resolveEggPhaseAtTurnEnd). The revert/win is purely
+  // turn-based (driven by the Phoenix's sanguine_egg transform config); the
+  // `sanguine_chrysalis` relic here is DISPLAY-ONLY (no effects) — it just shows
+  // the player why the Egg is invulnerable and what they must do.
   transformForms: ['sanguinePhoenix'],
 
   skills: [],
-  relics: [],
+  relics: ['sanguine_chrysalis'],
 };
 
 export default sanguineEgg;

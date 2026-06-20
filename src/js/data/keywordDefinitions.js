@@ -58,7 +58,7 @@ export const KEYWORD_DEFINITIONS = {
   'sanguine egg': {
     id: 'sanguine egg',
     label: 'Sanguine Egg',
-    description: 'A wild [[Tile]] — matches as any color. Left on the board when the Sanguine Phoenix is slain; clear them all within one turn or the Phoenix is reborn.',
+    description: 'A [[wild]] tile. Left on the board when the Sanguine Phoenix is slain; clear them all within one turn or the Phoenix is reborn.',
   },
   'sanguine phoenix': {
     id: 'sanguine phoenix',
