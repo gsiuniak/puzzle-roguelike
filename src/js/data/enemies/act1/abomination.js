@@ -28,8 +28,8 @@ const abomination = {
   type: 'minion',
   floors: [7, 8, 9],
 
-  hp: 28, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 28,
+  hp: 25, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 25,
   attack: 2,
   armor: 0,
   // Starts with 1 Red so it can Infected Bite on turn one; builds Green via

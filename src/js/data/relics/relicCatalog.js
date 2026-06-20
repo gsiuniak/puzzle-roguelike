@@ -555,7 +555,7 @@ const RELIC_CATALOG = {
     icon: 'relic_flaming_arrow',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
+      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
     ],
   },
 
@@ -566,7 +566,7 @@ const RELIC_CATALOG = {
     icon: 'relic_water_balloon',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
+      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
     ],
   },
 
@@ -577,7 +577,7 @@ const RELIC_CATALOG = {
     icon: 'relic_thorned_branch',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
+      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
     ],
   },
 
@@ -588,7 +588,7 @@ const RELIC_CATALOG = {
     icon: 'relic_static_comb',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
+      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
     ],
   },
 
@@ -599,7 +599,7 @@ const RELIC_CATALOG = {
     icon: 'relic_tuning_fork',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALE_PER_POINT } } },
+      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
     ],
   },
 

@@ -188,7 +188,7 @@ const GENERIC_SOUND_BY_ACTION = Object.freeze({
   explode: { family: 'destroy', versions: 5 },
   destroy: { family: 'destroy', versions: 5 },
   armor:   { family: 'armor',   versions: 2 },
-  barrier: { family: 'armor',   versions: 2 },
+  barrier: { family: 'barrier', versions: 1 },
   convert: { family: 'convert', versions: 3 },
   change:  { family: 'change',  versions: 3 },
   create:  { family: 'create',  versions: 2, create: true },
@@ -328,6 +328,12 @@ const ACTION_NOUNS = Object.freeze({
     'Ferocity', 'Whetstone', 'Bloodlust', 'Warcry', 'Honing', 'Frenzy', 'Edge',
     'Savagery', 'Bloodrage', 'Fury', 'Sharpening', 'Onset', 'Vigor', 'Bloodthirst',
     'Rampage', 'Berserking', 'Goad',
+  ],
+  // Magic is the arcane counterpart to attack — lean intellect/eldritch nouns.
+  magic: [
+    'Insight', 'Attunement', 'Ascendance', 'Epiphany', 'Acumen', 'Clarity', 'Focus',
+    'Awakening', 'Empowerment', 'Channeling', 'Mastery', 'Genius', 'Enlightenment',
+    'Resonance', 'Ascension', 'Communion', 'Potency', 'Sagacity',
   ],
   explode: [
     'Cataclysm', 'Detonation', 'Conflagration', 'Starburst', 'Eruption', 'Concussion',

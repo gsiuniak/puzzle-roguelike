@@ -277,6 +277,8 @@ const GENERIC_SFX_CLIPS = [
   ...[1, 2, 3, 4, 5].map((v) => `destroy_${v}`),
   // armor — 2 versions
   ...[1, 2].map((v) => `armor_${v}`),
+  // barrier — 1 version (woven barrier spells; see skillSynthesizer)
+  ...[1].map((v) => `barrier_${v}`),
   // convert — 3 versions
   ...[1, 2, 3].map((v) => `convert_${v}`),
   // change (single-tile recolor) — 3 versions
