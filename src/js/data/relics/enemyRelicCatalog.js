@@ -195,17 +195,23 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
-  // Death-transform engine (Sanguine Phoenix). When the owner would die, it does
-  // NOT die — it transforms into the Sanguine Egg enemy (a killable second
-  // health bar, no skills, keeps its mana) and seeds the board with 2 wild
-  // Sanguine Egg tiles. Board/state-touching → BattleController
-  // ._handlePassiveBoardEffect via the `transform` path (swaps the enemy identity
-  // in place + defers the egg-tile spawn). Fires on the `onDeath` trigger,
-  // dispatched from _checkGameOver before victory is declared.
+  // Death-transform engine (Sanguine Phoenix) — drives the whole egg minigame.
+  // When the owner would die it does NOT die: it transforms into the dormant,
+  // INVULNERABLE Sanguine Egg form (keeps its mana) and seeds the board with 2
+  // wild Sanguine Egg tiles. This starts the EGG PHASE (BattleController):
+  //   - the player has ONE turn (extra turns included) to clear BOTH egg tiles →
+  //     instant victory;
+  //   - if any remain at the Egg's deadline turn, the leftovers BURST (liquid
+  //     blood, no tendrils) and the Egg reverts to a full-life Phoenix (the
+  //     `revert*` payload below).
+  // Board/state-touching → BattleController._handlePassiveBoardEffect via the
+  // `transform` path. Fires on the `onDeath` trigger, dispatched from
+  // _checkGameOver before victory is declared. There is NO second relic on the
+  // Egg — the revert/win is purely turn-based, configured entirely here.
   sanguine_egg: {
     id: 'sanguine_egg',
     name: 'Sanguine Egg',
-    description: 'Upon death, transform into a [[Sanguine Egg]].\n[[Create]] 2 Sanguine Egg [[tiles]].',
+    description: 'Upon death, transform into a [[Sanguine Egg]] and [[Create]] 2 Sanguine Egg [[tiles]].\nClear them within one turn or the Phoenix is reborn.',
     icon: 'relic_sanguine_egg',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -216,34 +222,11 @@ const ENEMY_RELIC_CATALOG = {
           intoEnemyId: 'sanguineEgg',
           createTiles: { type: 'sanguine_egg', amount: 2, avoidMatches: true },
           sound: 'sfx_sanguine_egg_spawn',
-        },
-      },
-    ],
-  },
-
-  // Rebirth engine (Sanguine Egg form). Also an `onDeath` check — when the EGG is
-  // killed it inspects the board: if any Sanguine Egg tiles remain they BURST
-  // (liquid-blood, no tendrils — see _spawnHarvestTendrils bloodOnly) and the egg
-  // transforms back into a full-life Sanguine Phoenix (original relics/skills,
-  // kept mana); if NO eggs remain it simply stays dead (battle over). Using
-  // onDeath (not a turn trigger) keeps the revive/die deterministic and avoids
-  // the egg ever needing to "pass" a turn to resolve. The player wins by clearing
-  // both egg tiles BEFORE landing the killing blow on the egg.
-  sanguine_chrysalis: {
-    id: 'sanguine_chrysalis',
-    name: 'Sanguine Chrysalis',
-    description: 'Upon death, [[Harvest]] all [[Sanguine Egg]] tiles and transform into a [[Sanguine Phoenix]].\nIf no Sanguine Eggs remain, perish.',
-    icon: 'relic_sanguine_chrysalis',
-    rarity: RELIC_RARITY.RARE,
-    effects: [
-      {
-        trigger: 'onDeath',
-        effectType: 'chrysalis',
-        chrysalis: {
+          // Egg-phase resolution config (read by BattleController._applyTransform):
           eggType: 'sanguine_egg',
-          intoEnemyId: 'sanguinePhoenix',
+          revertEnemyId: 'sanguinePhoenix',
+          revertSound: 'sfx_sanguine_egg_hatch',
           tendrilColor: '#a01a2a',
-          sound: 'sfx_sanguine_egg_hatch',
         },
       },
     ],

@@ -3,14 +3,15 @@
  * vampire built entirely from data-driven parts (no bespoke boss code):
  *
  *   - Sanguine Egg relic (onDeath): instead of dying, the Phoenix TRANSFORMS
- *     into the dormant, KILLABLE Sanguine Egg enemy (its own HP bar, no skills,
- *     keeps its mana) and seeds the board with 2 wild Sanguine Egg tiles.
- *   - The Egg's Sanguine Chrysalis relic (also onDeath — fires when the EGG is
- *     killed): if any egg tiles still remain, they burst (liquid blood) and the
- *     Egg is REBORN as a full-life Phoenix; if the player cleared every egg
- *     first, it perishes. So clear BOTH egg tiles before the killing blow. Both
- *     transforms run through the same onDeath path — deterministic, no turn
- *     trigger, no incubation (which mis-behaved with extra turns).
+ *     into the dormant, INVULNERABLE Sanguine Egg form (no skills, keeps its
+ *     mana) and seeds the board with 2 wild Sanguine Egg tiles. This starts the
+ *     TURN-BASED egg minigame (BattleController egg phase): the player has ONE
+ *     turn (extra turns included) to clear BOTH egg tiles. Clear them → instant
+ *     victory; fail → the leftover eggs burst and the Egg reverts to a full-life
+ *     Phoenix (which forfeits that turn). The Egg's HP bar is cosmetic — the win
+ *     condition is the tiles, not damage. All of it is configured from the
+ *     sanguine_egg relic's `transform` payload (eggType/revert*); the Egg form
+ *     carries no relic of its own.
  *   - Blood Gorge (6 Purple): drain 5 of every enemy mana, +10 Max HP, heal 10
  *     — a snowballing HP pool that punishes a slow kill.
  *   - Anemic Feast (10 Red): skull-fed Magic nuke that refuels Purple and gains
@@ -24,7 +25,7 @@
  * All art is dedicated: portraits (portrait_sanguine_phoenix /
  * portrait_sanguine_phoenix_egg), skill icons (skill_blood_gorge /
  * skill_anemic_feast), relic icons (relic_sanguine_egg /
- * relic_sanguine_chrysalis), the phoenix_egg_tile, and the four SFX.
+ * relic_sanguine_egg), the phoenix_egg_tile, and the four SFX.
  *
  * See act1/goblin.js for the full field documentation.
  */

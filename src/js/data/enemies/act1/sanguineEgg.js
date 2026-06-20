@@ -6,19 +6,19 @@
  * Sanguine Egg relic swaps into it on death. MapScene still registers it so the
  * id resolves when pre-building the Phoenix's transform forms.
  *
- * A KILLABLE second health bar — the Egg's Sanguine Chrysalis relic fires on the
- * Egg's DEATH (not a turn trigger): if any wild Sanguine Egg tiles remain it is
- * reborn as a full-life Phoenix; if the player cleared them all first, it
- * perishes. So the player must clear both egg tiles BEFORE landing the killing
- * blow on the Egg. It has no skills and inherits the Phoenix's mana across the
- * transform; it is DORMANT (passes its turns — see BattleController._doEnemyTurn)
- * so it never moves tiles.
+ * The egg minigame is TURN-BASED and TILE-BASED (BattleController egg phase):
+ * when the Phoenix is "killed" it becomes this Egg and 2 wild Sanguine Egg tiles
+ * are seeded. The player has ONE turn (extra turns included) to clear BOTH:
+ *   - clear them → instant victory;
+ *   - fail      → the leftover eggs burst and the Egg reverts to a full-life
+ *                 Phoenix (which then forfeits that turn).
+ * The Egg is INVULNERABLE (its HP bar is purely cosmetic — the win condition is
+ * the tiles, NOT damage), has no skills/relics, inherits the Phoenix's mana, and
+ * is DORMANT (its turns drive the grace/deadline of the minigame — see
+ * BattleController._doEnemyTurn / _resolveEggDeadline). So it never moves tiles.
  *
- * `hp` is the second-bar size — tune it. It must be high enough that the
- * Phoenix-killing cascade doesn't immediately also kill the Egg (else the Egg
- * phase is skipped) but low enough to grind down over a couple of turns while
- * clearing the eggs. `attackScale: 0` opts the Egg out of the per-floor attack
- * bonus (it never attacks anyway, being dormant).
+ * `hp` / `attack` are cosmetic only (the Egg is invulnerable and never acts).
+ * `attackScale: 0` opts it out of the per-floor attack bonus.
  *
  * See act1/goblin.js for the full field documentation.
  */
@@ -35,7 +35,7 @@ const sanguineEgg = {
   type: 'elite',
   floors: [], // never spawns on its own — reached only via the Phoenix's transform
 
-  hp: 20,  // killable second health bar (floor-scaled like any enemy) — tunable
+  hp: 20,  // cosmetic only — the Egg is invulnerable for the whole egg phase
   maxHp: 20,
   attack: 1,
   attackScale: 0, // dormant — never attacks; opt out of the per-floor attack bonus
@@ -50,11 +50,13 @@ const sanguineEgg = {
     isSpecialTrack: false,
   },
 
-  // Reverts to the full-life Phoenix when its chrysalis blooms with eggs present.
+  // Reverts to the full-life Phoenix if the player fails to clear the egg tiles
+  // in time (BattleController._resolveEggDeadline). No relics — the revert/win is
+  // purely turn-based, driven by the Phoenix's sanguine_egg transform config.
   transformForms: ['sanguinePhoenix'],
 
   skills: [],
-  relics: ['sanguine_chrysalis'],
+  relics: [],
 };
 
 export default sanguineEgg;
