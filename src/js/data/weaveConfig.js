@@ -91,7 +91,7 @@ export const TAGS_PER_ROUND_WEIGHTS = Object.freeze({
  * Tune freely — add a tag id with its own {value: weight} map to give it a
  * hidden roll; a tag absent from this table has no hidden value (magnitude 1).
  */
-// Base-damage roll shared by the two damage tags (`physical` / `magical`) and
+// Base-damage roll shared by the two damage tags (`strike` / `blast`) and
 // the internal `damage` fallback. The stat-SCALING multiplier rides on top of
 // this base (see DAMAGE_SCALING_WEIGHTS) and is what makes the spell grow.
 const DAMAGE_ROLL = { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 };
@@ -101,10 +101,10 @@ export const TAG_VALUE_TABLES = Object.freeze({
   create: { 3: 18, 4: 26, 5: 16, 6: 13, 7: 10, 8: 7, 9: 5, 10: 3, 11: 1.5, 12: 0.5 },
 
   // ── Action magnitudes ──
-  // `deal N physical/magical` — mid rolls common (same base for both types; the
+  // `deal N strike/blast` — mid rolls common (same base for both types; the
   // damage TYPE only changes which stat it scales with + the keyword shown).
-  physical: DAMAGE_ROLL,
-  magical:  DAMAGE_ROLL,
+  strike:  DAMAGE_ROLL,
+  blast:   DAMAGE_ROLL,
   damage:   DAMAGE_ROLL, // internal fallback (verb-less bag / random safety)
   armor:  { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
   heal:   { 4: 16, 5: 20, 6: 20, 7: 15, 8: 11, 9: 8, 10: 5, 11: 3, 12: 2 },
@@ -115,6 +115,8 @@ export const TAG_VALUE_TABLES = Object.freeze({
   drain:  { 2: 0, 3: 40, 4: 32, 5: 12, 6: 6 },
   // `gain N attack` — permanent for the battle, so the rolls are small.
   attack: { 1: 53, 2: 37, 3: 9, 4: 1 },
+  // `gain N magic` — counterpart to attack, same small permanent-stat rolls.
+  magic:  { 1: 53, 2: 37, 3: 9, 4: 1 },
 
   // ── Status durations (turn cycles) ──
   silence:    { 2: 50, 3: 35, 4: 15 },
@@ -183,12 +185,12 @@ export const COST_AFFINITY_SUBSIDY = Object.freeze({
  * Cost-color SKEW for the two damage tags, applied ONLY when no element tag
  * dictates the cost color (the rollCostColor fallback — i.e. "without influence").
  * These relative weights are ADDED to each color's baseline so the cost color
- * gradients toward the type's flavor: Physical skews red→…→purple, Magical the
+ * gradients toward the type's flavor: Strike skews red→…→purple, Blast the
  * reverse. Tune the spread freely.
  */
 export const DAMAGE_COLOR_SKEW = Object.freeze({
-  physical: { red: 45, blue: 32, green: 22, yellow: 14, purple: 8 },
-  magical:  { purple: 45, yellow: 32, green: 22, blue: 14, red: 8 },
+  strike: { red: 45, blue: 32, green: 22, yellow: 14, purple: 8 },
+  blast:  { purple: 45, yellow: 32, green: 22, blue: 14, red: 8 },
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -196,8 +198,8 @@ export const DAMAGE_COLOR_SKEW = Object.freeze({
 // ═══════════════════════════════════════════════════════════
 
 /**
- * Relative draw weights for the damage SCALING multiplier a woven Physical/
- * Magical tag rolls. Keys MUST match DAMAGE_SCALING_PRESETS in scalingConfig.js
+ * Relative draw weights for the damage SCALING multiplier a woven Strike/
+ * Blast tag rolls. Keys MUST match DAMAGE_SCALING_PRESETS in scalingConfig.js
  * (_33 = ×1/3 … _300 = ×3). Bigger multipliers are rarer — a high roll is a
  * lucky score. Adjust freely to retune how punchy woven damage scales.
  */
@@ -223,7 +225,7 @@ export const DAMAGE_SCALING_POWER = Object.freeze({
 
 /**
  * The "Greater" qualifier tag: a magnitude multiplier for any magnitude verb
- * (Create / Physical / Magical / Attack / Armor / Heal / Drain) — OR, if there's
+ * (Create / Strike / Blast / Attack / Magic / Armor / Heal / Drain) — OR, if there's
  * no such verb to amplify, it widens an AREA destruction (3x3 → 5x5). Also has a
  * chance to SURGE (emit one extra synergistic effect). The magnitude boost is
  * always at least +1 so small gains (e.g. +1 Attack) still grow.

@@ -106,11 +106,11 @@ const NON_COLOR_BONUS_TAGS = Object.freeze(
 );
 
 /** The two damage tags (each rolls a scaling multiplier on its stat). */
-const DAMAGE_TAGS = Object.freeze(['physical', 'magical']);
+const DAMAGE_TAGS = Object.freeze(['strike', 'blast']);
 /** Damage tag → the stat its rolled scaling multiplier applies to. */
-const DAMAGE_TAG_STAT = Object.freeze({ physical: 'attack', magical: 'magic' });
+const DAMAGE_TAG_STAT = Object.freeze({ strike: 'attack', blast: 'magic' });
 /** Damage tag → the inline keyword used in the description ("Deal <<n>> [[mag]]"). */
-const DAMAGE_TAG_KEYWORD = Object.freeze({ physical: '[[phys]]', magical: '[[mag]]' });
+const DAMAGE_TAG_KEYWORD = Object.freeze({ strike: '[[phys]]', blast: '[[mag]]' });
 
 /**
  * Primary action → curated SYNERGY pool for the `greater` surge (one is rolled
@@ -118,25 +118,26 @@ const DAMAGE_TAG_KEYWORD = Object.freeze({ physical: '[[phys]]', magical: '[[mag
  * non-color bonus pool for actions not listed.
  */
 const SYNERGY_BY_ACTION = Object.freeze({
-  physical: ['attack', 'bleed', 'extra_turn'],
-  magical:  ['extra_turn', 'brittle', 'drain'],
+  strike:   ['attack', 'bleed', 'extra_turn'],
+  blast:    ['extra_turn', 'brittle', 'drain'],
   create:   ['wild', 'extra_turn'],
   armor:    ['barrier', 'heal'],
   heal:     ['armor', 'extra_turn'],
-  destroy:  ['extra_turn', 'physical'],
-  explode:  ['extra_turn', 'magical'],
+  destroy:  ['extra_turn', 'strike'],
+  explode:  ['extra_turn', 'blast'],
   convert:  ['extra_turn', 'create'],
   change:   ['create', 'extra_turn'],
-  drain:    ['enfeeble', 'magical'],
-  attack:   ['physical', 'extra_turn'],
+  drain:    ['enfeeble', 'blast'],
+  attack:   ['strike', 'extra_turn'],
+  magic:    ['blast', 'extra_turn'],
 });
 
 /** Primary action → cost-color AFFINITY (a weight, not a rule — see
  *  COST_COLOR_WEIGHTS in weaveConfig). */
-// NOTE: the two damage tags (physical/magical) use the gradient DAMAGE_COLOR_SKEW
+// NOTE: the two damage tags (strike/blast) use the gradient DAMAGE_COLOR_SKEW
 // (weaveConfig) in rollCostColor instead of a single affinity color.
 const ACTION_COST_AFFINITY = Object.freeze({
-  attack: 'blue', explode: 'red', destroy: 'red',
+  attack: 'blue', magic: 'purple', explode: 'red', destroy: 'red',
   armor: 'blue', heal: 'green', create: 'green',
   convert: 'purple', change: 'purple', drain: 'purple', shuffle: 'yellow',
 });
@@ -148,7 +149,8 @@ const ACTION_COST_AFFINITY = Object.freeze({
  * pickSkillSound + GENERIC_SOUND_BY_ACTION below).
  */
 const ACTION_SOUND = Object.freeze({
-  physical: 'skill_bash', magical: 'skill_bash', damage: 'skill_bash', attack: 'skill_encroach',
+  strike: 'skill_bash', blast: 'skill_bash', damage: 'skill_bash',
+  attack: 'skill_encroach', magic: 'skill_encroach',
   armor: 'skill_defend', heal: 'skill_oungan',
   create: 'skill_oungan', destroy: 'skill_fracture',
   explode: 'skill_explode', convert: 'skill_explode', change: 'skill_explode',
@@ -178,8 +180,8 @@ const GENERIC_CREATE_FLAVORS = Object.freeze(['red', 'blue', 'green', 'yellow', 
  * Actions NOT listed (heal/attack/drain/shuffle) have no generic clip → ACTION_SOUND.
  */
 const GENERIC_SOUND_BY_ACTION = Object.freeze({
-  physical: { family: 'damage', versions: 3, colored: true },
-  magical:  { family: 'damage', versions: 3, colored: true },
+  strike:  { family: 'damage', versions: 3, colored: true },
+  blast:   { family: 'damage', versions: 3, colored: true },
   damage:  { family: 'damage',  versions: 3, colored: true },
   explode: { family: 'destroy', versions: 5 },
   destroy: { family: 'destroy', versions: 5 },
@@ -201,6 +203,7 @@ const POWER = Object.freeze({
   perManaDrainedOneColor: 1,
   perManaDrainedAllColors: 1.5,
   perAttack: 1,          // permanent for the battle
+  perMagic: 1,           // permanent for the battle (counterpart to perAttack)
   perTileCreated: 1.5,
   thrallTileMult: 1.5,   // wild tiles are worth more per tile
   destroyTile: 2,        // single-tile snipe
@@ -267,7 +270,7 @@ const ELEMENT_ADJ = Object.freeze({
   ],
 });
 
-/** Shared damage-family noun pool (used by both physical + magical tags). */
+/** Shared damage-family noun pool (used by both strike + blast tags). */
 const DAMAGE_NOUNS = Object.freeze([
   'Strike', 'Lash', 'Rend', 'Reckoning', 'Scourge', 'Sundering', 'Spike', 'Verdict',
   'Smite', 'Onslaught', 'Lance', 'Wrath', 'Cleave', 'Havoc', 'Punishment', 'Blow',
@@ -276,8 +279,8 @@ const DAMAGE_NOUNS = Object.freeze([
 
 /** Primary action → name noun candidates. */
 const ACTION_NOUNS = Object.freeze({
-  physical: DAMAGE_NOUNS,
-  magical: DAMAGE_NOUNS,
+  strike: DAMAGE_NOUNS,
+  blast: DAMAGE_NOUNS,
   damage: DAMAGE_NOUNS,
   armor: [
     'Bulwark', 'Aegis', 'Ward', 'Carapace', 'Rampart', 'Shell', 'Vigil', 'Bastion',
@@ -348,8 +351,8 @@ const TAG_SUFFIXES = Object.freeze({
   purple:     ['of Shadows', 'of the Void', 'of Whispers', 'of Dusk'],
   skull:      ['of Graves', 'of Bone', 'of the Dead', 'of Rot'],
   // Actions.
-  physical:   ['of Wrath', 'Unleashed', 'of Ruin'],
-  magical:    ['of Power', 'Arcane', 'of the Arcane'],
+  strike:     ['of Wrath', 'Unleashed', 'of Ruin'],
+  blast:      ['of Power', 'Arcane', 'of the Arcane'],
   damage:     ['of Wrath', 'Unleashed', 'of Ruin'],
   armor:      ['of Wardens', 'Enduring', 'of Vigil'],
   heal:       ['of Mercy', 'Restoring', 'of Grace'],
@@ -359,6 +362,7 @@ const TAG_SUFFIXES = Object.freeze({
   change:     ['of Marks', 'Inscribed', 'of Runes'],
   drain:      ['of Hunger', 'Withering', 'of Famine'],
   attack:     ['of Fury', 'Rising', 'of Bloodlust'],
+  magic:      ['of Power', 'Ascendant', 'of the Arcane'],
   explode:    ['of Cataclysm', 'Bursting', 'of the Blast'],
   // Modifiers / shapes / statuses.
   greater:    ['Greater', 'Empowered', 'of Might'],
@@ -510,8 +514,8 @@ function rollCostColor(elements, primaryAction, affinityColors = []) {
     weights[el] += first ? COST_COLOR_WEIGHTS.firstElement : COST_COLOR_WEIGHTS.otherElement;
     first = false;
   }
-  // Damage tags gradient the whole color spread (Physical→red…purple,
-  // Magical→purple…red); other actions add a single affinity color's weight.
+  // Damage tags gradient the whole color spread (Strike→red…purple,
+  // Blast→purple…red); other actions add a single affinity color's weight.
   const skew = DAMAGE_COLOR_SKEW[primaryAction];
   if (skew) {
     for (const c of COST_COLORS) weights[c] += skew[c] || 0;
@@ -761,13 +765,13 @@ export function synthesize(recipe, options = {}) {
   };
 
   /**
-   * Emit a damage effect of a given TYPE (physical → Attack scaling, magical →
+   * Emit a damage effect of a given TYPE (strike → Attack scaling, blast →
    * Magic scaling). The scaling MULTIPLIER is rolled from a weighted preset; the
    * description uses `<<amount>>` (live computed value) + the [[phys]]/[[mag]]
    * keyword. Cost rises with the multiplier but non-linearly (a random luck
    * discount on the scaling's power contribution). `perSkull` adds the board-
    * dependent "+N per Skull" rider (not reflected in the dynamic value).
-   * @param {'physical'|'magical'} type
+   * @param {'strike'|'blast'} type
    * @param {number} amount — base damage (already greater-multiplied if applicable)
    * @param {{perSkull?:number}} [opts]
    */
@@ -870,10 +874,11 @@ export function synthesize(recipe, options = {}) {
    */
   const emitRandomBonus = (tag) => {
     switch (tag) {
-      case 'physical': case 'magical': { emitDamage(tag, rollTagValue(tag) || 5); return true; }
+      case 'strike': case 'blast': { emitDamage(tag, rollTagValue(tag) || 5); return true; }
       case 'armor': { emitArmor(rollTagValue('armor') || 5); return true; }
       case 'heal': { emitHeal(rollTagValue('heal') || 5); return true; }
       case 'attack': { const a = rollTagValue('attack') || 1; effects.push({ effectType: 'gain_attack', gainAttack: { amount: a } }); lines.push(`Gain ${a} [[attack]]`); power += a * POWER.perAttack; return true; }
+      case 'magic': { const a = rollTagValue('magic') || 1; effects.push({ effectType: 'gain_magic', gainMagic: { amount: a } }); lines.push(`Gain ${a} [[magic]]`); power += a * POWER.perMagic; return true; }
       case 'drain': { const a = rollTagValue('drain') || 2; effects.push({ effectType: 'drain_mana', drainMana: { amount: a } }); lines.push(`Drain ${a} [[mana]] of every color from the enemy`); power += a * POWER.perManaDrainedAllColors; return true; }
       case 'create': { emitCreate(rollTagValue('create') || 3, pickRandom(COST_COLORS)); return true; }
       case 'wild': { emitCreate(Math.max(2, Math.round((rollTagValue('create') || 3) * 0.75)), 'wild'); return true; }
@@ -918,8 +923,8 @@ export function synthesize(recipe, options = {}) {
   for (const action of actions) {
     used.add(action);
     switch (action) {
-      case 'physical':
-      case 'magical': {
+      case 'strike':
+      case 'blast': {
         let amount = roll(action, 5);
         // `greater` multiplies the base amount (and may surge a synergy later).
         if (consumeGreater()) amount = greaterBoost(amount);
@@ -950,6 +955,14 @@ export function synthesize(recipe, options = {}) {
         effects.push({ effectType: 'gain_attack', gainAttack: { amount } });
         lines.push(`Gain ${amount} [[attack]]`);
         power += amount * POWER.perAttack;
+        break;
+      }
+      case 'magic': {
+        let amount = roll('magic', 1);
+        if (consumeGreater()) amount = greaterBoost(amount);
+        effects.push({ effectType: 'gain_magic', gainMagic: { amount } });
+        lines.push(`Gain ${amount} [[magic]]`);
+        power += amount * POWER.perMagic;
         break;
       }
       case 'shuffle': {

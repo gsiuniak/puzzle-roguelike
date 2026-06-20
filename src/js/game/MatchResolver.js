@@ -50,6 +50,10 @@ export const SKILL_EFFECT_TYPES = {
   // (e.g. Chokeweed's "Encroach"). Resolved in BattleController._resolveEffect;
   // shares semantics with EffectResolver's gain_attack used by relics.
   GAIN_ATTACK: 'gain_attack',
+  // Permanently increases the caster's MAGIC for the rest of the battle (the
+  // counterpart to GAIN_ATTACK — the woven `magic` tag). Payload
+  // gainMagic: { amount }. Resolved in BattleController._resolveEffect.
+  GAIN_MAGIC: 'gain_magic',
   // Caster sets its own HP to 0 (e.g. Goblin Sapper's "Boom Baby!"). Resolved
   // in BattleController._resolveEffect; the subsequent _checkGameOver ends the
   // battle. Pair after a DAMAGE effect for a "deal damage then die" skill.

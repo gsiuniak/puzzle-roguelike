@@ -36,6 +36,7 @@ export const EFFECT_TYPES = {
   GAIN_MANA:     'gain_mana',
   DRAIN_MANA:    'drain_mana',
   GAIN_ATTACK:   'gain_attack',
+  GAIN_MAGIC:    'gain_magic',
   EXTRA_TURN:    'extra_turn',
   REDUCE_DAMAGE: 'reduce_damage',
 };
@@ -165,6 +166,20 @@ export function applyEffect(effect, ctx) {
       if (amount === 0) return true;
       caster.attack = (caster.attack || 0) + amount;
       if (log) log.add(`${caster.name} gains ${amount} attack.`);
+      return true;
+    }
+
+    case EFFECT_TYPES.GAIN_MAGIC: {
+      // Counterpart to GAIN_ATTACK: permanently raises the caster's Magic for
+      // the rest of the battle (magic isn't dynamically recomputed, so a flat
+      // add persists cleanly).
+      if (!caster) return true;
+      const amount = (effect.gainMagic && typeof effect.gainMagic.amount === 'number')
+        ? effect.gainMagic.amount
+        : 0;
+      if (amount === 0) return true;
+      caster.magic = (caster.magic || 0) + amount;
+      if (log) log.add(`${caster.name} gains ${amount} magic.`);
       return true;
     }
 

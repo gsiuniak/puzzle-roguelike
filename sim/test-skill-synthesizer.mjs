@@ -69,7 +69,7 @@ function tableKeys(tagId) {
       fx.convertByType.from !== 'green' && (COST_COLORS.includes(fx.convertByType.from) || fx.convertByType.from === 'skull'));
   }
 
-  const none = synthesize(['convert', 'physical']);
+  const none = synthesize(['convert', 'strike']);
   const nfx = none.skill.effects.find((e) => e.effectType === 'convert_tiles_by_type');
   check('element-less convert still by-type (rolled colors)', !!nfx);
   if (nfx) check('rolled from ≠ to', nfx.convertByType.from !== nfx.convertByType.to);
@@ -83,9 +83,9 @@ function tableKeys(tagId) {
 // ── 2. Hidden rolls land inside their tables; cost inside the band ──
 {
   for (let i = 0; i < 40; i++) {
-    const r = synthesize(['red', 'physical']);
+    const r = synthesize(['red', 'strike']);
     const fx = r.skill.effects.find((e) => e.effectType === 'damage');
-    if (!tableKeys('physical').includes(fx.damage.amount)) {
+    if (!tableKeys('strike').includes(fx.damage.amount)) {
       check('damage roll inside its table', false, String(fx.damage.amount));
       break;
     }
@@ -111,7 +111,7 @@ function tableKeys(tagId) {
 // ── 4. Choice-driven downsides (NO injection — wasted picks contribute nothing) ──
 {
   // wild FLOORS to creating Wild tiles (never fizzles) — so it's used, not wasted.
-  const wild = synthesize(['physical', 'wild']);
+  const wild = synthesize(['strike', 'wild']);
   const wfx = wild.skill.effects.find((e) => e.effectType === 'create_tiles');
   check('wild floors to creating Wild tiles', !!wfx && wfx.createTiles.type === 'wild', JSON.stringify(wild.skill.effects));
   check('wild is used (floored), not wasted', wild.usedTags.includes('wild') && !wild.unusedTags.includes('wild'));
@@ -127,12 +127,12 @@ function tableKeys(tagId) {
   // pure damage → NO free extra turn anymore (just a cheap damage spell).
   let etCount = 0;
   for (let i = 0; i < 40; i++) {
-    if (synthesize(['physical']).skill.effects.some((e) => e.effectType === 'extra_turn')) etCount++;
+    if (synthesize(['strike']).skill.effects.some((e) => e.effectType === 'extra_turn')) etCount++;
   }
   eq('pure damage never surges an extra turn', etCount, 0);
 
   // Two elements → both become COST colors (split), neither wasted, no create.
-  const two = synthesize(['physical', 'red', 'blue']);
+  const two = synthesize(['strike', 'red', 'blue']);
   const colors = Object.keys(two.skill.cost);
   check('both elements become cost colors', colors.includes('red') && colors.includes('blue'), JSON.stringify(two.skill.cost));
   check('no element conjures tiles', !two.skill.effects.some((e) => e.effectType === 'create_tiles'));
@@ -143,7 +143,7 @@ function tableKeys(tagId) {
 {
   let everWasted = false;
   for (let i = 0; i < 80 && !everWasted; i++) {
-    if (synthesize(['physical', 'random']).unusedTags.includes('random')) everWasted = true;
+    if (synthesize(['strike', 'random']).unusedTags.includes('random')) everWasted = true;
   }
   check('random is never wasted', !everWasted);
 
@@ -183,7 +183,7 @@ function tableKeys(tagId) {
   // skull + damage → per-Skull scaling damage.
   let sawPerSkull = false;
   for (let i = 0; i < 20 && !sawPerSkull; i++) {
-    const d = synthesize(['skull', 'physical']).skill.effects.find((e) => e.effectType === 'damage');
+    const d = synthesize(['skull', 'strike']).skill.effects.find((e) => e.effectType === 'damage');
     if (d && typeof d.damage.perSkull === 'number' && d.damage.perSkull > 0) sawPerSkull = true;
   }
   check('skull + damage → per-Skull damage', sawPerSkull);
@@ -236,14 +236,14 @@ function tableKeys(tagId) {
 // ── 5b. Name variety + soft cost color ──
 {
   const names = new Set();
-  for (let i = 0; i < 60; i++) names.add(synthesize(['red', 'physical', 'frozen']).skill.name);
+  for (let i = 0; i < 60; i++) names.add(synthesize(['red', 'strike', 'frozen']).skill.name);
   check('names vary (>8 distinct in 60)', names.size > 8, `got ${names.size}`);
 
   // A single woven element now DETERMINISTICALLY sets the cost color (it pays
   // for the spell) — pick order / color choice is a real, legible decision.
   const colors = new Set();
   for (let i = 0; i < 60; i++) {
-    const keys = Object.keys(synthesize(['blue', 'physical']).skill.cost);
+    const keys = Object.keys(synthesize(['blue', 'strike']).skill.cost);
     keys.forEach((k) => colors.add(k));
   }
   eq('single element pins the cost color', colors.size, 1);
@@ -252,19 +252,29 @@ function tableKeys(tagId) {
 
 // ── 5c. Damage TYPES scale + carry <<>> markup; Greater amplifies; cost skew ──
 {
-  // physical → Attack scaling; magical → Magic scaling. Multiplier from a preset.
+  // strike → Attack scaling; blast → Magic scaling. Multiplier from a preset.
   const SCALE_VALUES = new Set(Object.values(DAMAGE_SCALING_PRESETS));
   let physOk = true, magOk = true;
   for (let i = 0; i < 40; i++) {
-    const p = synthesize(['physical']).skill.effects.find((e) => e.effectType === 'damage');
+    const p = synthesize(['strike']).skill.effects.find((e) => e.effectType === 'damage');
     if (!p || !p.damage.scaling || !(p.damage.scaling.attack > 0) || p.damage.scaling.magic) physOk = false;
     if (p && !SCALE_VALUES.has(p.damage.scaling.attack)) physOk = false;
-    const m = synthesize(['magical']).skill.effects.find((e) => e.effectType === 'damage');
+    const m = synthesize(['blast']).skill.effects.find((e) => e.effectType === 'damage');
     if (!m || !m.damage.scaling || !(m.damage.scaling.magic > 0) || m.damage.scaling.attack) magOk = false;
     if (m && !SCALE_VALUES.has(m.damage.scaling.magic)) magOk = false;
   }
-  check('physical damage scales with Attack (preset multiplier)', physOk);
-  check('magical damage scales with Magic (preset multiplier)', magOk);
+  check('strike damage scales with Attack (preset multiplier)', physOk);
+  check('blast damage scales with Magic (preset multiplier)', magOk);
+
+  // The `magic` tag is the counterpart to `attack`: a gain_magic effect.
+  let magicGainOk = true;
+  for (let i = 0; i < 30; i++) {
+    const g = synthesize(['magic']).skill.effects.find((e) => e.effectType === 'gain_magic');
+    if (!g || !(g.gainMagic.amount >= 1)) magicGainOk = false;
+  }
+  check('magic tag emits a gain_magic effect', magicGainOk);
+  const gm = synthesize(['magic']).skill.description;
+  check('magic description has [[magic]]', gm.includes('[[magic]]'), gm);
 
   // Healing scales with Magic at the _50 (×1/2) preset + carries <<n>> markup.
   let healOk = true;
@@ -287,19 +297,19 @@ function tableKeys(tagId) {
   check('armor description has <<n>> + [[armor]]', /<<\d+>>/.test(ad) && ad.includes('[[armor]]'), ad);
 
   // Description carries the dynamic <<n>> value + the damage-type keyword.
-  const pd = synthesize(['physical']).skill.description;
-  check('physical description has <<n>> + [[phys]]', /<<\d+>>/.test(pd) && pd.includes('[[phys]]'), pd);
-  const md = synthesize(['magical']).skill.description;
-  check('magical description has <<n>> + [[mag]]', /<<\d+>>/.test(md) && md.includes('[[mag]]'), md);
+  const pd = synthesize(['strike']).skill.description;
+  check('strike description has <<n>> + [[phys]]', /<<\d+>>/.test(pd) && pd.includes('[[phys]]'), pd);
+  const md = synthesize(['blast']).skill.description;
+  check('blast description has <<n>> + [[mag]]', /<<\d+>>/.test(md) && md.includes('[[mag]]'), md);
 
   // Greater amplifies damage (avg amount with Greater clearly exceeds without).
   let withG = 0, noG = 0, N = 200;
   for (let i = 0; i < N; i++) {
-    withG += synthesize(['physical', 'greater']).skill.effects.find((e) => e.effectType === 'damage').damage.amount;
-    noG += synthesize(['physical']).skill.effects.find((e) => e.effectType === 'damage').damage.amount;
+    withG += synthesize(['strike', 'greater']).skill.effects.find((e) => e.effectType === 'damage').damage.amount;
+    noG += synthesize(['strike']).skill.effects.find((e) => e.effectType === 'damage').damage.amount;
   }
   check('Greater multiplies damage amount', withG / N > noG / N * 1.2, `withG=${(withG/N).toFixed(1)} noG=${(noG/N).toFixed(1)}`);
-  check('Greater is consumed by a damage tag', synthesize(['physical', 'greater']).usedTags.includes('greater'));
+  check('Greater is consumed by a damage tag', synthesize(['strike', 'greater']).usedTags.includes('greater'));
 
   // Greater also amplifies Attack gain (always at least +1).
   let aWithG = 0, aNoG = 0, M = 200;
@@ -314,7 +324,7 @@ function tableKeys(tagId) {
   const gw = synthesize(['convert', 'greater']);
   check('Greater wasted when no magnitude verb', gw.unusedTags.includes('greater') && !!gw.wastedReasons.greater, JSON.stringify(gw.unusedTags));
 
-  // Cost-color SKEW (no element → fallback): physical skews red-heavy, magical purple-heavy.
+  // Cost-color SKEW (no element → fallback): strike skews red-heavy, blast purple-heavy.
   const tally = (action) => {
     const c = { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 };
     for (let i = 0; i < 400; i++) {
@@ -322,10 +332,10 @@ function tableKeys(tagId) {
     }
     return c;
   };
-  const pc = tally('physical');
-  check('physical cost skews toward red over purple', pc.red > pc.purple, JSON.stringify(pc));
-  const mc = tally('magical');
-  check('magical cost skews toward purple over red', mc.purple > mc.red, JSON.stringify(mc));
+  const pc = tally('strike');
+  check('strike cost skews toward red over purple', pc.red > pc.purple, JSON.stringify(pc));
+  const mc = tally('blast');
+  check('blast cost skews toward purple over red', mc.purple > mc.red, JSON.stringify(mc));
 }
 
 // ── 6. extra_turn is always the LAST effect (cascade ordering, decision #4) ──
@@ -338,7 +348,7 @@ function tableKeys(tagId) {
 
 // ── 7. Status mapping: debuffs → opponent, buffs → self, valid catalog ids ──
 {
-  const deb = synthesize(['physical', 'silence']);
+  const deb = synthesize(['strike', 'silence']);
   const dfx = deb.skill.effects.find((e) => e.effectType === 'apply_status');
   check('silence emits apply_status', !!dfx);
   if (dfx) {

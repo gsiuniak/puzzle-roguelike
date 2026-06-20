@@ -74,11 +74,13 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   skull:  { id: 'skull',  label: 'Skull',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_skull' },
 
   // ── Actions (the verb the skill performs) ──
-  // Damage comes in two TYPES: Physical scales with Attack, Magical with Magic
-  // (the scaling MULTIPLIER is rolled at synthesis — see weaveConfig
-  // DAMAGE_SCALING_WEIGHTS). Both reuse the damage icon for now.
-  physical: { id: 'physical', label: 'Physical', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
-  magical:  { id: 'magical',  label: 'Magical',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
+  // Damage comes in two TYPES: Strike is a damaging spell that scales with
+  // Attack, Blast is a damaging spell that scales with Magic (the scaling
+  // MULTIPLIER is rolled at synthesis — see weaveConfig DAMAGE_SCALING_WEIGHTS).
+  // Both reuse the damage icon for now. These are distinct from the `attack` /
+  // `magic` action tags below, which permanently RAISE those stats.
+  strike: { id: 'strike', label: 'Strike', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
+  blast:  { id: 'blast',  label: 'Blast',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
   armor:   { id: 'armor',   label: 'Armor',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_armor' },
   create:  { id: 'create',  label: 'Create',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_create' },
   destroy: { id: 'destroy', label: 'Destroy', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
@@ -89,6 +91,10 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   heal:    { id: 'heal',    label: 'Heal',    category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   drain:   { id: 'drain',   label: 'Drain',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: null },
   attack:  { id: 'attack',  label: 'Attack',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_attack' },
+  // `magic` is the counterpart to `attack`: it permanently raises the caster's
+  // Magic stat for the rest of the battle (boosting Blast + any magic-scaling
+  // effect). No dedicated icon yet → placeholder.
+  magic:   { id: 'magic',   label: 'Magic',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   explode: { id: 'explode', label: 'Explode', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: 'weave_icon_explode' },
   // Shuffle randomizes the board and ALWAYS grants an extra turn (synthesizer-forced).
   shuffle: { id: 'shuffle', label: 'Shuffle', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.LEGENDARY,     icon: null },
@@ -109,7 +115,7 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // color→board-wide color wipe, and boosts `create`'s tile count.
   all:        { id: 'all',        label: 'All',        category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
   // `greater` is a magnitude qualifier: it multiplies a magnitude verb's output
-  // (Create / Physical / Magical / Attack / Armor / Heal / Drain) OR widens an
+  // (Create / Strike / Blast / Attack / Magic / Armor / Heal / Drain) OR widens an
   // area destruction (3x3 → 5x5), AND has a chance to surge (extra synergy effect).
   greater:    { id: 'greater',    label: 'Greater',    category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
 

@@ -2313,6 +2313,19 @@ export default class BattleController {
         return false;
       }
 
+      case SKILL_EFFECT_TYPES.GAIN_MAGIC: {
+        // Permanent magic gain (the woven `magic` tag). Magic isn't dynamically
+        // recomputed, so a flat add persists cleanly for the rest of the battle.
+        const amount = (effect.gainMagic && typeof effect.gainMagic.amount === 'number')
+          ? effect.gainMagic.amount
+          : 0;
+        if (amount !== 0) {
+          src.magic = (src.magic || 0) + amount;
+          this.log.add(`${src.name} gains ${amount} magic.`);
+        }
+        return false;
+      }
+
       case SKILL_EFFECT_TYPES.SELF_DESTRUCT: {
         // Caster dies. The post-effect _checkGameOver detects hp <= 0 and ends
         // the battle (if the same skill also killed the opponent, the player's
