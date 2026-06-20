@@ -39,14 +39,14 @@ const sanguinePhoenix = {
 
   act: 1,
   rarity: 'common',
-  type: 'minion',
-  floors: [1, 2, 3, 4, 5, 6],
-  // type: 'elite',
-  // floors: [4, 5, 6, 7, 8, 9],
+  // type: 'minion',
+  // floors: [1, 2, 3, 4, 5, 6],
+  type: 'elite',
+  floors: [4, 5, 6, 7, 8, 9],
 
-  hp: 1, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 1,
-  attack: 1,
+  hp: 12, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 12,
+  attack: 3,
   armor: 0,
   // No starting mana — it must match the board to fuel Blood Gorge / Anemic Feast.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
