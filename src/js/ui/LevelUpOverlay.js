@@ -37,7 +37,7 @@ import AudioManager from '../audio/AudioManager.js';
 export const OVERLAY_BACKDROP_ALPHA = 0.78;
 
 /** Container (modal frame) width as a fraction of canvas width (height ← art aspect). */
-const CONTAINER_WIDTH_FRAC = 0.46;
+const CONTAINER_WIDTH_FRAC = 0.55;
 /** Vertical offset of the whole modal from canvas center (px; negative = up). */
 const GROUP_Y_OFFSET = 0;
 

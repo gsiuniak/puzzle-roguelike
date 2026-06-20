@@ -199,20 +199,20 @@ const POWER = Object.freeze({
   perHeal: 0.3,
   perManaGained: 0.5,
   perManaDrainedOneColor: 1,
-  perManaDrainedAllColors: 2.5,
+  perManaDrainedAllColors: 1.5,
   perAttack: 1,          // permanent for the battle
   perTileCreated: 1.5,
   thrallTileMult: 1.5,   // wild tiles are worth more per tile
   destroyTile: 2,        // single-tile snipe
-  destroyRow: 8,
-  destroyColumn: 8,
+  destroyRow: 6,
+  destroyColumn: 6,
   destroyArea: 9,        // 3×3
-  destroyAreaWide: 16,   // 5×5 (explode + area)
+  destroyAreaWide: 14,   // 5×5 (explode + area)
   convertByType: 8,      // all of one color → another
   convertTile: 3,        // targeted single tile
   convertArea: 8,        // targeted 3×3
-  perDebuffTurn: 4,
-  perBuffTurn: 4,
+  perDebuffTurn: 3,
+  perBuffTurn: 3,
   extraTurn: 8,
   shuffleBoard: 10,       // whole-board reshuffle (always paired with an extra turn)
   perSkullDamage: 0.5,    // `skull + damage`: weight per "+N per Skull" (× est. skulls)

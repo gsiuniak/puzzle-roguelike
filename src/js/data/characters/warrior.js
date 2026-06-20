@@ -22,7 +22,7 @@ const warrior = {
     startingMagic: 1,
     startingArmor: 0,
     startingMana: {
-      red: 100,
+      red: 0,
       blue: 5,
       green: 0,
       yellow: 0,

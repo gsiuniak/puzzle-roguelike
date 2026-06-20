@@ -114,7 +114,7 @@ export const TAG_VALUE_TABLES = Object.freeze({
   // so the table stays modest).
   drain:  { 2: 0, 3: 40, 4: 32, 5: 12, 6: 6 },
   // `gain N attack` — permanent for the battle, so the rolls are small.
-  attack: { 1: 55, 2: 33, 3: 12 },
+  attack: { 1: 53, 2: 37, 3: 9, 4: 1 },
 
   // ── Status durations (turn cycles) ──
   silence:    { 2: 50, 3: 35, 4: 15 },
@@ -202,7 +202,7 @@ export const DAMAGE_COLOR_SKEW = Object.freeze({
  * lucky score. Adjust freely to retune how punchy woven damage scales.
  */
 export const DAMAGE_SCALING_WEIGHTS = Object.freeze({
-  _33: 30, _50: 26, _100: 22, _150: 12, _200: 6, _250: 3, _300: 1.5,
+  _33: 15, _50: 24, _100: 26, _150: 14, _200: 8, _250: 4, _300: 2,
 });
 
 /**

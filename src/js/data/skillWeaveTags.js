@@ -67,7 +67,7 @@ export const TAG_CATEGORY = Object.freeze({
 export const SKILL_WEAVE_TAGS = Object.freeze({
   // ── Elements (the match-3 colors + skull) ──
   red:    { id: 'red',    label: 'Red',    category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_red' },
-  blue:   { id: 'blue',   label: 'Water',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: null },
+  blue:   { id: 'blue',   label: 'Blue',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: null },
   green:  { id: 'green',  label: 'Green',  category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_green' },
   yellow: { id: 'yellow', label: 'Yellow', category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_yellow' },
   purple: { id: 'purple', label: 'Purple', category: TAG_CATEGORY.ELEMENT, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_purple' },
