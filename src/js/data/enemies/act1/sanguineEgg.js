@@ -35,8 +35,8 @@ const sanguineEgg = {
   type: 'elite',
   floors: [], // never spawns on its own — reached only via the Phoenix's transform
 
-  hp: 20,  // cosmetic only — the Egg is invulnerable for the whole egg phase
-  maxHp: 20,
+  hp: 999, // cosmetic only — BattleController pins the Egg to 999/999 on transform
+  maxHp: 999, // (it's invulnerable for the whole egg phase; the bar is decorative)
   attack: 1,
   attackScale: 0, // dormant — never attacks; opt out of the per-floor attack bonus
   armor: 0,
