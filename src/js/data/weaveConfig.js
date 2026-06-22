@@ -169,6 +169,11 @@ export const COST_COLOR_WEIGHTS = Object.freeze({
   // win, but not absolute. (Only the fallback path; an explicitly woven element
   // still dictates its own cost color.)
   characterAffinity: 70,
+  // Added to colors the spell CREATES tiles of (create_tiles). Creating tiles of
+  // a color is NOT a guaranteed refund (placed avoiding matches, no forced
+  // cascade), so unlike convert it's ALLOWED — and slightly ENCOURAGED — to cost
+  // that same color (e.g. "deal damage + create 3 Blue" can cost Blue).
+  createdColor: 50,
 });
 
 /**

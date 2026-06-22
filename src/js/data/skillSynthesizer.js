@@ -220,9 +220,12 @@ const POWER = Object.freeze({
   destroyColumn: 6,
   destroyArea: 9,        // 3×3
   destroyAreaWide: 14,   // 5×5 (explode + area)
-  convertByType: 8,      // all of one color → another
+  // Mass / area conversions into ONE color near-guarantee a 5+ match (→ free
+  // extra turn) AND dump a flood of that color's mana — priced high so they cost
+  // a lot (and, paired with the no-same-color-cost rule, can't self-fund a loop).
+  convertByType: 8,     // all of one color → another (board-wide flood)
   convertTile: 3,        // targeted single tile
-  convertArea: 8,        // targeted 3×3
+  convertArea: 16,       // targeted 3×3 (9 tiles → one color = guaranteed big match)
   perDebuffTurn: 3,
   perBuffTurn: 3,
   extraTurn: 8,
@@ -571,13 +574,22 @@ function capitalize(s) {
  * and the primary action's affinity ADD weight (influence, not a hard rule).
  * Only used as the FALLBACK when a bag has no cost-eligible element tag (a
  * multi-element bag's cost colors are deterministic — see buildCost).
+ * `excludeColors` (loop-risk colors the spell refunds) are dropped from the roll
+ * so a spell can never cost a color it refunds — no infinite mana loop.
+ * `favorColors` (colors the spell creates) get a slight added weight.
  */
-function rollCostColor(elements, primaryAction, affinityColors = []) {
+function rollCostColor(elements, primaryAction, affinityColors = [], excludeColors = null, favorColors = null) {
+  const exclude = excludeColors instanceof Set ? excludeColors : new Set(excludeColors || []);
+  const favor = favorColors instanceof Set ? favorColors : new Set(favorColors || []);
+  const eligible = COST_COLORS.filter((c) => !exclude.has(c));
+  // If every color is excluded (degenerate), fall back to the full set so we
+  // still produce a cost rather than nothing.
+  const pool = eligible.length ? eligible : COST_COLORS;
   const weights = {};
-  for (const c of COST_COLORS) weights[c] = COST_COLOR_WEIGHTS.anyColor;
+  for (const c of pool) weights[c] = COST_COLOR_WEIGHTS.anyColor;
   let first = true;
   for (const el of elements) {
-    if (!COST_COLORS.includes(el)) continue; // skull is never a cost color
+    if (weights[el] == null) continue; // skull / excluded colors aren't in the pool
     weights[el] += first ? COST_COLOR_WEIGHTS.firstElement : COST_COLOR_WEIGHTS.otherElement;
     first = false;
   }
@@ -585,17 +597,22 @@ function rollCostColor(elements, primaryAction, affinityColors = []) {
   // Blast→purple…red); other actions add a single affinity color's weight.
   const skew = DAMAGE_COLOR_SKEW[primaryAction];
   if (skew) {
-    for (const c of COST_COLORS) weights[c] += skew[c] || 0;
+    for (const c of pool) weights[c] += skew[c] || 0;
   } else {
     const affinity = ACTION_COST_AFFINITY[primaryAction];
-    if (affinity) weights[affinity] += COST_COLOR_WEIGHTS.actionAffinity;
+    if (affinity && weights[affinity] != null) weights[affinity] += COST_COLOR_WEIGHTS.actionAffinity;
   }
   // CHARACTER affinity: lean the cost toward the colors the character generates
   // (their starting-skill colors), so woven spells feel fundable for that class.
   for (const c of affinityColors) {
-    if (COST_COLORS.includes(c)) weights[c] += COST_COLOR_WEIGHTS.characterAffinity;
+    if (weights[c] != null) weights[c] += COST_COLOR_WEIGHTS.characterAffinity;
   }
-  return pickWeightedEntry(Object.entries(weights)) || pickRandom(COST_COLORS);
+  // CREATED colors: slightly encourage costing a color the spell makes tiles of
+  // ("create 3 Blue" → can cost Blue).
+  for (const c of favor) {
+    if (weights[c] != null) weights[c] += COST_COLOR_WEIGHTS.createdColor;
+  }
+  return pickWeightedEntry(Object.entries(weights)) || pickRandom(pool);
 }
 
 /**
@@ -608,11 +625,14 @@ function rollCostColor(elements, primaryAction, affinityColors = []) {
  * @param {string[]} elements — bag element tags (cost-roll influence)
  * @param {string} primaryAction
  * @param {string[]} affinityColors — character's starting-skill colors, in order
+ * @param {Set<string>} [excludeColors] — loop-risk colors (never cost them)
+ * @param {Set<string>} [favorColors] — colors the spell creates (slight cost bias)
  * @returns {Object<string,number>}
  */
-function buildAffinityCost(total, elements, primaryAction, affinityColors) {
-  const aff = (affinityColors || []).filter((c) => COST_COLORS.includes(c));
-  const primary = rollCostColor(elements, primaryAction, aff);
+function buildAffinityCost(total, elements, primaryAction, affinityColors, excludeColors = null, favorColors = null) {
+  const exclude = excludeColors instanceof Set ? excludeColors : new Set(excludeColors || []);
+  const aff = (affinityColors || []).filter((c) => COST_COLORS.includes(c) && !exclude.has(c));
+  const primary = rollCostColor(elements, primaryAction, aff, exclude, favorColors);
   if (aff.includes(primary) || aff.length === 0 || total < COST_AFFINITY_SUBSIDY.minTotal) {
     return { [primary]: total };
   }
@@ -665,6 +685,48 @@ function buildCost(total, elementColorsInOrder) {
   const cost = {};
   use.forEach((c, i) => { cost[c] = alloc[i]; });
   return cost;
+}
+
+/**
+ * Colors a spell must NEVER cost — those it would REFUND for at least the cost,
+ * enabling an infinite loop. CONVERT (mass / area / single) floods a region into
+ * one color → a guaranteed match that returns more of that color than was spent;
+ * GAIN_MANA hands the color back directly. Both are excluded from the cost.
+ * CREATE is deliberately NOT here (see createdCostColors) — created tiles are
+ * placed avoiding matches with no forced cascade, so they aren't a guaranteed
+ * refund. Wild is excluded too (player-chosen color, requires manual setup).
+ * @param {object[]} effects — the emitted effect list
+ * @returns {Set<string>}
+ */
+function loopRiskColors(effects) {
+  const gen = new Set();
+  const add = (c) => { if (COST_COLORS.includes(c)) gen.add(c); };
+  for (const e of effects) {
+    switch (e.effectType) {
+      case 'convert_tile': if (e.convertTile) add(e.convertTile.type); break;
+      case 'convert_tiles_by_type': if (e.convertByType) add(e.convertByType.to); break;
+      case 'gain_mana': if (e.gainMana) add(e.gainMana.color); break;
+      default: break;
+    }
+  }
+  return gen;
+}
+
+/**
+ * Colors the spell CREATES tiles of (create_tiles). Costing such a color is
+ * ALLOWED and slightly ENCOURAGED (COST_COLOR_WEIGHTS.createdColor) — making
+ * tiles isn't a free refund, but a "make Blue, spend Blue" spell reads nicely.
+ * @param {object[]} effects — the emitted effect list
+ * @returns {Set<string>}
+ */
+function createdCostColors(effects) {
+  const made = new Set();
+  for (const e of effects) {
+    if (e.effectType === 'create_tiles' && e.createTiles && COST_COLORS.includes(e.createTiles.type)) {
+      made.add(e.createTiles.type);
+    }
+  }
+  return made;
 }
 
 /**
@@ -1262,13 +1324,22 @@ export function synthesize(recipe, options = {}) {
   // spells are genuinely harder to fund. With no element tag, the color is the
   // weighted affinity roll.
   const total = computeManaCostTotal(power);
-  // Only DANGLING colors (not consumed by a tile-verb) pay the cost — one word,
-  // one job. Split in pick order (first dangling color pays most).
-  const danglingColors = tileTypes.filter((t) => COST_COLORS.includes(t) && !used.has(t));
+  // A spell must never cost a color it would REFUND — convert/gain hand back at
+  // least the cost, enabling an infinite loop, so those colors are EXCLUDED from
+  // every cost path. CREATE is exempt (not a guaranteed refund) and its colors
+  // are instead slightly FAVORED.
+  const excluded = loopRiskColors(effects);
+  const favored = createdCostColors(effects);
+  // Only DANGLING colors (not consumed by a tile-verb, not loop-risk) pay the
+  // cost — one word, one job. Split in pick order (first pays most).
+  const danglingColors = tileTypes.filter(
+    (t) => COST_COLORS.includes(t) && !used.has(t) && !excluded.has(t),
+  );
   let cost = buildCost(total, danglingColors);
-  // No woven element dictates the cost → fall back to an affinity-weighted roll,
-  // subsidizing an off-color result into the character's primary color.
-  if (!cost) cost = buildAffinityCost(total, elements, primaryAction, affinityColors);
+  // No woven element dictates the cost → fall back to an affinity-weighted roll
+  // (excluding loop-risk colors, favoring created colors), subsidizing an
+  // off-color result into the character's primary color.
+  if (!cost) cost = buildAffinityCost(total, elements, primaryAction, affinityColors, excluded, favored);
   // Paying with a color COUNTS as using it (it isn't wasted).
   for (const c of Object.keys(cost)) if (tileTypes.includes(c)) used.add(c);
   // Dominant (most-paid) cost color — drives the resolve-sound color + logging.
