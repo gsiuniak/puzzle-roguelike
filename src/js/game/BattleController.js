@@ -586,6 +586,10 @@ export default class BattleController {
       // One-round magic shield pool (absorbs damage like armor; expires at the
       // owner's next turn start). Runtime-only — always starts at 0. See decision #38.
       barrier: 0,
+      // POISON stack pool. At the end of the APPLIER's turn this combatant takes
+      // armor-piercing damage equal to the stack count, then the stacks halve.
+      // Runtime-only — always starts at 0. See _applyPoison / _tickPoison.
+      poison: 0,
       mana: d.mana ? { ...d.mana } : {},
       portrait: d.portrait || '',
       skills: (d.skills || []).map(s => ({ ...s })),
@@ -1106,7 +1110,8 @@ export default class BattleController {
       this._dispatchDamageEvent(
         this.activeSide,
         this.activeSide === 'player' ? 'enemy' : 'player',
-        r
+        r,
+        { isSkull: true }
       );
       // Check for immediate game over — don't enter cascade if target died
       if (this._checkGameOver()) return;
@@ -1491,7 +1496,8 @@ export default class BattleController {
       this._dispatchDamageEvent(
         this.activeSide,
         this.activeSide === 'player' ? 'enemy' : 'player',
-        r
+        r,
+        { isSkull: true }
       );
       // Check for immediate game over — stop cascade if target died
       if (this._checkGameOver()) return;
@@ -1659,6 +1665,16 @@ export default class BattleController {
 
     // NOTE: status effects are ticked at the START of the affected side's turn
     // (_tickStatusesAtTurnStart in _completeTurnIntro), not here.
+
+    // POISON ticks at the END of the APPLIER's turn: the side ending its turn
+    // applied poison to its opponent, so deal the opponent's poison now (then
+    // halve the stacks). Poison damage can be lethal — re-check game over and
+    // stop before the turn transition if so. See decision #39.
+    this._tickPoison(side === 'player' ? 'enemy' : 'player');
+    if (this._checkGameOver()) {
+      if (this.onStateChange) this.onStateChange();
+      return;
+    }
 
     this.pendingExtraTurn = false;
     this._swapTriggerPos = null;
@@ -2457,6 +2473,19 @@ export default class BattleController {
         return false;
       }
 
+      case SKILL_EFFECT_TYPES.APPLY_POISON: {
+        // Apply POISON stacks (default to the OPPONENT). The number of stacks
+        // applied scales with the caster's stats (Poison Dart: base 3 + Magic
+        // _50). The stacks themselves deal flat damage = stack count at the
+        // applier's turn end (_tickPoison). See decision #39.
+        const cfg = effect.poison || {};
+        const base = (typeof cfg.amount === 'number') ? cfg.amount : 0;
+        const stacks = base + scaledBonus(cfg.scaling, src);
+        const targetState = cfg.target === 'self' ? src : tgt;
+        this._applyPoison(targetState, stacks);
+        return false;
+      }
+
       default:
         console.warn(`[BattleController] Unknown effect type: "${effect.effectType}". Skipping.`);
         return false;
@@ -2623,7 +2652,7 @@ export default class BattleController {
    * @param {'player'|'enemy'} targetSide
    * @param {{actualDamage:number, blocked:number, armorDamage:number}} result
    */
-  _dispatchDamageEvent(attackerSide, targetSide, result) {
+  _dispatchDamageEvent(attackerSide, targetSide, result, opts = {}) {
     if (!result || result.actualDamage <= 0) return;
     this._currentRelicTarget = this._getStateBySide(targetSide);
     this.passives.dispatch(TRIGGER_TYPES.ON_TAKE_DAMAGE, {
@@ -2636,6 +2665,9 @@ export default class BattleController {
       side: attackerSide,
       amount: result.actualDamage,
       target: targetSide,
+      // Whether this was SKULL damage — lets onDealDamage relics gate on it
+      // (Poison Vial only poisons on skull damage). See decision #39.
+      isSkull: !!opts.isSkull,
     });
     this._currentRelicTarget = null;
   }
@@ -2744,6 +2776,8 @@ export default class BattleController {
         return this._applyTransform(effect, payload);
       case 'echo_damage':
         return this._applyPassiveEchoDamage(effect, payload);
+      case 'apply_poison':
+        return this._applyPassivePoison(effect, payload);
       case 'destroy_random_skulls': {
         // The once-per-action recursion guard applies ONLY to damage-triggered
         // destroyers (Deathbringer, onDealDamage): the skull damage their
@@ -3277,6 +3311,74 @@ export default class BattleController {
     }
     this._echoDamageActive = false;
     return true;
+  }
+
+  // ── Poison ────────────────────────────────────────────
+  //
+  // Poison is a numeric STACK pool on a combatant (state.poison), distinct from
+  // the duration-based status system. Stacks are applied to the opponent (by a
+  // skill or relic); at the END of the applier's turn (_endTurn) the poisoned
+  // side takes armor-piercing damage equal to the current stack count, then the
+  // stacks are halved (floor). Application scales with Magic (skills) or equals
+  // the skull damage dealt (Poison Vial relic). See decision #39.
+
+  /**
+   * Add `stacks` poison to `targetState` (rounded). No immediate damage — the
+   * pool ticks at the applier's turn end.
+   * @param {object} targetState
+   * @param {number} stacks
+   */
+  _applyPoison(targetState, stacks) {
+    const n = Math.round(stacks || 0);
+    if (!targetState || n <= 0) return;
+    targetState.poison = (targetState.poison || 0) + n;
+    this.log.add(`${targetState.name} is poisoned (${targetState.poison} stacks).`);
+  }
+
+  /**
+   * Relic-driven poison application (Poison Vial, onDealDamage). Applies poison
+   * equal to the damage just dealt to the damaged side. Gated on `requireSkull`
+   * so only SKULL damage poisons (payload.isSkull is set at the skull-damage
+   * dispatch sites). Host-handled (like echo_damage) because it reads the
+   * trigger payload's amount/target.
+   * @param {object} effect  — { poison: { requireSkull? } }
+   * @param {object} payload — onDealDamage { side, amount, target, isSkull }
+   * @returns {boolean} always true (effect recognized/handled)
+   */
+  _applyPassivePoison(effect, payload) {
+    const cfg = (effect && effect.poison) || {};
+    if (cfg.requireSkull && !(payload && payload.isSkull)) return true;
+    const amount = (payload && typeof payload.amount === 'number') ? payload.amount : 0;
+    if (amount <= 0) return true;
+    const targetSide = (payload && payload.target)
+      || (payload && payload.side === 'player' ? 'enemy' : 'player');
+    this._applyPoison(this._getStateBySide(targetSide), amount);
+    return true;
+  }
+
+  /**
+   * Tick the poison on `targetSide`: deal armor-piercing damage equal to the
+   * stack count (bypasses _applyDamage so armor/barrier don't absorb it), then
+   * halve the stacks. Called from _endTurn for the side that just acted's
+   * opponent (poison ticks at the APPLIER's turn end). Can be lethal — the
+   * caller re-checks game over.
+   * @param {'player'|'enemy'} targetSide
+   */
+  _tickPoison(targetSide) {
+    const t = this._getStateBySide(targetSide);
+    if (!t || !t.poison || t.poison <= 0) return;
+    // The Sanguine Egg is invulnerable for the whole egg phase (mirror _applyDamage).
+    if (t === this.enemyState && this._eggPhaseActive) return;
+
+    const dmg = t.poison;
+    t.hp = Math.max(0, t.hp - dmg);
+    if (t.hp <= 0) t._defeated = true;
+    this.log.add(`${t.name} takes ${dmg} poison damage.`);
+    this._setShakeFromDamage(dmg, t.maxHp);
+    // Green floating "-N" over the portrait (kind 'poison' → green in BattleScene).
+    this._emitFloatingStat(targetSide, 'poison', dmg);
+    // Stacks halve (rounded down) after dealing damage.
+    t.poison = Math.floor(t.poison / 2);
   }
 
   /**

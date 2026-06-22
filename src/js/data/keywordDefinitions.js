@@ -55,6 +55,11 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Change',
     description: 'Turns a specified [[Tile]] into a specific type.',
   },
+  poison: {
+    id: 'poison',
+    label: 'Poison',
+    description: 'Stacks of poison. At the end of the turn, deal [[Damage]] equal to the number of stacks, then the stacks are halved.',
+  },
   'sanguine egg': {
     id: 'sanguine egg',
     label: 'Sanguine Egg',

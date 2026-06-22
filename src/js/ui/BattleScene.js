@@ -1280,6 +1280,8 @@ export default class BattleScene extends UIPanel {
       heal:    { color: '#3fbf3f', sign: '+' },
       armor:   { color: '#4aa3ff', sign: '+' },
       barrier: { color: '#a24dff', sign: '+' },
+      // Poison damage floats as a green "-N" (placeholder). See decision #39.
+      poison:  { color: '#7cc63f', sign: '-' },
     };
     const style = STAT_TEXT_STYLE[ev.kind];
     if (!style) return;

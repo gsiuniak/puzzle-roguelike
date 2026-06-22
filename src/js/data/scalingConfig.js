@@ -136,7 +136,7 @@ export function resolveDynamicText(raw, effects, caster, cursor = { i: 0 }) {
 /**
  * Extract the scalable `{ amount, scaling }` payload from an effect, or null if
  * the effect isn't a scalable type. Keep this in sync with the effect types that
- * use `<<n>>` markup (damage, heal, armor, barrier).
+ * use `<<n>>` markup (damage, heal, armor, barrier, apply_poison).
  * @param {object} e
  * @returns {{amount?:number, scaling?:any}|null}
  */
@@ -146,5 +146,7 @@ function scalablePayload(e) {
   if (e.effectType === 'heal' && e.heal) return e.heal;
   if (e.effectType === 'armor' && e.armor) return e.armor;
   if (e.effectType === 'barrier' && e.barrier) return e.barrier;
+  // Poison application stacks scale with the caster's stat (Magic). See decision #39.
+  if (e.effectType === 'apply_poison' && e.poison) return e.poison;
   return null;
 }

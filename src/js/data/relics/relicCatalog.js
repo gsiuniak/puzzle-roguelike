@@ -123,6 +123,26 @@ const RELIC_CATALOG = {
     ],
   },
 
+  // Witch Doctor's starter — fuses skull damage and poison: dealing skull
+  // damage applies Poison equal to the damage dealt. Board-touching effect,
+  // host-handled (BattleController._applyPassivePoison) so it can read the
+  // onDealDamage payload's amount; `requireSkull` gates it to skull damage only.
+  // See decision #39.
+  poison_vial: {
+    id: 'poison_vial',
+    name: 'Poison Vial',
+    description: 'Dealing [[Skull]] damage applies [[Poison]] equal to the damage dealt.',
+    icon: 'relic_poison_vial',
+    rarity: RELIC_RARITY.STARTER,
+    effects: [
+      {
+        trigger: 'onDealDamage',
+        effectType: 'apply_poison',
+        poison: { requireSkull: true },
+      },
+    ],
+  },
+
   // ── Group A: spawn-rate relics ──────────────────────────────────────────
   // Each raises its tile's spawn chance by 10 percentage points. The board
   // redistributes the remaining probability across the other tiles in

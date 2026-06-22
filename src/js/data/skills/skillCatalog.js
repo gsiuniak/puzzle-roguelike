@@ -127,29 +127,38 @@ const SKILL_CATALOG = {
   },
 
   // ── Witch Doctor ─────────────────────────────────────
+  // Single-tile skull seeder (targeted) — turns one chosen tile into a Skull to
+  // enable/complete a skull match (which deals skull damage and, with Poison
+  // Vial, applies Poison). Mirrors Arcane Inscription's targeted convert_tile.
   summon_dead: {
     id: 'summon_dead',
     name: 'Summon Dead',
-    description: '[[Change]] all Yellow [[tiles]] into [[Skulls]]',
+    description: '[[Change]] a [[tile]] into a [[Skull]].',
     icon: 'skill_summon_dead',
     sound: 'skill_create_skull',
-    cost: { purple: 4 },
+    targeting: 'board_tile',
+    area: { radius: 0 },
+    cost: { purple: 3 },
     effects: [
-      { effectType: 'convert_tiles_by_type', convertByType: { from: 'yellow', to: 'skull' } },
+      { effectType: 'convert_tile', convertTile: { type: 'skull' } },
     ],
   },
-  oungan: {
-    id: 'oungan',
-    name: 'Oungan',
-    description: '[[Heal]] <<6>> HP\nGain 2 [[attack]].',
-    icon: 'skill_oungan',
-    sound: 'skill_oungan',
-    cost: { green: 6 },
+  // Witch Doctor's poison engine. Applies Poison (stacks scale with Magic at
+  // _50), refuels its own green, and grants a Magic-scaled Barrier for defense.
+  // See decision #39.
+  poison_dart: {
+    id: 'poison_dart',
+    name: 'Poison Dart',
+    description: 'Apply <<3>> [[Poison]].\n[[Create]] 3 Green [[tiles]].\nGain <<4>> [[Barrier]].',
+    icon: 'skill_poison_dart',
+    sound: 'skill_oungan', // placeholder SFX (witch-doctor) until dedicated art
+    cost: { green: 5 },
     effects: [
-      // Heal 5→6: sim showed Oungan was the most under-budget player skill (~0.8 HPe/mana).
-      // Healing scales off BOTH Attack and Magic at the _50 (×1/2 each) preset.
-      { effectType: 'heal', heal: { amount: 6, scaling: { attack: DAMAGE_SCALING_PRESETS._50, magic: DAMAGE_SCALING_PRESETS._50 } } },
-      { effectType: 'gain_attack', gainAttack: { amount: 2 } },
+      // Poison application scales with Magic (_50). `<<3>>` shows the live value.
+      { effectType: 'apply_poison', poison: { amount: 3, target: 'opponent', scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
+      { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
+      // Barrier scales with Magic at the _66 (×2/3) preset — the non-heal defense.
+      { effectType: 'barrier', barrier: { amount: 4, scaling: { magic: DAMAGE_SCALING_PRESETS._66 } } },
     ],
   },
 

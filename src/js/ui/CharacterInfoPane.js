@@ -71,6 +71,13 @@ const STATUS_COUNT_STROKE = '#000000';
 const STATUS_BUFF_COUNT_OFFSET   = { x: 0, y: 0.3 }; // on the buff crest's emblem (lower-center)
 const STATUS_DEBUFF_COUNT_OFFSET = { x: 0, y: 0.24 }; // on the debuff X's central badge (center)
 
+// Poison stack count — PLACEHOLDER: a small green number near the portrait's
+// top edge while the combatant has poison stacks. See decision #39.
+const POISON_BADGE_FONT   = 28;
+const POISON_BADGE_COLOR  = '#7cc63f';
+const POISON_BADGE_STROKE = '#0a2208';
+const POISON_BADGE_OFFSET = { x: 0, y: 20 }; // from portrait top-center, downward
+
 const HEALTH_BAR_HEIGHT = 36;
 const HEALTH_LABEL_FONT_SIZE = 20;
 
@@ -164,6 +171,8 @@ export default class CharacterInfoPane extends UIPanel {
     // Active status effects (buffs/debuffs), refreshed from updateFromState().
     // Each entry is the live status object { id, kind, turns, ... }.
     this._statuses = [];
+    // Poison stack count (placeholder display), refreshed from updateFromState().
+    this._poison = 0;
 
     if (characterData) {
       this.buildHierarchy();
@@ -347,6 +356,9 @@ export default class CharacterInfoPane extends UIPanel {
     // flair early-returns).
     this._renderShieldBadges(ctx);
 
+    // Poison stack count near the portrait top (placeholder).
+    this._renderPoisonBadge(ctx);
+
     if (!this._nameText || !this._flair) return;
     if (!this._nameText.text) return;
 
@@ -362,6 +374,32 @@ export default class CharacterInfoPane extends UIPanel {
     this._flair.rect.w = Math.max(0, r.w - FLAIR_SIDE_INSET * 2);
     this._flair.rect.h = FLAIR_HEIGHT;
     this._flair.renderSelf(ctx);
+  }
+
+  /**
+   * PLACEHOLDER: draw the current poison stack count as a small green number
+   * near the portrait's top edge. Hidden at 0 stacks. See decision #39.
+   */
+  _renderPoisonBadge(ctx) {
+    if (!this._poison || this._poison <= 0) return;
+    const r = this._portrait && this._portrait.rect;
+    if (!r || r.w <= 0) return;
+
+    const text = String(this._poison | 0);
+    const x = r.x + r.w / 2 + POISON_BADGE_OFFSET.x;
+    const y = r.y + POISON_BADGE_OFFSET.y;
+
+    ctx.save();
+    ctx.font = `bold ${POISON_BADGE_FONT}px "Marcellus SC", Georgia, "Times New Roman", serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = POISON_BADGE_STROKE;
+    ctx.fillStyle = POISON_BADGE_COLOR;
+    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x, y);
+    ctx.restore();
   }
 
   _buildStatGroup(iconKey, getValueRef, setValueRef, initialValue) {
@@ -422,6 +460,8 @@ export default class CharacterInfoPane extends UIPanel {
 
     // Active status effects — drawn over the portrait in render().
     this._statuses = Array.isArray(state.statuses) ? state.statuses : [];
+    // Poison stacks — drawn near the portrait top in render() (placeholder).
+    this._poison = state.poison || 0;
   }
 
   updateFromData() {

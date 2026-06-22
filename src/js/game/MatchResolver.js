@@ -93,6 +93,14 @@ export const SKILL_EFFECT_TYPES = {
   // "shuffle" skills — always paired with an extra turn). Resolved in
   // BattleController._resolveEffect → _executeShuffle; non-cascade.
   SHUFFLE: 'shuffle',
+  // Applies POISON stacks to the opponent. Payload poison: { amount, scaling?,
+  // target? } — application scales with Magic (Poison Dart uses _50). Poison is
+  // a numeric stack pool on the combatant (state.poison): at the end of the
+  // applier's turn it deals damage equal to the stack count (armor-piercing),
+  // then the stacks are halved. Resolved in BattleController._resolveEffect (skill
+  // path) and _handlePassiveBoardEffect (relic path, e.g. Poison Vial). See
+  // BattleController._applyPoison / _tickPoison.
+  APPLY_POISON: 'apply_poison',
 };
 
 /**
