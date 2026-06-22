@@ -144,28 +144,13 @@ const ACTION_COST_AFFINITY = Object.freeze({
   convert: 'purple', change: 'purple', drain: 'purple', shuffle: 'yellow',
 });
 
-/**
- * Primary action → resolve SFX (SoundConfig keys). FALLBACK only — used for
- * actions that have NO clip in the generic SFX pool (heal/attack/drain/shuffle).
- * Actions covered by the generic pool get a `sfx_generic_*` clip instead (see
- * pickSkillSound + GENERIC_SOUND_BY_ACTION below).
- */
-const ACTION_SOUND = Object.freeze({
-  strike: 'skill_bash', blast: 'skill_bash', damage: 'skill_bash',
-  attack: 'skill_encroach', magic: 'skill_encroach',
-  armor: 'skill_defend', barrier: 'skill_defend', heal: 'skill_oungan',
-  create: 'skill_oungan', destroy: 'skill_fracture',
-  explode: 'skill_explode', convert: 'skill_explode', change: 'skill_explode',
-  drain: 'skill_doomsong', shuffle: 'skill_fracture',
-});
-const DEFAULT_SOUND = 'sfx_skill_cast';
-
 // ── Generic SFX pool (sfx_audio_generic_sprite — see SoundConfig.js) ──
 // A synthesized skill picks ONE clip from this authored pool at creation time
 // (here, once) and reuses it for the rest of the run. The clip is chosen by the
 // skill's PRIMARY action (the "most relevant effect"); families with multiple
 // authored versions pick one at random; color-aware families (damage/create)
-// pick the relevant tile color. Actions absent here fall back to ACTION_SOUND.
+// pick the relevant tile color. Every action maps to a generic clip (directly or
+// via GENERIC_SOUND_FALLBACK_BY_ACTION), so a woven spell is never silent.
 
 /** SoundConfig key prefix for the generic pool clips. */
 const GENERIC_SOUND_PREFIX = 'sfx_generic_';
@@ -179,7 +164,9 @@ const GENERIC_CREATE_FLAVORS = Object.freeze(['red', 'blue', 'green', 'yellow', 
  *   versions — number of authored versions (a random one is rolled)
  *   colored  — pick a `damage_<color>` clip from the cost color
  *   create   — pick a `create_<flavor>` clip from the created tile type
- * Actions NOT listed (heal/attack/drain/shuffle) have no generic clip → ACTION_SOUND.
+ * Actions whose own family isn't in the generic pool (heal/attack/magic/drain/
+ * shuffle) are voiced by their closest-fitting family via
+ * GENERIC_SOUND_FALLBACK_BY_ACTION, so EVERY woven spell still gets a generic clip.
  */
 const GENERIC_SOUND_BY_ACTION = Object.freeze({
   strike:  { family: 'damage', versions: 3, colored: true },
@@ -193,6 +180,25 @@ const GENERIC_SOUND_BY_ACTION = Object.freeze({
   change:  { family: 'change',  versions: 3 },
   create:  { family: 'create',  versions: 2, create: true },
 });
+
+/**
+ * Closest-fitting generic family for actions that have NO dedicated clip family
+ * of their own. Used as a SECOND pass in pickSkillSound so a spell built purely
+ * from these (e.g. a heal, a stat-buff, a drain, a shuffle) still draws a sound
+ * from the generic pool instead of an old `skill_*` clip (the "defaults to
+ * encroach" bug) or silence.
+ */
+const GENERIC_SOUND_FALLBACK_BY_ACTION = Object.freeze({
+  heal:    { family: 'armor',   versions: 2 },               // supportive/defensive feel
+  attack:  { family: 'armor',   versions: 2 },               // self-buff
+  magic:   { family: 'change',  versions: 3 },               // arcane shimmer
+  drain:   { family: 'damage',  versions: 3, colored: true }, // siphon ≈ damage
+  shuffle: { family: 'convert', versions: 3 },               // board transformation
+});
+
+/** Last-resort generic family when a bag has no action that maps to any of the
+ *  above — guarantees a generic-pool clip rather than silence. */
+const GENERIC_SOUND_DEFAULT = Object.freeze({ family: 'damage', versions: 3, colored: true });
 
 /**
  * Power-score weights — how much each emitted effect contributes to the
@@ -528,25 +534,32 @@ function buildGenericSound(desc, effects, costColor) {
  * PRIMARY action has no generic clip (e.g. `attack`, which voiced an old
  * `skill_encroach` before) still draws from the generic pool via its other
  * actions (damage / create / …). Color-aware families pick the relevant tile
- * color (damage → cost color; create → the created tile flavor). Only when NO
- * bag action maps to the generic pool (pure attack/heal/drain/shuffle) does it
- * fall back to the per-action authored sound. Called ONCE here, so the chosen
+ * color (damage → cost color; create → the created tile flavor). Actions whose
+ * own family isn't in the pool (heal/attack/magic/drain/shuffle) fall back to a
+ * closest-fitting generic family, and a bag with no usable action at all falls
+ * back to the generic default — so EVERY woven spell gets a generic-pool clip
+ * (never silence or an old `skill_*` sound). Called ONCE here, so the chosen
  * clip persists for the rest of the run.
  *
  * @param {string[]} actions — the spell's action tags, in pick order
  * @param {object[]} effects — the emitted effect list (for the create flavor)
  * @param {string} costColor — the rolled cost color (damage clip color)
- * @returns {string} a SoundConfig key
+ * @returns {string} a SoundConfig key (always a `sfx_generic_*` clip)
  */
 function pickSkillSound(actions, effects, costColor) {
   const list = Array.isArray(actions) ? actions : [];
+  // 1) Prefer an action with its own dedicated generic family.
   for (const action of list) {
     const desc = GENERIC_SOUND_BY_ACTION[action];
     if (desc) return buildGenericSound(desc, effects, costColor);
   }
-  // No bag action has a generic clip — fall back to the primary action's
-  // authored sound (else the silent default).
-  return ACTION_SOUND[list[0]] || DEFAULT_SOUND;
+  // 2) Else voice the first action that maps to a closest-fitting family.
+  for (const action of list) {
+    const desc = GENERIC_SOUND_FALLBACK_BY_ACTION[action];
+    if (desc) return buildGenericSound(desc, effects, costColor);
+  }
+  // 3) No usable action — still draw SOMETHING from the generic pool.
+  return buildGenericSound(GENERIC_SOUND_DEFAULT, effects, costColor);
 }
 
 function capitalize(s) {
