@@ -226,6 +226,46 @@ const POWER = Object.freeze({
   destroyByColor: 9,      // `destroy + all + color`: board-wide color wipe
 });
 
+/**
+ * Canonical RESOLUTION + DESCRIPTION order for a woven skill's effects. The
+ * battle engine resolves a skill's `effects` array top-to-bottom and the card
+ * renders `descriptionLines` in that same order — but the synthesizer EMITS in
+ * TAG PICK order, so a recipe could otherwise read (and resolve) in a jumbled
+ * sequence. Before assembling the skill we sort the emitted effects AND their
+ * paired description lines into this fixed order, so every woven spell resolves
+ * and READS the same sensible way: board-shaping first (shuffle → create →
+ * convert → destroy), then damage, then defense/heal, then stat / mana / status
+ * riders. `extra_turn` stays LAST — decision #4: it must follow any create_tiles
+ * whose cascade resets the extra-turn flag. Lower number = earlier; effect types
+ * not listed here sort just before extra_turn (EFFECT_ORDER_DEFAULT), preserving
+ * their relative order. The description line for an effect is reordered in
+ * lockstep, so what the player reads is exactly what resolves.
+ */
+const EFFECT_RESOLUTION_ORDER = Object.freeze({
+  shuffle: 10,
+  create_tiles: 20,
+  convert_tiles_by_type: 30,
+  convert_tile: 35,
+  destroy_tiles_row: 40,
+  destroy_tiles_column: 41,
+  destroy_tiles: 42,
+  destroy_tiles_by_type: 45,
+  damage: 50,
+  gain_max_hp: 58,
+  heal: 60,
+  armor: 65,
+  barrier: 68,
+  gain_attack: 70,
+  gain_magic: 72,
+  drain_mana: 80,
+  gain_mana: 82,
+  apply_status: 90,
+  extra_turn: 1000,
+});
+/** Sort key for an effect type absent from EFFECT_RESOLUTION_ORDER (lands just
+ *  before extra_turn, after every classified effect). */
+const EFFECT_ORDER_DEFAULT = 500;
+
 /** Tile types a tile-verb (create/convert/change) can operate on — the 5 mana
  *  colors + skull + wild. Membership-based so synthesis is order-tolerant and
  *  independent of TAG_CATEGORY (wild/skull read as types here). */
@@ -1236,6 +1276,26 @@ export function synthesize(recipe, options = {}) {
   }
   for (const t of tileTypes) {
     if (!used.has(t)) markWasted(t, 'no effect or cost used this color');
+  }
+
+  // ── Canonical effect order ──
+  // Reorder the emitted effects AND their paired description lines in lockstep
+  // into the standard resolution order (EFFECT_RESOLUTION_ORDER), so the skill
+  // resolves and reads consistently regardless of the tag pick order. Throughout
+  // synthesis effects[i] and lines[i] are pushed as a unit (one effect ⇒ one
+  // line), so a stable sort of shared indices keeps them aligned. Guarded on a
+  // length match so a future 1:1-breaking change degrades to the emit order
+  // rather than mis-pairing lines with effects.
+  if (effects.length === lines.length && effects.length > 1) {
+    const rank = (t) => (EFFECT_RESOLUTION_ORDER[t] != null ? EFFECT_RESOLUTION_ORDER[t] : EFFECT_ORDER_DEFAULT);
+    const order = effects.map((_, i) => i).sort((a, b) => {
+      const d = rank(effects[a].effectType) - rank(effects[b].effectType);
+      return d !== 0 ? d : a - b; // stable within a tier — keep emit order
+    });
+    const newEffects = order.map((i) => effects[i]);
+    const newLines = order.map((i) => lines[i]);
+    effects.length = 0; effects.push(...newEffects);
+    lines.length = 0; lines.push(...newLines);
   }
 
   // ── Assemble ──

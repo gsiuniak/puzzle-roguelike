@@ -1684,6 +1684,16 @@ export default class BattleController {
 
     // New turn = new action: re-arm Deathbringer's once-per-action guard.
     this._deathbringerFiredThisAction = false;
+    // A fresh (non-extra) turn must NEVER inherit a pending extra-turn grant.
+    // Legitimate extra turns continue via _finishResolving / _beginEnemyExtraTurn,
+    // which set PLAYER_TURN / ENEMY_TURN directly and BYPASS this intro — so any
+    // _extraTurnEarned still set when a normal TURN_INTRO completes is STALE.
+    // Clearing it here enforces the invariant and stops a leaked flag from
+    // silently swallowing the next turn (the "I cast a spell and the turn just
+    // doesn't pass, with no extra-turn indication" bug — a pure instant skill
+    // has no way to set this mid-turn, so a stuck flag can only be stale).
+    this._extraTurnEarned = false;
+    this.pendingExtraTurn = false;
     // Reset before dispatching onTurnStart so a turn-start passive (Usurper's
     // Heart harvest) can extend the enemy's pre-action wait for this turn.
     this._extraEnemyTurnDelay = 0;
