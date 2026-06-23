@@ -131,14 +131,15 @@ const RELIC_CATALOG = {
   poison_vial: {
     id: 'poison_vial',
     name: 'Poison Vial',
-    description: 'Dealing [[Skull]] damage applies [[Poison]] equal to the damage dealt.',
+    description: 'Dealing [[Skull]] damage applies [[Poison]] equal to half the damage dealt.',
     icon: 'relic_poison_vial',
     rarity: RELIC_RARITY.STARTER,
     effects: [
       {
         trigger: 'onDealDamage',
         effectType: 'apply_poison',
-        poison: { requireSkull: true },
+        // Poison = floor(damage dealt * fraction). `fraction` is tunable.
+        poison: { requireSkull: true, fraction: 0.5 },
       },
     ],
   },

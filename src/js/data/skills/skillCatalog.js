@@ -149,13 +149,15 @@ const SKILL_CATALOG = {
   poison_dart: {
     id: 'poison_dart',
     name: 'Poison Dart',
-    description: 'Apply <<3>> [[Poison]].\n[[Create]] 3 Green [[tiles]].\nGain <<4>> [[Barrier]].',
+    description: 'Apply <<4>> [[Poison]].\n[[Create]] 3 Green [[tiles]].\nGain <<4>> [[Barrier]].',
     icon: 'skill_poison_dart',
-    sound: 'skill_oungan', // placeholder SFX (witch-doctor) until dedicated art
+    sound: 'skill_poison_dart',
     cost: { green: 5 },
     effects: [
-      // Poison application scales with Magic (_50). `<<3>>` shows the live value.
-      { effectType: 'apply_poison', poison: { amount: 3, target: 'opponent', scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
+      // Poison application scales with Magic at _25 (NOT _50): poison's halving
+      // decay already ≈ doubles each stack's lifetime value, so a half-rate magic
+      // scaling makes its EFFECTIVE scaling match a direct-damage skill's. See decision #39.
+      { effectType: 'apply_poison', poison: { amount: 3, target: 'opponent', scaling: { magic: DAMAGE_SCALING_PRESETS._25 } } },
       { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
       // Barrier scales with Magic at the _66 (×2/3) preset — the non-heal defense.
       { effectType: 'barrier', barrier: { amount: 4, scaling: { magic: DAMAGE_SCALING_PRESETS._66 } } },

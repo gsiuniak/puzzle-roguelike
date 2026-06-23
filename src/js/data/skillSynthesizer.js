@@ -113,6 +113,11 @@ const DAMAGE_TAG_STAT = Object.freeze({ strike: 'attack', blast: 'magic' });
 /** Damage tag → the inline keyword used in the description ("Deal <<n>> [[mag]]"). */
 const DAMAGE_TAG_KEYWORD = Object.freeze({ strike: '[[phys]]', blast: '[[mag]]' });
 
+/** Multiplier applied to woven poison's rolled magic-scaling preset. Poison's
+ *  halving decay ≈ doubles each stack's lifetime value, so we HALVE the scaling
+ *  rate to keep its effective scaling in line with direct damage. See decision #39. */
+const POISON_SCALING_FACTOR = 0.5;
+
 /**
  * Primary action → curated SYNERGY pool for the `greater` surge (one is rolled
  * and emitted as a bonus when Greater surges). Falls back to the generic
@@ -121,6 +126,7 @@ const DAMAGE_TAG_KEYWORD = Object.freeze({ strike: '[[phys]]', blast: '[[mag]]' 
 const SYNERGY_BY_ACTION = Object.freeze({
   strike:   ['attack', 'bleed', 'extra_turn'],
   blast:    ['extra_turn', 'brittle', 'drain'],
+  poison:   ['bleed', 'enfeeble', 'blast'],
   create:   ['wild', 'extra_turn'],
   armor:    ['barrier', 'heal'],
   barrier:  ['armor', 'heal'],
@@ -142,6 +148,8 @@ const ACTION_COST_AFFINITY = Object.freeze({
   attack: 'blue', magic: 'purple', explode: 'red', destroy: 'red',
   armor: 'blue', heal: 'green', create: 'green',
   convert: 'purple', change: 'purple', drain: 'purple', shuffle: 'yellow',
+  // Poison's preferred cost color is GREEN (the rot/attrition color).
+  poison: 'green',
 });
 
 // ── Generic SFX pool (sfx_audio_generic_sprite — see SoundConfig.js) ──
@@ -194,6 +202,7 @@ const GENERIC_SOUND_FALLBACK_BY_ACTION = Object.freeze({
   magic:   { family: 'change',  versions: 3 },               // arcane shimmer
   drain:   { family: 'damage',  versions: 3, colored: true }, // siphon ≈ damage
   shuffle: { family: 'convert', versions: 3 },               // board transformation
+  poison:  { family: 'damage',  versions: 3, colored: true }, // venom ≈ damage (green cost color)
 });
 
 /** Last-resort generic family when a bag has no action that maps to any of the
@@ -230,6 +239,7 @@ const POWER = Object.freeze({
   perBuffTurn: 3,
   extraTurn: 8,
   shuffleBoard: 10,       // whole-board reshuffle (always paired with an extra turn)
+  perPoisonStack: 2.0,    // `apply N poison`: each stack ≈ 2× damage over the halving decay tail — priced for the real value
   perSkullDamage: 0.5,    // `skull + damage`: weight per "+N per Skull" (× est. skulls)
   destroySkull: 2,        // `skull + destroy`: weight per Skull tile destroyed
   destroyByColor: 9,      // `destroy + all + color`: board-wide color wipe
@@ -260,6 +270,7 @@ const EFFECT_RESOLUTION_ORDER = Object.freeze({
   destroy_tiles: 42,
   destroy_tiles_by_type: 45,
   damage: 50,
+  apply_poison: 52,
   gain_max_hp: 58,
   heal: 60,
   armor: 65,
@@ -334,6 +345,11 @@ const ACTION_NOUNS = Object.freeze({
   strike: DAMAGE_NOUNS,
   blast: DAMAGE_NOUNS,
   damage: DAMAGE_NOUNS,
+  poison: [
+    'Venom', 'Blight', 'Plague', 'Toxin', 'Rot', 'Contagion', 'Pestilence', 'Miasma',
+    'Corruption', 'Affliction', 'Sickness', 'Decay', 'Bane', 'Virulence', 'Murk',
+    'Festering', 'Putrescence', 'Canker', 'Taint', 'Envenoming',
+  ],
   armor: [
     'Bulwark', 'Aegis', 'Ward', 'Carapace', 'Rampart', 'Shell', 'Vigil', 'Bastion',
     'Mantle', 'Fortress', 'Redoubt', 'Guardian', 'Palisade', 'Barricade', 'Aegida',
@@ -417,6 +433,7 @@ const TAG_SUFFIXES = Object.freeze({
   strike:     ['of Wrath', 'Unleashed', 'of Ruin'],
   blast:      ['of Power', 'Arcane', 'of the Arcane'],
   damage:     ['of Wrath', 'Unleashed', 'of Ruin'],
+  poison:     ['of Rot', 'Festering', 'of Blight', 'of Venom'],
   armor:      ['of Wardens', 'Enduring', 'of Vigil'],
   heal:       ['of Mercy', 'Restoring', 'of Grace'],
   create:     ['of Genesis', 'Unfolding', 'of Seeds'],
@@ -931,6 +948,44 @@ export function synthesize(recipe, options = {}) {
   };
 
   /**
+   * Emit an apply_poison effect — the DoT damage-type action (the green
+   * counterpart to strike/blast). Applies `amount` poison STACKS to the opponent;
+   * the stacks tick for their count at turn end then halve. The application
+   * scales with Magic via a rolled MULTIPLIER preset (like blast), the
+   * description uses `<<amount>>` (live value) + [[Poison]], and `skull + poison`
+   * adds the board-dependent "+N per Skull" rider. See decision #39.
+   * @param {number} amount — base stacks (already greater-multiplied if applicable)
+   * @param {{perSkull?:number}} [opts]
+   */
+  const emitPoison = (amount, opts = {}) => {
+    const presetKey = rollDamageScalingPreset();
+    const rolledMult = DAMAGE_SCALING_PRESETS[presetKey] != null
+      ? DAMAGE_SCALING_PRESETS[presetKey] : DAMAGE_SCALE_PER_POINT;
+    // HALF the rolled multiplier: poison's halving decay already ≈ doubles each
+    // stack's lifetime value, so a half-rate magic scaling keeps its EFFECTIVE
+    // scaling in line with strike/blast instead of doubling it. See decision #39.
+    const mult = rolledMult * POISON_SCALING_FACTOR;
+    const scaling = { magic: mult };
+    scalingRolls.poison = presetKey;
+
+    const poison = { amount, target: 'opponent', scaling };
+    const perSkull = opts.perSkull || 0;
+    if (perSkull > 0) poison.perSkull = perSkull;
+    effects.push({ effectType: 'apply_poison', poison });
+
+    lines.push(perSkull > 0
+      ? `Apply <<${amount}>> [[Poison]], plus ${perSkull} per [[Skull]] on the board`
+      : `Apply <<${amount}>> [[Poison]]`);
+
+    // Power: each stack ≈ 2× damage over the decay tail (DoT-discounted via
+    // perPoisonStack) + the scaled contribution + per-Skull rider.
+    const sp = DAMAGE_SCALING_POWER;
+    const luck = sp.luckMin + Math.random() * Math.max(0, sp.luckMax - sp.luckMin);
+    const scaledPower = mult * sp.estStat * sp.perScaledPoint * luck;
+    power += amount * POWER.perPoisonStack + scaledPower + perSkull * EST_SKULLS_ON_BOARD * POWER.perSkullDamage;
+  };
+
+  /**
    * Emit a heal effect. Healing scales off BOTH Attack and Magic at the fixed
    * `_50` (×1/2 each) preset; the description uses `<<amount>>` (live computed
    * value) + the [[Heal]] keyword.
@@ -1019,6 +1074,7 @@ export function synthesize(recipe, options = {}) {
   const emitRandomBonus = (tag) => {
     switch (tag) {
       case 'strike': case 'blast': { emitDamage(tag, rollTagValue(tag) || 5); return true; }
+      case 'poison': { emitPoison(rollTagValue('poison') || 4); return true; }
       case 'armor': { emitArmor(rollTagValue('armor') || 5); return true; }
       case 'barrier': { emitBarrier(rollTagValue('barrier') || 5); return true; }
       case 'heal': { emitHeal(rollTagValue('heal') || 5); return true; }
@@ -1080,6 +1136,21 @@ export function synthesize(recipe, options = {}) {
           perSkull = Math.random() < 0.35 ? 2 : 1;
         }
         emitDamage(action, amount, { perSkull });
+        break;
+      }
+      case 'poison': {
+        let amount = roll('poison', 3);
+        // `greater` multiplies the base stacks (like strike/blast).
+        if (consumeGreater()) amount = greaterBoost(amount);
+        // skull + poison → ALSO "+1 stack per Skull on the board" (read at cast).
+        // CAPPED at 1 (unlike strike/blast which can roll 2) — poison + skull on
+        // a skull-heavy board would otherwise compound too hard. See decision #39.
+        let perSkull = 0;
+        if (tileTypes.includes('skull') && !used.has('skull')) {
+          used.add('skull');
+          perSkull = 1;
+        }
+        emitPoison(amount, { perSkull });
         break;
       }
       case 'armor': {

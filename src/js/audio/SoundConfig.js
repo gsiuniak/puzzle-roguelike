@@ -174,6 +174,7 @@ const SOUNDS = {
   skill_fracture:     { sprite: 'skill_fracture',     category: AudioCategory.SFX },
   skill_create_skull: { sprite: 'skill_create_skull', category: AudioCategory.SFX },
   skill_oungan:       { sprite: 'skill_oungan',       category: AudioCategory.SFX },
+  skill_poison_dart:  { sprite: 'skill_poison_dart',  category: AudioCategory.SFX },
 
   // ── Enemy skill resolve sounds ──────────────────────────
   skill_doomsong:      { sprite: 'sfx_skill_doomsong',      category: AudioCategory.SFX },

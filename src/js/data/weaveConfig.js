@@ -106,6 +106,11 @@ export const TAG_VALUE_TABLES = Object.freeze({
   strike:  DAMAGE_ROLL,
   blast:   DAMAGE_ROLL,
   damage:   DAMAGE_ROLL, // internal fallback (verb-less bag / random safety)
+  // `apply N poison` — base STACK count. Rolls SMALL (EV ≈ 3) because each stack
+  // deals ~2× its value over the halving decay tail (N + N/2 + …), so a poison of
+  // 3 ≈ 6 total damage spread over turns. Magic scaling (halved, see emitPoison)
+  // rides on top.
+  poison: { 1: 14, 2: 28, 3: 24, 4: 14, 5: 9, 6: 5, 7: 2 },
   armor:  { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
   // `gain N barrier` — a one-round magic shield (an ACTION now, not a status).
   // Base magnitude mirrors armor; the Magic scaling (×2/3) is applied at synth.

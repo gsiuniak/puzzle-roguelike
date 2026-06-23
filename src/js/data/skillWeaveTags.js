@@ -81,6 +81,12 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // `magic` action tags below, which permanently RAISE those stats.
   strike: { id: 'strike', label: 'Strike', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
   blast:  { id: 'blast',  label: 'Blast',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
+  // `poison` is the THIRD damage-type action — a damage-over-time: it applies
+  // POISON stacks (which tick for their count at turn end, then halve). Its
+  // preferred cost color is GREEN, the application scales with Magic, and (like
+  // strike/blast) `greater` amplifies it and `skull` adds "+N per Skull on the
+  // board". Synthesized into an apply_poison effect. See decision #39.
+  poison:  { id: 'poison',  label: 'Poison',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
   armor:   { id: 'armor',   label: 'Armor',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_armor' },
   // `barrier` is a one-round MAGIC shield (an ACTION, not a status): like armor
   // it absorbs damage as a temporary-HP pool, but scales with Magic (twice as

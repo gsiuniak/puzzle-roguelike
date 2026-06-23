@@ -2480,7 +2480,10 @@ export default class BattleController {
         // applier's turn end (_tickPoison). See decision #39.
         const cfg = effect.poison || {};
         const base = (typeof cfg.amount === 'number') ? cfg.amount : 0;
-        const stacks = base + scaledBonus(cfg.scaling, src);
+        // `perSkull` (woven `skull + poison`): +N stacks per Skull on the board.
+        const perSkull = (typeof cfg.perSkull === 'number') ? cfg.perSkull : 0;
+        const skullCount = perSkull > 0 ? this.board.getTilesOfType('skull').length : 0;
+        const stacks = base + perSkull * skullCount + scaledBonus(cfg.scaling, src);
         const targetState = cfg.target === 'self' ? src : tgt;
         this._applyPoison(targetState, stacks);
         return false;
@@ -3348,11 +3351,15 @@ export default class BattleController {
   _applyPassivePoison(effect, payload) {
     const cfg = (effect && effect.poison) || {};
     if (cfg.requireSkull && !(payload && payload.isSkull)) return true;
-    const amount = (payload && typeof payload.amount === 'number') ? payload.amount : 0;
-    if (amount <= 0) return true;
+    const dealt = (payload && typeof payload.amount === 'number') ? payload.amount : 0;
+    if (dealt <= 0) return true;
+    // Poison = floor(damage dealt × fraction). `fraction` defaults to 1.
+    const fraction = (typeof cfg.fraction === 'number') ? cfg.fraction : 1;
+    const stacks = Math.floor(dealt * fraction);
+    if (stacks <= 0) return true;
     const targetSide = (payload && payload.target)
       || (payload && payload.side === 'player' ? 'enemy' : 'player');
-    this._applyPoison(this._getStateBySide(targetSide), amount);
+    this._applyPoison(this._getStateBySide(targetSide), stacks);
     return true;
   }
 
@@ -3370,14 +3377,17 @@ export default class BattleController {
     // The Sanguine Egg is invulnerable for the whole egg phase (mirror _applyDamage).
     if (t === this.enemyState && this._eggPhaseActive) return;
 
-    const dmg = t.poison;
-    t.hp = Math.max(0, t.hp - dmg);
+    // Poison is NO LONGER armor-piercing — route through the resolver so the
+    // poisoned side's barrier → armor → block absorb it like any other damage.
+    const r = this.resolver.applyDamage(t, t.poison);
     if (t.hp <= 0) t._defeated = true;
-    this.log.add(`${t.name} takes ${dmg} poison damage.`);
-    this._setShakeFromDamage(dmg, t.maxHp);
-    // Green floating "-N" over the portrait (kind 'poison' → green in BattleScene).
-    this._emitFloatingStat(targetSide, 'poison', dmg);
-    // Stacks halve (rounded down) after dealing damage.
+    if (r.actualDamage > 0) {
+      this.log.add(`${t.name} takes ${r.actualDamage} poison damage.`);
+      this._setShakeFromDamage(r.actualDamage, t.maxHp);
+      // Green floating "-N" over the portrait (kind 'poison' → green in BattleScene).
+      this._emitFloatingStat(targetSide, 'poison', r.actualDamage);
+    }
+    // Stacks halve (rounded down) after ticking — even if armor absorbed the hit.
     t.poison = Math.floor(t.poison / 2);
   }
 
