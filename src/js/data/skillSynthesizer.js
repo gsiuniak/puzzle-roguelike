@@ -102,7 +102,8 @@ const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
 const NON_COLOR_BONUS_TAGS = Object.freeze(
   Object.values(SKILL_WEAVE_TAGS)
     // `greater` is a qualifier (no standalone effect), so it's never a `random` bonus.
-    .filter((t) => t.category !== TAG_CATEGORY.ELEMENT && t.id !== 'random' && t.id !== 'greater')
+    // `disabled` tags (e.g. poison) are excluded so `random`/surge can't create them.
+    .filter((t) => t.category !== TAG_CATEGORY.ELEMENT && t.id !== 'random' && t.id !== 'greater' && !t.disabled)
     .map((t) => t.id),
 );
 

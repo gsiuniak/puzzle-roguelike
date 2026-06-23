@@ -147,21 +147,22 @@ const SKILL_CATALOG = {
   // Witch Doctor's poison engine. Applies Poison (stacks scale with Magic at
   // _50), refuels its own green, and grants a Magic-scaled Barrier for defense.
   // See decision #39.
-  poison_dart: {
-    id: 'poison_dart',
-    name: 'Poison Dart',
-    description: 'Apply <<4>> [[Poison]].\n[[Create]] 3 Green [[tiles]].\nGain <<4>> [[Barrier]].',
-    icon: 'skill_poison_dart',
-    sound: 'skill_poison_dart',
+  oungan: {
+    id: 'ougan',
+    name: 'Oungan',
+    description: 'Heal <<8>>.\n[[Create]] 3 Green [[tiles]].\nGain 3 [[Attack]].',
+    icon: 'skill_oungan',
+    sound: 'skill_oungan',
     cost: { green: 5 },
     effects: [
+      { effectType: 'heal', heal: { amount: 100  }}
       // Poison application scales with Magic at _25 (NOT _50): poison's halving
       // decay already ≈ doubles each stack's lifetime value, so a half-rate magic
       // scaling makes its EFFECTIVE scaling match a direct-damage skill's. See decision #39.
-      { effectType: 'apply_poison', poison: { amount: 3, target: 'opponent', scaling: { magic: DAMAGE_SCALING_PRESETS._25 } } },
-      { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
-      // Barrier scales with Magic at the _66 (×2/3) preset — the non-heal defense.
-      { effectType: 'barrier', barrier: { amount: 4, scaling: { magic: DAMAGE_SCALING_PRESETS._66 } } },
+      // { effectType: 'apply_poison', poison: { amount: 3, target: 'opponent', scaling: { magic: DAMAGE_SCALING_PRESETS._25 } } },
+      // { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
+      // // Barrier scales with Magic at the _66 (×2/3) preset — the non-heal defense.
+      // { effectType: 'barrier', barrier: { amount: 4, scaling: { magic: DAMAGE_SCALING_PRESETS._66 } } },
     ],
   },
 

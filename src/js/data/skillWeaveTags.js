@@ -86,7 +86,12 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // preferred cost color is GREEN, the application scales with Magic, and (like
   // strike/blast) `greater` amplifies it and `skull` adds "+N per Skull on the
   // board". Synthesized into an apply_poison effect. See decision #39.
-  poison:  { id: 'poison',  label: 'Poison',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_damage' },
+  // DISABLED: poison is currently excluded from the weave draw + synthesis (the
+  // `disabled` flag drops it from DRAWABLE_TAG_IDS and the synthesizer's random/
+  // surge pool). All poison machinery (emitPoison, the apply_poison effect, the
+  // Poison Dart skill, Poison Vial relic) is LEFT INTACT — remove `disabled` to
+  // re-enable woven poison. See decision #39.
+  poison:  { id: 'poison',  label: 'Poison',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_damage', disabled: true },
   armor:   { id: 'armor',   label: 'Armor',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_armor' },
   // `barrier` is a one-round MAGIC shield (an ACTION, not a status): like armor
   // it absorbs damage as a temporary-HP pool, but scales with Magic (twice as
@@ -145,8 +150,10 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
 /** Default tag-icon asset key (gold flame placeholder from the mock). */
 export const DEFAULT_TAG_ICON = 'skill_weave_tag_test';
 
-/** All tag ids, frozen — the global draw pool. */
+/** All tag ids, frozen. */
 const ALL_TAG_IDS = Object.freeze(Object.keys(SKILL_WEAVE_TAGS));
+/** The global DRAW pool — all tags except any flagged `disabled` (e.g. poison). */
+const DRAWABLE_TAG_IDS = Object.freeze(ALL_TAG_IDS.filter((id) => !SKILL_WEAVE_TAGS[id].disabled));
 
 // ═══════════════════════════════════════════════════════════
 // Catalog lookups
@@ -246,7 +253,7 @@ export function drawTagsForRound({ roundIndex = 0, chosen = [], count = 3, guara
   // Soft guarantee: seed one rarity-weighted ACTION tag first (no color bias —
   // actions aren't colors).
   if (wantAction) {
-    const actionPool = ALL_TAG_IDS.filter(
+    const actionPool = DRAWABLE_TAG_IDS.filter(
       (id) => !exclude.has(id) && SKILL_WEAVE_TAGS[id].category === TAG_CATEGORY.ACTION,
     );
     const a = pickByRarity(actionPool);
@@ -255,7 +262,7 @@ export function drawTagsForRound({ roundIndex = 0, chosen = [], count = 3, guara
 
   // Fill the rest from the global pool (element tags nudged by colorBias).
   while (picks.length < count) {
-    const pool = ALL_TAG_IDS.filter((id) => !exclude.has(id));
+    const pool = DRAWABLE_TAG_IDS.filter((id) => !exclude.has(id));
     const id = pickByRarity(pool, colorBias);
     if (!id) break;
     picks.push(id);

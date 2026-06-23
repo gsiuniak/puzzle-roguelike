@@ -22,13 +22,13 @@ const witchDoctor = {
     startingMana: {
       red: 0,
       blue: 0,
-      green: 2,
+      green: 100,
       yellow: 0,
       purple: 3,
     },
   },
 
-  skills: ['summon_dead', 'poison_dart'],
+  skills: ['summon_dead', 'oungan'],
   relics: ['poison_vial'],
 };
 
