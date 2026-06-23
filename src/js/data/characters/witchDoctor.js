@@ -22,9 +22,9 @@ const witchDoctor = {
     startingMana: {
       red: 0,
       blue: 0,
-      green: 100,
+      green: 5,
       yellow: 0,
-      purple: 3,
+      purple: 2,
     },
   },
 

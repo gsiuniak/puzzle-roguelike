@@ -139,7 +139,7 @@ const RELIC_CATALOG = {
         trigger: 'onDealDamage',
         effectType: 'apply_poison',
         // Poison = floor(damage dealt * fraction). `fraction` is tunable.
-        poison: { requireSkull: true, fraction: 1 },
+        poison: { requireSkull: true, fraction: 0.5 },
       },
     ],
   },

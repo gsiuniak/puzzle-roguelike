@@ -128,34 +128,42 @@ const SKILL_CATALOG = {
   },
 
   // ── Witch Doctor ─────────────────────────────────────
-  // Single-tile skull seeder (targeted) — turns one chosen tile into a Skull to
-  // enable/complete a skull match (which deals skull damage and, with Poison
-  // Vial, applies Poison). Mirrors Arcane Inscription's targeted convert_tile.
+  // Mass green→skull reaper: converts all Green tiles into Skulls (which deal
+  // skull damage when matched and, with Poison Vial, apply Poison). Creates a
+  // "tend vs reap" tension with Poison Dart, which makes Green.
   summon_dead: {
     id: 'summon_dead',
     name: 'Summon Dead',
-    description: '[[Change]] a [[tile]] into a [[Skull]].',
+    description: '[[Change]] all Green [[tiles]] into [[Skulls]].',
     icon: 'skill_summon_dead',
     sound: 'skill_create_skull',
-    targeting: 'board_tile',
-    area: { radius: 0 },
-    cost: { purple: 3 },
+    cost: { purple: 5 },
     effects: [
-      { effectType: 'convert_tile', convertTile: { type: 'skull' } },
+      { effectType: 'convert_tiles_by_type', convertByType: { from: 'green', to: 'skull' } },
     ],
+    // ── Single-tile variant (commented out for reference) ──
+    // Targeted skull seeder — turns one chosen tile into a Skull to enable a
+    // skull match. Mirrors Arcane Inscription's targeted convert_tile.
+    // targeting: 'board_tile',
+    // area: { radius: 0 },
+    // effects: [
+    //   { effectType: 'convert_tile', convertTile: { type: 'skull' } },
+    // ],
   },
   // Witch Doctor's poison engine. Applies Poison (stacks scale with Magic at
   // _50), refuels its own green, and grants a Magic-scaled Barrier for defense.
   // See decision #39.
   oungan: {
-    id: 'ougan',
+    id: 'oungan',
     name: 'Oungan',
-    description: 'Heal <<8>>.\n[[Create]] 3 Green [[tiles]].\nGain 3 [[Attack]].',
+    description: 'Heal <<5>>.\n[[Create]] 3 Green [[tiles]].\nGain 1 [[Attack]].',
     icon: 'skill_oungan',
     sound: 'skill_oungan',
     cost: { green: 5 },
     effects: [
-      { effectType: 'heal', heal: { amount: 100  }}
+      { effectType: 'heal', heal: { amount: 5  }, scaling: { attack: DAMAGE_SCALING_PRESETS.__75 }},
+      { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
+      { effectType: 'gain_attack', gainAttack: { amount: 1 } },
       // Poison application scales with Magic at _25 (NOT _50): poison's halving
       // decay already ≈ doubles each stack's lifetime value, so a half-rate magic
       // scaling makes its EFFECTIVE scaling match a direct-damage skill's. See decision #39.
