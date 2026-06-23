@@ -131,7 +131,7 @@ const RELIC_CATALOG = {
   poison_vial: {
     id: 'poison_vial',
     name: 'Poison Vial',
-    description: 'Dealing [[Skull]] damage applies [[Poison]] equal to the damage dealt.',
+    description: 'Dealing [[Skull]] damage applies [[Poison]] equal to the half the damage dealt.',
     icon: 'relic_poison_vial',
     rarity: RELIC_RARITY.STARTER,
     effects: [

@@ -42,6 +42,7 @@ export const DAMAGE_SCALING_PRESETS = {
   _200: 2,
   _150: 1.5,
   _100: 1,
+  _75: 3 / 4, // "+3 per 4 of the stat"
   _66: 2 / 3, // "+1 per 1.5 of the stat" — twice as effective as _33 (Barrier/Magic)
   _50: 1 / 2,
   _33: 1/3,

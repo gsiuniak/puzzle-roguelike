@@ -161,9 +161,9 @@ const SKILL_CATALOG = {
     sound: 'skill_oungan',
     cost: { green: 5 },
     effects: [
-      { effectType: 'heal', heal: { amount: 5  }, scaling: { attack: DAMAGE_SCALING_PRESETS.__75 }},
+      { effectType: 'heal', heal: { amount: 5, scaling: { attack: DAMAGE_SCALING_PRESETS._75 } } },
       { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
-      { effectType: 'gain_attack', gainAttack: { amount: 1 } },
+      // { effectType: 'gain_attack', gainAttack: { amount: 1 } },
       // Poison application scales with Magic at _25 (NOT _50): poison's halving
       // decay already ≈ doubles each stack's lifetime value, so a half-rate magic
       // scaling makes its EFFECTIVE scaling match a direct-damage skill's. See decision #39.
