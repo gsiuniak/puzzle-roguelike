@@ -85,7 +85,7 @@ const SKILL_CATALOG = {
   fracture: {
     id: 'fracture',
     name: 'Fracture',
-    description: '[[Destroy]] 1 row\n[[Create]] 5 purple [[tiles]]',
+    description: '[[Destroy]] 1 row\nDeal <<5>> [[mag]].',
     icon: 'skill_fracture',
     sound: 'skill_fracture',
     targeting: 'board_tile',
@@ -93,7 +93,8 @@ const SKILL_CATALOG = {
     cost: { yellow: 5 },
     effects: [
       { effectType: 'destroy_tiles_row' },
-      { effectType: 'create_tiles', createTiles: { amount: 5, type: 'purple' } },
+      { effectType: 'damage', damage: { amount: 5, scaling: { magic: DAMAGE_SCALING_PRESETS._150 } } },
+      // { effectType: 'create_tiles', createTiles: { amount: 5, type: 'purple' } },
     ],
   },
   // Old Explode skill — kept commented out for easy revert.

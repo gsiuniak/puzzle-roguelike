@@ -29,7 +29,7 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 // On a won battle the player picks ONE attribute on the Level Up overlay (which
 // shows BEFORE the relic reward overlay). Each grants this much (the mock's
 // values; all tunable). Replaces the old auto-growth on victory.
-const LEVEL_UP_GROWTH = Object.freeze({ attack: 1, magic: 2, maxHp: 8 });
+const LEVEL_UP_GROWTH = Object.freeze({ attack: 1, magic: 1, maxHp: 8 });
 // attribute key → runState statModifier path (applyRunModifier).
 const LEVEL_UP_STAT_PATH = Object.freeze({
   attack: 'startingAttack', magic: 'startingMagic', maxHp: 'maxHp',

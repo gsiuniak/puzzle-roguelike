@@ -86,7 +86,7 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // preferred cost color is GREEN, the application scales with Magic, and (like
   // strike/blast) `greater` amplifies it and `skull` adds "+N per Skull on the
   // board". Synthesized into an apply_poison effect. See decision #39.
-  poison:  { id: 'poison',  label: 'Poison',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: 'weave_icon_damage' },
+  poison:  { id: 'poison',  label: 'Poison',  category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_damage' },
   armor:   { id: 'armor',   label: 'Armor',   category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_armor' },
   // `barrier` is a one-round MAGIC shield (an ACTION, not a status): like armor
   // it absorbs damage as a temporary-HP pool, but scales with Magic (twice as

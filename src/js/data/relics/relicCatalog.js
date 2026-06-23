@@ -274,11 +274,11 @@ const RELIC_CATALOG = {
   funerary_bell: {
     id: 'funerary_bell',
     name: 'Funerary Bell',
-    description: 'Increases [[damage]] dealt of [[matched]] [[skulls]] by 2.',
+    description: 'Increases [[damage]] dealt of [[matched]] [[skulls]] by 3.',
     icon: 'relic_funerary_bell',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'modify_skull_damage', skullDamage: { amount: 2 } },
+      { trigger: 'onBattleStart', effectType: 'modify_skull_damage', skullDamage: { amount: 3 } },
     ],
   },
 
@@ -301,12 +301,12 @@ const RELIC_CATALOG = {
   blighted_hook: {
     id: 'blighted_hook',
     name: 'Blighted Hook',
-    description: '[[Drain]] 1 of each [[mana]] from the opponent when [[matching]] 4+ [[tiles]].',
+    description: '[[Drain]] 2 of each [[mana]] from the opponent when [[matching]] 4+ [[tiles]].',
     icon: 'relic_blighted_hook',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       // Removes mana from the opponent — the player does not gain it.
-      { trigger: 'onMatch4Plus', effectType: 'drain_mana', drainMana: { amount: 1 } },
+      { trigger: 'onMatch4Plus', effectType: 'drain_mana', drainMana: { amount: 2 } },
     ],
   },
 
@@ -328,30 +328,30 @@ const RELIC_CATALOG = {
     icon: 'relic_claymore',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'modify_stat', modifyStat: { stat: 'attack', amount: 3 } },
+      { trigger: 'onBattleStart', effectType: 'modify_stat', modifyStat: { stat: 'attack', amount: 2 } },
     ],
   },
 
   aegis: {
     id: 'aegis',
     name: 'Aegis',
-    description: 'Gain <<1>> [[Armor]] at the start of each turn.',
+    description: 'Gain <<2>> [[Armor]] at the start of each turn.',
     icon: 'relic_aegis',
     rarity: RELIC_RARITY.COMMON,
     effects: [
       // Armor scales with Attack at the _33 (×1/3) preset by default.
-      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
     ],
   },
 
   thorned_rose: {
     id: 'thorned_rose',
     name: 'Thorned Rose',
-    description: 'Deal <<1>> [[phys]] to the enemy whenever you take damage.',
+    description: 'Deal <<3>> [[phys]] to the enemy whenever you take damage.',
     icon: 'relic_thorned_rose',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
+      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 3, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
@@ -364,7 +364,7 @@ const RELIC_CATALOG = {
     effects: [
       // Heal scales off BOTH Attack and Magic at the _50 (×1/2 each) preset. (Amount
       // aligned to the long-standing "2 HP" description; was previously 1.)
-      { trigger: 'onTurnStart', effectType: 'heal', heal: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._50, magic: DAMAGE_SCALING_PRESETS._50 } } },
+      { trigger: 'onTurnStart', effectType: 'heal', heal: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._20, magic: DAMAGE_SCALING_PRESETS._20 } } },
     ],
   },
 
@@ -459,13 +459,13 @@ const RELIC_CATALOG = {
   soul_eater: {
     id: 'soul_eater',
     name: 'Soul Eater',
-    description: '[[Heal]] <<3>> life whenever you deal [[damage]].',
+    description: '[[Heal]] <<1>> life whenever you deal [[damage]].',
     icon: 'relic_soul_eater',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
       // onDealDamage fires with side = the attacker, so heal restores the owner.
-      // Heal scales off BOTH Attack and Magic at the _50 (×1/2 each) preset.
-      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 3, scaling: { attack: DAMAGE_SCALING_PRESETS._50, magic: DAMAGE_SCALING_PRESETS._50 } } },
+      // Heal scales off BOTH Attack and Magic at the _10 (×1/10 each) preset.
+      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._10, magic: DAMAGE_SCALING_PRESETS._10 } } },
     ],
   },
 
@@ -576,7 +576,7 @@ const RELIC_CATALOG = {
     icon: 'relic_flaming_arrow',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
+      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
     ],
   },
 
@@ -587,7 +587,7 @@ const RELIC_CATALOG = {
     icon: 'relic_water_balloon',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
+      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
     ],
   },
 
@@ -598,7 +598,7 @@ const RELIC_CATALOG = {
     icon: 'relic_thorned_branch',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
+      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
     ],
   },
 
@@ -609,7 +609,7 @@ const RELIC_CATALOG = {
     icon: 'relic_static_comb',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
+      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
     ],
   },
 
@@ -620,7 +620,7 @@ const RELIC_CATALOG = {
     icon: 'relic_tuning_fork',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._20 } } },
+      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
     ],
   },
 
@@ -631,55 +631,55 @@ const RELIC_CATALOG = {
   familiar_red: {
     id: 'familiar_red',
     name: 'Fire Familiar',
-    description: 'Gain 1 red [[mana]] whenever you [[match]] 3 or more [[tiles]].',
+    description: 'Gain 1 red [[mana]] whenever you [[match]] 4 or more [[tiles]].',
     icon: 'relic_familiar_red',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'red', amount: 1 } },
+      { trigger: 'onTileMatchType', condition: { minCount: 4 }, effectType: 'gain_mana', gainMana: { color: 'red', amount: 1 } },
     ],
   },
 
   familiar_blue: {
     id: 'familiar_blue',
     name: 'Water Familiar',
-    description: 'Gain 1 blue [[mana]] whenever you [[match]] 3 or more [[tiles]].',
+    description: 'Gain 1 blue [[mana]] whenever you [[match]] 4 or more [[tiles]].',
     icon: 'relic_familiar_blue',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'blue', amount: 1 } },
+      { trigger: 'onTileMatchType', condition: { minCount: 4 }, effectType: 'gain_mana', gainMana: { color: 'blue', amount: 1 } },
     ],
   },
 
   familiar_green: {
     id: 'familiar_green',
     name: 'Earth Familiar',
-    description: 'Gain 1 green [[mana]] whenever you match 3 or more [[tiles]].',
+    description: 'Gain 1 green [[mana]] whenever you match 4 or more [[tiles]].',
     icon: 'relic_familiar_green',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'green', amount: 1 } },
+      { trigger: 'onTileMatchType', condition: { minCount: 4 }, effectType: 'gain_mana', gainMana: { color: 'green', amount: 1 } },
     ],
   },
 
   familiar_yellow: {
     id: 'familiar_yellow',
     name: 'Energy Familiar',
-    description: 'Gain 1 yellow [[mana]] whenever you [[match]] 3 or more [[tiles]].',
+    description: 'Gain 1 yellow [[mana]] whenever you [[match]] 4 or more [[tiles]].',
     icon: 'relic_familiar_yellow',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'yellow', amount: 1 } },
+      { trigger: 'onTileMatchType', condition: { minCount: 4 }, effectType: 'gain_mana', gainMana: { color: 'yellow', amount: 1 } },
     ],
   },
 
   familiar_purple: {
     id: 'familiar_purple',
     name: 'Arcane Familiar',
-    description: 'Gain 1 purple [[mana]] whenever you match 3 or more [[tiles]].',
+    description: 'Gain 1 purple [[mana]] whenever you match 4 or more [[tiles]].',
     icon: 'relic_familiar_purple',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onTileMatchType', condition: { minCount: 3 }, effectType: 'gain_mana', gainMana: { color: 'purple', amount: 1 } },
+      { trigger: 'onTileMatchType', condition: { minCount: 4 }, effectType: 'gain_mana', gainMana: { color: 'purple', amount: 1 } },
     ],
   },
 
@@ -691,7 +691,7 @@ const RELIC_CATALOG = {
     icon: 'relic_slingshot',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
+      { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 3, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 

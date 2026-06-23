@@ -124,7 +124,7 @@ export const TAG_VALUE_TABLES = Object.freeze({
   // `gain N attack` — permanent for the battle, so the rolls are small.
   attack: { 1: 53, 2: 37, 3: 9, 4: 1 },
   // `gain N magic` — counterpart to attack, same small permanent-stat rolls.
-  magic:  { 2: 53, 4: 37, 6: 9, 8: 1 },
+  magic:  { 1: 53, 2: 37, 3: 9, 5: 1 },
 
   // ── Status durations (turn cycles) ──
   silence:    { 2: 50, 3: 35, 4: 15 },
