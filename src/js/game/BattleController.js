@@ -45,7 +45,7 @@ const SWAP_BASE_DURATION = 120;
  * gained from each matched color (floor(magic / N)). Stacks with mana-gain
  * relics (Bellows, etc.). Applied per matched color in _applyMatchBonuses.
  */
-const MAGIC_MANA_PER_POINT = 3;
+const MAGIC_MANA_PER_POINT = 9;
 /** Turn intro animation delay in ms (NOT scaled — presentation timing) */
 const TURN_INTRO_DURATION = 600;
 /**

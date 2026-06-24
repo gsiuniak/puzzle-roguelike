@@ -32,9 +32,9 @@ import RELIC_CATALOG, { RELIC_RARITY } from './relicCatalog.js';
  */
 export const RELIC_RARITY_WEIGHTS = {
   [RELIC_RARITY.COMMON]:    70,
-  [RELIC_RARITY.UNCOMMON]:   20,
+  [RELIC_RARITY.UNCOMMON]:   25,
   [RELIC_RARITY.RARE]:       15,
-  [RELIC_RARITY.LEGENDARY]:   4,
+  [RELIC_RARITY.LEGENDARY]:   0,
   // Starter relics are filtered out of the pool already; 0 is a safety net.
   [RELIC_RARITY.STARTER]:     0,
 };

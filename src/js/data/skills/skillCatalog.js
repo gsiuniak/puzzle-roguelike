@@ -160,13 +160,13 @@ const SKILL_CATALOG = {
   oungan: {
     id: 'oungan',
     name: 'Oungan',
-    description: 'Heal <<5>>.\n[[Create]] 3 Green [[tiles]].\nGain 1 [[Attack]].',
+    description: 'Heal <<5>>.\n[[Create]] 4 Green [[tiles]].\nGain 1 [[Attack]].',
     icon: 'skill_oungan',
     sound: 'skill_oungan',
     cost: { green: 5 },
     effects: [
       { effectType: 'heal', heal: { amount: 5, scaling: { attack: DAMAGE_SCALING_PRESETS._100 } } },
-      { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
+      { effectType: 'create_tiles', createTiles: { amount: 4, type: 'green' } },
       { effectType: 'gain_attack', gainAttack: { amount: 1 } },
       // Poison application scales with Magic at _25 (NOT _50): poison's halving
       // decay already ≈ doubles each stack's lifetime value, so a half-rate magic

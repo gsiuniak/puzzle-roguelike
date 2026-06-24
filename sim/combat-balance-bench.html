@@ -618,11 +618,11 @@ const COLOR_ORDER = ["red","yellow","green","blue","purple"];
 const TUNE_DEFAULT = {
   // value equivalences (DEV), doc §3.1
   DEV_damage: 1.0, DEV_armor: 0.9, DEV_barrier: 0.9, DEV_heal: 1.0,
-  V_turn: 8.0, DEV_tile: 0.5, DEV_attack_perm: 6.0, V_mana: 3.0,
-  // play model
-  ctrlColor: 1.5,      // colored matches you steer per turn
-  ctrlSkull: 1.0,      // skull matches you steer per turn
-  focusFrac: 0.6,      // share of steered colored matches funneled to the skill's color
+  V_turn: 4.0, DEV_tile: 0.5, DEV_attack_perm: 6.0, V_mana: 3.0,  // V_turn = extra-turn FLOOR (real value computed per combatant)
+  // play model — a turn is ONE swap: skull-building and skill-funding SHARE it.
+  matchesPerTurn: 1.1, // deliberate matches you actually land per turn (≈ one swap + a little)
+  skullFocus: 0.45,    // share of your matching aimed at skulls (the rest funds colors/skills)
+  focusFrac: 0.7,      // share of that color mana actually usable to fund your skills
   maxCastsPerSkill: 1.5, // cap on casts/turn of ONE skill (capped-greedy loadout model)
   Nskull: 3.3,         // avg skull match size
   Ncolor: 3.2,         // avg colored match size
@@ -846,24 +846,32 @@ function skillDEV(skill, st, etv){
   return { dev, breakdown: bd, hitDamage: dmg>0?dmg:0 };
 }
 
-// skull damage per turn (steered + ambient cascade), generic
+// A turn is ONE swap's worth of matching, SHARED between skull-building and
+// colour/skill-funding (you steer it toward one or the other, not both), plus
+// ambient cascades. These two are the single source of "how many of each kind
+// of match happen per turn" — everything downstream derives from them, so skull
+// damage and skill economy can't both claim a full turn's worth of matches.
+function skullMatchesPerTurn(){ return TUNE.matchesPerTurn*TUNE.skullFocus + TUNE.cascadeLambda*TUNE.skullShare; }
+function colorMatchesPerTurn(){ return TUNE.matchesPerTurn*(1-TUNE.skullFocus) + TUNE.cascadeLambda*(1-TUNE.skullShare); }
+
+// skull damage per turn (steered + ambient cascade), generic — NO tempo here;
+// callers multiply by tempo() at the point of use.
 function skullDevPerTurn(st){
-  const per = matchedSkullDmg(TUNE.Nskull, st.attack);
-  return (TUNE.ctrlSkull*per + TUNE.cascadeLambda*TUNE.skullShare*per) * TUNE.DEV_damage;
+  return skullMatchesPerTurn() * matchedSkullDmg(TUNE.Nskull, st.attack) * TUNE.DEV_damage;
 }
 function tempo(){ return 1 / (1 - clamp(TUNE.pExtra,0,0.8)); }
 
 function totalColorMana(st){
-  return TUNE.ctrlColor*manaPerColorMatch(st.magic) + TUNE.cascadeLambda*(1-TUNE.skullShare)*manaPerColorMatch(st.magic);
+  return colorMatchesPerTurn() * manaPerColorMatch(st.magic);
 }
 
-// value of a granted extra turn = another turn of skull pressure + leftover
-// economy (NOT a flat constant), floored at V_turn. So a reliable extra-turn
-// skill (Cyclops' Smash, the Warrior's Bash) is worth the actual turn it grants
-// rather than a fixed 8 — strong/bursty combatants get the credit they earn.
+// value of a granted extra turn = one more turn of skull pressure + that turn's
+// mana value (NOT a flat constant), floored at V_turn. So a reliable extra-turn
+// skill (Cyclops' Smash, the Warrior's Bash) is worth the actual turn it grants —
+// which for a weak combatant is small, not a fixed 8.
 function extraTurnValue(st){
   return Math.max(TUNE.V_turn,
-    skullDevPerTurn(st) + (1-TUNE.focusFrac)*totalColorMana(st)*TUNE.V_mana*TUNE.econEff);
+    skullDevPerTurn(st) + totalColorMana(st)*TUNE.V_mana*TUNE.econEff);
 }
 // LOADOUT cadence — CAPPED-GREEDY. The player funnels `focusFrac` of color-mana
 // income into skills, spending it on the HIGHEST value-per-mana skills FIRST,
@@ -918,8 +926,8 @@ function relicAdjust(relics, st){
   const adj = { attack:0, magic:0, armor:0, barrier:0, hp:0, dmgPerTurn:0, manaValue:0, ehpFlat:0, outMult:1, notes:[] };
   if(!relics || !relics.length) return adj;
   const ctx = {
-    skullMatches: (T.ctrlSkull + T.cascadeLambda*T.skullShare)*tempo(),
-    allMatches:   (T.ctrlColor + T.ctrlSkull + T.cascadeLambda),
+    skullMatches: skullMatchesPerTurn()*tempo(),
+    allMatches:   T.matchesPerTurn + T.cascadeLambda,
     match4:       T.match4PerTurn,
   };
   const STAT_MAP = { attack:'attack', magic:'magic', armor:'armor', barrier:'barrier', maxHp:'hp', hp:'hp' };
@@ -991,7 +999,7 @@ function applyStatus(hit, atk, def){
 // damage/turn ATTACKER lands on TARGET (status + relic aware) — for TTK & risk
 function dmgPerTurnVsTarget(atkSt, skills, atkStatus, tgtStatus, radj){
   const perSkullHit = matchedSkullDmg(TUNE.Nskull, atkSt.attack);
-  const skullMatches = (TUNE.ctrlSkull + TUNE.cascadeLambda*TUNE.skullShare) * tempo();
+  const skullMatches = skullMatchesPerTurn() * tempo();
   const skullDmg = skullMatches * applyStatus(perSkullHit, atkStatus, tgtStatus) * TUNE.DEV_damage;
   const plan = skillPlan(skills, atkSt);
   const skillDmg = plan.parts.reduce((a,p)=> a + p.castsPerTurn*applyStatus(p.hit, atkStatus, tgtStatus)*TUNE.DEV_damage, 0);
@@ -1388,7 +1396,7 @@ function buildTuners(){
     ["DEV_heal","1 HP healed","full only below max"],["V_turn","1 extra turn","a whole turn of output"],["DEV_tile","1 tile made","sets up a match"],
     ["DEV_attack_perm","+1 perm attack","value over the fight"],["V_mana","1 mana","value of the mana itself"]];
   $("tuneDEV").innerHTML=DEVf.map(([k,l,s])=>tuneRow(k,l,s)).join("");
-  const Mf=[["ctrlColor","Steered color matches /turn",""],["ctrlSkull","Steered skull matches /turn",""],["focusFrac","Funnel into skill color","0–1"],
+  const Mf=[["matchesPerTurn","Matches landed /turn","≈ one swap"],["skullFocus","Share aimed at skulls","0–1"],["focusFrac","Color mana usable for skills","0–1"],
     ["maxCastsPerSkill","Max casts /turn per skill","capped-greedy"],
     ["Nskull","Avg skull match size",""],["Ncolor","Avg color match size",""],["cascadeLambda","Cascade matches /clear","λ"],
     ["skullShare","Skull share of cascades","0–1"],["pExtra","P(turn has 4+ extra turn)","0–0.8"],["econEff","Leftover-mana efficiency","0–1"],
