@@ -36,10 +36,6 @@ const CascadePhase = {
   FALL: 'FALL',
 };
 
-/** Fixed cosmetic HP shown on the Sanguine Egg form (it's invulnerable for the
- *  whole egg phase, so the bar is decorative — always full at this value). */
-const EGG_DISPLAY_HP = 999;
-
 /** Base durations in ms (scaled by speedMultiplier) */
 const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
 const ENEMY_BASE_DELAY = 400;
@@ -92,34 +88,25 @@ export default class BattleController {
      *  cleared via getState(). @type {string|null} */
     this._pendingTransformSfx = null;
 
-    /** Deferred egg-spawn from a death-transform (Sanguine Egg). Set by
-     *  _applyTransform, drained in _endTurn so the eggs land on a SETTLED board
-     *  (creating them mid-killing-cascade let the cascade sweep them — the "eggs
-     *  don't always drop" bug). `{ createTiles, side, sound }` or null. */
-    this._pendingEggSpawn = null;
-
     /** Re-entry guard while dispatching onDeath (a transform that leaves HP at
      *  0 must not re-trigger onDeath forever). @type {boolean} */
     this._deathTransformFiring = false;
 
     /**
      * Sanguine Egg phase state (the turn-based egg minigame — see decision #37 /
-     * _applyTransform). When the Phoenix is "killed" it becomes the Egg, the
-     * board is seeded with egg tiles, and the player KEEPS the turn (a hidden
-     * extra turn) so they get one turn (extra turns included) to clear ALL of them:
-     *   - clear them → instant VICTORY (_maybeWinEggPhase, from _finishResolving)
-     *   - fail       → at the player's turn END the leftover eggs are destroyed
-     *                  and the Egg reverts to a full-life Phoenix (_resolveEggPhaseAtTurnEnd)
-     * The Egg is INVULNERABLE for the whole phase (its HP bar is decorative — the
-     * win condition is the tiles, not damage). `_eggsSpawned` gates the win check
-     * + the deadline until the deferred eggs actually land. `_eggForcedExtraTurn`
-     * suppresses the "extra turn" announcement so the retained turn stays hidden.
+     * _applyTransform). When the Phoenix is "killed" it becomes the Egg — a
+     * NORMAL, killable low-HP enemy — and the player KEEPS the turn (a hidden
+     * extra turn), so they get one turn (extra turns included) to slay it:
+     *   - slay it → VICTORY (the normal enemy-death path, _checkGameOver)
+     *   - fail    → at the player's turn END the Egg reverts to a full-life
+     *               Phoenix (_resolveEggPhaseAtTurnEnd)
+     * `_eggForcedExtraTurn` suppresses the "extra turn" announcement so the
+     * retained turn stays hidden.
      */
     this._eggPhaseActive = false;
-    this._eggsSpawned = false;
     this._eggForcedExtraTurn = false;
-    /** `{ eggType, revertEnemyId, revertSound, tendrilColor }` — copied from the
-     *  Sanguine Egg relic's `transform` payload when the phase begins. */
+    /** `{ revertEnemyId, revertSound }` — copied from the Sanguine Egg relic's
+     *  `transform` payload when the phase begins. */
     this._eggPhaseConfig = null;
 
     this.enemyAI = null;
@@ -829,10 +816,6 @@ export default class BattleController {
     // Check for game over before proceeding to next turn
     if (this._checkGameOver()) return true;
 
-    // If this instant skill (e.g. Bash) killed the Phoenix, the transform just
-    // fired and the board is settled (no cascade) — drop the egg tiles now.
-    this._maybeSpawnPendingEggs();
-
     // Deathbringer: skill damage may have queued skull destructions.
     if (this._pendingSkullDestroy > 0 && this._maybeStartPendingSkullDestroy()) return true;
 
@@ -954,9 +937,6 @@ export default class BattleController {
 
     if (enteredCascade) return true;
     if (this._checkGameOver()) return true;
-    // If this non-cascade targeted skill killed the Phoenix, the transform just
-    // fired on a settled board — drop the egg tiles now.
-    this._maybeSpawnPendingEggs();
     // Deathbringer: skill damage may have queued skull destructions.
     if (this._pendingSkullDestroy > 0 && this._maybeStartPendingSkullDestroy()) return true;
     if (this._extraTurnEarned) {
@@ -1564,17 +1544,6 @@ export default class BattleController {
   }
 
   _finishResolving() {
-    // Egg phase: if this resolution cleared the last Sanguine Egg tile, the
-    // player wins IMMEDIATELY (no need to wait for the deadline turn). Guarded by
-    // _eggsSpawned so the Phoenix's own killing cascade (eggs not seeded yet)
-    // never false-triggers it.
-    if (this._maybeWinEggPhase()) return;
-
-    // If the Phoenix was just killed this resolution (Phoenix→Egg transform fired
-    // mid-cascade / via a targeted destroy), the board is NOW settled — drop the
-    // deferred egg tiles here so they aren't swept by the cascade's gravity.
-    this._maybeSpawnPendingEggs();
-
     // Deathbringer: if damage dealt during this resolution queued skull
     // destructions, run them as a follow-up resolution before ending the
     // turn (skip if the battle already ended).
@@ -1650,13 +1619,13 @@ export default class BattleController {
 
   _endTurn(side) {
     // Egg-phase DEADLINE: the player retained the turn after killing the Phoenix
-    // (a hidden extra turn) to clear the egg tiles. If they're ending that turn
-    // with the phase still live, resolve it now — a cleared board is a defensive
-    // win (normally taken instantly in _finishResolving), otherwise the leftover
-    // eggs burst and the Egg reverts to a full-life Phoenix IN PLACE, and this
-    // _endTurn then proceeds normally so the reborn Phoenix takes the enemy turn.
-    if (side === 'player' && this._eggPhaseActive && this._eggsSpawned) {
-      if (this._resolveEggPhaseAtTurnEnd()) return; // victory — stop here
+    // (a hidden extra turn) to slay the Egg. If they're ending that turn with the
+    // phase still live, the Egg survived — it reverts to a full-life Phoenix IN
+    // PLACE (a slain Egg would already have ended the battle via _checkGameOver),
+    // and this _endTurn then proceeds normally so the reborn Phoenix takes the
+    // enemy turn.
+    if (side === 'player' && this._eggPhaseActive) {
+      this._resolveEggPhaseAtTurnEnd();
     }
 
     // Dispatch onTurnEnd BEFORE we mutate state for the next turn so
@@ -2003,10 +1972,10 @@ export default class BattleController {
   _doEnemyTurn() {
     // ── 0a. Dormant Sanguine Egg: SAFETY pass. In normal flow the egg phase
     //    resolves at the player's turn END (_endTurn → _resolveEggPhaseAtTurnEnd:
-    //    win, or revert to the Phoenix BEFORE this enemy turn), so the Egg never
-    //    actually reaches its own enemy turn. If it somehow does, it must NOT act
-    //    (it would fall through to _doEnemySwap and shuffle the board / match away
-    //    its own eggs) — it simply passes.
+    //    slain → victory, or revert to the Phoenix BEFORE this enemy turn), so the
+    //    Egg never actually reaches its own enemy turn. If it somehow does, it must
+    //    NOT act (it would fall through to _doEnemySwap and shuffle the board) — it
+    //    simply passes.
     if (this.enemyState._isDormantEgg) {
       this.log.add(`The ${this.enemyState.name} lies dormant.`);
       this._endTurn('enemy');
@@ -2531,6 +2500,9 @@ export default class BattleController {
       // Death-transform (Sanguine Egg relic): the enemy may cheat death by
       // transforming instead of dying. If it does, the battle continues.
       if (this._tryEnemyDeathTransform()) return false;
+      // A real death — if the Egg itself was just slain, clear any lingering
+      // egg-phase state so the turn-end deadline can't fire after victory.
+      this._endEggPhase();
       this.state = BattleState.GAME_OVER;
       this.log.add(`Victory! ${this.enemyState.name} has been slain!`);
       if (this.onStateChange) this.onStateChange();
@@ -2596,14 +2568,6 @@ export default class BattleController {
    * @returns {{actualDamage:number, blocked:number, armorDamage:number}}
    */
   _applyDamage(target, amount, opts = {}) {
-    // The Sanguine Egg is INVULNERABLE for the entire egg phase. The win
-    // condition is clearing the egg TILES, not damaging the Egg — so its HP bar
-    // is purely cosmetic and damage to it does nothing (a big killing cascade
-    // can't shortcut the phase, and the player can't "kill" the Egg directly).
-    if (target === this.enemyState && this._eggPhaseActive) {
-      return { actualDamage: 0, blocked: 0, armorDamage: 0 };
-    }
-
     const side = target === this.playerState ? 'player' : 'enemy';
     const attackerSide = opts.attackerSide || (side === 'player' ? 'enemy' : 'player');
     const attacker = this._getStateBySide(attackerSide);
@@ -3103,17 +3067,16 @@ export default class BattleController {
 
   /**
    * Death-transform board effect (Sanguine Egg relic, onDeath): when the Phoenix
-   * is "killed" it does NOT die — it swaps into its DORMANT, INVULNERABLE Egg
-   * form, seeds the board with egg tiles (deferred to a settled board via
-   * _maybeSpawnPendingEggs), and RETAINS the player's turn (a hidden extra turn).
-   * This starts the EGG PHASE: the player has that one turn (extra turns included)
-   * to clear every egg tile — see _maybeWinEggPhase (clear them → instant win) and
-   * _resolveEggPhaseAtTurnEnd (fail → eggs destroyed, Phoenix reborn at the
-   * player's turn end). The Egg's HP bar is decorative (it's invulnerable in
-   * _applyDamage, fixed at 999); only the tiles matter.
+   * is "killed" it does NOT die — it swaps into its DORMANT Egg form (a NORMAL,
+   * killable low-HP enemy at its full floor-scaled HP, set by _transformInto) and
+   * RETAINS the player's turn (a hidden extra turn). This starts the EGG PHASE:
+   * the player has that one turn (extra turns included) to deal the Egg's HP in
+   * damage. Slay it → victory (the normal enemy-death path); fail → at the
+   * player's turn end the Egg reverts to a full-life Phoenix
+   * (_resolveEggPhaseAtTurnEnd).
    *
-   * @param {object} effect — { transform: { intoEnemyId, createTiles?, sound?,
-   *                            eggType?, revertEnemyId?, revertSound?, tendrilColor? } }
+   * @param {object} effect — { transform: { intoEnemyId, sound?, revertEnemyId?,
+   *                            revertSound? } }
    * @param {object} payload — { side } (the dying side)
    * @returns {boolean} always true (effect recognized/handled)
    */
@@ -3124,153 +3087,62 @@ export default class BattleController {
     const e = this.enemyState;
     // Safety: the Egg never acts. In normal flow it never even gets an enemy turn
     // (the player keeps the turn, then the deadline fires at the player's turn end
-    // and reverts to the Phoenix before the enemy turn).
+    // and either the Egg is slain — victory — or it reverts to the Phoenix before
+    // the enemy turn). _transformInto already gave the Egg its full floor-scaled
+    // HP — it is a NORMAL, killable enemy now (no longer invulnerable).
     e._isDormantEgg = true;
-    // The Egg always shows a fixed HP bar — it's invulnerable, so this is purely
-    // cosmetic (999 / 999, every time).
-    e.maxHp = EGG_DISPLAY_HP;
-    e.hp = EGG_DISPLAY_HP;
 
     // Begin the egg phase (re-initialised every time, so a reborn Phoenix can be
-    // re-killed). _eggsSpawned flips true when the deferred eggs actually land.
+    // re-killed into a fresh egg).
     this._eggPhaseActive = true;
-    this._eggsSpawned = false;
     this._eggPhaseConfig = {
-      eggType: (cfg.createTiles && cfg.createTiles.type) || cfg.eggType || 'sanguine_egg',
       revertEnemyId: cfg.revertEnemyId || 'sanguinePhoenix',
       revertSound: cfg.revertSound || null,
-      tendrilColor: cfg.tendrilColor || '#a01a2a',
     };
 
     // The player KEEPS the turn after the killing blow (a "hidden" extra turn):
     // forcing _extraTurnEarned makes EVERY kill path retain the player's turn
     // instead of passing to the enemy — cascade skull-match kills (via
     // _finishResolving), instant skills like Bash, and targeted destroys — so the
-    // player can work on the eggs in the same turn. _eggForcedExtraTurn suppresses
-    // the extra-turn log so it stays hidden.
+    // player gets one turn (extra turns included) to slay the Egg.
+    // _eggForcedExtraTurn suppresses the extra-turn log so it stays hidden.
     this._extraTurnEarned = true;
     this._eggForcedExtraTurn = true;
 
-    // Defer the egg-tile creation to a SETTLED, FINAL board (drained by
-    // _maybeSpawnPendingEggs — from _finishResolving for cascade/destroy kills, or
-    // inline after the instant-skill game-over check). Creating them at the death
-    // moment risks the in-flight cascade gravity sweeping the wild eggs (the "eggs
-    // don't drop" bug — the kill is usually mid-cascade or pre-gravity).
-    if (cfg.createTiles) {
-      this._pendingEggSpawn = {
-        createTiles: cfg.createTiles,
-        side: (payload && payload.side) || 'enemy',
-        sound: cfg.sound || null,
-      };
-    } else if (cfg.sound) {
-      this._pendingTransformSfx = cfg.sound;
-    }
+    if (cfg.sound) this._pendingTransformSfx = cfg.sound;
     this.log.add(`${e.name} emerges!`);
     return true;
   }
 
   /**
-   * Drain a deferred egg-spawn (`_pendingEggSpawn`) onto the now-settled board.
-   * Idempotent: a no-op when nothing is pending. Called from every settled,
-   * final point reachable after a Phoenix→Egg transform (_finishResolving for
-   * cascade/destroy kills; inline after the instant-skill game-over checks for
-   * non-cascade kills like Bash), so the eggs always land exactly once on a board
-   * that won't be swept by gravity.
-   */
-  _maybeSpawnPendingEggs() {
-    if (!this._pendingEggSpawn) return;
-    const pending = this._pendingEggSpawn;
-    this._pendingEggSpawn = null;
-    this._applyPassiveCreateTiles({ createTiles: pending.createTiles }, { side: pending.side });
-    if (pending.sound) this._pendingTransformSfx = pending.sound;
-    this._eggsSpawned = true;
-  }
-
-  /**
-   * Egg-phase WIN check (called from _finishResolving after every cascade). If
-   * the egg phase is active, the eggs have spawned, and NONE remain on the board,
-   * the player has cleared them all — declare victory immediately. Guarded by
-   * _eggsSpawned so the Phoenix's own killing cascade (eggs not yet seeded) can't
-   * false-trigger a win.
-   * @returns {boolean} true if the egg phase ended in victory
-   */
-  _maybeWinEggPhase() {
-    if (!this._eggPhaseActive || !this._eggsSpawned) return false;
-    const eggType = (this._eggPhaseConfig && this._eggPhaseConfig.eggType) || 'sanguine_egg';
-    if (this.board.getTilesOfType(eggType).length > 0) return false;
-    this._declareEggWin();
-    return true;
-  }
-
-  /**
-   * The player cleared every egg — end the phase and let the Egg die for real.
-   * _endEggPhase clears the invulnerability so _checkGameOver (no death-transform
-   * left on the Egg) declares the win.
-   */
-  _declareEggWin() {
-    this.log.add(`The last Sanguine Egg shatters!`);
-    this._endEggPhase();
-    this.enemyState.hp = 0;
-    this.enemyState._defeated = true;
-    this._checkGameOver();
-  }
-
-  /**
    * Egg-phase DEADLINE — called from _endTurn when the player ENDS their (retained)
-   * turn with the egg phase still live. The player had their one turn (extra turns
-   * included); the leftover eggs BURST (liquid blood, no tendrils) and the Egg
-   * reverts to a full-life Sanguine Phoenix in place, then the turn proceeds
-   * normally to the (reborn) enemy. A cleared-eggs win is normally taken instantly
-   * by _maybeWinEggPhase, but we re-check defensively here.
-   * @returns {boolean} true if this resolved into a VICTORY (caller must stop)
+   * turn with the egg phase still live. A slain Egg would already have ended the
+   * battle (via _checkGameOver) before reaching here, so in practice the Egg
+   * SURVIVED: it reverts to a full-life Sanguine Phoenix IN PLACE, then the caller
+   * (_endTurn) proceeds normally so the reborn Phoenix takes its turn next. The
+   * dead-Egg branch is a defensive guard only.
    */
   _resolveEggPhaseAtTurnEnd() {
+    if (this.enemyState.hp <= 0 || this.enemyState._defeated) {
+      // Defensive: the Egg was slain but victory wasn't declared — let normal flow
+      // handle it; just clear the phase so the deadline never re-fires.
+      this._endEggPhase();
+      return;
+    }
+
     const cfg = this._eggPhaseConfig || {};
-    const eggType = cfg.eggType || 'sanguine_egg';
-    const eggs = this.board.getTilesOfType(eggType);
-
-    if (eggs.length === 0) {
-      // Defensive: eggs were cleared but the instant win didn't fire. Win here.
-      this._declareEggWin();
-      return true;
-    }
-
-    // Eggs remain — they BURST (blood only, no tendrils) and the Egg reverts to a
-    // full-life Sanguine Phoenix. Surface the blood splash, remove the eggs in
-    // place (each → a random mana color, no cascade) so they vanish without
-    // gifting a free match. The caller (_endTurn) then proceeds to the enemy turn,
-    // so the reborn Phoenix takes its turn next.
     if (cfg.revertSound) this._pendingTransformSfx = cfg.revertSound;
-    this._harvestEvents.push({
-      side: 'enemy',
-      positions: eggs.map((p) => ({ col: p.col, row: p.row })),
-      color: cfg.tendrilColor || '#a01a2a',
-      bloodOnly: true,
-    });
-
-    const converted = [];
-    for (const p of eggs) {
-      const color = MANA_COLORS[Math.floor(Math.random() * MANA_COLORS.length)];
-      if (this.board.convertTilesToType([p], color) > 0) {
-        converted.push({ col: p.col, row: p.row, typeId: color });
-      }
-    }
-    this._convertedTilePositions = (this._convertedTilePositions || []).concat(converted);
-
     this._endEggPhase();
     this._transformInto(cfg.revertEnemyId || 'sanguinePhoenix');
-    this.log.add(`${this.enemyState.name} bursts from its egg, reborn!`);
-    return false;
+    this.log.add(`${this.enemyState.name} hatches, reborn!`);
   }
 
-  /** Clear all egg-phase state (on win or revert). The Egg is no longer
-   *  invulnerable and the flags reset for any future cycle. */
+  /** Clear all egg-phase state (on a slain Egg or a revert). Flags reset for any
+   *  future cycle. */
   _endEggPhase() {
     this._eggPhaseActive = false;
-    this._eggsSpawned = false;
     this._eggForcedExtraTurn = false;
     this._eggPhaseConfig = null;
-    this._pendingEggSpawn = null;
   }
 
   /**
@@ -3374,8 +3246,6 @@ export default class BattleController {
   _tickPoison(targetSide) {
     const t = this._getStateBySide(targetSide);
     if (!t || !t.poison || t.poison <= 0) return;
-    // The Sanguine Egg is invulnerable for the whole egg phase (mirror _applyDamage).
-    if (t === this.enemyState && this._eggPhaseActive) return;
 
     // Poison is NO LONGER armor-piercing — route through the resolver so the
     // poisoned side's barrier → armor → block absorb it like any other damage.

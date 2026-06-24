@@ -195,25 +195,23 @@ const ENEMY_RELIC_CATALOG = {
     ],
   },
 
-  // Death-transform engine (Sanguine Phoenix) — drives the whole egg minigame.
-  // When the owner would die it does NOT die: it transforms into the dormant,
-  // INVULNERABLE Sanguine Egg form (keeps its mana) and seeds the board with 2
-  // wild Sanguine Egg tiles. This starts the EGG PHASE (BattleController):
-  //   - the player has ONE turn (extra turns included) to clear BOTH egg tiles →
-  //     instant victory;
-  //   - if any remain at the Egg's deadline turn, the leftovers BURST (liquid
-  //     blood, no tendrils) and the Egg reverts to a full-life Phoenix (the
-  //     `revert*` payload below).
+  // Death-transform engine (Sanguine Phoenix) — drives the egg minigame. When
+  // the owner would die it does NOT die: it transforms into the dormant Sanguine
+  // Egg form (keeps its mana) — a NORMAL, killable low-HP enemy. This starts the
+  // EGG PHASE (BattleController):
+  //   - the player KEEPS the turn (a hidden extra turn) and has ONE turn (extra
+  //     turns included) to deal the Egg's HP in damage → victory;
+  //   - if the Egg survives to the player's turn END it reverts to a full-life
+  //     Phoenix (the `revert*` payload below).
   // Board/state-touching → BattleController._handlePassiveBoardEffect via the
   // `transform` path. Fires on the `onDeath` trigger, dispatched from
   // _checkGameOver before victory is declared. The Egg form carries the
-  // DISPLAY-ONLY `sanguine_chrysalis` relic (below) so the player can read why
-  // it's invulnerable; the actual win/revert is the turn-based egg phase,
-  // configured entirely here.
+  // DISPLAY-ONLY `sanguine_chrysalis` relic (below) so the player can read what
+  // to do; the actual revert is the turn-based egg phase, configured here.
   sanguine_egg: {
     id: 'sanguine_egg',
     name: 'Sanguine Egg',
-    description: 'Upon death, transform into a Sanguine Egg and [[Create]] 2 [[Sanguine Egg]] tiles.\nClear them within one turn or the Phoenix is reborn.',
+    description: 'Upon death, transform into a fragile Sanguine Egg.\nSlay it within one turn or the Phoenix is reborn.',
     icon: 'relic_sanguine_egg',
     rarity: RELIC_RARITY.RARE,
     effects: [
@@ -222,28 +220,24 @@ const ENEMY_RELIC_CATALOG = {
         effectType: 'transform',
         transform: {
           intoEnemyId: 'sanguineEgg',
-          createTiles: { type: 'sanguine_egg', amount: 2, avoidMatches: true },
           sound: 'sfx_sanguine_egg_spawn',
           // Egg-phase resolution config (read by BattleController._applyTransform):
-          eggType: 'sanguine_egg',
           revertEnemyId: 'sanguinePhoenix',
           revertSound: 'sfx_sanguine_egg_hatch',
-          tendrilColor: '#a01a2a',
         },
       },
     ],
   },
 
   // DISPLAY-ONLY relic shown on the Sanguine Egg form (sanguineEgg.js) so the
-  // player understands the egg phase. It has NO effects — the Egg's
-  // invulnerability and the "clear the tiles or the Phoenix is reborn" deadline
-  // are hardcoded in the BattleController egg phase (driven by the sanguine_egg
-  // transform config above), not by this relic. It exists purely for its icon +
-  // tooltip on the enemy relic bar.
+  // player understands the egg phase. It has NO effects — the "slay it this turn
+  // or the Phoenix is reborn" deadline is hardcoded in the BattleController egg
+  // phase (driven by the sanguine_egg transform config above), not by this relic.
+  // It exists purely for its icon + tooltip on the enemy relic bar.
   sanguine_chrysalis: {
     id: 'sanguine_chrysalis',
     name: 'Sanguine Chrysalis',
-    description: 'Invulnerable. Destroy the [[Sanguine Egg]] [[tiles]] or the Phoenix is reborn.',
+    description: 'Fragile. Slay this Egg before your turn ends or the Phoenix is reborn at full life.',
     icon: 'relic_sanguine_chrysalis',
     rarity: RELIC_RARITY.RARE,
     effects: [],

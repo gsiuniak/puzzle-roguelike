@@ -6,21 +6,23 @@
  * Sanguine Egg relic swaps into it on death. MapScene still registers it so the
  * id resolves when pre-building the Phoenix's transform forms.
  *
- * The egg minigame is TURN-BASED and TILE-BASED (BattleController egg phase):
- * when the Phoenix is "killed" it becomes this Egg and 2 wild Sanguine Egg tiles
- * are seeded. The player has ONE turn (extra turns included) to clear BOTH:
- *   - clear them → instant victory;
- *   - fail      → the leftover eggs burst and the Egg reverts to a full-life
- *                 Phoenix (which then forfeits that turn).
- * The Egg is INVULNERABLE (its HP bar is purely cosmetic — the win condition is
- * the tiles, NOT damage), has no skills, inherits the Phoenix's mana, and is
- * DORMANT (it never acts/moves tiles). Its only relic, `sanguine_chrysalis`, is
- * DISPLAY-ONLY (no effects) — it just shows the player why the Egg is invulnerable
- * and what to do; the win/revert is hardcoded in the BattleController egg phase
- * (_resolveEggPhaseAtTurnEnd).
+ * The egg minigame is TURN-BASED and DAMAGE-BASED (BattleController egg phase):
+ * when the Phoenix is "killed" it becomes this Egg — a NORMAL, killable low-HP
+ * enemy — and the player KEEPS the turn (a hidden extra turn). The player has
+ * ONE turn (extra turns included) to deal the Egg's HP in damage:
+ *   - slay it → victory (the normal enemy-death path);
+ *   - fail   → at the player's turn END the Egg reverts to a full-life Phoenix
+ *              (which then takes its turn).
+ * The Egg has a small `hp` (floor-scaled like any enemy by MapScene), no skills,
+ * inherits the Phoenix's mana, and is DORMANT (it never acts/moves tiles — in
+ * normal flow it reverts before it would ever get an enemy turn). Its only relic,
+ * `sanguine_chrysalis`, is DISPLAY-ONLY (no effects) — it just tells the player
+ * to slay the Egg before their turn ends; the revert is hardcoded in the
+ * BattleController egg phase (_resolveEggPhaseAtTurnEnd).
  *
- * `hp` / `attack` are cosmetic only (the Egg is invulnerable and never acts).
- * `attackScale: 0` opts it out of the per-floor attack bonus.
+ * `hp` / `maxHp` are the floor-1-equivalent baseline (MapScene scales maxHp by
+ * depth). `attack` is cosmetic (the Egg never acts); `attackScale: 0` opts it out
+ * of the per-floor attack bonus.
  *
  * See act1/goblin.js for the full field documentation.
  */
@@ -37,8 +39,8 @@ const sanguineEgg = {
   type: 'elite',
   floors: [], // never spawns on its own — reached only via the Phoenix's transform
 
-  hp: 999, // cosmetic only — BattleController pins the Egg to 999/999 on transform
-  maxHp: 999, // (it's invulnerable for the whole egg phase; the bar is decorative)
+  hp: 5, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 5, // the player must deal this much in ONE turn to slay the Egg
   attack: 1,
   attackScale: 0, // dormant — never attacks; opt out of the per-floor attack bonus
   armor: 0,
@@ -52,11 +54,11 @@ const sanguineEgg = {
     isSpecialTrack: false,
   },
 
-  // Reverts to the full-life Phoenix if the player fails to clear the egg tiles
-  // in time (BattleController._resolveEggPhaseAtTurnEnd). The revert/win is purely
+  // Reverts to the full-life Phoenix if the player fails to slay the Egg before
+  // their turn ends (BattleController._resolveEggPhaseAtTurnEnd). The revert is
   // turn-based (driven by the Phoenix's sanguine_egg transform config); the
-  // `sanguine_chrysalis` relic here is DISPLAY-ONLY (no effects) — it just shows
-  // the player why the Egg is invulnerable and what they must do.
+  // `sanguine_chrysalis` relic here is DISPLAY-ONLY (no effects) — it just tells
+  // the player they must slay the Egg this turn.
   transformForms: ['sanguinePhoenix'],
 
   skills: [],

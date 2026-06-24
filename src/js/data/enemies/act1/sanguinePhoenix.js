@@ -3,14 +3,13 @@
  * vampire built entirely from data-driven parts (no bespoke boss code):
  *
  *   - Sanguine Egg relic (onDeath): instead of dying, the Phoenix TRANSFORMS
- *     into the dormant, INVULNERABLE Sanguine Egg form (no skills, keeps its
- *     mana) and seeds the board with 2 wild Sanguine Egg tiles. This starts the
- *     TURN-BASED egg minigame (BattleController egg phase): the player has ONE
- *     turn (extra turns included) to clear BOTH egg tiles. Clear them → instant
- *     victory; fail → the leftover eggs burst and the Egg reverts to a full-life
- *     Phoenix (which forfeits that turn). The Egg's HP bar is cosmetic — the win
- *     condition is the tiles, not damage. All of it is configured from the
- *     sanguine_egg relic's `transform` payload (eggType/revert*); the Egg form
+ *     into the dormant Sanguine Egg form (no skills, keeps its mana) — a NORMAL,
+ *     killable low-HP enemy. This starts the TURN-BASED egg minigame
+ *     (BattleController egg phase): the player KEEPS the turn (a hidden extra
+ *     turn) and has ONE turn (extra turns included) to deal the Egg's HP in
+ *     damage. Slay it → victory; fail → at the player's turn end the Egg reverts
+ *     to a full-life Phoenix (which then takes its turn). All of it is configured
+ *     from the sanguine_egg relic's `transform` payload (revert*); the Egg form
  *     carries no relic of its own.
  *   - Blood Gorge (6 Purple): drain 5 of every enemy mana, +10 Max HP, heal 10
  *     — a snowballing HP pool that punishes a slow kill.
