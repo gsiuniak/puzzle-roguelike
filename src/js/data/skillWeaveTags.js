@@ -119,7 +119,7 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   row:    { id: 'row',    label: 'Row',    category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_row' },
   column: { id: 'column', label: 'Column', category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_column' },
   area:   { id: 'area',   label: 'Area',   category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.RARE,     icon: 'weave_icon_area' },
-  tile:   { id: 'tile',   label: 'Tile',   category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_tile' },
+  tile:   { id: 'tile',   label: 'Tile',   category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_tile', disabled: true },
   random: { id: 'random', label: 'Random', category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.COMMON,   icon: 'weave_icon_random' },
 
   // ── Modifiers (alter the spell as a whole) ──
@@ -143,7 +143,7 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   brittle:    { id: 'brittle',    label: 'Brittle',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
   intangible: { id: 'intangible', label: 'Intangible', category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.LEGENDARY, icon: null },
   berserk:    { id: 'berserk',    label: 'Berserk',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.LEGENDARY, icon: null },
-  bleed:      { id: 'bleed',      label: 'Bleed',      category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
+  bleed:      { id: 'bleed',      label: 'Bleed',      category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null, disabled: true },
   frozen:     { id: 'frozen',     label: 'Frozen',     category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
 });
 

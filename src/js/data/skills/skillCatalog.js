@@ -229,24 +229,24 @@ const SKILL_CATALOG = {
   boulder_throw: {
     id: 'boulder_throw',
     name: 'Boulder Throw',
-    description: 'Deal <<10>> [[damage]].\n[[Create]] 6 Green [[tiles]].',
+    description: 'Deal <<10>> [[damage]].\n[[Create]] 4 Green [[tiles]].',
     icon: 'skill_boulder_throw',
     sound: 'skill_boulder_throw',
     cost: { green: 6 },
     effects: [
       { effectType: 'damage', damage: { amount: 10, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
-      { effectType: 'create_tiles', createTiles: { amount: 6, type: 'green' } },
+      { effectType: 'create_tiles', createTiles: { amount: 4, type: 'green' } },
     ],
   },
   smash: {
     id: 'smash',
     name: 'Smash',
-    description: 'Deal <<10>> [[damage]].\nGain an [[extra turn]]',
+    description: 'Deal <<8>> [[damage]].\nGain an [[extra turn]]',
     icon: 'skill_smash',
     sound: 'skill_smash',
     cost: { red: 6 },
     effects: [
-      { effectType: 'damage', damage: { amount: 10, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
+      { effectType: 'damage', damage: { amount: 8, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
       { effectType: 'extra_turn' },
     ],
   },
