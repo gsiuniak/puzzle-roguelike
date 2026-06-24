@@ -150,6 +150,20 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .tog input:checked::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid var(--bg);border-width:0 2px 2px 0;transform:rotate(45deg)}
 .tog:has(input:checked){border-color:var(--signal-dim);color:var(--ink)}
 
+/* skill loadout chips */
+.skill-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:2px;min-height:4px}
+.chip{display:inline-flex;align-items:center;gap:7px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:11.5px;color:var(--ink-2);cursor:pointer;transition:.12s;user-select:none}
+.chip:hover{border-color:var(--line-2);color:var(--ink)}
+.chip.active{border-color:var(--signal-dim);color:var(--ink);box-shadow:0 0 0 1px var(--signal-dim) inset}
+.chip.enemy.active{border-color:rgba(229,90,94,.5);box-shadow:0 0 0 1px rgba(229,90,94,.45) inset}
+.chip .x{color:var(--ink-3);font-weight:700;line-height:1;font-size:14px;cursor:pointer;margin-left:1px}
+.chip .x:hover{color:var(--bad)}
+.skill-add{display:grid;grid-template-columns:1fr auto;gap:8px;margin:2px 0 0}
+.skill-add .btn{flex:none;padding:8px 12px}
+.skill-edit-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-family:var(--mono);font-weight:600;margin:6px 0 -4px}
+.combatant-meta{font-size:10.5px;color:var(--ink-3);font-family:var(--mono);margin:-6px 0 0;line-height:1.5}
+.combatant-meta b{color:var(--ink-2);font-weight:600}
+
 .btn-row{display:flex;gap:8px;margin-top:2px}
 .btn{flex:1;appearance:none;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2);font-family:var(--sans);font-weight:600;font-size:12px;padding:8px;border-radius:7px;cursor:pointer;transition:.13s}
 .btn:hover{border-color:var(--line-2);color:var(--ink)}
@@ -188,6 +202,11 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .fill.skill{background:var(--signal)}
 .fill.econ{background:var(--t-purple)}
 .fill.tempo{background:var(--warn)}
+.fill.relic{background:var(--t-green)}
+.hero-stats{display:flex;flex-wrap:wrap;gap:11px;font-size:11px;color:var(--ink-2);font-family:var(--mono);align-items:baseline}
+.hero-stats b{color:var(--ink);font-weight:600}
+.hero-stats i{color:var(--good);font-style:normal;font-size:10px}
+.hero-stats .hs-floor{color:var(--ink-3);margin-left:auto}
 
 /* ---------- balance beam (signature) ---------- */
 .beam-card .beam-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px}
@@ -303,7 +322,7 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
         </svg>
         Combat Balance Bench
       </h1>
-      <span class="sub">match-3 roguelike · DEV power model</span>
+      <span class="sub">match-3 roguelike · <span id="dataBadge">DEV power model</span></span>
     </div>
 
     <div class="side-switch" id="sideSwitch">
@@ -326,9 +345,10 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
 
       <div class="ctl">
         <div class="field">
-          <label for="preset">Preset</label>
+          <label for="preset">Preset <span class="hint" id="presetSrc"></span></label>
           <select id="preset"></select>
         </div>
+        <div class="combatant-meta" id="combatantMeta" style="display:none"></div>
 
         <div class="subhead"><span>Stats</span><span class="ln"></span></div>
         <div class="grid-4">
@@ -342,11 +362,13 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
           <div class="field"><label>Barrier</label><input type="number" id="barrier" min="0" step="1" value="0"></div>
         </div>
 
-        <div class="subhead"><span>Skill</span><span class="ln"></span></div>
-        <div class="field">
-          <label for="skillPreset">Loadout</label>
-          <select id="skillPreset"></select>
+        <div class="subhead"><span>Skills</span><span class="ln"></span></div>
+        <div class="skill-chips" id="skillChips"></div>
+        <div class="skill-add">
+          <select id="skillAdd"></select>
+          <button class="btn" id="skillAddBtn" type="button">+ Add</button>
         </div>
+        <div class="skill-edit-label" id="skillEditLabel">Editing active skill</div>
         <div class="field">
           <label>Mana color</label>
           <div class="colorpick" id="colorpick"></div>
@@ -389,6 +411,14 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
           <label class="tog"><input type="checkbox" id="st_tberserk">Berserk (×2 in)</label>
         </div>
 
+        <div class="subhead"><span>Relics</span><span class="ln"></span></div>
+        <div class="skill-chips" id="relicChips"></div>
+        <div class="skill-add">
+          <select id="relicAdd"></select>
+          <button class="btn" id="relicAddBtn" type="button">+ Add</button>
+        </div>
+        <div class="combatant-meta" id="relicNote" style="display:none"></div>
+
         <div class="btn-row">
           <button class="btn" id="resetBtn">Reset to preset</button>
           <button class="btn ghost" id="copyBtn">Copy as JSON</button>
@@ -412,6 +442,7 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
           </div>
           <div class="hero-meta">
             <div class="hero-name"><span id="heroName">Warrior</span><span class="tag player" id="heroTag">player</span></div>
+            <div class="hero-stats" id="heroStats"></div>
             <div class="minigrid">
               <div class="mini"><div class="k">eDPS</div><div class="v" id="m_edps">—</div></div>
               <div class="mini"><div class="k">eHP</div><div class="v" id="m_ehp">—</div></div>
@@ -500,7 +531,7 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
         <button data-metric="ttk">Time to kill</button>
         <button data-metric="risk">Death risk</button>
       </div>
-      <label class="growth-tog"><input type="checkbox" id="applyGrowth" checked> apply player level-up growth (+8 HP / +1 atk / +1 mag per floor)</label>
+      <label class="growth-tog"><input type="checkbox" id="applyGrowth" checked> apply player growth <span id="growthDesc" class="mono" style="color:var(--ink-3)"></span></label>
       <div class="legend" id="legend"></div>
     </div>
     <div class="chart-box"><svg id="chart" viewBox="0 0 920 300"></svg></div>
@@ -544,7 +575,7 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
   </footer>
 
 </div>
-<script>
+<script type="module">
 "use strict";
 /* ===========================================================================
    COMBAT BALANCE BENCH — engine
@@ -566,10 +597,19 @@ C.P_SKULL  = C.SPAWN_SKULL / C.SPAWN_TOTAL;   // 0.2083
 C.P_COLOR  = C.SPAWN_COLOR / C.SPAWN_TOTAL;   // 0.1667
 C.E_SKULLS = C.BOARD * C.P_SKULL;             // 13.33
 
-// scaling presets: coefficient = damage per stat point (doc §1.5 "per N stat")
-const SCALE = { none:0, "_25":0.25, "_33":1/3, "_50":0.5, "_66":2/3, "_75":0.75, "_100":1.0, "_150":1.5 };
-const SCALE_LABEL = { none:"none", "_25":"25% · +1/4", "_33":"33% · +1/3", "_50":"50% · +1/2",
-  "_66":"66% · +2/3", "_75":"75% · +3/4", "_100":"100% · +1/1", "_150":"150% · +3/2" };
+// scaling presets: coefficient = damage per stat point (mirrors scalingConfig.DAMAGE_SCALING_PRESETS)
+const SCALE = { none:0, "_20":0.2, "_25":0.25, "_33":1/3, "_50":0.5, "_66":2/3, "_75":0.75,
+  "_100":1.0, "_150":1.5, "_200":2.0, "_250":2.5, "_300":3.0 };
+const SCALE_LABEL = { none:"none", "_20":"20% · +1/5", "_25":"25% · +1/4", "_33":"33% · +1/3", "_50":"50% · +1/2",
+  "_66":"66% · +2/3", "_75":"75% · +3/4", "_100":"100% · +1/1", "_150":"150% · +3/2",
+  "_200":"200% · +2/1", "_250":"250% · +5/2", "_300":"300% · +3/1" };
+// closest preset key for a raw multiplier (translation from source scaling numbers)
+function scaleKeyFromMult(m){
+  if(!m) return "none";
+  let best="none", bd=Infinity;
+  for(const [k,v] of Object.entries(SCALE)){ const d=Math.abs(v-m); if(d<bd){ bd=d; best=k; } }
+  return best;
+}
 
 const TILE_COLORS = { red:"--t-red", blue:"--t-blue", green:"--t-green", yellow:"--t-yellow", purple:"--t-purple", skull:"--t-skull" };
 const COLOR_ORDER = ["red","yellow","green","blue","purple"];
@@ -583,6 +623,7 @@ const TUNE_DEFAULT = {
   ctrlColor: 1.5,      // colored matches you steer per turn
   ctrlSkull: 1.0,      // skull matches you steer per turn
   focusFrac: 0.6,      // share of steered colored matches funneled to the skill's color
+  maxCastsPerSkill: 1.5, // cap on casts/turn of ONE skill (capped-greedy loadout model)
   Nskull: 3.3,         // avg skull match size
   Ncolor: 3.2,         // avg colored match size
   cascadeLambda: 0.6,  // spontaneous matches per clear (§2.2: 0.3–1.0)
@@ -590,6 +631,13 @@ const TUNE_DEFAULT = {
   pExtra: 0.15,        // P(a turn contains a natural 4+ match → extra turn)
   econEff: 0.30,       // efficiency converting leftover colored mana → DEV
   refA: 5, refM: 5,    // reference stats for skill-economics readout
+  // relic / per-fight model — how often passive triggers fire per turn, and how
+  // long a fight runs (used to price turn-start / per-fight relic accrual).
+  fightTurns: 6,         // assumed fight length (prices accruing relics: armor/heal/ramp)
+  match4PerTurn: 0.5,    // expected 4+ matches per turn (onMatch4Plus reactors)
+  colorGainPerTurn: 1.0, // single-color mana-gain events per turn (onGainMana reactors)
+  takeHitsPerTurn: 1.0,  // times the owner is hit per turn (onTakeDamage reactors)
+  dealEventsPerTurn: 2.0,// damage instances the owner deals per turn (onDealDamage reactors)
   // balance thresholds
   ttkMin: 4, ttkMax: 8,
   deathTrivial: 0.05,   // below this = "Safe" (little threat)
@@ -605,7 +653,9 @@ const skl = (o) => Object.assign({
   poison:0, bleed:0, tiles:0, permAtk:0, name:"Skill"
 }, o);
 
-const SKILLS = {
+// Baked-in fallback skills (used only when source data can't be loaded — see
+// loadSourceData). When source loads, SKILLS is rebuilt from the real catalog.
+let SKILLS = {
   bash:        skl({name:"Bash",            color:"red",    mana:5, base:null, scaleA:"_100", extra:true }),
   defend:      skl({name:"Defend",          color:"blue",   mana:5, base:0, gArmor:6, scaleA:"_33", tiles:3 }),
   fracture:    skl({name:"Fracture",        color:"yellow", mana:5, base:5, scaleM:"_150", destroy:true, destroyN:8 }),
@@ -618,20 +668,114 @@ const SKILLS = {
   none:        skl({name:"— none —",        color:"red",    mana:0, base:0 }),
 };
 
-const PRESETS = {
+// Baked-in fallback presets (rebuilt from source characters/enemies on load).
+let PRESETS = {
   player: {
-    warrior:     { label:"Warrior",      hp:30, attack:1, magic:1, manaPool:5, armor:0, barrier:0, skill:"bash" },
-    mage:        { label:"Mage",         hp:18, attack:1, magic:3, manaPool:3, armor:0, barrier:0, skill:"fracture" },
-    witchdoctor: { label:"Witch Doctor", hp:25, attack:1, magic:1, manaPool:5, armor:0, barrier:0, skill:"oungan" },
-    custom:      { label:"Custom",       hp:24, attack:3, magic:3, manaPool:4, armor:0, barrier:0, skill:"bash" },
+    warrior:     { label:"Warrior",      hp:30, attack:1, magic:1, manaPool:5, armor:0, barrier:0, skillIds:["bash","defend"] },
+    mage:        { label:"Mage",         hp:18, attack:1, magic:3, manaPool:3, armor:0, barrier:0, skillIds:["fracture"] },
+    witchdoctor: { label:"Witch Doctor", hp:25, attack:1, magic:1, manaPool:5, armor:0, barrier:0, skillIds:["oungan"] },
+    custom:      { label:"Custom",       hp:24, attack:3, magic:3, manaPool:4, armor:0, barrier:0, skillIds:["bash"] },
   },
   enemy: {
-    minion:      { label:"Minion (reference)", hp:22, attack:3, magic:2, manaPool:4, armor:0, barrier:0, skill:"none" },
-    brute:       { label:"Brute",              hp:34, attack:4, magic:1, manaPool:3, armor:4, barrier:0, skill:"enemy_strike" },
-    caster:      { label:"Caster",             hp:18, attack:2, magic:4, manaPool:5, armor:0, barrier:0, skill:"enemy_skill" },
-    boss:        { label:"Boss",               hp:50, attack:4, magic:3, manaPool:5, armor:0, barrier:6, skill:"enemy_skill" },
+    minion:      { label:"Minion (reference)", hp:22, attack:3, magic:2, manaPool:4, armor:0, barrier:0, skillIds:["none"] },
+    brute:       { label:"Brute",              hp:34, attack:4, magic:1, manaPool:3, armor:4, barrier:0, skillIds:["enemy_strike"] },
+    caster:      { label:"Caster",             hp:18, attack:2, magic:4, manaPool:5, armor:0, barrier:0, skillIds:["enemy_skill"] },
+    boss:        { label:"Boss",               hp:50, attack:4, magic:3, manaPool:5, armor:0, barrier:6, skillIds:["enemy_skill"] },
   }
 };
+let DATA_SOURCE = "fallback"; // "source" once real character/enemy/skill data loads
+// relic catalogs (id → relic object with effects[]), per pool. Empty in fallback.
+let RELICS = { player:{}, enemy:{} };
+const resolveRelicObj = (id)=>{
+  const r = RELICS.player[id] || RELICS.enemy[id]; if(!r) return null;
+  return { ...r, effects:(r.effects||[]).map(e=>({ ...e })) };
+};
+
+/* ----------- source-data loading + translation (characters/enemies/skills) -- */
+const sumMana = (m)=> m ? Object.values(m).reduce((a,b)=>a+(b||0),0) : 0;
+
+// translate a real catalog skill ({ cost, effects:[…] }) into the bench's flat skill model
+function translateSkill(cat){
+  const o = skl({ name:cat.name||cat.id||"Skill", id:cat.id, base:0 });
+  const cost = cat.cost||{};
+  let total=0, domColor=null, domAmt=-1;
+  for(const [col,amt] of Object.entries(cost)){ total+=amt; if(amt>domAmt){ domAmt=amt; domColor=col; } }
+  o.mana = total;
+  o.color = (domColor && COLOR_ORDER.includes(domColor)) ? domColor : "red";
+  let scaleSet=false;
+  const grabScale=(s)=>{ if(!scaleSet && s){ o.scaleA=scaleKeyFromMult(s.attack); o.scaleM=scaleKeyFromMult(s.magic); scaleSet=true; } };
+  for(const e of (cat.effects||[])){
+    switch(e.effectType){
+      case 'damage':       { const d=e.damage||{};  o.base+=(d.amount||0); o.perSkull+=(d.perSkull||0); grabScale(d.scaling); break; }
+      case 'heal':         { const h=e.heal||{};    o.heal+=(h.amount||0); grabScale(h.scaling); break; }
+      case 'armor':        { const a=e.armor||{};   o.gArmor+=(a.amount||0); grabScale(a.scaling); break; }
+      case 'barrier':      { const b=e.barrier||{}; o.gBarrier+=(b.amount||0); grabScale(b.scaling); break; }
+      case 'apply_poison': { o.poison+=((e.poison&&e.poison.amount)||0); break; }
+      case 'create_tiles': { o.tiles+=((e.createTiles&&e.createTiles.amount)||0); break; }
+      case 'convert_tile': { o.tiles+=1; break; }
+      case 'gain_attack':  { o.permAtk+=((e.gainAttack&&e.gainAttack.amount)||0); break; }
+      case 'extra_turn':   { o.extra=true; break; }
+      case 'destroy_tiles_row':
+      case 'destroy_tiles_column': { o.destroy=true; o.destroyN+=8; break; }
+      case 'destroy_tiles':        { o.destroy=true; o.destroyN+=9; break; }
+      case 'destroy_tiles_by_type':{ o.destroy=true; o.destroyN+=((e.destroyByType&&e.destroyByType.amount)||6); break; }
+      // gain_max_hp / gain_mana / drain_mana / convert_tiles_by_type / apply_status → board-state, left unmodeled
+    }
+  }
+  return o;
+}
+
+function buildSkillsFromCatalog(CATALOG){
+  const out = { none: skl({ name:"— none —", color:"red", mana:0, base:0 }) };
+  for(const [id,cat] of Object.entries(CATALOG)){ out[id] = translateSkill(cat); }
+  return out;
+}
+
+function buildPresetsFromData(CHARS, ENEMY_LIST){
+  const player={}, enemy={};
+  for(const [id,def] of Object.entries(CHARS||{})){
+    const bs=def.baseStats||{};
+    player[id] = { label:def.className||def.name||id, hp:bs.maxHp||1,
+      attack:bs.startingAttack||0, magic:bs.startingMagic||0, manaPool:sumMana(bs.startingMana),
+      armor:bs.startingArmor||0, barrier:0, skillIds:(def.skills||[]).slice(), relicIds:(def.relics||[]).slice(),
+      growthPlan:def.growthPlan||null };
+  }
+  for(const def of (ENEMY_LIST||[])){
+    enemy[def.id] = { label:`${def.name} · ${def.type||'?'}`, hp:(def.hp!=null?def.hp:def.maxHp)||1,
+      attack:def.attack||0, magic:def.magic||0, manaPool:sumMana(def.mana),
+      armor:def.armor||0, barrier:0, skillIds:(def.skills||[]).slice(), relicIds:(def.relics||[]).slice(),
+      floors:def.floors||null, type:def.type||null, rarity:def.rarity||null };
+  }
+  return { player, enemy };
+}
+
+// dynamic-import the real source data; fall back silently to baked-in presets.
+async function loadSourceData(){
+  try{
+    const [CHARMOD, ENEMYMOD, SKILLMOD, RELICMOD, ERELICMOD] = await Promise.all([
+      import('../src/js/data/characters/index.js'),
+      import('../src/js/data/enemies/index.js'),
+      import('../src/js/data/skills/skillCatalog.js'),
+      import('../src/js/data/relics/relicCatalog.js'),
+      import('../src/js/data/relics/enemyRelicCatalog.js'),
+    ]);
+    const CHARS = CHARMOD.default || {};
+    const ENEMY_LIST = ENEMYMOD.ALL_ENEMIES || Object.values(ENEMYMOD.default || {});
+    const CATALOG = SKILLMOD.default || {};
+    if(!Object.keys(CHARS).length || !Object.keys(CATALOG).length) throw new Error("empty source data");
+    SKILLS = buildSkillsFromCatalog(CATALOG);
+    PRESETS = buildPresetsFromData(CHARS, ENEMY_LIST);
+    RELICS = { player: RELICMOD.default || {}, enemy: ERELICMOD.default || {} };
+    DATA_SOURCE = "source";
+    return true;
+  }catch(err){
+    console.warn("[bench] Using baked-in presets — could not load source data. "
+      + "Serve the project over http(s); file:// blocks ES-module imports.", err);
+    DATA_SOURCE = "fallback";
+    return false;
+  }
+}
+const presetKey = (obj, pref)=> (obj && obj[pref]) ? pref : Object.keys(obj||{})[0];
 
 /* ============================== math core ================================= */
 const floorDiv = (x,y)=>Math.floor(x/y);
@@ -659,13 +803,20 @@ function effectiveStats(c, side, floor, applyGrowth){
     attack = c.attack + enemyAtkBonus(floor);
   } else if(applyGrowth){
     const v = floor-1; // floor 1 = 0 wins so far
-    hp += C.LEVELUP.maxHp * v; attack += C.LEVELUP.attack * v; magic += C.LEVELUP.magic * v;
+    // per-character growthPlan from source data (decision #36); fall back to flat LEVELUP
+    const g = c.growthPlan;
+    const gHp  = g ? (g.maxHp||0)          : C.LEVELUP.maxHp;
+    const gAtk = g ? (g.startingAttack||0) : C.LEVELUP.attack;
+    const gMag = g ? (g.startingMagic||0)  : C.LEVELUP.magic;
+    hp += gHp * v; attack += gAtk * v; magic += gMag * v;
   }
   return { hp, attack, magic, armor, barrier };
 }
 
 // full DEV of one skill cast (damage + every effect incl. extra-turn) [MODEL pricing]
-function skillDEV(skill, st){
+// `etv` = value of a granted extra turn (defaults to the flat V_turn; skillPlan
+// passes the combatant's actual per-turn output so burst skills are valued right).
+function skillDEV(skill, st, etv){
   const T = TUNE; let dev=0; const bd={};
   const primaryScaled = scaledBonus(st.attack, st.magic, skill.scaleA, skill.scaleM);
   const baseGiven = (skill.base===null || skill.base===undefined || skill.base==="") ? st.attack : Number(skill.base);
@@ -691,18 +842,8 @@ function skillDEV(skill, st){
     bd.destroy = nS*destroyedSkullPerTile(st.attack)*T.DEV_damage + (n-nS)*T.DEV_tile;
     dev += bd.destroy;
   }
-  if(skill.extra){ bd.extraTurn = T.V_turn; dev += T.V_turn; }
+  if(skill.extra){ const ev = (etv==null?T.V_turn:etv); bd.extraTurn = ev; dev += ev; }
   return { dev, breakdown: bd, hitDamage: dmg>0?dmg:0 };
-}
-
-// skill cadence (turns per cast) from mana income of its color
-function skillCadence(skill, st){
-  if(!skill || Number(skill.mana)<=0) return { castsPerTurn:0, turnsPerCast:Infinity, colorMana:0 };
-  const perMatch = manaPerColorMatch(st.magic);
-  const colorMana = TUNE.ctrlColor*TUNE.focusFrac*perMatch
-                  + TUNE.cascadeLambda*(1-TUNE.skullShare)*TUNE.focusFrac*perMatch;
-  const castsPerTurn = colorMana / Number(skill.mana);
-  return { castsPerTurn, turnsPerCast: castsPerTurn>0?1/castsPerTurn:Infinity, colorMana };
 }
 
 // skull damage per turn (steered + ambient cascade), generic
@@ -715,24 +856,125 @@ function tempo(){ return 1 / (1 - clamp(TUNE.pExtra,0,0.8)); }
 function totalColorMana(st){
   return TUNE.ctrlColor*manaPerColorMatch(st.magic) + TUNE.cascadeLambda*(1-TUNE.skullShare)*manaPerColorMatch(st.magic);
 }
-function economyDev(skill, st, cad){
-  if(!skill || Number(skill.mana)<=0) return 0;   // no castable skill → mana has nothing to buy
-  const spent = Number(skill.mana) * (cad.castsPerTurn||0);
-  const leftover = Math.max(0, totalColorMana(st) - spent);
-  return leftover * TUNE.V_mana * TUNE.econEff;
+
+// value of a granted extra turn = another turn of skull pressure + leftover
+// economy (NOT a flat constant), floored at V_turn. So a reliable extra-turn
+// skill (Cyclops' Smash, the Warrior's Bash) is worth the actual turn it grants
+// rather than a fixed 8 — strong/bursty combatants get the credit they earn.
+function extraTurnValue(st){
+  return Math.max(TUNE.V_turn,
+    skullDevPerTurn(st) + (1-TUNE.focusFrac)*totalColorMana(st)*TUNE.V_mana*TUNE.econEff);
+}
+// LOADOUT cadence — CAPPED-GREEDY. The player funnels `focusFrac` of color-mana
+// income into skills, spending it on the HIGHEST value-per-mana skills FIRST,
+// each capped at `maxCastsPerSkill` casts/turn. This is MONOTONE: adding a weaker
+// skill never raises offense and removing one never lowers it — a rational player
+// just casts their best affordable skill, so a worse skill in the kit is ignored
+// (fixes "removing Defend raised Warrior power"). A strong second skill still
+// earns credit from whatever budget the (capped) best skill leaves unspent.
+function skillPlan(skills, st){
+  const Mtot = totalColorMana(st), budget = TUNE.focusFrac * Mtot, etv = extraTurnValue(st);
+  const cast = (skills||[]).filter(s=>s && Number(s.mana)>0).map(s=>{
+    const d = skillDEV(s, st, etv), mana = Number(s.mana);
+    return { skill:s, mana, dev:Math.max(0,d.dev), hit:d.hitDamage||0, vpm:Math.max(0,d.dev)/mana };
+  }).sort((a,b)=> b.vpm - a.vpm);
+  let rem = budget, spent = 0;
+  const parts = cast.map(k=>{
+    const give = Math.max(0, Math.min(rem, k.mana*TUNE.maxCastsPerSkill)); // capped-greedy
+    const cph = k.mana>0 ? give/k.mana : 0;
+    rem -= give; spent += give;
+    return { skill:k.skill, mana:k.mana, dev:k.dev, hit:k.hit, vpm:k.vpm, castsPerTurn:cph };
+  });
+  return { parts, spent, budget, Mtot };
 }
 
-// total offense DEV/turn (no target) — feeds Power Level
-function eDPS(c, st, skill){
-  const cad = skillCadence(skill, st);
+// ── relic pricing [MODEL] — folds passive relics into stat deltas, per-turn
+//    damage, economy value, eHP and a damage multiplier (echo). Trigger
+//    frequencies live in TUNE (fightTurns / match4PerTurn / …). ──
+function relicAmount(payload, st){
+  if(!payload) return 0;
+  const base = (payload.amount==null) ? st.attack : Number(payload.amount); // missing → attack (Briarthorn)
+  const s = payload.scaling || null;
+  const bonus = s ? Math.max(0, Math.floor((st.attack||0)*(s.attack||0) + (st.magic||0)*(s.magic||0))) : 0;
+  return base + bonus;
+}
+function relicFreq(trigger, cond, ctx){
+  switch(trigger){
+    case 'onTurnStart':  return 1;
+    case 'onMatch4Plus': return ctx.match4;
+    case 'onTileMatchType':
+      if(cond && cond.typeId==='skull') return ctx.skullMatches;
+      if(cond && cond.minCount>=4)      return ctx.match4;
+      return ctx.allMatches;
+    case 'onTileMatch':  return ctx.allMatches;
+    case 'onGainMana':   return TUNE.colorGainPerTurn;
+    case 'onTakeDamage': return TUNE.takeHitsPerTurn;
+    case 'onDealDamage': return TUNE.dealEventsPerTurn;
+    default:             return trigger==='onDeath' ? 0 : 1;
+  }
+}
+function relicAdjust(relics, st){
+  const T=TUNE;
+  const adj = { attack:0, magic:0, armor:0, barrier:0, hp:0, dmgPerTurn:0, manaValue:0, ehpFlat:0, outMult:1, notes:[] };
+  if(!relics || !relics.length) return adj;
+  const ctx = {
+    skullMatches: (T.ctrlSkull + T.cascadeLambda*T.skullShare)*tempo(),
+    allMatches:   (T.ctrlColor + T.ctrlSkull + T.cascadeLambda),
+    match4:       T.match4PerTurn,
+  };
+  const STAT_MAP = { attack:'attack', magic:'magic', armor:'armor', barrier:'barrier', maxHp:'hp', hp:'hp' };
+  for(const r of relics){
+    for(const e of (r.effects||[])){
+      const f = relicFreq(e.trigger, e.condition, ctx);
+      switch(e.effectType){
+        case 'modify_stat': { const m=e.modifyStat||{}, k=STAT_MAP[m.stat]; if(k) adj[k]+=Number(m.amount||0); break; }
+        case 'modify_skull_damage': { adj.dmgPerTurn += ((e.skullDamage&&e.skullDamage.amount)||0)*ctx.skullMatches; break; }
+        case 'modify_mana_gain': { adj.manaValue += ((e.manaGain&&e.manaGain.amount)||0)*ctx.allMatches*0.4*T.V_mana*T.econEff; break; }
+        case 'modify_spawn_rate': { const sr=e.spawnRate||{}, pp=(sr.amount||0)/100;
+          if(sr.tile==='skull') adj.dmgPerTurn += pp*ctx.skullMatches*matchedSkullDmg(T.Nskull,st.attack);
+          else adj.manaValue += pp*ctx.allMatches*manaPerColorMatch(st.magic)*T.V_mana*T.econEff; break; }
+        case 'grant_starting_mana': { adj.manaValue += ((e.startingMana&&e.startingMana.amount)||0)*T.V_mana*T.econEff/Math.max(1,T.fightTurns); break; }
+        case 'attack_per_unspent_mana': { const p=e.attackPerMana||{}, leftover=(1-T.focusFrac)*totalColorMana(st);
+          adj.attack += (p.amount||1)*(leftover/(p.per||3)); break; }
+        case 'armor':   { adj.ehpFlat += relicAmount(e.armor,st)*f*T.fightTurns*T.DEV_armor*0.6; break; }
+        case 'barrier': { adj.ehpFlat += relicAmount(e.barrier,st)*f*T.fightTurns*T.DEV_barrier*0.6; break; }
+        case 'heal':    { adj.ehpFlat += relicAmount(e.heal,st)*f*T.fightTurns*T.DEV_heal*0.7; break; }
+        case 'damage':  { adj.dmgPerTurn += relicAmount(e.damage,st)*f; break; }
+        case 'gain_mana':  { adj.manaValue += ((e.gainMana&&e.gainMana.amount)||0)*f*T.V_mana*T.econEff; break; }
+        case 'drain_mana': { adj.manaValue += ((e.drainMana&&e.drainMana.amount)||0)*f*T.V_mana*T.econEff*0.5; break; }
+        case 'gain_attack':{ adj.attack += ((e.gainAttack&&e.gainAttack.amount)||0)*f*T.fightTurns*0.5; break; }
+        case 'echo_damage':{ adj.outMult *= (1 + ((e.echoDamage&&e.echoDamage.multiplier)||1)); break; }
+        case 'destroy_random_skulls': { adj.dmgPerTurn += ((e.destroySkulls&&e.destroySkulls.amount)||0)*f*destroyedSkullPerTile(st.attack)*0.5; break; }
+        case 'destroy_random_row':    { adj.dmgPerTurn += f*8*(C.E_SKULLS/C.BOARD)*destroyedSkullPerTile(st.attack); break; }
+        case 'destroy_tiles_radius':  { adj.dmgPerTurn += f*9*(C.E_SKULLS/C.BOARD)*destroyedSkullPerTile(st.attack); break; }
+        case 'reduce_damage': { adj.ehpFlat += ((e.reduceDamage&&e.reduceDamage.amount)||0)*T.takeHitsPerTurn*T.fightTurns; break; }
+        case 'harvest_tiles': { adj.attack += ((e.harvestTiles&&e.harvestTiles.attackPer)||0)*3; adj.notes.push(`${r.name}: Thrall engine (rough)`); break; }
+        default: { adj.notes.push(`${r.name}: ${e.effectType} (unpriced)`); break; }
+      }
+    }
+  }
+  return adj;
+}
+
+// total offense DEV/turn (no target) — feeds Power Level. Loadout + relic aware.
+function eDPS(st, skills, radj){
+  radj = radj || { outMult:1, dmgPerTurn:0, manaValue:0 };
   const skull = skullDevPerTurn(st) * tempo();
-  const sk = skillDEV(skill, st);
-  const skillTurn = cad.castsPerTurn * sk.dev;
-  const econ = economyDev(skill, st, cad);
+  const plan = skillPlan(skills, st);
+  const skillTurn = plan.parts.reduce((a,p)=> a + p.castsPerTurn*p.dev, 0);
+  const relicDmgDEV = (radj.dmgPerTurn||0)*TUNE.DEV_damage;
+  const baseDmg = skull + skillTurn + relicDmgDEV;
+  const echoExtra = baseDmg*((radj.outMult||1)-1);
+  const leftover = Math.max(0, plan.Mtot - plan.spent);
+  const econ = leftover*TUNE.V_mana*TUNE.econEff + (radj.manaValue||0);
+  const top = plan.parts.slice().sort((a,b)=>b.vpm-a.vpm)[0];
   return {
-    total: skull + skillTurn + econ,
-    parts: { skull, skill: skillTurn, econ },
-    cadence: cad, skillDEV: sk, tempo: tempo(), manaPerTurn: totalColorMana(st),
+    total: baseDmg + echoExtra + econ,
+    parts: { skull, skill: skillTurn, econ, relic: relicDmgDEV + echoExtra },
+    cadence: top ? { castsPerTurn:top.castsPerTurn, turnsPerCast: top.castsPerTurn>0?1/top.castsPerTurn:Infinity, colorMana:0 }
+                 : { castsPerTurn:0, turnsPerCast:Infinity, colorMana:0 },
+    skillDEV: top ? { dev:top.dev, hitDamage:top.hit } : { dev:0, hitDamage:0 },
+    tempo: tempo(), manaPerTurn: plan.Mtot, plan,
   };
 }
 function eHP(st){ return st.hp + TUNE.DEV_armor*(st.armor||0) + TUNE.DEV_barrier*(st.barrier||0); }
@@ -746,27 +988,29 @@ function applyStatus(hit, atk, def){
   return d;
 }
 
-// damage/turn ATTACKER lands on TARGET (status-aware) — for TTK & risk
-function dmgPerTurnVsTarget(atkSt, atkSkill, atkStatus, tgtStatus){
+// damage/turn ATTACKER lands on TARGET (status + relic aware) — for TTK & risk
+function dmgPerTurnVsTarget(atkSt, skills, atkStatus, tgtStatus, radj){
   const perSkullHit = matchedSkullDmg(TUNE.Nskull, atkSt.attack);
   const skullMatches = (TUNE.ctrlSkull + TUNE.cascadeLambda*TUNE.skullShare) * tempo();
   const skullDmg = skullMatches * applyStatus(perSkullHit, atkStatus, tgtStatus) * TUNE.DEV_damage;
-  const cad = skillCadence(atkSkill, atkSt);
-  const sk = skillDEV(atkSkill, atkSt);
-  const skillDmg = cad.castsPerTurn * applyStatus(sk.hitDamage||0, atkStatus, tgtStatus) * TUNE.DEV_damage;
-  return Math.max(0.01, skullDmg + skillDmg);
+  const plan = skillPlan(skills, atkSt);
+  const skillDmg = plan.parts.reduce((a,p)=> a + p.castsPerTurn*applyStatus(p.hit, atkStatus, tgtStatus)*TUNE.DEV_damage, 0);
+  const relicDmg = ((radj&&radj.dmgPerTurn)||0)*TUNE.DEV_damage;
+  const mult = (radj&&radj.outMult)||1;
+  return Math.max(0.01, (skullDmg + skillDmg + relicDmg)*mult);
 }
 
 // variance of attacker's per-turn damage vs target — burst & death risk
-function turnVariance(atkSt, atkSkill, atkStatus, tgtStatus){
-  const mean = dmgPerTurnVsTarget(atkSt, atkSkill, atkStatus, tgtStatus);
+function turnVariance(atkSt, skills, atkStatus, tgtStatus, radj){
+  const mean = dmgPerTurnVsTarget(atkSt, skills, atkStatus, tgtStatus, radj);
   const perSkullHit = applyStatus(matchedSkullDmg(TUNE.Nskull, atkSt.attack), atkStatus, tgtStatus);
   const vCascade = TUNE.cascadeLambda*TUNE.skullShare * perSkullHit*perSkullHit; // Poisson count × per-hit²
   const vExtra = TUNE.pExtra*(1-TUNE.pExtra) * (mean*mean);                       // bonus-turn swing
-  const cad = skillCadence(atkSkill, atkSt);
-  const skillHit = applyStatus(skillDEV(atkSkill,atkSt).hitDamage||0, atkStatus, tgtStatus);
   let vCast = 0;
-  if(cad.castsPerTurn>0 && cad.castsPerTurn<1) vCast = cad.castsPerTurn*(1-cad.castsPerTurn)*skillHit*skillHit;
+  for(const p of skillPlan(skills, atkSt).parts){
+    const hit = applyStatus(p.hit, atkStatus, tgtStatus), cph = p.castsPerTurn;
+    if(cph>0 && cph<1) vCast += cph*(1-cph)*hit*hit;
+  }
   const sigma = Math.sqrt(Math.max(0, vCascade+vExtra+vCast));
   return { mean, sigma, p95: mean+1.645*sigma, max: mean+2.5*sigma };
 }
@@ -777,19 +1021,24 @@ function erf(x){ const t=1/(1+0.3275911*Math.abs(x)); const y=1-(((((1.061405429
 
 /* --------------------- side & matchup assembly ---------------------------- */
 function buildSide(slot, side, floor, applyGrowth){
-  const st = effectiveStats(slot, side, floor, applyGrowth);
-  const skill = (typeof slot.skillObj==="object") ? slot.skillObj : SKILLS[slot.skill];
-  const off = eDPS(slot, st, skill);
-  const def = eHP(st);
+  const st0 = effectiveStats(slot, side, floor, applyGrowth);
+  const radj = relicAdjust(slot.relics, st0);
+  // relic stat deltas land on top of the floor-scaled / grown base stats
+  const st = { hp:st0.hp+radj.hp, attack:st0.attack+radj.attack, magic:st0.magic+radj.magic,
+               armor:st0.armor+radj.armor, barrier:st0.barrier+radj.barrier };
+  const skills = slot.skills || [];
+  const off = eDPS(st, skills, radj);
+  const def = eHP(st) + radj.ehpFlat;
   const status = slot.status || {};
-  return { slot, side, st, skill, off, def, status, powerRaw: Math.sqrt(Math.max(0,off.total*def)) };
+  return { slot, side, st, st0, radj, skill:skillOf(slot), skills, off, def, status,
+           powerRaw: Math.sqrt(Math.max(0, off.total*def)) };
 }
 
 function matchup(P, E){
-  const ppt = dmgPerTurnVsTarget(P.st, P.skill, P.status, E.status); // player → enemy
-  const ept = dmgPerTurnVsTarget(E.st, E.skill, E.status, P.status); // enemy → player
+  const ppt = dmgPerTurnVsTarget(P.st, P.skills, P.status, E.status, P.radj); // player → enemy
+  const ept = dmgPerTurnVsTarget(E.st, E.skills, E.status, P.status, E.radj); // enemy → player
   const ttkPE = E.def / ppt, ttkEP = P.def / ept;
-  const ev = turnVariance(E.st, E.skill, E.status, P.status);
+  const ev = turnVariance(E.st, E.skills, E.status, P.status, E.radj);
   // death = P(enemy's CUMULATIVE damage over the race ≥ player eHP). Player acts first, so
   // the enemy gets ~ttkPE−0.5 actions before the player lands the kill. Cumulative damage over
   // n turns ~ Normal(n·μ, n·σ²). This couples both TTKs: a dead-heat race → ~coin-flip risk.
@@ -817,8 +1066,19 @@ const $ = (id)=>document.getElementById(id);
 const cssv = (n)=> getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 function deepCopyCombatant(p){
-  return { ...p, skillObj:{ ...SKILLS[p.skill] }, status:{ out_berserk:false, in_brittle:false, in_intangible:false, in_berserk:false } };
+  const ids = (p.skillIds && p.skillIds.length) ? p.skillIds : ["none"];
+  const skills = ids.map(id => ({ ...(SKILLS[id] || SKILLS.none) }));
+  const relics = (p.relicIds||[]).map(resolveRelicObj).filter(Boolean);
+  return {
+    label:p.label, hp:p.hp, attack:p.attack, magic:p.magic, manaPool:p.manaPool,
+    armor:p.armor||0, barrier:p.barrier||0,
+    skills, activeSkill:0, relics,
+    growthPlan:p.growthPlan||null, floors:p.floors||null, type:p.type||null, rarity:p.rarity||null,
+    status:{ out_berserk:false, in_brittle:false, in_intangible:false, in_berserk:false },
+  };
 }
+// the skill currently fed into the power model (one of the loadout's skills)
+function skillOf(c){ return (c.skills && c.skills[c.activeSkill]) || SKILLS.none; }
 const STATE = {
   active:"player", floor:1, applyGrowth:true, sweepMetric:"power",
   player: deepCopyCombatant(PRESETS.player.warrior),
@@ -827,7 +1087,10 @@ const STATE = {
 function activeCombatant(){ return STATE[STATE.active]; }
 
 // reference power (fresh Warrior+Bash, floor 1, current tuning) → normalize to 100
-function refPowerRaw(){ return buildSide(deepCopyCombatant(PRESETS.player.warrior),"player",1,false).powerRaw || 1; }
+function refPowerRaw(){
+  const ref = PRESETS.player.warrior || PRESETS.player[presetKey(PRESETS.player,"warrior")];
+  return buildSide(deepCopyCombatant(ref),"player",1,false).powerRaw || 1;
+}
 let NORM = 100 / refPowerRaw();
 const power = (raw)=> NORM*raw;
 
@@ -835,7 +1098,8 @@ const power = (raw)=> NORM*raw;
 function renderAll(){
   NORM = 100 / refPowerRaw();
   const floor = STATE.floor;
-  const P = buildSide(STATE.player,"player",floor,false); // literal stats in hero/beam
+  // (a) player stats follow the floor via auto-growth (toggle in the sweep header)
+  const P = buildSide(STATE.player,"player",floor,STATE.applyGrowth);
   const E = buildSide(STATE.enemy,"enemy",floor,false);   // floor-scaled
   const active = STATE.active==="player" ? P : E;
   renderHero(active);
@@ -860,12 +1124,24 @@ function renderHero(s){
   const cad=s.off.cadence;
   $("m_cad").innerHTML    = cad.castsPerTurn>0 ? ('every '+(cad.turnsPerCast<10?cad.turnsPerCast.toFixed(1):'∞')+'<small>t</small>') : '—';
   $("m_tempo").textContent= '×'+s.off.tempo.toFixed(2);
-  $("m_burst").textContent= turnVariance(s.st,s.skill,s.status,{}).p95.toFixed(0);
+  $("m_burst").textContent= turnVariance(s.st,s.skills,s.status,{},s.radj).p95.toFixed(0);
+  // effective stats AT THIS FLOOR (after growth + relic deltas), with the delta vs base
+  const hs=$("heroStats");
+  if(hs){
+    const d=(grown,base)=>{ const dv=Math.round(grown-base); return dv? `<i>(${dv>0?'+':''}${dv})</i>`:''; };
+    hs.innerHTML = `<span>HP <b>${s.st.hp.toFixed(0)}</b>${d(s.st.hp,s.slot.hp)}</span>`
+      + `<span>ATK <b>${s.st.attack.toFixed(s.st.attack%1?1:0)}</b>${d(s.st.attack,s.slot.attack)}</span>`
+      + `<span>MAG <b>${s.st.magic.toFixed(s.st.magic%1?1:0)}</b>${d(s.st.magic,s.slot.magic)}</span>`
+      + `<span>ARM <b>${s.st.armor.toFixed(0)}</b></span>`
+      + `<span class="hs-floor">@ floor ${STATE.floor}</span>`;
+  }
 }
 
 function renderBreakdown(s){
-  const p=s.off.parts, max=Math.max(p.skull,p.skill,p.econ,0.001);
+  const p=s.off.parts, relic=p.relic||0;
+  const max=Math.max(p.skull,p.skill,p.econ,relic,0.001);
   const rows=[["Skull matches","skull",p.skull],["Skill","skill",p.skill],["Economy","econ",p.econ]];
+  if(relic>0.05) rows.push(["Relics","relic",relic]);
   $("breakdown").innerHTML = rows.map(([lab,cls,val])=>`
     <div class="bk-row"><span class="lab">${lab}</span>
       <span class="track"><span class="fill ${cls}" style="width:${(val/max*100).toFixed(1)}%"></span></span>
@@ -968,15 +1244,15 @@ function evalMatchupWith(statKey, value, floor){
   const cfg=FLEX_STATS[statKey];
   const pC=cloneSlot(STATE.player), eC=cloneSlot(STATE.enemy);
   const target = cfg.side==="player"?pC:eC;
-  if(cfg.skill){ target.skillObj[cfg.skill]=value; } else { target[cfg.key]=value; }
+  if(cfg.skill){ skillOf(target)[cfg.skill]=value; } else { target[cfg.key]=value; }
   return matchup(buildSide(pC,"player",floor,false), buildSide(eC,"enemy",floor,false));
 }
-function cloneSlot(s){ return { ...s, skillObj:{...s.skillObj}, status:{...s.status} }; }
+function cloneSlot(s){ return { ...s, skills:(s.skills||[]).map(k=>({...k})), status:{...s.status} }; }
 
 function renderSolver(P,E,floor){
   const statKey=$("flexStat").value, cfg=FLEX_STATS[statKey];
   const lo=Number($("flexMin").value), hi=Number($("flexMax").value);
-  const cur = cfg.skill ? Number(STATE[cfg.side].skillObj[cfg.skill]) : Number(STATE[cfg.side][cfg.key]);
+  const cur = cfg.skill ? Number(skillOf(STATE[cfg.side])[cfg.skill]) : Number(STATE[cfg.side][cfg.key]);
   const N=80; let fairLo=null, fairHi=null, anyFair=false;
   for(let i=0;i<=N;i++){ const v=lo+(hi-lo)*i/N; if(isFair(evalMatchupWith(statKey,v,floor))){ anyFair=true; if(fairLo===null)fairLo=v; fairHi=v; } }
   const X=(v)=> clamp((v-lo)/(hi-lo||1),0,1)*100;
@@ -1008,7 +1284,16 @@ function sweepData(){
   }
   return rows;
 }
-function renderSweep(){ const d=sweepData(); drawChart(d,STATE.sweepMetric); drawLegend(STATE.sweepMetric); drawTable(d); }
+function renderSweep(){
+  const gd=$("growthDesc");
+  if(gd){
+    const g=STATE.player.growthPlan;
+    if(g){ const p=[]; if(g.maxHp)p.push(`+${g.maxHp} HP`); if(g.startingAttack)p.push(`+${g.startingAttack} atk`); if(g.startingMagic)p.push(`+${g.startingMagic} mag`);
+      gd.textContent=`(${p.join(' / ')||'—'} per floor · ${STATE.player.label})`; }
+    else gd.textContent=`(+${C.LEVELUP.maxHp} HP / +${C.LEVELUP.attack} atk / +${C.LEVELUP.magic} mag per floor)`;
+  }
+  const d=sweepData(); drawChart(d,STATE.sweepMetric); drawLegend(STATE.sweepMetric); drawTable(d);
+}
 
 function drawLegend(metric){
   const sig=cssv("--signal"),red=cssv("--t-red"),warn=cssv("--warn"),good=cssv("--good");
@@ -1069,10 +1354,24 @@ function animateNumber(el,target,dec){
 function buildSelectOptions(){
   const scaleOpts=Object.keys(SCALE).map(k=>`<option value="${k}">${SCALE_LABEL[k]}</option>`).join("");
   $("scaleAttack").innerHTML=scaleOpts; $("scaleMagic").innerHTML=scaleOpts;
-  $("skillPreset").innerHTML=Object.entries(SKILLS).map(([k,s])=>`<option value="${k}">${s.name}</option>`).join("");
+  // catalog skills available to add to a loadout (skip the synthetic "none"); a
+  // blank "Custom" entry lets you build an off-catalog skill and watch its power.
+  $("skillAdd").innerHTML=`<option value="__custom__">＋ Custom skill (blank)</option>`
+    + Object.entries(SKILLS).filter(([k])=>k!=="none")
+      .map(([k,s])=>`<option value="${k}">${s.name}</option>`).join("");
   $("flexStat").innerHTML=Object.entries(FLEX_STATS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("");
   $("colorpick").innerHTML=COLOR_ORDER.map(c=>`<button data-color="${c}" title="${c}"><span class="swatch" style="background:var(${TILE_COLORS[c]})"></span></button>`).join("");
+  buildRelicSelect();
 }
+// the relic pool follows the active side (players vs enemy-only catalog)
+function buildRelicSelect(){
+  const pool = RELICS[STATE.active] || {};
+  const entries = Object.entries(pool);
+  $("relicAdd").innerHTML = entries.length
+    ? entries.map(([id,r])=>`<option value="${id}">${r.name}</option>`).join("")
+    : `<option value="">(no relics — serve over http)</option>`;
+}
+const stripMarkup = (s)=> String(s||"").replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g,"$1").replace(/<<([^>]*)>>/g,"$1");
 function buildPresetSelect(){
   $("preset").innerHTML=Object.entries(PRESETS[STATE.active]).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("");
   const cur=activeCombatant();
@@ -1090,22 +1389,54 @@ function buildTuners(){
     ["DEV_attack_perm","+1 perm attack","value over the fight"],["V_mana","1 mana","value of the mana itself"]];
   $("tuneDEV").innerHTML=DEVf.map(([k,l,s])=>tuneRow(k,l,s)).join("");
   const Mf=[["ctrlColor","Steered color matches /turn",""],["ctrlSkull","Steered skull matches /turn",""],["focusFrac","Funnel into skill color","0–1"],
+    ["maxCastsPerSkill","Max casts /turn per skill","capped-greedy"],
     ["Nskull","Avg skull match size",""],["Ncolor","Avg color match size",""],["cascadeLambda","Cascade matches /clear","λ"],
     ["skullShare","Skull share of cascades","0–1"],["pExtra","P(turn has 4+ extra turn)","0–0.8"],["econEff","Leftover-mana efficiency","0–1"],
-    ["refA","Reference attack","econ readout"],["refM","Reference magic","econ readout"],["ttkMin","TTK band — min","turns"],["ttkMax","TTK band — max","turns"],
+    ["refA","Reference attack","econ readout"],["refM","Reference magic","econ readout"],
+    ["fightTurns","Assumed fight length","turns (relic accrual)"],["match4PerTurn","4+ matches /turn","relic reactors"],
+    ["colorGainPerTurn","Color mana-gains /turn","relic reactors"],["takeHitsPerTurn","Hits taken /turn","relic reactors"],
+    ["dealEventsPerTurn","Damage events /turn","relic reactors"],
+    ["ttkMin","TTK band — min","turns"],["ttkMax","TTK band — max","turns"],
     ["deathTrivial","Death — trivial below","0–1"],["deathFairMax","Death — fair ceiling","0–1"],["deathLossMax","Death — lost above","0–1"]];
   $("tuneModel").innerHTML=Mf.map(([k,l,s])=>tuneRow(k,l,s)).join("");
   document.querySelectorAll("[data-tune]").forEach(inp=> inp.addEventListener("input",()=>{ TUNE[inp.dataset.tune]=Number(inp.value); renderAll(); }));
 }
 
 /* ----------------------------- form <-> state ----------------------------- */
+function renderSkillChips(c){
+  const isE=STATE.active==="enemy";
+  $("skillChips").innerHTML = (c.skills||[]).map((s,i)=>
+    `<span class="chip ${isE?'enemy':''} ${i===c.activeSkill?'active':''}" data-i="${i}">`
+    + `<span class="nm">${s.name||'Skill'}</span><span class="x" data-i="${i}" title="remove">×</span></span>`).join("");
+  $("skillEditLabel").textContent = `Editing: ${skillOf(c).name||'—'}  (drives the power model)`;
+}
+function renderRelicChips(c){
+  const isE=STATE.active==="enemy";
+  $("relicChips").innerHTML = (c.relics||[]).map((r,i)=>
+    `<span class="chip ${isE?'enemy':''}" data-i="${i}" title="${stripMarkup(r.description)}">`
+    + `<span class="nm">${r.name||'Relic'}</span><span class="x" data-i="${i}" title="remove">×</span></span>`).join("");
+  // surface any relic effects the model can't price, so power is never silently wrong
+  const note=$("relicNote");
+  const notes=[]; for(const r of (c.relics||[])){ const a=relicAdjust([r],{attack:c.attack,magic:c.magic}); notes.push(...a.notes); }
+  if(notes.length){ note.style.display=""; note.innerHTML=`Unpriced: <b>${notes.join(' · ')}</b>`; }
+  else { note.style.display="none"; note.innerHTML=""; }
+}
 function loadForm(){
   const c=activeCombatant();
   $("hp").value=c.hp; $("attack").value=c.attack; $("magic").value=c.magic; $("manaPool").value=c.manaPool;
   $("armor").value=c.armor||0; $("barrier").value=c.barrier||0;
-  const s=c.skillObj;
-  const known=Object.entries(SKILLS).find(([k,v])=>v.name===s.name);
-  $("skillPreset").value = known?known[0]:"none";
+  renderSkillChips(c);
+  renderRelicChips(c);
+  // combatant meta (enemy floor eligibility / type / rarity from source data)
+  const meta=$("combatantMeta");
+  if(c.floors && c.floors.length){
+    meta.style.display=""; meta.innerHTML=`Floors <b>${c.floors.join(', ')}</b> · ${c.type||''}${c.rarity?' · '+c.rarity:''}`;
+  } else if(c.growthPlan){
+    const g=c.growthPlan; const parts=[];
+    if(g.maxHp) parts.push(`+${g.maxHp} HP`); if(g.startingAttack) parts.push(`+${g.startingAttack} atk`); if(g.startingMagic) parts.push(`+${g.startingMagic} mag`);
+    meta.style.display=""; meta.innerHTML=`Growth / win <b>${parts.join(' · ')||'—'}</b>`;
+  } else { meta.style.display="none"; meta.innerHTML=""; }
+  const s=skillOf(c);
   setColor(s.color);
   $("mana").value=s.mana; $("base").value=(s.base===null||s.base===undefined)?"":s.base; $("perSkull").value=s.perSkull||0;
   $("scaleAttack").value=s.scaleA||"none"; $("scaleMagic").value=s.scaleM||"none";
@@ -1128,7 +1459,8 @@ function readForm(){
   c.hp=+$("hp").value; c.attack=+$("attack").value; c.magic=+$("magic").value; c.manaPool=+$("manaPool").value;
   c.armor=+$("armor").value; c.barrier=+$("barrier").value;
   const baseV=$("base").value.trim();
-  c.skillObj={ name:c.skillObj.name, color:getColor(), mana:+$("mana").value, base: baseV===""?null:Number(baseV), perSkull:+$("perSkull").value,
+  const cur=skillOf(c);
+  c.skills[c.activeSkill]={ name:cur.name, id:cur.id, color:getColor(), mana:+$("mana").value, base: baseV===""?null:Number(baseV), perSkull:+$("perSkull").value,
     scaleA:$("scaleAttack").value, scaleM:$("scaleMagic").value, extra:$("fx_extra").checked, destroy:$("fx_destroy").checked, destroyN:+$("destroyN").value,
     heal:+$("heal").value, gArmor:+$("gArmor").value, gBarrier:+$("gBarrier").value, poison:+$("poison").value, bleed:+$("bleed").value, tiles:+$("tiles").value, permAtk:+$("permAtk").value };
   c.status={ out_berserk:$("st_berserk").checked, in_brittle:$("st_brittle").checked, in_intangible:$("st_intang").checked, in_berserk:$("st_tberserk").checked };
@@ -1139,34 +1471,73 @@ function wire(){
   document.querySelectorAll("#sideSwitch button").forEach(b=> b.addEventListener("click",()=>{
     readForm(); STATE.active=b.dataset.side;
     document.querySelectorAll("#sideSwitch button").forEach(x=>x.classList.toggle("active",x===b));
-    buildPresetSelect(); loadForm(); renderAll();
+    buildPresetSelect(); buildRelicSelect(); loadForm(); renderAll();
   }));
 
   $("floor").addEventListener("input",()=>{ STATE.floor=+$("floor").value; $("floorVal").textContent=STATE.floor; renderAll(); });
 
   $("preset").addEventListener("change",()=>{ const p=PRESETS[STATE.active][$("preset").value];
-    STATE[STATE.active]=deepCopyCombatant(p); loadForm(); renderAll(); });
+    STATE[STATE.active]=deepCopyCombatant(p);
+    // jump the floor to where this enemy actually spawns, so the matchup is meaningful
+    if(STATE.active==="enemy" && p.floors && p.floors.length){
+      STATE.floor=clamp(p.floors[0],1,10); $("floor").value=STATE.floor; $("floorVal").textContent=STATE.floor;
+    }
+    loadForm(); renderAll(); });
 
-  $("skillPreset").addEventListener("change",()=>{ const s={...SKILLS[$("skillPreset").value]};
-    activeCombatant().skillObj=s; loadForm(); renderAll(); });
+  // add a skill from the real catalog (or a blank "Custom") → appended & active
+  $("skillAddBtn").addEventListener("click",()=>{
+    const id=$("skillAdd").value;
+    const add = id==="__custom__" ? skl({ name:"Custom Skill", id:"custom", color:getColor(), mana:5, base:5 })
+                                  : (SKILLS[id] ? { ...SKILLS[id] } : null);
+    if(!add) return;
+    const c=activeCombatant(); c.skills.push(add); c.activeSkill=c.skills.length-1;
+    loadForm(); renderAll();
+  });
+  // chips: click selects the active (modeled) skill; the × removes it
+  $("skillChips").addEventListener("click",(e)=>{
+    const chip=e.target.closest(".chip"); if(!chip) return;
+    const i=Number(chip.dataset.i), c=activeCombatant();
+    if(e.target.classList.contains("x")){
+      c.skills.splice(i,1);
+      if(!c.skills.length) c.skills.push({ ...SKILLS.none });
+      if(i<c.activeSkill) c.activeSkill--;
+      c.activeSkill=clamp(c.activeSkill,0,c.skills.length-1);
+    } else {
+      c.activeSkill=clamp(i,0,c.skills.length-1);
+    }
+    loadForm(); renderAll();
+  });
+
+  // add a relic from the side-appropriate catalog → folded into power
+  $("relicAddBtn").addEventListener("click",()=>{
+    const id=$("relicAdd").value; const r=resolveRelicObj(id); if(!r) return;
+    const c=activeCombatant(); (c.relics||(c.relics=[])).push(r);
+    loadForm(); renderAll();
+  });
+  // relic chips: the × removes (no "active" concept — all relics always apply)
+  $("relicChips").addEventListener("click",(e)=>{
+    const chip=e.target.closest(".chip"); if(!chip || !e.target.classList.contains("x")) return;
+    const i=Number(chip.dataset.i), c=activeCombatant();
+    c.relics.splice(i,1); loadForm(); renderAll();
+  });
 
   document.querySelectorAll("#colorpick button").forEach(b=> b.addEventListener("click",()=>{ setColor(b.dataset.color); readForm(); renderAll(); }));
 
   // delegate input/change on the whole editor → read + render
   $("editorPanel").addEventListener("input",(e)=>{
-    if(e.target.id==="preset"||e.target.id==="skillPreset") return; // handled above
+    if(e.target.id==="preset"||e.target.id==="skillAdd"||e.target.id==="relicAdd") return; // handled above
     if(e.target.id==="fx_destroy") $("destroyField").style.display=e.target.checked?"":"none";
     readForm(); renderAll();
   });
 
   $("resetBtn").addEventListener("click",()=>{ const k=$("preset").value; STATE[STATE.active]=deepCopyCombatant(PRESETS[STATE.active][k]); loadForm(); renderAll(); });
   $("copyBtn").addEventListener("click",()=>{ const c=activeCombatant();
-    const out={ side:STATE.active, stats:{hp:c.hp,attack:c.attack,magic:c.magic,mana:c.manaPool,armor:c.armor,barrier:c.barrier}, skill:c.skillObj, status:c.status };
+    const out={ side:STATE.active, stats:{hp:c.hp,attack:c.attack,magic:c.magic,mana:c.manaPool,armor:c.armor,barrier:c.barrier}, skills:c.skills, activeSkill:c.activeSkill, modeledSkill:skillOf(c), relics:(c.relics||[]).map(r=>r.id||r.name), status:c.status };
     navigator.clipboard?.writeText(JSON.stringify(out,null,2)); const t=$("copyBtn").textContent; $("copyBtn").textContent="Copied ✓"; setTimeout(()=>$("copyBtn").textContent=t,1200); });
 
   document.querySelectorAll("#sweepTabs button").forEach(b=> b.addEventListener("click",()=>{
     STATE.sweepMetric=b.dataset.metric; document.querySelectorAll("#sweepTabs button").forEach(x=>x.classList.toggle("active",x===b)); renderSweep(); }));
-  $("applyGrowth").addEventListener("change",()=>{ STATE.applyGrowth=$("applyGrowth").checked; renderSweep(); });
+  $("applyGrowth").addEventListener("change",()=>{ STATE.applyGrowth=$("applyGrowth").checked; renderAll(); });
 
   $("calibToggle").addEventListener("click",()=>{ $("calibToggle").classList.toggle("open"); $("calibBody").classList.toggle("open"); });
 
@@ -1176,6 +1547,11 @@ function wire(){
 
 /* -------------------------------- init ------------------------------------ */
 function init(){
+  // reflect whether we're on live source data or baked-in fallback
+  const live = DATA_SOURCE==="source";
+  $("dataBadge").textContent = live ? "live source data" : "baked-in presets (serve over http)";
+  $("dataBadge").style.color = live ? "var(--signal)" : "var(--warn)";
+  $("presetSrc").textContent = live ? "src/js/data" : "fallback";
   buildSelectOptions();
   buildPresetSelect();
   buildTuners();
@@ -1185,7 +1561,16 @@ function init(){
   wire();
   renderAll();
 }
-document.addEventListener("DOMContentLoaded", init);
+
+// Boot: pull characters/enemies/skills from the source data (graceful fallback),
+// (re)seed the default combatants from the resolved presets, then init the UI.
+async function boot(){
+  await loadSourceData();
+  STATE.player = deepCopyCombatant(PRESETS.player[presetKey(PRESETS.player,"warrior")]);
+  STATE.enemy  = deepCopyCombatant(PRESETS.enemy[presetKey(PRESETS.enemy,"goblin")]);
+  init();
+}
+boot();
 
 </script>
 </body>
