@@ -66,10 +66,15 @@ function enemyHpFloorMult(depth) {
 // ── Per-floor enemy ATTACK scaling ───────────────────────
 // Attack is the lethality knob (it drives BOTH skill damage and skull-match
 // damage, and now also scales enemy skills via their `scaling` field). It's
-// sharp, so it ramps as a small ADDITIVE step bonus (≈ +1 every 3 floors) on
-// top of the enemy's authored base attack — preserving per-enemy identity (a
-// base-3 brute always stays +1 over a base-2 minion). Index = node.depth.
-const ENEMY_ATTACK_FLOOR_BONUS = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3];
+// sharp, so it ramps as a small ADDITIVE step bonus on top of the enemy's
+// authored base attack — preserving per-enemy identity (a base-3 brute always
+// stays +1 over a base-2 minion). Index = node.depth.
+// STEEPENED 2026-06-23 (≈ +1 every 2 floors, was +1 every 3, top +4 was +3):
+// player growth is now deterministic and ALWAYS includes Max HP (decision #36),
+// so enemy *damage* must scale faster to stay a real threat against a steadily
+// growing HP pool — otherwise flat HP out-paces the threat and tanking is free.
+// See docs/balance-combat-math.md §4.2 / §7.1.
+const ENEMY_ATTACK_FLOOR_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
 
 /** Per-floor additive attack bonus for a 0-indexed map depth (clamps). */
 function enemyAttackFloorBonus(depth) {

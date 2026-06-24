@@ -115,12 +115,21 @@ export const SKULL_DAMAGE_SOURCE = {
 /**
  * Calculate skull damage for a matched skull group.
  *
- * Formula: matchedSkullCount + max(0, attack - 1)
+ * Per-SKULL attack scaling (fixed 2026-06-23, see docs/balance-combat-math.md
+ * §1.1). The Attack bonus is applied to EVERY skull in the match, not once per
+ * match. The old `N + max(0, A - 1)` added the bonus a single time regardless of
+ * size, which made many small skull matches strictly better than one big one at
+ * high Attack (e.g. A=10: two 3-matches = 24 vs one 6-match = 15) — directly
+ * fighting the 4+ extra-turn incentive. This was unintended.
+ *
+ * Formula: round(N × (1 + max(0, A − 1) / 3))
+ *   At N = 3 this reproduces the OLD values exactly, so the common 3-match is
+ *   unchanged; only larger matches are corrected to scale linearly with N.
  *
  * Examples:
- *   1 attack, 3 skulls → 3 damage
- *   2 attack, 3 skulls → 4 damage
- *   10 attack, 3 skulls → 12 damage
+ *   1 attack, 3 skulls → 3    1 attack, 6 skulls → 6
+ *   2 attack, 3 skulls → 4    4 attack, 6 skulls → 12
+ *   10 attack, 3 skulls → 12  10 attack, 6 skulls → 24  (was 15)
  *
  * @param {{ attack: number }} attacker - combatant with attack stat
  * @param {number} skullCount - number of skulls in the match group
@@ -128,7 +137,8 @@ export const SKULL_DAMAGE_SOURCE = {
  */
 export function calculateMatchedSkullDamage(attacker, skullCount) {
   const attack = (attacker && typeof attacker.attack === 'number') ? attacker.attack : 1;
-  return skullCount + Math.max(0, attack - 1);
+  const perSkull = 1 + Math.max(0, attack - 1) / 3;
+  return Math.round(skullCount * perSkull);
 }
 
 /**

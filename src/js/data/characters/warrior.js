@@ -35,6 +35,14 @@ const warrior = {
 
   /** Starting relic IDs — resolved via relicCatalog at battle-state creation */
   relics: ['family_crest'],
+
+  /**
+   * Per-victory growth (AUTO-applied; stat picking is disabled — decision #36).
+   * Keys are applyRunModifier statModifier paths. Warrior = tanky bruiser: the
+   * heaviest HP growth in the cast, plus steady Attack (its skull/Bash damage
+   * scales with Attack). Both axes grow every win, so HP is never the lone pick.
+   */
+  growthPlan: { maxHp: 5, startingAttack: 1 },
 };
 
 export default warrior;

@@ -25,10 +25,15 @@ import Metrics from '../engine/Metrics.js';
 import { generateRelicRewardOptions } from '../data/relics/relicRewards.js';
 import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
 
-// ── Post-victory LEVEL UP growth ─────────────────────────
-// On a won battle the player picks ONE attribute on the Level Up overlay (which
-// shows BEFORE the relic reward overlay). Each grants this much (the mock's
-// values; all tunable). Replaces the old auto-growth on victory.
+// ── Post-victory growth ──────────────────────────────────
+// STAT PICKING IS DISABLED (decision #36 update, 2026-06-23). Growth is now
+// AUTO-applied per character from its `growthPlan` (data/characters/*) so BOTH
+// an HP axis AND an offense axis grow every win — removing the dominant "dump
+// everything into Max HP" pick (see docs/balance-dominant-strategy-analysis.md).
+// _applyGrowthPlan reads the char def's growthPlan; DEFAULT_GROWTH_PLAN is the
+// fallback. The LevelUpOverlay + LEVEL_UP_* tables below are kept (dormant) but
+// NO LONGER SHOWN — re-enable by calling _showLevelUpOverlay() on victory again.
+const DEFAULT_GROWTH_PLAN = Object.freeze({ maxHp: 4, startingAttack: 1 });
 const LEVEL_UP_GROWTH = Object.freeze({ attack: 1, magic: 1, maxHp: 8 });
 // attribute key → runState statModifier path (applyRunModifier).
 const LEVEL_UP_STAT_PATH = Object.freeze({
@@ -1468,9 +1473,10 @@ export default class BattleScene extends UIPanel {
           return;
         }
 
-        // ── Victory: show the LEVEL UP overlay first (its onDismiss then opens
-        //    the relic reward overlay; see _showRewardOverlay). ──
-        this._showLevelUpOverlay();
+        // ── Victory: AUTO-apply the character's growth plan (stat picking is
+        //    disabled — decision #36), then open the relic reward overlay. ──
+        this._applyGrowthPlan();
+        this._showRewardOverlay();
       }
     }
 
@@ -2057,6 +2063,30 @@ export default class BattleScene extends UIPanel {
       applyRunModifier(runState, path, amount);
       console.log(`[BattleScene] Level Up: +${amount} ${key} (victory #${runState.victories}).`);
     }
+  }
+
+  /**
+   * Auto-apply the character's per-victory growth plan to the persistent run
+   * state. Replaces the player-chosen Level Up overlay — stat picking is disabled
+   * (decision #36). Reads the character def's `growthPlan` (data/characters/*),
+   * applies each stat via applyRunModifier, and bumps the victory counter. Called
+   * on victory immediately before the reward overlay opens, so the reward cards
+   * (and the next battle) see the post-growth effective stats.
+   */
+  _applyGrowthPlan() {
+    const runState = this.userData ? this.userData.runState : null;
+    if (!runState) return;
+    const characterDef = getCharacterById(runState.characterId);
+    const plan = (characterDef && characterDef.growthPlan) || DEFAULT_GROWTH_PLAN;
+    runState.victories = (runState.victories || 0) + 1;
+    const applied = [];
+    for (const [path, amount] of Object.entries(plan)) {
+      if (amount) {
+        applyRunModifier(runState, path, amount);
+        applied.push(`+${amount} ${path}`);
+      }
+    }
+    console.log(`[BattleScene] Growth (victory #${runState.victories}): ${applied.join(', ') || 'none'}.`);
   }
 
   /**

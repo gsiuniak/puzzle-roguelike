@@ -18,7 +18,7 @@ const cyclops = {
   maxHp: 18,
   attack: 3,
   armor: 1,
-  mana: { red: 4, blue: 0, green: 0, yellow: 0, purple: 0 }, // starting red toward Smash
+  mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 }, // starting red toward Smash
   portrait: 'cyclops', // maps to 'portrait_cyclops' asset key
   music: {
     trackKey: 'battle_theme',

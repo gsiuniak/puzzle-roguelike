@@ -30,6 +30,14 @@ const witchDoctor = {
 
   skills: ['summon_dead', 'oungan'],
   relics: ['poison_vial'],
+
+  /**
+   * Per-victory growth (AUTO-applied; stat picking is disabled — decision #36).
+   * Witch Doctor = attrition/sustain: middling HP growth and MAGIC, which drives
+   * its poison application (Poison Dart _25), Barrier, and mana economy. Both
+   * axes grow every win.
+   */
+  growthPlan: { maxHp: 4, startingMagic: 1 },
 };
 
 export default witchDoctor;

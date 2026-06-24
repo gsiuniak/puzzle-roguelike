@@ -30,6 +30,14 @@ const mage = {
 
   skills: ['fracture', 'arcane_inscription'],
   relics: ['unstable_catalyst'],
+
+  /**
+   * Per-victory growth (AUTO-applied; stat picking is disabled — decision #36).
+   * Mage = glass cannon: leaner HP growth, scaling on MAGIC — its single best
+   * stat (it scales Fracture at _150 AND prints +⌊M/3⌋ mana per matched color,
+   * so it is both damage and economy). See docs/balance-combat-math.md §3.5.
+   */
+  growthPlan: { maxHp: 4, startingMagic: 1 },
 };
 
 export default mage;

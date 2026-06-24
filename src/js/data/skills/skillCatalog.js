@@ -90,7 +90,11 @@ const SKILL_CATALOG = {
     sound: 'skill_fracture',
     targeting: 'board_tile',
     area: 1,
-    cost: { yellow: 5 },
+    // Cost 5→6: Fracture was the highest value-per-mana skill in the catalog
+    // (row-destroy is a large tile-count payout AND it carries the best damage
+    // scaling, _150 Magic). +1 cost pulls it toward the [2.5, 3.5] V/mana target
+    // band without touching the Mage's Magic scaling. See docs/balance-combat-math.md §3.2/§7.4.
+    cost: { yellow: 6 },
     effects: [
       { effectType: 'destroy_tiles_row' },
       { effectType: 'damage', damage: { amount: 5, scaling: { magic: DAMAGE_SCALING_PRESETS._150 } } },
@@ -161,7 +165,7 @@ const SKILL_CATALOG = {
     sound: 'skill_oungan',
     cost: { green: 5 },
     effects: [
-      { effectType: 'heal', heal: { amount: 5, scaling: { attack: DAMAGE_SCALING_PRESETS._75 } } },
+      { effectType: 'heal', heal: { amount: 5, scaling: { attack: DAMAGE_SCALING_PRESETS._100 } } },
       { effectType: 'create_tiles', createTiles: { amount: 3, type: 'green' } },
       { effectType: 'gain_attack', gainAttack: { amount: 1 } },
       // Poison application scales with Magic at _25 (NOT _50): poison's halving

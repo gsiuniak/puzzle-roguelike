@@ -3,6 +3,8 @@
 > **Status:** Quantitative balance analysis (no code changes). Captured 2026-06-23.
 > **Companion to:** [`balance-dominant-strategy-analysis.md`](balance-dominant-strategy-analysis.md) (the *why HP dominates* design argument). This doc is the *numbers underneath it*.
 > **Method:** Every formula and constant below was read out of the live source with file:line citations. Anything labelled **[MODEL]** is a derived estimate built on stated assumptions, not a code fact. Anything labelled **[CODE]** is exact.
+>
+> **⚠ Partly superseded by changes applied 2026-06-23** — see [`balance-changes-2026-06-23.md`](balance-changes-2026-06-23.md). The matched-skull bug (§1.1) is FIXED, stat picking is DISABLED in favour of per-character growth plans (§4 / decision #36), enemy attack scaling was steepened (§7.1), and the spell-synth POWER weights were re-aligned to this DEV model (§3). The *analysis* below still stands; the specific pre-change numbers it cites do not all reflect current code.
 
 ---
 

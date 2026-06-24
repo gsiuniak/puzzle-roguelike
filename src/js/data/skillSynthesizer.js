@@ -214,16 +214,22 @@ const GENERIC_SOUND_DEFAULT = Object.freeze({ family: 'damage', versions: 3, col
  * Power-score weights — how much each emitted effect contributes to the
  * spell's POWER (which drives the mana-cost tier via MANA_COST_CONFIG).
  */
+// Weights re-aligned 2026-06-23 to the damage-equivalent-value (DEV) model in
+// docs/balance-combat-math.md §3. perDamage = 0.5 is the anchor (1 damage ≈ 1
+// DEV ≈ 0.5 power). Other effects are priced at their DEV-per-point × 0.5:
+// armor/barrier ≈ 0.9 DEV, heal ≈ 0.8 DEV (sustain uptime discount), a created
+// tile ≈ deferred mana (was over-valued at 1.5), and a PERMANENT stat point is
+// worth several DEV over a fight (Magic most, §3.5) — these were badly under-priced.
 const POWER = Object.freeze({
   perDamage: 0.5,
-  perArmor: 0.4,
-  perHeal: 0.3,
+  perArmor: 0.45,        // ~0.9 DEV/pt (armor & barrier)
+  perHeal: 0.4,          // ~0.8 DEV/pt — heal only pays full when below max
   perManaGained: 0.5,
   perManaDrainedOneColor: 1,
   perManaDrainedAllColors: 1.5,
-  perAttack: 1,          // permanent for the battle
-  perMagic: 1,           // permanent for the battle (counterpart to perAttack)
-  perTileCreated: 1.5,
+  perAttack: 2,          // permanent for the battle — worth ~4 DEV over a fight
+  perMagic: 2.5,         // permanent; Magic scales damage AND prints mana (§3.5) → priced above Attack
+  perTileCreated: 1.1,   // a created tile is deferred mana, not an immediate payoff (was 1.5, over-valued)
   thrallTileMult: 1.5,   // wild tiles are worth more per tile
   destroyTile: 2,        // single-tile snipe
   destroyRow: 6,
@@ -240,7 +246,7 @@ const POWER = Object.freeze({
   perBuffTurn: 3,
   extraTurn: 8,
   shuffleBoard: 10,       // whole-board reshuffle (always paired with an extra turn)
-  perPoisonStack: 2.0,    // `apply N poison`: each stack ≈ 2× damage over the halving decay tail — priced for the real value
+  perPoisonStack: 1.0,    // `apply N poison`: ~2× damage over the halving tail = ~2 DEV/stack = 1.0 power (was 2.0, double-counted). NOTE: poison tag is currently disabled (decision #39); pricing matters only if re-enabled.
   perSkullDamage: 0.5,    // `skull + damage`: weight per "+N per Skull" (× est. skulls)
   destroySkull: 2,        // `skull + destroy`: weight per Skull tile destroyed
   destroyByColor: 9,      // `destroy + all + color`: board-wide color wipe
