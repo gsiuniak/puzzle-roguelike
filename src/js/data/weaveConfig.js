@@ -139,9 +139,9 @@ export const TAG_VALUE_TABLES = Object.freeze({
   // `lock N`: turns the targeted color stays locked (unmatchable + unmovable for
   // BOTH sides). 2 turns minimum.
   lock:      { 2: 60, 3: 40 },
-  // `reflect N`: flat damage reflected back to attackers per hit taken. The
-  // duration is a fixed constant (skillSynthesizer REFLECT_DURATION), not rolled.
-  reflect:   { 2: 28, 3: 30, 4: 22, 5: 13, 6: 7 },
+  // `reflect N`: DURATION in turns the Reflect buff lasts (reflects ALL damage
+  // taken back to the attacker — the owner still takes it). Strong, so kept short.
+  reflect:   { 1: 30, 2: 45, 3: 25 },
 
   // ── Status durations (turn cycles) ──
   silence:    { 2: 50, 3: 35 },

@@ -3,401 +3,428 @@
     "sfx_audio_generic_sprite.ogg"
   ],
   "sprite": {
-    "sfx_generic_barrier_1": [
+    "sfx_generic_reflect_1": [
       0,
+      1760
+    ],
+    "sfx_generic_lock_1": [
+      1780,
+      1760
+    ],
+    "sfx_generic_lock_2": [
+      3560,
+      1760
+    ],
+    "sfx_generic_barrier_1": [
+      5340,
       1480
     ],
     "sfx_generic_create_wild_2": [
-      1500,
+      6840,
       1480
     ],
     "sfx_generic_create_wild_1": [
-      3000,
+      8340,
       1480
     ],
     "sfx_generic_create_skull_2": [
-      4500,
+      9840,
       1480
     ],
     "sfx_generic_create_skull_1": [
-      6000,
+      11340,
       1480
     ],
     "sfx_generic_create_purple_2": [
-      7500,
+      12840,
       1480
     ],
     "sfx_generic_create_yellow_2": [
-      9000,
+      14340,
       1480
     ],
     "sfx_generic_create_yellow_1": [
-      10500,
+      15840,
       1480
     ],
     "sfx_generic_create_green_2": [
-      12000,
+      17340,
       1480
     ],
     "sfx_generic_create_green_1": [
-      13500,
+      18840,
       1480
     ],
     "sfx_generic_create_blue_2": [
-      15000,
+      20340,
       1480
     ],
     "sfx_generic_create_blue_1": [
-      16500,
+      21840,
       1480
     ],
     "sfx_generic_create_red_2": [
-      18000,
+      23340,
       1480
     ],
     "sfx_generic_create_red_1": [
-      19500,
+      24840,
       1480
     ],
     "sfx_generic_create_purple_1": [
-      21000,
+      26340,
       2000
     ],
     "sfx_generic_destroy_5": [
-      23020,
+      28360,
       1480
     ],
     "sfx_generic_destroy_4": [
-      24520,
+      29860,
       1480
     ],
     "sfx_generic_destroy_3": [
-      26020,
+      31360,
       1480
     ],
     "sfx_generic_destroy_2": [
-      27520,
+      32860,
       1480
     ],
     "sfx_generic_destroy_1": [
-      29020,
+      34360,
       1480
     ],
     "sfx_generic_armor_2": [
-      30520,
+      35860,
       1480
     ],
     "sfx_generic_armor_1": [
-      32020,
+      37360,
       1480
     ],
     "sfx_generic_convert_3": [
-      33520,
+      38860,
       2000
     ],
     "sfx_generic_convert_2": [
-      35540,
+      40880,
       2000
     ],
     "sfx_generic_convert_1": [
-      37560,
+      42900,
       2000
     ],
     "sfx_generic_change_3": [
-      39580,
+      44920,
       1480
     ],
     "sfx_generic_change_2": [
-      41080,
+      46420,
       1480
     ],
     "sfx_generic_change_1": [
-      42580,
+      47920,
       1480
     ],
     "sfx_generic_damage_blue_3": [
-      44080,
+      49420,
       1480
     ],
     "sfx_generic_damage_blue_2": [
-      45580,
+      50920,
       1480
     ],
     "sfx_generic_damage_blue_1": [
-      47080,
+      52420,
       1480
     ],
     "sfx_generic_damage_purple_3": [
-      48580,
+      53920,
       1480
     ],
     "sfx_generic_damage_purple_2": [
-      50080,
+      55420,
       1480
     ],
     "sfx_generic_damage_purple_1": [
-      51580,
+      56920,
       1480
     ],
     "sfx_generic_damage_yellow_1": [
-      53080,
+      58420,
       1480
     ],
     "sfx_generic_damage_yellow_2": [
-      54580,
+      59920,
       1480
     ],
     "sfx_generic_damage_yellow_3": [
-      56080,
+      61420,
       1480
     ],
     "sfx_generic_damage_green_1": [
-      57580,
+      62920,
       1480
     ],
     "sfx_generic_damage_green_2": [
-      59080,
+      64420,
       1480
     ],
     "sfx_generic_damage_green_3": [
-      60580,
+      65920,
       1480
     ],
     "sfx_generic_damage_red_2": [
-      62080,
+      67420,
       1480
     ],
     "sfx_generic_damage_red_3": [
-      63580,
+      68920,
       1480
     ],
     "sfx_generic_damage_red_1": [
-      65080,
+      70420,
       1480
     ]
   },
   "_meta": {
-    "total_duration_ms": 66560,
+    "total_duration_ms": 71900,
     "sample_rate": 44100,
     "channels": 2,
     "gap_ms": 20,
-    "clip_count": 43
+    "clip_count": 46
   },
   "_sprites_detail": {
-    "sfx_generic_barrier_1": {
+    "sfx_generic_deflect_1": {
       "start": 0,
+      "duration": 1760,
+      "end": 1760
+    },
+    "sfx_generic_lock_1": {
+      "start": 1780,
+      "duration": 1760,
+      "end": 3540
+    },
+    "sfx_generic_lock_2": {
+      "start": 3560,
+      "duration": 1760,
+      "end": 5320
+    },
+    "sfx_generic_barrier_1": {
+      "start": 5340,
       "duration": 1480,
-      "end": 1480
+      "end": 6820
     },
     "sfx_generic_create_wild_2": {
-      "start": 1500,
+      "start": 6840,
       "duration": 1480,
-      "end": 2980
+      "end": 8320
     },
     "sfx_generic_create_wild_1": {
-      "start": 3000,
+      "start": 8340,
       "duration": 1480,
-      "end": 4480
+      "end": 9820
     },
     "sfx_generic_create_skull_2": {
-      "start": 4500,
+      "start": 9840,
       "duration": 1480,
-      "end": 5980
+      "end": 11320
     },
     "sfx_generic_create_skull_1": {
-      "start": 6000,
+      "start": 11340,
       "duration": 1480,
-      "end": 7480
+      "end": 12820
     },
     "sfx_generic_create_purple_2": {
-      "start": 7500,
+      "start": 12840,
       "duration": 1480,
-      "end": 8980
+      "end": 14320
     },
     "sfx_generic_create_yellow_2": {
-      "start": 9000,
+      "start": 14340,
       "duration": 1480,
-      "end": 10480
+      "end": 15820
     },
     "sfx_generic_create_yellow_1": {
-      "start": 10500,
+      "start": 15840,
       "duration": 1480,
-      "end": 11980
+      "end": 17320
     },
     "sfx_generic_create_green_2": {
-      "start": 12000,
+      "start": 17340,
       "duration": 1480,
-      "end": 13480
+      "end": 18820
     },
     "sfx_generic_create_green_1": {
-      "start": 13500,
+      "start": 18840,
       "duration": 1480,
-      "end": 14980
+      "end": 20320
     },
     "sfx_generic_create_blue_2": {
-      "start": 15000,
+      "start": 20340,
       "duration": 1480,
-      "end": 16480
+      "end": 21820
     },
     "sfx_generic_create_blue_1": {
-      "start": 16500,
+      "start": 21840,
       "duration": 1480,
-      "end": 17980
+      "end": 23320
     },
     "sfx_generic_create_red_2": {
-      "start": 18000,
+      "start": 23340,
       "duration": 1480,
-      "end": 19480
+      "end": 24820
     },
     "sfx_generic_create_red_1": {
-      "start": 19500,
+      "start": 24840,
       "duration": 1480,
-      "end": 20980
+      "end": 26320
     },
     "sfx_generic_create_purple_1": {
-      "start": 21000,
+      "start": 26340,
       "duration": 2000,
-      "end": 23000
+      "end": 28340
     },
     "sfx_generic_destroy_5": {
-      "start": 23020,
+      "start": 28360,
       "duration": 1480,
-      "end": 24500
+      "end": 29840
     },
     "sfx_generic_destroy_4": {
-      "start": 24520,
+      "start": 29860,
       "duration": 1480,
-      "end": 26000
+      "end": 31340
     },
     "sfx_generic_destroy_3": {
-      "start": 26020,
+      "start": 31360,
       "duration": 1480,
-      "end": 27500
+      "end": 32840
     },
     "sfx_generic_destroy_2": {
-      "start": 27520,
+      "start": 32860,
       "duration": 1480,
-      "end": 29000
+      "end": 34340
     },
     "sfx_generic_destroy_1": {
-      "start": 29020,
+      "start": 34360,
       "duration": 1480,
-      "end": 30500
+      "end": 35840
     },
     "sfx_generic_armor_2": {
-      "start": 30520,
+      "start": 35860,
       "duration": 1480,
-      "end": 32000
+      "end": 37340
     },
     "sfx_generic_armor_1": {
-      "start": 32020,
+      "start": 37360,
       "duration": 1480,
-      "end": 33500
+      "end": 38840
     },
     "sfx_generic_convert_3": {
-      "start": 33520,
+      "start": 38860,
       "duration": 2000,
-      "end": 35520
+      "end": 40860
     },
     "sfx_generic_convert_2": {
-      "start": 35540,
+      "start": 40880,
       "duration": 2000,
-      "end": 37540
+      "end": 42880
     },
     "sfx_generic_convert_1": {
-      "start": 37560,
+      "start": 42900,
       "duration": 2000,
-      "end": 39560
+      "end": 44900
     },
     "sfx_generic_change_3": {
-      "start": 39580,
+      "start": 44920,
       "duration": 1480,
-      "end": 41060
+      "end": 46400
     },
     "sfx_generic_change_2": {
-      "start": 41080,
+      "start": 46420,
       "duration": 1480,
-      "end": 42560
+      "end": 47900
     },
     "sfx_generic_change_1": {
-      "start": 42580,
+      "start": 47920,
       "duration": 1480,
-      "end": 44060
+      "end": 49400
     },
     "sfx_generic_damage_blue_3": {
-      "start": 44080,
+      "start": 49420,
       "duration": 1480,
-      "end": 45560
+      "end": 50900
     },
     "sfx_generic_damage_blue_2": {
-      "start": 45580,
+      "start": 50920,
       "duration": 1480,
-      "end": 47060
+      "end": 52400
     },
     "sfx_generic_damage_blue_1": {
-      "start": 47080,
+      "start": 52420,
       "duration": 1480,
-      "end": 48560
+      "end": 53900
     },
     "sfx_generic_damage_purple_3": {
-      "start": 48580,
+      "start": 53920,
       "duration": 1480,
-      "end": 50060
+      "end": 55400
     },
     "sfx_generic_damage_purple_2": {
-      "start": 50080,
+      "start": 55420,
       "duration": 1480,
-      "end": 51560
+      "end": 56900
     },
     "sfx_generic_damage_purple_1": {
-      "start": 51580,
+      "start": 56920,
       "duration": 1480,
-      "end": 53060
+      "end": 58400
     },
     "sfx_generic_damage_yellow_1": {
-      "start": 53080,
+      "start": 58420,
       "duration": 1480,
-      "end": 54560
+      "end": 59900
     },
     "sfx_generic_damage_yellow_2": {
-      "start": 54580,
+      "start": 59920,
       "duration": 1480,
-      "end": 56060
+      "end": 61400
     },
     "sfx_generic_damage_yellow_3": {
-      "start": 56080,
+      "start": 61420,
       "duration": 1480,
-      "end": 57560
+      "end": 62900
     },
     "sfx_generic_damage_green_1": {
-      "start": 57580,
+      "start": 62920,
       "duration": 1480,
-      "end": 59060
+      "end": 64400
     },
     "sfx_generic_damage_green_2": {
-      "start": 59080,
+      "start": 64420,
       "duration": 1480,
-      "end": 60560
+      "end": 65900
     },
     "sfx_generic_damage_green_3": {
-      "start": 60580,
+      "start": 65920,
       "duration": 1480,
-      "end": 62060
+      "end": 67400
     },
     "sfx_generic_damage_red_2": {
-      "start": 62080,
+      "start": 67420,
       "duration": 1480,
-      "end": 63560
+      "end": 68900
     },
     "sfx_generic_damage_red_3": {
-      "start": 63580,
+      "start": 68920,
       "duration": 1480,
-      "end": 65060
+      "end": 70400
     },
     "sfx_generic_damage_red_1": {
-      "start": 65080,
+      "start": 70420,
       "duration": 1480,
-      "end": 66560
+      "end": 71900
     }
   }
 }

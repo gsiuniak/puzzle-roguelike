@@ -164,9 +164,9 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   berserk:    { id: 'berserk',    label: 'Berserk',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.LEGENDARY, icon: null },
   bleed:      { id: 'bleed',      label: 'Bleed',      category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null, disabled: true },
   frozen:     { id: 'frozen',     label: 'Frozen',     category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
-  // `reflect` is a self BUFF: for a fixed few turns the caster reflects a flat
-  // amount of damage back to attackers (see statusEffects `reflecting`). Carries
-  // a rolled reflect amount via the apply_status payload's reflectValue. Decision #40.
+  // `reflect` is a self BUFF: for N turns the caster STILL takes damage but
+  // ALSO deals the same amount back to the attacker (see statusEffects
+  // `reflecting`). The rolled value is its DURATION. Decision #40.
   reflect:    { id: 'reflect',    label: 'Reflect',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
 });
 

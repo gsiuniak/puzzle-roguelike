@@ -84,7 +84,7 @@ const STATUS_TAG_TO_ID = Object.freeze({
   frozen: 'frozen',
   intangible: 'intangible',
   berserk: 'berserk',
-  // `reflect` → the `reflecting` self-buff (carries a rolled reflectValue). Decision #40.
+  // `reflect` → the `reflecting` self-buff (rolled value = its DURATION). Decision #40.
   reflect: 'reflecting',
   // NOTE: `barrier` is NOT here — it's no longer a status. It's an ACTION that
   // emits a `barrier` shield effect (see emitBarrier / the action switch).
@@ -93,9 +93,6 @@ const STATUS_TAG_TO_ID = Object.freeze({
 /** Status tags that BUFF the caster (apply_status target 'self'). */
 const SELF_STATUS_TAGS = new Set(['intangible', 'berserk', 'reflect']);
 
-/** Fixed duration (turn cycles) for the woven `reflect` buff (its rolled value
- *  is the reflect amount, not the duration). See decision #40. */
-const REFLECT_DURATION = 2;
 /** Assumed pool size when power-pricing `consume` (players bank mana for it). */
 const EST_CONSUMED = 8;
 /** Assumed base damage of the hit `mark` doubles (for power-pricing). */
@@ -224,12 +221,27 @@ const GENERIC_SOUND_FALLBACK_BY_ACTION = Object.freeze({
   consume: { family: 'damage',  versions: 3, colored: true }, // a burst of spent power
   mark:    { family: 'change',  versions: 3 },                // a sigil/brand shimmer
   transmute: { family: 'convert', versions: 3 },              // mana alchemy
-  lock:    { family: 'convert', versions: 3 },                // board lockdown
+  lock:    { family: 'lock', versions: 2 },                   // dedicated lock clips
 });
 
 /** Last-resort generic family when a bag has no action that maps to any of the
  *  above — guarantees a generic-pool clip rather than silence. */
 const GENERIC_SOUND_DEFAULT = Object.freeze({ family: 'damage', versions: 3, colored: true });
+
+/**
+ * Resolve-SFX SALIENCE per action. pickSkillSound voices the highest-priority
+ * action in the bag (NOT just the first picked), so a distinctive effect wins
+ * over a generic support — e.g. a `lock + armor` spell plays the LOCK sound, not
+ * gain-armor. Damage/destruction rank highest, board-control next, plain
+ * buffs/supports lowest. Actions absent here rank 0 (only chosen if nothing else).
+ */
+const SOUND_PRIORITY = Object.freeze({
+  strike: 100, blast: 100, damage: 100, poison: 95,
+  explode: 92, destroy: 90, consume: 86,
+  lock: 80, shuffle: 70, convert: 66, change: 64, transmute: 62,
+  create: 58, drain: 56, mark: 40,
+  armor: 30, barrier: 30, heal: 28, attack: 24, magic: 24,
+});
 
 /**
  * Power-score weights — how much each emitted effect contributes to the
@@ -273,9 +285,9 @@ const POWER = Object.freeze({
   destroyByColor: 9,      // `destroy + all + color`: board-wide color wipe
   // ── New mechanics (decision #40) ──
   perConsumeUnit: 0.5,    // `consume`: per-unit damage × est. pool size (EST_CONSUMED)
-  perMark: 0.5,           // `mark`: flat bonus ≈ deferred damage (priced like damage)
+  perMark: 0.5,           // `mark`: one-time multiplier (priced via EST_MARK_DAMAGE)
   lockTurn: 3,            // `lock`: denial, priced like a debuff turn
-  perReflect: 0.6,        // `reflect`: flat reflect × est. hits over its duration
+  reflectTurn: 6,         // `reflect`: reflects ALL damage taken → strong per turn
   // leech adds POWER as estimated healed = est. damage × fraction × perHeal.
 });
 
@@ -295,7 +307,9 @@ const POWER = Object.freeze({
  * lockstep, so what the player reads is exactly what resolves.
  */
 const EFFECT_RESOLUTION_ORDER = Object.freeze({
-  lock_color: 12,           // board control, before board-shaping
+  lock_color: 8,            // BEFORE shuffle — read the clicked tile's color before
+                            // shuffle scrambles positions (lock is by color, so the
+                            // right color stays locked through the shuffle).
   shuffle: 10,
   create_tiles: 20,
   convert_tiles_by_type: 30,
@@ -607,38 +621,31 @@ function buildGenericSound(desc, effects, costColor) {
 }
 
 /**
- * Choose the resolve SFX for a synthesized skill — preferring the generic SFX
- * pool (sfx_audio_generic_sprite), with a random version, so the spell's "most
- * relevant effect" is voiced. The bag's ACTIONS are walked in pick order and
- * the FIRST one that has a generic clip wins — so a multi-action spell whose
- * PRIMARY action has no generic clip (e.g. `attack`, which voiced an old
- * `skill_encroach` before) still draws from the generic pool via its other
- * actions (damage / create / …). Color-aware families pick the relevant tile
- * color (damage → cost color; create → the created tile flavor). Actions whose
- * own family isn't in the pool (heal/attack/magic/drain/shuffle) fall back to a
- * closest-fitting generic family, and a bag with no usable action at all falls
- * back to the generic default — so EVERY woven spell gets a generic-pool clip
- * (never silence or an old `skill_*` sound). Called ONCE here, so the chosen
- * clip persists for the rest of the run.
+ * Choose the resolve SFX for a synthesized skill from the generic SFX pool
+ * (sfx_audio_generic_sprite), with a random version. The bag's actions are
+ * ranked by SOUND_PRIORITY and the MOST SALIENT one with a clip is voiced — so a
+ * `lock + armor` spell plays the distinctive lock sound rather than gain-armor,
+ * and a `strike + lock` spell plays the strike sound. Each action resolves to a
+ * dedicated family (GENERIC_SOUND_BY_ACTION) or its closest fit
+ * (GENERIC_SOUND_FALLBACK_BY_ACTION); both maps together cover every action, so a
+ * bag with no usable action falls back to the generic default — EVERY woven spell
+ * gets a generic-pool clip (never silence or an old `skill_*` sound). Color-aware
+ * families pick the relevant tile color (damage → cost color; create → the
+ * created tile flavor). Called ONCE here, so the chosen clip persists for the run.
  *
- * @param {string[]} actions — the spell's action tags, in pick order
+ * @param {string[]} actions — the spell's action tags
  * @param {object[]} effects — the emitted effect list (for the create flavor)
  * @param {string} costColor — the rolled cost color (damage clip color)
  * @returns {string} a SoundConfig key (always a `sfx_generic_*` clip)
  */
 function pickSkillSound(actions, effects, costColor) {
-  const list = Array.isArray(actions) ? actions : [];
-  // 1) Prefer an action with its own dedicated generic family.
+  const list = (Array.isArray(actions) ? actions.slice() : [])
+    .sort((a, b) => (SOUND_PRIORITY[b] || 0) - (SOUND_PRIORITY[a] || 0));
   for (const action of list) {
-    const desc = GENERIC_SOUND_BY_ACTION[action];
+    const desc = GENERIC_SOUND_BY_ACTION[action] || GENERIC_SOUND_FALLBACK_BY_ACTION[action];
     if (desc) return buildGenericSound(desc, effects, costColor);
   }
-  // 2) Else voice the first action that maps to a closest-fitting family.
-  for (const action of list) {
-    const desc = GENERIC_SOUND_FALLBACK_BY_ACTION[action];
-    if (desc) return buildGenericSound(desc, effects, costColor);
-  }
-  // 3) No usable action — still draw SOMETHING from the generic pool.
+  // No usable action — still draw SOMETHING from the generic pool.
   return buildGenericSound(GENERIC_SOUND_DEFAULT, effects, costColor);
 }
 
@@ -1146,11 +1153,15 @@ export function synthesize(recipe, options = {}) {
     power += turns * POWER.lockTurn;
   };
 
-  /** Emit a reflect self-buff (apply_status 'reflecting' with reflectValue). Decision #40. */
-  const emitReflect = (reflectValue) => {
-    effects.push({ effectType: 'apply_status', applyStatus: { id: 'reflecting', target: 'self', turns: REFLECT_DURATION, reflectValue } });
-    lines.push(`Reflect ${reflectValue} [[Damage]] back to attackers for ${REFLECT_DURATION} turns`);
-    power += reflectValue * POWER.perReflect * REFLECT_DURATION + REFLECT_DURATION * POWER.perBuffTurn * 0.5;
+  /** Emit a reflect self-buff (apply_status 'reflecting' for `turns`) — reflects
+   *  ALL damage taken back to the attacker for the duration. Decision #40. */
+  const emitReflect = (turns) => {
+    const t = Math.max(1, turns || 1);
+    effects.push({ effectType: 'apply_status', applyStatus: { id: 'reflecting', target: 'self', turns: t } });
+    lines.push(t === 1
+      ? '[[Reflect]] all [[Damage]] taken back to the attacker for 1 turn'
+      : `[[Reflect]] all [[Damage]] taken back to the attacker for ${t} turns`);
+    power += t * POWER.reflectTurn;
   };
 
   /**
@@ -1230,7 +1241,7 @@ export function synthesize(recipe, options = {}) {
       case 'mark':    { emitMark(2); return true; }
       case 'transmute': { emitTransmute(rollTagValue('transmute') || 3, pickRandom(COST_COLORS)); return true; }
       case 'lock':    { emitLock(Math.max(2, rollTagValue('lock') || 2), pickRandom(COST_COLORS)); return true; }
-      case 'reflect': { emitReflect(rollTagValue('reflect') || 3); return true; }
+      case 'reflect': { emitReflect(rollTagValue('reflect') || 2); return true; }
       case 'leech': {
         // Leech needs a damage vehicle — emit a damage effect with lifesteal.
         const t = pickRandom(DAMAGE_TAGS);
@@ -1568,8 +1579,8 @@ export function synthesize(recipe, options = {}) {
     const statusId = STATUS_TAG_TO_ID[tag];
     if (!statusId) continue;
     used.add(tag);
-    // Reflect carries a rolled reflect AMOUNT (not a duration) — fixed duration.
-    if (tag === 'reflect') { emitReflect(roll('reflect', 3)); continue; }
+    // Reflect carries a rolled DURATION (it reflects ALL damage taken).
+    if (tag === 'reflect') { emitReflect(roll('reflect', 2)); continue; }
     const turns = roll(tag, 1);
     const isSelf = SELF_STATUS_TAGS.has(tag);
     const applyStatus = { id: statusId, target: isSelf ? 'self' : 'opponent', turns };

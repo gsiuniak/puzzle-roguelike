@@ -257,6 +257,11 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Lock',
     description: 'Locked [[Tiles]] cannot be moved or [[matched]] by either side until the lock expires. Targets a tile and locks every tile of its color.',
   },
+  reflect: {
+    id: 'reflect',
+    label: 'Reflect',
+    description: 'A buff: while active you still take [[Damage]], but deal the same amount back to the attacker.',
+  },
 };
 
 /**
@@ -285,6 +290,7 @@ export const KEYWORD_ALIASES = {
   freeze: 'frozen',
   locked: 'lock',
   locking: 'lock',
+  reflecting: 'reflect',
 };
 
 /**

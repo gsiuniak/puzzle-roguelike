@@ -1053,6 +1053,11 @@ export default class BattleScene extends UIPanel {
       this._audioManager.playSfx('sfx_thrall_summon');
     }
 
+    // ── Reflect SFX (the `reflecting` buff fired this frame) ──
+    if (state.reflectTriggered && this._audioManager) {
+      this._audioManager.playSfx('sfx_generic_reflect_1');
+    }
+
     // ── Enemy transform (Sanguine Phoenix ⇄ Egg) ──
     // Rebuild the enemy portrait + skills pane for the new identity. The relic
     // bar and HP/mana refresh from state.enemyState each frame below, so only

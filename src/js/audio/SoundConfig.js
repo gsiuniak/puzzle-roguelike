@@ -287,6 +287,11 @@ const GENERIC_SFX_CLIPS = [
   // damage — by tile color, 3 versions each
   ...['red', 'blue', 'green', 'yellow', 'purple']
     .flatMap((c) => [1, 2, 3].map((v) => `damage_${c}_${v}`)),
+  // lock — 2 versions (woven `lock` skills; see skillSynthesizer)
+  ...[1, 2].map((v) => `lock_${v}`),
+  // reflect — 1 version, played when the `reflecting` buff fires (NOT a woven
+  // resolve sound — BattleScene plays it from the reflectTriggered state flag).
+  'reflect_1',
 ];
 for (const clip of GENERIC_SFX_CLIPS) {
   const key = `sfx_generic_${clip}`;

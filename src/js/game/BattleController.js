@@ -673,6 +673,10 @@ export default class BattleController {
     const boardShuffled = this._boardShuffled;
     this._boardShuffled = false;
 
+    // One-shot reflect SFX flag (the `reflecting` buff fired), cleared on read.
+    const reflectTriggered = this._reflectTriggered;
+    this._reflectTriggered = false;
+
     // One-shot enemy-transform signal (Sanguine Phoenix ⇄ Egg): the new enemy
     // state so the scene rebuilds the portrait + skills pane. Cleared on read.
     const enemyTransformed = this._enemyTransformed;
@@ -700,6 +704,7 @@ export default class BattleController {
       harvestEvents,
       thrallSummoned,
       boardShuffled,
+      reflectTriggered,
       enemyTransformed,
       transformSfx,
       gameOver: this.state === BattleState.GAME_OVER,
@@ -956,9 +961,19 @@ export default class BattleController {
     if (this._extraTurnEarned) {
       this._extraTurnEarned = false;
       this.pendingExtraTurn = true;
+      // CRITICAL: return to PLAYER_TURN. We entered via TARGETING; a targeted
+      // skill that grants an extra turn WITHOUT a cascade (e.g. lock + extra_turn)
+      // would otherwise leave the state stuck in TARGETING (the "kept targeting"
+      // bug). Cascade-entering targeted skills route through _finishResolving
+      // which sets PLAYER_TURN, so they were unaffected.
+      this.state = BattleState.PLAYER_TURN;
+      this.activeSide = 'player';
       if (!this._eggForcedExtraTurn) this.log.add('--- Extra Turn (Player) ---');
       this._eggForcedExtraTurn = false;
       if (this.onStateChange) this.onStateChange();
+      // The extra turn may begin with no possible move (e.g. board now heavily
+      // locked) — auto-pass if truly stuck.
+      this._maybeAutoPassPlayer();
       return true;
     }
     this._endTurn('player');
@@ -1751,6 +1766,11 @@ export default class BattleController {
     // observe the active side correctly.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_START, { side });
 
+    // If the player's turn begins with no possible move and no castable skill
+    // (e.g. the board is fully locked), auto-pass so the turn cycles and locks
+    // tick down rather than soft-locking. See decision #40.
+    if (side === 'player' && this._maybeAutoPassPlayer()) return;
+
     if (this.onStateChange) this.onStateChange();
   }
 
@@ -1854,10 +1874,9 @@ export default class BattleController {
         const applier = this._getStateBySide(applierSide);
         const atk = (applier && applier.attack) || 1;
         st.tickDamage = Math.max(1, Math.ceil(atk / 2));
-      } else if (id === 'reflecting') {
-        // Flat damage reflected back to attackers per hit (see _applyDamage).
-        st.reflectValue = Math.max(1, (typeof params.reflectValue === 'number') ? params.reflectValue : 1);
       }
+      // `reflecting` needs no per-instance data — it reflects whatever damage is
+      // taken (see _applyDamage). Its only parameter is duration (turns).
     }
     if (def.kind === 'buff') this.log.add(`${targetState.name} gains ${def.name}.`);
     else this.log.add(`${targetState.name} is afflicted with ${def.name}.`);
@@ -2102,6 +2121,26 @@ export default class BattleController {
     this.log.add('No valid moves. Board reshuffled.');
     this.board.reshuffle();
     this._endTurn('enemy');
+  }
+
+  /**
+   * Safety net for a fully-stuck PLAYER turn: if there is no tile the player can
+   * move (getValidSwaps excludes locked tiles, so an all-locked board yields
+   * none) AND no skill they can cast, auto-pass the turn so it cycles and locks
+   * tick down (locks expire each turn start, so the board frees up within a few
+   * turns). No-op when any swap or castable skill exists. See decision #40.
+   * @returns {boolean} true if the turn was auto-passed
+   */
+  _maybeAutoPassPlayer() {
+    if (this.state !== BattleState.PLAYER_TURN) return false;
+    if (this.board.getValidSwaps().length > 0) return false; // a tile can still move
+    const canCast = !this._isSilenced(this.playerState)
+      && (this.playerState.skills || []).some((s) => this._affordable(this.playerState, s));
+    if (canCast) return false; // a skill can still be cast
+    this.log.add('No moves available — turn passed.');
+    this.pendingExtraTurn = false;
+    this._endTurn('player');
+    return true;
   }
 
   /**
@@ -2466,7 +2505,7 @@ export default class BattleController {
         }
         const turns = typeof cfg.turns === 'number' ? cfg.turns : 1;
         const targetState = cfg.target === 'self' ? src : tgt;
-        this._applyStatus(targetState, cfg.id, { turns, attackValue: cfg.attackValue, reflectValue: cfg.reflectValue }, side);
+        this._applyStatus(targetState, cfg.id, { turns, attackValue: cfg.attackValue }, side);
         return false;
       }
 
@@ -2797,15 +2836,17 @@ export default class BattleController {
     const result = this.resolver.applyDamage(target, finalAmount);
 
     // REFLECT (woven buff): if the target carries the `reflecting` buff, deal its
-    // flat reflectValue back to the attacker. Guarded against recursion (a
+    // all the damage taken back to the attacker. Guarded against recursion (a
     // reflected hit can't itself reflect). The nested _applyDamage handles the
     // attacker's floating "-x" + sticky death; we add log + shake here. Decision #40.
     if (result.actualDamage > 0 && attacker && !opts.isReflect && !this._reflecting) {
-      const refl = this._getStatus(target, 'reflecting');
-      if (refl && refl.reflectValue > 0) {
+      // Reflect ALL of the damage just taken back to the attacker (the target
+      // still took it above). See decision #40.
+      if (this._hasStatus(target, 'reflecting')) {
         this._reflecting = true;
-        const rr = this._applyDamage(attacker, refl.reflectValue, { attackerSide: side, isReflect: true });
+        const rr = this._applyDamage(attacker, result.actualDamage, { attackerSide: side, isReflect: true });
         this._reflecting = false;
+        this._reflectTriggered = true; // one-shot → BattleScene plays the reflect SFX
         if (rr.actualDamage > 0) {
           this.log.add(`${target.name} reflects ${rr.actualDamage} damage to ${attacker.name}.`);
           this._setShakeFromDamage(rr.actualDamage, attacker.maxHp);
