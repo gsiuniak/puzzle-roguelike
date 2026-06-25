@@ -2527,11 +2527,12 @@ export default class BattleController {
       }
 
       case SKILL_EFFECT_TYPES.CONSUME: {
-        // Spend a built-up pool for damage = poolSize × perUnit. 'mana' (with a
-        // color = that color's leftover, no color = ALL leftover mana); 'armor'/
-        // 'barrier' = that shield pool (a Shield Bash). See decision #40.
+        // Spend a built-up pool for damage = floor(poolSize / divisor) — 1 damage
+        // per `divisor` units. 'mana' (with a color = that color's leftover, no
+        // color = ALL leftover mana); 'armor'/'barrier' = that shield pool (a
+        // Shield Bash). No stat scaling. See decision #40.
         const cfg = effect.consume || {};
-        const perUnit = Math.max(0, (cfg.perUnit || 1) + scaledBonus(cfg.scaling, src));
+        const divisor = Math.max(1, cfg.divisor || 2);
         let units = 0;
         if (cfg.resource === 'armor') { units = src.armor || 0; src.armor = 0; }
         else if (cfg.resource === 'barrier') { units = src.barrier || 0; src.barrier = 0; }
@@ -2541,7 +2542,7 @@ export default class BattleController {
           for (const c of cols) { units += src.mana[c] || 0; src.mana[c] = 0; }
           this._recomputeDynamicAttack(src);
         }
-        const amount = units * perUnit;
+        const amount = Math.floor(units / divisor);
         if (amount > 0) {
           const r = this._applyDamage(tgt, amount);
           this.log.add(`${src.name} consumes ${units} ${cfg.resource || 'mana'}, dealing ${r.actualDamage} damage.`);
@@ -2554,13 +2555,14 @@ export default class BattleController {
       }
 
       case SKILL_EFFECT_TYPES.MARK: {
-        // Bank a flat bonus onto the caster's NEXT damage instance (consumed in
-        // _applyDamage). Persists until consumed. See decision #40.
-        const amount = (effect.mark && typeof effect.mark.amount === 'number')
-          ? effect.mark.amount : 0;
-        if (amount > 0) {
-          src.mark = (src.mark || 0) + amount;
-          this.log.add(`${src.name} marks the next strike (+${amount}).`);
+        // Arm a one-time damage MULTIPLIER on the caster's NEXT damage instance
+        // (consumed in _applyDamage). Persists until consumed (no timer). The
+        // larger multiplier wins if re-applied. See decision #40.
+        const mult = (effect.mark && typeof effect.mark.multiplier === 'number')
+          ? effect.mark.multiplier : 2;
+        if (mult > 1) {
+          src.mark = Math.max(src.mark || 0, mult);
+          this.log.add(`${src.name} marks the next strike (x${mult}).`);
         }
         return false;
       }
@@ -2571,7 +2573,7 @@ export default class BattleController {
         // _executeLockColor (clicked tile's color); this path only fires for an
         // instant skill with a preset `cfg.color`, else most-abundant. Decision #40.
         const cfg = effect.lockColor || {};
-        const turns = (typeof cfg.turns === 'number' && cfg.turns > 0) ? cfg.turns : 1;
+        const turns = (typeof cfg.turns === 'number' && cfg.turns >= 2) ? cfg.turns : 2;
         let color = cfg.color;
         if (!color) color = this._mostAbundantBoardColor();
         if (color) {
@@ -2637,7 +2639,7 @@ export default class BattleController {
    */
   _executeLockColor(col, row, effect, skillName) {
     const cfg = effect.lockColor || {};
-    const turns = (typeof cfg.turns === 'number' && cfg.turns > 0) ? cfg.turns : 1;
+    const turns = (typeof cfg.turns === 'number' && cfg.turns >= 2) ? cfg.turns : 2;
     const LOCKABLE = [...MANA_COLORS, 'skull'];
     let color = this.board.get(col, row);
     if (!color || !LOCKABLE.includes(color)) {
@@ -2775,12 +2777,11 @@ export default class BattleController {
     // tunable. (Barrier is NOT a status — it's a numeric shield pool absorbed in
     // resolver.applyDamage AFTER this mitigation, alongside armor. See decision #38.)
     let dmg = Math.max(0, payload.amount | 0);
-    // MARK (woven): the attacker banks a flat bonus onto its NEXT damage
-    // instance. Added to the raw damage (so it shares the target's mitigation)
-    // then consumed. Skipped for reflected damage so reflect can't burn a mark.
-    // See decision #40.
-    if (attacker && attacker.mark > 0 && !opts.isReflect) {
-      dmg += attacker.mark;
+    // MARK (woven): the attacker's banked one-time MULTIPLIER (×2, or ×3 with
+    // Greater) is applied to this hit's raw damage, then consumed. Skipped for
+    // reflected damage so reflect can't burn a mark. See decision #40.
+    if (attacker && attacker.mark > 1 && !opts.isReflect) {
+      dmg = Math.round(dmg * attacker.mark);
       attacker.mark = 0;
     }
     const attackerBerserk = !!attacker && this._hasStatus(attacker, 'berserk');

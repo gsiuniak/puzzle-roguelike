@@ -130,17 +130,15 @@ export const TAG_VALUE_TABLES = Object.freeze({
   // `transmute N mana` — how much of your OTHER mana is converted into the
   // destination color (a battery for next turn — see emitTransmute).
   transmute: { 2: 20, 3: 30, 4: 22, 5: 14, 6: 9, 7: 5 },
-  // `consume`: damage dealt PER unit of the consumed pool (leftover mana / armor
-  // / barrier). The pool size at cast is the multiplier — see emitConsume.
-  consume:   { 1: 30, 2: 40, 3: 20, 4: 10 },
-  // `mark`: a FLAT bonus added to the caster's NEXT damage instance. Persists
-  // until consumed (no timer), so it never relies on Extra Turn. See decision #40.
-  mark:      { 2: 26, 3: 28, 4: 20, 5: 14, 6: 8, 7: 4 },
+  // `consume`: the DIVISOR — consume N units of a pool (leftover mana / armor /
+  // barrier) per 1 damage. 2 (the cap = 1/2 damage per mana) is the lucky roll;
+  // 3/4 are weaker. No stat scaling — the payoff is hoarding a big pool. See decision #40.
+  consume:   { 2: 30, 3: 40, 4: 30 },
   // `leech`: lifesteal PERCENT of damage dealt (divided by 100 at synthesis).
   leech:     { 25: 40, 33: 35, 50: 20, 66: 5 },
   // `lock N`: turns the targeted color stays locked (unmatchable + unmovable for
-  // BOTH sides). 1 or 2 turns.
-  lock:      { 1: 55, 2: 45 },
+  // BOTH sides). 2 turns minimum.
+  lock:      { 2: 60, 3: 40 },
   // `reflect N`: flat damage reflected back to attackers per hit taken. The
   // duration is a fixed constant (skillSynthesizer REFLECT_DURATION), not rolled.
   reflect:   { 2: 28, 3: 30, 4: 22, 5: 13, 6: 7 },

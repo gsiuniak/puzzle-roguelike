@@ -105,15 +105,17 @@ export const SKILL_EFFECT_TYPES = {
   // turn). Payload transmuteMana: { color, amount }. Resolved in
   // BattleController._resolveEffect; the woven `transmute` action. See decision #40.
   TRANSMUTE_MANA: 'transmute_mana',
-  // Spend a built-up POOL for damage = poolSize × perUnit. Payload consume:
-  // { resource:'mana'|'armor'|'barrier', color?, perUnit, scaling? } — 'mana'
-  // with a color eats leftover mana of that color (no color = all leftover mana);
-  // 'armor'/'barrier' eat that shield pool (a Shield Bash). Damage routes through
-  // _applyDamage. Resolved in BattleController._resolveEffect. See decision #40.
+  // Spend a built-up POOL for damage = floor(poolSize / divisor) — 1 damage per
+  // `divisor` units (capped at 1 per 2 = ½ damage/mana). Payload consume:
+  // { resource:'mana'|'armor'|'barrier', color?, divisor } — 'mana' with a color
+  // eats leftover mana of that color (no color = all leftover mana); 'armor'/
+  // 'barrier' eat that shield pool (a Shield Bash). No stat scaling. Damage routes
+  // through _applyDamage. Resolved in BattleController._resolveEffect. See decision #40.
   CONSUME: 'consume',
-  // Bank a FLAT bonus onto the caster's NEXT damage instance (state.mark),
-  // consumed in _applyDamage. Payload mark: { amount }. Persists until consumed
-  // (no timer). Resolved in BattleController._resolveEffect. See decision #40.
+  // Arm a one-time damage MULTIPLIER on the caster's NEXT damage instance
+  // (state.mark), consumed in _applyDamage. Payload mark: { multiplier } (×2, or
+  // ×3 with Greater). Persists until consumed (no timer). Resolved in
+  // BattleController._resolveEffect. See decision #40.
   MARK: 'mark',
   // Lock all tiles of a color: unmatchable + unmovable (for BOTH sides) for N
   // turns. Payload lockColor: { color?, turns } — omit color to lock the

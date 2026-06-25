@@ -96,8 +96,10 @@ const SELF_STATUS_TAGS = new Set(['intangible', 'berserk', 'reflect']);
 /** Fixed duration (turn cycles) for the woven `reflect` buff (its rolled value
  *  is the reflect amount, not the duration). See decision #40. */
 const REFLECT_DURATION = 2;
-/** Assumed pool size when power-pricing `consume` (leftover mana/armor varies). */
-const EST_CONSUMED = 4;
+/** Assumed pool size when power-pricing `consume` (players bank mana for it). */
+const EST_CONSUMED = 8;
+/** Assumed base damage of the hit `mark` doubles (for power-pricing). */
+const EST_MARK_DAMAGE = 8;
 
 /** The five mana colors a cost may be paid in (skull is never a cost). */
 const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
@@ -1100,31 +1102,32 @@ export function synthesize(recipe, options = {}) {
   };
 
   /**
-   * Emit a consume effect: deal damage = pool size × perUnit, spending that pool.
-   * `poolColor` (a cost color) eats that color's LEFTOVER mana after the cost is
-   * paid; null eats ALL leftover mana. perUnit scales with Attack (rolled preset).
-   * The displayed `<<perUnit>>` is the per-mana damage. See decision #40.
+   * Emit a consume effect: deal 1 damage per `divisor` units of a pool, spending
+   * the whole pool. `poolColor` (a cost color) eats that color's LEFTOVER mana
+   * after the cost is paid; null eats ALL leftover mana. No stat scaling — the
+   * payoff is hoarding a big pool (rate capped at 1 per 2 mana). See decision #40.
    */
-  const emitConsume = (perUnit, poolColor) => {
-    const presetKey = rollDamageScalingPreset();
-    const mult = DAMAGE_SCALING_PRESETS[presetKey] != null
-      ? DAMAGE_SCALING_PRESETS[presetKey] : DAMAGE_SCALE_PER_POINT;
-    scalingRolls.consume = presetKey;
-    const consume = { resource: 'mana', perUnit, scaling: { attack: mult } };
+  const emitConsume = (divisor, poolColor) => {
+    const consume = { resource: 'mana', divisor };
     if (poolColor) consume.color = poolColor;
     effects.push({ effectType: 'consume', consume });
     lines.push(poolColor
-      ? `Consume your remaining ${TILE_LABEL[poolColor]} [[mana]]: deal <<${perUnit}>> [[phys]] per mana`
-      : `Consume all your remaining [[mana]]: deal <<${perUnit}>> [[phys]] per mana`);
-    const sp = DAMAGE_SCALING_POWER;
-    power += perUnit * EST_CONSUMED * POWER.perConsumeUnit + mult * sp.estStat * sp.perScaledPoint;
+      ? `Consume your remaining ${TILE_LABEL[poolColor]} [[mana]]: deal 1 [[phys]] per ${divisor} mana`
+      : `Consume all your remaining [[mana]]: deal 1 [[phys]] per ${divisor} mana`);
+    power += (EST_CONSUMED / divisor) * POWER.perConsumeUnit;
   };
 
-  /** Emit a mark effect: bank a flat bonus onto the caster's NEXT damage. Decision #40. */
-  const emitMark = (amount) => {
-    effects.push({ effectType: 'mark', mark: { amount } });
-    lines.push(`Mark the enemy: your next hit deals +${amount} [[Damage]]`);
-    power += amount * POWER.perMark;
+  /**
+   * Emit a mark effect: the caster's NEXT damage instance is MULTIPLIED (one-time,
+   * persists until consumed — no timer). Default ×2; `greater` can raise it. Decision #40.
+   */
+  const emitMark = (multiplier) => {
+    const mult = multiplier || 2;
+    effects.push({ effectType: 'mark', mark: { multiplier: mult } });
+    lines.push(mult >= 3
+      ? `Mark the enemy: your next hit deals ${mult}x [[Damage]]`
+      : `Mark the enemy: your next hit deals double [[Damage]]`);
+    power += (mult - 1) * EST_MARK_DAMAGE * POWER.perConsumeUnit;
   };
 
   /**
@@ -1223,10 +1226,10 @@ export function synthesize(recipe, options = {}) {
       case 'row': case 'column': case 'area': case 'tile': {
         return emitDestroyShaped(tag); // a bare shape's bonus is a destroy of it
       }
-      case 'consume': { emitConsume(rollTagValue('consume') || 2, pickRandom(COST_COLORS)); return true; }
-      case 'mark':    { emitMark(rollTagValue('mark') || 3); return true; }
+      case 'consume': { emitConsume(rollTagValue('consume') || 3, pickRandom(COST_COLORS)); return true; }
+      case 'mark':    { emitMark(2); return true; }
       case 'transmute': { emitTransmute(rollTagValue('transmute') || 3, pickRandom(COST_COLORS)); return true; }
-      case 'lock':    { emitLock(rollTagValue('lock') || 1, pickRandom(COST_COLORS)); return true; }
+      case 'lock':    { emitLock(Math.max(2, rollTagValue('lock') || 2), pickRandom(COST_COLORS)); return true; }
       case 'reflect': { emitReflect(rollTagValue('reflect') || 3); return true; }
       case 'leech': {
         // Leech needs a damage vehicle — emit a damage effect with lifesteal.
@@ -1337,19 +1340,22 @@ export function synthesize(recipe, options = {}) {
         break;
       }
       case 'consume': {
-        let perUnit = roll('consume', 2);
-        if (consumeGreater()) perUnit = greaterBoost(perUnit);
+        let divisor = roll('consume', 3);
+        // `greater` sharpens the rate one step (more damage per mana), capped at
+        // the 1-per-2 ceiling; only consumed if it actually improves the divisor.
+        if (divisor > 2 && consumeGreater()) divisor -= 1;
         // Bind to a woven color's LEFTOVER mana but DON'T consume the color —
         // it stays dangling so it still pays the cost (you over-buy it, then cash
         // the rest). No woven color → consume ALL leftover mana. See decision #40.
         const poolColor = tileTypes.find((t) => COST_COLORS.includes(t) && !used.has(t)) || null;
-        emitConsume(perUnit, poolColor);
+        emitConsume(divisor, poolColor);
         break;
       }
       case 'mark': {
-        let amount = roll('mark', 3);
-        if (consumeGreater()) amount = greaterBoost(amount);
-        emitMark(amount);
+        // One-time damage MULTIPLIER on the next hit (×2; greater → ×3).
+        let mult = 2;
+        if (consumeGreater()) mult += 1;
+        emitMark(mult);
         break;
       }
       case 'transmute': {
@@ -1371,7 +1377,7 @@ export function synthesize(recipe, options = {}) {
           markWasted('lock', 'spell can have only one targeted effect');
           break;
         }
-        let turns = roll('lock', 1);
+        let turns = Math.max(2, roll('lock', 2)); // 2-turn minimum
         if (consumeGreater()) turns = greaterBoost(turns);
         targeting = { targeting: 'board_tile', area: { radius: 0 } };
         emitLock(turns, null); // color comes from the clicked tile at cast

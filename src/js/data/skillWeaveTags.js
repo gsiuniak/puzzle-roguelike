@@ -126,7 +126,7 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // consumed, so it never depends on Extra Turn. See decision #40.
   mark: { id: 'mark', label: 'Mark', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
   // `lock` is a TARGETED control tool: the player clicks a tile and every tile
-  // of that color becomes unmatchable + unmovable (for BOTH sides) for 1-2 turns.
+  // of that color becomes unmatchable + unmovable (for BOTH sides) for 2-3 turns.
   // Claims the single targeting slot. See decision #40.
   lock: { id: 'lock', label: 'Lock', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: null },
 
