@@ -281,13 +281,13 @@ const SKILL_CATALOG = {
   frenzy: {
     id: 'frenzy',
     name: 'Frenzy',
-    description: 'Gain <<10>> [[armor]].\nCreate 5 Blue [[tiles]].',
+    description: 'Gain <<8>> [[armor]].\nCreate 4 Blue [[tiles]].',
     icon: 'skill_frenzy',
     sound: 'skill_frenzy',
     cost: { blue: 8 },
     effects: [
-      { effectType: 'armor', armor: { amount: 10, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
-      { effectType: 'create_tiles', createTiles: { amount: 5, type: 'blue' } },
+      { effectType: 'armor', armor: { amount: 8, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
+      { effectType: 'create_tiles', createTiles: { amount: 4, type: 'blue' } },
       // { effectType: 'extra_turn' },
     ],
   },

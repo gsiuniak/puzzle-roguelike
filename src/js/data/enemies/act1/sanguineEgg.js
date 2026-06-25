@@ -39,8 +39,8 @@ const sanguineEgg = {
   type: 'elite',
   floors: [], // never spawns on its own — reached only via the Phoenix's transform
 
-  hp: 5, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 5, // the player must deal this much in ONE turn to slay the Egg
+  hp: 3, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 3, // the player must deal this much in ONE turn to slay the Egg
   attack: 1,
   attackScale: 0, // dormant — never attacks; opt out of the per-floor attack bonus
   armor: 0,
