@@ -128,7 +128,7 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // `lock` is a TARGETED control tool: the player clicks a tile and every tile
   // of that color becomes unmatchable + unmovable (for BOTH sides) for 2-3 turns.
   // Claims the single targeting slot. See decision #40.
-  lock: { id: 'lock', label: 'Lock', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: null },
+  lock: { id: 'lock', label: 'Lock', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: null },
 
   // ── Shapes / targets (where the action lands) ──
   row:    { id: 'row',    label: 'Row',    category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_row' },
@@ -167,7 +167,7 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // `reflect` is a self BUFF: for N turns the caster STILL takes damage but
   // ALSO deals the same amount back to the attacker (see statusEffects
   // `reflecting`). The rolled value is its DURATION. Decision #40.
-  reflect:    { id: 'reflect',    label: 'Reflect',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
+  reflect:    { id: 'reflect',    label: 'Reflect',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.UNCOMMON,      icon: null },
 });
 
 /** Default tag-icon asset key (gold flame placeholder from the mock). */
