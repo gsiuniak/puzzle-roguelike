@@ -1557,6 +1557,25 @@ export default class BattleController {
       this.log.add(`${totalDestroyed} tiles destroyed across ${this._allSteps.length} cascade(s).`);
     }
 
+    this._analysis = null;
+    this._allSteps = [];
+    this.highlightCells = [];
+    this.emptyCells = [];
+    this.fallCells = [];
+    this._previousEmptyCells = null;
+
+    // Check game over BEFORE converting the extra-turn flag below. A damage
+    // EFFECT resolved as part of this action (e.g. Fracture's direct damage
+    // alongside its row destroy) can kill the enemy without the death being
+    // noticed until now — and the death-transform (Sanguine Egg, decision #37)
+    // fires INSIDE _checkGameOver and FORCES _extraTurnEarned so the player
+    // retains the turn to slay the Egg. If this ran AFTER the extra-turn check,
+    // that forced flag would be missed and the turn would end, instantly
+    // reverting the Egg to a full-life Phoenix (the bug). For skull-match kills
+    // the transform fires earlier (in _doRemove), so this is also a no-op
+    // safety re-check for those paths.
+    if (this._checkGameOver()) return;
+
     // A turn-start cascade (e.g. Chokeweed Sap) resolves as part of the turn
     // setup, NOT as the side's action — so it never grants an extra turn (that
     // would double the turn). Suppress the extra-turn grant when resuming.
@@ -1570,15 +1589,6 @@ export default class BattleController {
       }
     }
     this._extraTurnEarned = false;
-
-    this._analysis = null;
-    this._allSteps = [];
-    this.highlightCells = [];
-    this.emptyCells = [];
-    this.fallCells = [];
-    this._previousEmptyCells = null;
-
-    if (this._checkGameOver()) return;
 
     if (this._resumeTurnAfterResolve) {
       // The cascade came from a turn-start passive; the active side still
