@@ -9,6 +9,8 @@ import BoardPlaceholder from './BoardPlaceholder.js';
 import UIText from './UIText.js';
 import FloatingImageEffect from './FloatingImageEffect.js';
 import FloatingTextEffect from './FloatingTextEffect.js';
+import DamageCounterEffect from './DamageCounterEffect.js';
+import ManaStreamEffect from './ManaStreamEffect.js';
 import TileParticleEffect from './TileParticleEffect.js';
 import HarvestTendrilEffect from './HarvestTendrilEffect.js';
 import BloodSplashEffect from './BloodSplashEffect.js';
@@ -18,7 +20,7 @@ import LevelUpOverlay from './LevelUpOverlay.js';
 import SkillLoadoutOverlay from './SkillLoadoutOverlay.js';
 import TooltipManager from '../systems/TooltipManager.js';
 import { BattleState } from '../game/BattleController.js';
-import { getTileType } from '../game/TileTypes.js';
+import { getTileType, isMana } from '../game/TileTypes.js';
 import { syncBattleResultsToRunState, applyRunModifier, getEffectivePlayerStats, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
 import { getCharacterById } from '../data/characters/index.js';
 import Metrics from '../engine/Metrics.js';
@@ -239,6 +241,14 @@ export default class BattleScene extends UIPanel {
     // ── Floating image effects ──
     /** @type {FloatingImageEffect[]} */
     this._floatingEffects = [];
+
+    // ── Accumulating damage counters (one per side, over the portrait) ──
+    // Each is a DamageCounterEffect that accumulates all damage to that side
+    // during a sequence, then finalizes (grows once, fades). Also kept in
+    // _floatingEffects for update/render/removal; the refs let us add to the
+    // live counter. Recreated lazily when a finalized/done counter is reused.
+    /** @type {{player: DamageCounterEffect|null, enemy: DamageCounterEffect|null}} */
+    this._damageCounters = { player: null, enemy: null };
 
     // ── Tile destruction particle effects ──
     /** @type {TileParticleEffect[]} */
@@ -985,10 +995,15 @@ export default class BattleScene extends UIPanel {
       }
     }
 
-    // ── Spawn match text effects for every 3+ match ──
+    // ── Spawn match text effects + mana streams for every 3+ match ──
+    // Mana from matches is credited to the ACTIVE side, so the wisps fly to
+    // that side's mana orbs. Skull/inert matches grant no mana → no stream.
     if (state.matchTextTriggers && state.matchTextTriggers.length > 0 && this._board) {
       for (const trigger of state.matchTextTriggers) {
         this._spawnMatchTextEffect(trigger);
+        if (isMana(trigger.typeId)) {
+          this._spawnManaStream(trigger, state.activeSide);
+        }
       }
     }
 
@@ -1078,14 +1093,38 @@ export default class BattleScene extends UIPanel {
       this._board.playShuffleAnimation();
     }
 
-    // ── Spawn combat-stat floating text over portraits ──
-    // Damage (red "-x"), heal (green "+x"), armor (blue "+x"). Multiple events
-    // for the same side this frame are stacked vertically so they don't overlap.
+    // ── Combat-stat feedback over portraits ──
+    // DAMAGE accumulates into a single per-side "total" counter (see
+    // _addDamageToCounter); heal (green "+x") / armor (blue) / barrier (purple)
+    // / poison (green) still float as independent text, stacked when concurrent.
     if (state.floatingStatEvents && state.floatingStatEvents.length > 0) {
       const stackBySide = { player: 0, enemy: 0 };
       for (const ev of state.floatingStatEvents) {
-        this._spawnStatTextEffect(ev, stackBySide[ev.side] || 0);
-        stackBySide[ev.side] = (stackBySide[ev.side] || 0) + 1;
+        if (ev.kind === 'damage') {
+          const receiver = ev.side === 'player' ? state.playerState : state.enemyState;
+          this._addDamageToCounter(ev.side, ev.amount, receiver ? receiver.maxHp : 0);
+        } else {
+          this._spawnStatTextEffect(ev, stackBySide[ev.side] || 0);
+          stackBySide[ev.side] = (stackBySide[ev.side] || 0) + 1;
+        }
+      }
+    }
+
+    // Re-anchor live damage counters to the portraits and feed them the
+    // "resolving" hint so a cascade stays as one accumulating counter and only
+    // finalizes once the board settles (the end of the damage sequence).
+    {
+      const resolving = state.state === BattleState.RESOLVING || state.state === BattleState.SWAPPING;
+      for (const side of ['player', 'enemy']) {
+        const counter = this._damageCounters[side];
+        if (!counter || counter.done) continue;
+        const pane = side === 'player' ? this._playerPane : this._enemyPane;
+        const center = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
+        if (center) counter.setAnchor(center.x, center.y);
+        // Only hold the counter open while its side is the one being attacked
+        // (the opponent is the active, resolving side). Once it's this side's
+        // own turn, let its received-damage total finalize promptly.
+        counter.resolving = resolving && state.activeSide !== side;
       }
     }
 
@@ -1315,6 +1354,56 @@ export default class BattleScene extends UIPanel {
     });
 
     this._floatingEffects.push(effect);
+  }
+
+  /**
+   * Accumulate a damage hit into the receiver side's running damage counter,
+   * creating a fresh counter if none is live (or the previous one is finalizing
+   * / done). The counter pops up over the receiver's portrait, accumulates all
+   * damage in the sequence, intensifies with relative damage, and finalizes
+   * (one last grow, then fade) once the board settles. See DamageCounterEffect.
+   * @param {'player'|'enemy'} side - the side taking damage
+   * @param {number} amount
+   * @param {number} maxHp - receiver max HP (drives relative intensity)
+   */
+  _addDamageToCounter(side, amount, maxHp) {
+    let counter = this._damageCounters[side];
+    if (!counter || counter.done || counter.finalizing) {
+      const pane = side === 'player' ? this._playerPane : this._enemyPane;
+      const center = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
+      if (!center) return;
+      counter = new DamageCounterEffect(center.x, center.y);
+      this._damageCounters[side] = counter;
+      this._floatingEffects.push(counter);
+    }
+    counter.add(amount, maxHp);
+  }
+
+  /**
+   * Fly a thin whispy mana stream from the matched tiles to the matching mana
+   * orb on the side that gained the mana (the active side), then pulse that orb
+   * as the wisps land.
+   * @param {{typeId:string, positions:Array<{col:number,row:number}>}} trigger
+   * @param {'player'|'enemy'} side - the side the mana is credited to
+   */
+  _spawnManaStream(trigger, side) {
+    const pane = side === 'player' ? this._playerPane : this._enemyPane;
+    if (!pane || typeof pane.getManaOrbCenter !== 'function') return;
+    const target = pane.getManaOrbCenter(trigger.typeId);
+    if (!target) return;
+
+    const cells = trigger.positions || (trigger.position ? [trigger.position] : []);
+    const sources = cells.map((c) => this._cellToScreen(c)).filter(Boolean);
+    if (sources.length === 0) return;
+
+    const tileType = getTileType(trigger.typeId);
+    this._floatingEffects.push(
+      new ManaStreamEffect(sources, target, {
+        color: tileType.color,
+        coreColor: '#fffcee',
+        onArrive: () => pane.pulseManaOrb(trigger.typeId),
+      })
+    );
   }
 
   /**

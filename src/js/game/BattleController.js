@@ -1404,6 +1404,9 @@ export default class BattleController {
           typeId: match.typeId,
           count: match.count,
           position: { col: match.positions[0].col, row: match.positions[0].row },
+          // All matched cells — source points for the mana-stream flourish
+          // (BattleScene flies wisps from these to the matching mana orb).
+          positions: match.positions.map((p) => ({ col: p.col, row: p.row })),
         });
       }
     }

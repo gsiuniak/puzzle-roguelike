@@ -37,16 +37,58 @@ export default class UIOrb extends UIElement {
     this.shadowBlur = 2;
     this.shadowOffsetX = 1;
     this.shadowOffsetY = 1;
+
+    // ── Pulse "bobble" animation (e.g. when a mana stream lands) ──
+    // A short scale punch about the orb center, decaying back to rest. Driven
+    // by update(dt); triggered via pulse(). Deliberately a SLIGHT, non-
+    // intensifying flourish (unlike the damage counter).
+    this._pulseElapsed = UIOrb.PULSE_MS; // start settled
+    this._pulsing = false;
+  }
+
+  /** Trigger (or restart) the slight scale bobble. */
+  pulse() {
+    this._pulseElapsed = 0;
+    this._pulsing = true;
+  }
+
+  update(dt) {
+    super.update(dt);
+    if (this._pulsing) {
+      this._pulseElapsed += dt;
+      if (this._pulseElapsed >= UIOrb.PULSE_MS) this._pulsing = false;
+    }
+  }
+
+  /** Current pulse scale factor (1 when settled). */
+  _pulseScale() {
+    if (!this._pulsing) return 1;
+    const p = this._pulseElapsed / UIOrb.PULSE_MS;
+    return 1 + UIOrb.PULSE_AMP * (1 - p) * Math.cos(p * Math.PI * 1.5);
   }
 
   renderSelf(ctx) {
     const r = this.rect;
+
+    const s = this._pulseScale();
+    let scaled = false;
+    if (s !== 1) {
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(s, s);
+      ctx.translate(-cx, -cy);
+      scaled = true;
+    }
 
     if (this.showAmountPlate) {
       this._renderWithPlate(ctx, r);
     } else {
       this._renderSimple(ctx, r);
     }
+
+    if (scaled) ctx.restore();
   }
 
   /** Original style: orb centered in rect, count inside orb */
@@ -212,3 +254,7 @@ export default class UIOrb extends UIElement {
     if (props.shadowOffsetY !== undefined) this.shadowOffsetY = props.shadowOffsetY;
   }
 }
+
+// Pulse "bobble" tunables (slight, non-intensifying flourish).
+UIOrb.PULSE_MS = 280;
+UIOrb.PULSE_AMP = 0.22;

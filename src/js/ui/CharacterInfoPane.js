@@ -481,6 +481,26 @@ export default class CharacterInfoPane extends UIPanel {
   }
 
   /**
+   * Center of a mana orb (by color) in design-space coordinates — the
+   * convergence point for incoming mana streams. Biased slightly upward toward
+   * the orb symbol. Returns null until laid out.
+   * @param {string} color - 'red'|'blue'|'green'|'yellow'|'purple'
+   * @returns {{x:number, y:number}|null}
+   */
+  getManaOrbCenter(color) {
+    const orb = this._manaOrbs[color];
+    const r = orb && orb.rect;
+    if (!r || r.w <= 0) return null;
+    return { x: r.x + r.w / 2, y: r.y + r.h * 0.35 };
+  }
+
+  /** Give a mana orb a slight bobble (e.g. when its stream lands). */
+  pulseManaOrb(color) {
+    const orb = this._manaOrbs[color];
+    if (orb && typeof orb.pulse === 'function') orb.pulse();
+  }
+
+  /**
    * Draw the shield badges ("🛡 +N") just to the right of the centered HP label:
    * armor (blue, icon_block) first, then barrier (purple, icon_barrier) stacked
    * to its right. Each shows the EXACT value (the bar overlays cap their visible
