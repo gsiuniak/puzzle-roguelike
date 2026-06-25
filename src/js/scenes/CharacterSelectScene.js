@@ -37,6 +37,22 @@ import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
 /** Duration of the cross-fade transition between splash backgrounds (ms) */
 const CROSS_FADE_DURATION = 400;
 
+/**
+ * How quickly the UI (info panel, heroes, button, aura) fades out once a hero
+ * with a `splashVideo` is confirmed, leaving only the full-canvas video (ms).
+ */
+const UI_FADE_OUT_DURATION = 350;
+
+/**
+ * How long BEFORE the choose-hero video's end to kick off the scene cross-fade,
+ * so the fade-to-next-scene completes roughly as the video finishes (ms).
+ * Should be ≥ the fadeToScene duration used below.
+ */
+const CHOOSE_VIDEO_CROSSFADE_LEAD = 700;
+
+/** Safety bail-out if the video never reports a usable duration / 'ended' (ms). */
+const CHOOSE_VIDEO_MAX_DURATION = 30000;
+
 const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
 
 export default class CharacterSelectScene extends UIPanel {
@@ -93,6 +109,29 @@ export default class CharacterSelectScene extends UIPanel {
     // ── Hover state ────────────────────────────────────
     /** @type {boolean} */
     this._buttonHovered = false;
+
+    // ── Choose-hero splash video intro ─────────────────
+    // When a hero with a `splashVideo` is confirmed, the UI fades out while a
+    // full-canvas video plays; the scene cross-fades to the next scene as the
+    // video nears its end. The <video> is off-DOM (not an AssetManager entry).
+    /** @type {HTMLVideoElement|null} */
+    this._video = null;
+    /** @type {string|null} src of the currently held/preloaded video */
+    this._videoSrc = null;
+    /** @type {boolean} true while the choose-hero video intro is playing */
+    this._choosingActive = false;
+    /** @type {object|null} the definition being transitioned into */
+    this._chosenDef = null;
+    /** @type {number} ms elapsed since the intro started */
+    this._chooseElapsed = 0;
+    /** @type {boolean} guard so the scene transition is started exactly once */
+    this._chooseTransitionStarted = false;
+    /** @type {number} 1→0 fade applied to all UI during the video intro */
+    this._uiFadeAlpha = 1;
+    /** Bound <video> listeners, retained for teardown. */
+    this._onVideoMeta = null;
+    this._onVideoEnded = null;
+    this._onVideoError = null;
 
     // ── UI fill scale ──────────────────────────────────
     // Multiplier applied to all UI sizes so the layout fills more of the
@@ -793,6 +832,10 @@ export default class CharacterSelectScene extends UIPanel {
 
     // Rebuild info panel for new character
     this._updateInfoPanel();
+
+    // Pre-buffer the newly selected hero's intro video (if any); idempotent and
+    // swaps out a previously buffered video when the src differs.
+    this._ensureVideoPreloaded(newDef);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -812,6 +855,16 @@ export default class CharacterSelectScene extends UIPanel {
     this._prevSplashKey = null;
     this._crossFadeAlpha = 1.0;
     this._buttonHovered = false;
+
+    // Reset the choose-hero video intro (the scene instance is reused across
+    // runs, e.g. after a defeat returns here).
+    this._choosingActive = false;
+    this._chosenDef = null;
+    this._chooseElapsed = 0;
+    this._chooseTransitionStarted = false;
+    this._uiFadeAlpha = 1;
+    // Pre-buffer the selected hero's intro video (if any) so it starts cleanly.
+    this._ensureVideoPreloaded(def);
 
     // Initialize aura color to selected character
     if (def && def.auraColor) {
@@ -883,6 +936,10 @@ export default class CharacterSelectScene extends UIPanel {
       input.canvas.removeEventListener('keydown', this._onKeyDown);
       this._onKeyDown = null;
     }
+
+    // Release the choose-hero intro video (the transition to the next scene is
+    // already underway by the time this fires).
+    this._destroyVideo();
   }
 
   /** Recursively set assetManager on all UIImage children */
@@ -901,6 +958,9 @@ export default class CharacterSelectScene extends UIPanel {
 
   /** @param {number} x @param {number} y */
   _handleMouseDown(x, y) {
+    // Once a hero is confirmed and the intro video is playing, ignore input.
+    if (this._choosingActive) return;
+
     if (this._tooltipManager) this._tooltipManager.onMouseDown(x, y);
 
     const hit = this.hitTest(x, y);
@@ -946,6 +1006,9 @@ export default class CharacterSelectScene extends UIPanel {
 
   /** @param {KeyboardEvent} e */
   _handleKeyDown(e) {
+    // Lock out navigation/confirm while the intro video is playing.
+    if (this._choosingActive) return;
+
     switch (e.key) {
       case 'ArrowLeft':
       case 'a':
@@ -982,6 +1045,9 @@ export default class CharacterSelectScene extends UIPanel {
   // ═══════════════════════════════════════════════════════
 
   _chooseHero() {
+    // Ignore re-confirms while an intro video is already playing.
+    if (this._choosingActive) return;
+
     const def = this._getSelectedDef();
     if (!def) return;
 
@@ -990,6 +1056,56 @@ export default class CharacterSelectScene extends UIPanel {
 
     // Play confirm sound
     AudioManager.playSfx('character_select_confirm');
+
+    // If this hero has a full-canvas intro video, fade the UI out and play it;
+    // the scene transition is deferred until the video nears its end.
+    if (def.splashVideo) {
+      this._beginChooseIntro(def);
+      return;
+    }
+
+    // Otherwise transition immediately (existing behavior).
+    this._performSceneTransition(def);
+  }
+
+  /**
+   * Begin the choose-hero intro: fade the UI out (driven in update) and play
+   * the hero's full-canvas video. The actual scene transition is started later
+   * by _maybeStartChooseTransition() once the video nears its end (or on
+   * end/error/timeout).
+   * @param {object} def
+   */
+  _beginChooseIntro(def) {
+    this._choosingActive = true;
+    this._chosenDef = def;
+    this._chooseElapsed = 0;
+    this._chooseTransitionStarted = false;
+
+    this._ensureVideoPreloaded(def);
+    const video = this._video;
+    if (!video) {
+      // No video element (build/preload failed) — just transition.
+      this._startChooseTransition();
+      return;
+    }
+
+    try { video.currentTime = 0; } catch (e) { /* ignore */ }
+    const playResult = video.play();
+    if (playResult && typeof playResult.catch === 'function') {
+      // Autoplay blocked / decode failure — fall back to an immediate transition.
+      playResult.catch(() => this._startChooseTransition());
+    }
+  }
+
+  /**
+   * Perform the run-state setup and fade to the next scene. Extracted from
+   * _chooseHero so it can run either immediately (no video) or deferred (after
+   * the intro video).
+   * @param {object} def
+   */
+  _performSceneTransition(def) {
+    const sm = this._sceneManager;
+    if (!sm) return;
 
     // Create run state from the immutable character definition.
     // This preserves baseStats as the immutable template and initializes
@@ -1032,6 +1148,112 @@ export default class CharacterSelectScene extends UIPanel {
   }
 
   // ═══════════════════════════════════════════════════════
+  // Choose-hero intro video
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Build + buffer the given definition's `splashVideo` (if any) ahead of time
+   * so it starts cleanly when the hero is confirmed. Idempotent: re-calling for
+   * the same src is a no-op; a different src (or no video) replaces/clears the
+   * held element.
+   * @param {object} def
+   */
+  _ensureVideoPreloaded(def) {
+    const src = def && def.splashVideo;
+    if (!src) {
+      // Selected hero has no video — drop any previously buffered one (unless
+      // an intro is actively playing it).
+      if (this._video && !this._choosingActive) this._destroyVideo();
+      return;
+    }
+    if (this._video && this._videoSrc === src) return; // already buffering this one
+    this._destroyVideo();
+    this._buildVideo(src);
+    try { this._video.load(); } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Create the off-DOM <video> for `src` and wire its listeners. Plays muted so
+   * autoplay is allowed; the character-select music keeps playing underneath.
+   * @param {string} src
+   */
+  _buildVideo(src) {
+    const video = document.createElement('video');
+    video.src = src;
+    video.muted = true;        // required for autoplay without a fresh gesture
+    video.playsInline = true;
+    video.loop = false;
+    video.preload = 'auto';
+
+    // CanvasApp.drawFullCanvasImage reads img.width/height — mirror the
+    // intrinsic video size so the cover-fit math works for the <video>.
+    this._onVideoMeta = () => {
+      video.width = video.videoWidth;
+      video.height = video.videoHeight;
+    };
+    // The video ending / failing is a hard cue to finish (no-op until the intro
+    // is actually active).
+    this._onVideoEnded = () => this._startChooseTransition();
+    this._onVideoError = () => this._startChooseTransition();
+    video.addEventListener('loadedmetadata', this._onVideoMeta);
+    video.addEventListener('ended', this._onVideoEnded);
+    video.addEventListener('error', this._onVideoError);
+
+    this._video = video;
+    this._videoSrc = src;
+  }
+
+  /** Stop and release the held <video> element. */
+  _destroyVideo() {
+    const video = this._video;
+    if (!video) return;
+    if (this._onVideoMeta) video.removeEventListener('loadedmetadata', this._onVideoMeta);
+    if (this._onVideoEnded) video.removeEventListener('ended', this._onVideoEnded);
+    if (this._onVideoError) video.removeEventListener('error', this._onVideoError);
+    this._onVideoMeta = this._onVideoEnded = this._onVideoError = null;
+    try { video.pause(); } catch (e) { /* ignore */ }
+    video.removeAttribute('src');
+    try { video.load(); } catch (e) { /* ignore */ }
+    this._video = null;
+    this._videoSrc = null;
+  }
+
+  /**
+   * Start the deferred scene transition exactly once. Called when the intro
+   * video nears its end, ends, errors, or the safety timeout elapses.
+   */
+  _startChooseTransition() {
+    if (!this._choosingActive || this._chooseTransitionStarted) return;
+    this._chooseTransitionStarted = true;
+    this._performSceneTransition(this._chosenDef);
+  }
+
+  /**
+   * Drive the intro each frame: advance the elapsed timer and trigger the scene
+   * cross-fade once the video is within CHOOSE_VIDEO_CROSSFADE_LEAD of its end
+   * (or the safety timeout elapses).
+   * @param {number} dt
+   */
+  _updateChooseIntro(dt) {
+    this._chooseElapsed += dt;
+    // Fade the UI out quickly so only the video remains.
+    this._uiFadeAlpha = Math.max(0, this._uiFadeAlpha - dt / UI_FADE_OUT_DURATION);
+
+    if (this._chooseTransitionStarted) return;
+
+    const v = this._video;
+    let nearEnd = false;
+    if (v && isFinite(v.duration) && v.duration > 0) {
+      const remainingMs = (v.duration - v.currentTime) * 1000;
+      nearEnd = remainingMs <= CHOOSE_VIDEO_CROSSFADE_LEAD;
+    }
+
+    if (nearEnd || this._chooseElapsed >= CHOOSE_VIDEO_MAX_DURATION) {
+      this._startChooseTransition();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
   // Update
   // ═══════════════════════════════════════════════════════
 
@@ -1047,6 +1269,9 @@ export default class CharacterSelectScene extends UIPanel {
 
     // Advance tooltip hold-timer / state
     if (this._tooltipManager) this._tooltipManager.update(dt);
+
+    // Advance the choose-hero video intro (UI fade-out + deferred transition)
+    if (this._choosingActive) this._updateChooseIntro(dt);
 
     super.update(dt);
   }
@@ -1077,6 +1302,13 @@ export default class CharacterSelectScene extends UIPanel {
       const currImg = am.get(this._currSplashKey);
       if (currImg) app.drawFullCanvasImage(currImg, Math.min(1.0, this._crossFadeAlpha));
     }
+
+    // Choose-hero intro video, drawn full-canvas on top of the splash with the
+    // same cover-fit framing (the video matches the splash resolution). The
+    // splash underneath covers any gap until the first frame is decodable.
+    if (this._choosingActive && this._video && this._video.readyState >= 2) {
+      app.drawFullCanvasImage(this._video, 1.0);
+    }
   }
 
   /** No in-viewport background — splashes are drawn full-canvas in renderBackground. */
@@ -1096,7 +1328,9 @@ export default class CharacterSelectScene extends UIPanel {
         const pr = this._infoPanel.rect;
         if (pr.w > 0 && pr.h > 0) {
           ctx.save();
-          ctx.globalAlpha = 0.92;
+          // Factor in the choose-hero UI fade (this method sets its own
+          // globalAlpha, overwriting the outer fade applied in render()).
+          ctx.globalAlpha = 0.92 * this._uiFadeAlpha;
           ctx.imageSmoothingEnabled = true;
           ctx.drawImage(
             panelImg,
@@ -1144,6 +1378,17 @@ export default class CharacterSelectScene extends UIPanel {
     // 1. Draw character splash backgrounds
     this.renderSelf(ctx);
 
+    // During the choose-hero intro the UI fades out, leaving only the
+    // full-canvas video (drawn in renderBackground). Once fully faded, skip the
+    // UI entirely. The fade is applied as an outer globalAlpha that multiplies
+    // through every UI element (none of them overwrite globalAlpha except the
+    // info-panel background, which factors _uiFadeAlpha in explicitly).
+    const uiAlpha = this._uiFadeAlpha;
+    if (uiAlpha <= 0.001) return;
+
+    ctx.save();
+    ctx.globalAlpha = uiAlpha;
+
     // 2. Draw animated aura strands (over splash, under all UI)
     this._auraEffect.render(ctx, this.rect);
 
@@ -1175,6 +1420,8 @@ export default class CharacterSelectScene extends UIPanel {
     if (this._tooltipManager) {
       this._tooltipManager.render(ctx);
     }
+
+    ctx.restore(); // end the choose-hero UI fade
 
     if (this.debug) {
       this._drawDebug(ctx);
