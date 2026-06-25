@@ -125,9 +125,10 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // `mark` banks a FLAT bonus onto your NEXT damage instance — persists until
   // consumed, so it never depends on Extra Turn. See decision #40.
   mark: { id: 'mark', label: 'Mark', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
-  // `lock` makes all tiles of a woven color unmatchable + unmovable (for BOTH
-  // sides) for N turns — a board-denial control tool. See decision #40.
-  lock: { id: 'lock', label: 'Lock', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: null },
+  // `lock` is a TARGETED control tool: the player clicks a tile and every tile
+  // of that color becomes unmatchable + unmovable (for BOTH sides) for 1-2 turns.
+  // Claims the single targeting slot. See decision #40.
+  lock: { id: 'lock', label: 'Lock', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.COMMON, icon: null },
 
   // ── Shapes / targets (where the action lands) ──
   row:    { id: 'row',    label: 'Row',    category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_row' },

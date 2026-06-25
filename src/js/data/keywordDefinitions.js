@@ -251,7 +251,12 @@ export const KEYWORD_DEFINITIONS = {
     id: 'barrier',
     label: 'Barrier',
     description: 'A temporary magic shield that absorbs [[Damage]] like [[Armor]], but lasts only one round. Scales with [[Magic]].',
-  }
+  },
+  lock: {
+    id: 'lock',
+    label: 'Lock',
+    description: 'Locked [[Tiles]] cannot be moved or [[matched]] by either side until the lock expires. Targets a tile and locks every tile of its color.',
+  },
 };
 
 /**
@@ -278,6 +283,8 @@ export const KEYWORD_ALIASES = {
   enfeebled: 'enfeeble',
   bleeding: 'bleed',
   freeze: 'frozen',
+  locked: 'lock',
+  locking: 'lock',
 };
 
 /**

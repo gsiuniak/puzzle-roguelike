@@ -390,7 +390,7 @@ export default class BoardPlaceholder extends UIElement {
         if (this._boardModel && this._boardModel.isColorLocked(colorKey)) {
           const prevA = ctx.globalAlpha;
           if (tileAlpha < 1) ctx.globalAlpha = prevA * tileAlpha;
-          this._drawLockedTileOverlay(ctx, drawX, drawY, drawCs);
+          this._drawLockedTileOverlay(ctx, drawX, drawY, drawCs, this._boardModel.getLockTurns(colorKey));
           if (tileAlpha < 1) ctx.globalAlpha = prevA;
         }
       }
@@ -520,20 +520,44 @@ export default class BoardPlaceholder extends UIElement {
 
   /**
    * Draw the `locked_tile` frame image over a locked tile at (x, y) with side
-   * `size`, sized to the cell. Drawn with high-quality smoothing (detailed art).
-   * No-op if the sprite is missing. See decision #40.
+   * `size`, sized to the cell, plus a white "turns remaining" number badge.
+   * Drawn with high-quality smoothing (detailed art). No-op if the sprite is
+   * missing. See decision #40.
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} x @param {number} y @param {number} size
+   * @param {number} [turns] turns remaining (drawn as a white badge if > 0)
    */
-  _drawLockedTileOverlay(ctx, x, y, size) {
+  _drawLockedTileOverlay(ctx, x, y, size, turns = 0) {
     if (size <= 0) return;
     const img = this._assetManager ? this._assetManager.get('locked_tile') : null;
-    if (!img) return;
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, 0, 0, img.width, img.height, Math.round(x), Math.round(y), size, size);
-    ctx.restore();
+    if (img) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, img.width, img.height, Math.round(x), Math.round(y), size, size);
+      ctx.restore();
+    }
+    // White turns-remaining badge, centered, with a dark outline for legibility
+    // over the tile + lock art.
+    if (turns > 0) {
+      const fs = Math.max(10, Math.round(size * 0.34));
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+      ctx.save();
+      ctx.font = `bold ${fs}px "MarcellusSC", serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = Math.max(2, fs * 0.2);
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = Math.max(2, fs * 0.15);
+      ctx.strokeText(String(turns), cx, cy);
+      ctx.shadowBlur = 0;
+      ctx.fillText(String(turns), cx, cy);
+      ctx.restore();
+    }
   }
 
   // ── Wild (Thrall) tile border overlay ─────────────────

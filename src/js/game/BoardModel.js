@@ -36,11 +36,14 @@ export default class BoardModel {
     this.spawnRateBoosts = {};
 
     /**
-     * @type {Object<string, number>} tile type → turns remaining LOCKED. A
-     * locked color is unmatchable (skipped in _scanLineRuns) AND unmovable
-     * (excluded from getValidSwaps + rejected by the swap guard), for BOTH
-     * sides. Set by the woven `lock` action (BattleController.lockColor) and
-     * ticked down each turn start (tickLocks). See decision #40.
+     * @type {Object<string, { turns:number, armed:boolean }>} tile type → lock
+     * state. A locked color is unmatchable (skipped in _scanLineRuns) AND
+     * unmovable (excluded from getValidSwaps + rejected by the swap guard), for
+     * BOTH sides. Set by the woven `lock` action (lockColor) and ticked at each
+     * turn start (tickLocks). `armed` mirrors the status-effect arming model: a
+     * lock applied MID-TURN is not yet armed, so the very next turn start (the
+     * opponent's) ARMS it without decrementing — that's why a 1-turn lock covers
+     * the opponent's whole turn instead of expiring instantly. See decision #40.
      */
     this.lockedColors = {};
 
@@ -80,22 +83,35 @@ export default class BoardModel {
    */
   lockColor(type, turns) {
     if (!type || !(turns > 0)) return;
-    this.lockedColors[type] = Math.max(this.lockedColors[type] || 0, turns);
+    const existing = this.lockedColors[type];
+    if (existing) existing.turns = Math.max(existing.turns, turns); // refresh keeps the longer
+    else this.lockedColors[type] = { turns, armed: false };
   }
 
   /** Whether `type` is currently locked. */
   isColorLocked(type) {
-    return (this.lockedColors[type] || 0) > 0;
+    const l = this.lockedColors[type];
+    return !!l && l.turns > 0;
+  }
+
+  /** Turns remaining on `type`'s lock (0 if not locked). For the UI badge. */
+  getLockTurns(type) {
+    const l = this.lockedColors[type];
+    return (l && l.turns > 0) ? l.turns : 0;
   }
 
   /**
-   * Decrement every lock by one and drop expired ones. Called once per turn
-   * start (BattleController._completeTurnIntro).
+   * Tick every lock at a turn start. A not-yet-armed lock (applied since the last
+   * turn start) is ARMED here without decrementing — so the turn that follows the
+   * cast (the opponent's) is fully covered; armed locks decrement and expire.
+   * Called once per turn start (BattleController._completeTurnIntro).
    */
   tickLocks() {
     for (const c of Object.keys(this.lockedColors)) {
-      this.lockedColors[c] -= 1;
-      if (this.lockedColors[c] <= 0) delete this.lockedColors[c];
+      const l = this.lockedColors[c];
+      if (!l.armed) { l.armed = true; continue; } // first tick after a mid-turn cast
+      l.turns -= 1;
+      if (l.turns <= 0) delete this.lockedColors[c];
     }
   }
 
@@ -624,7 +640,11 @@ export default class BoardModel {
     clone.spawnWeights = { ...this.spawnWeights };
     clone.weightModifiers = { ...this.weightModifiers };
     clone.spawnRateBoosts = { ...this.spawnRateBoosts };
-    clone.lockedColors = { ...this.lockedColors }; // AI sim respects locks
+    // Deep-copy lock entries (objects) so an AI-sim clone can't mutate live locks.
+    clone.lockedColors = {};
+    for (const k of Object.keys(this.lockedColors)) {
+      clone.lockedColors[k] = { ...this.lockedColors[k] };
+    }
 
     for (let x = 0; x < this.cols; x++) {
       for (let y = 0; y < this.rows; y++) {

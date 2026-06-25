@@ -937,6 +937,10 @@ export default class BattleController {
             enteredCascade = true;
           }
           break;
+        case SKILL_EFFECT_TYPES.LOCK_COLOR:
+          // Targeted lock: lock the CLICKED tile's color (and every tile of it).
+          this._executeLockColor(col, row, effect, skill.name);
+          break;
         default:
           if (this._resolveEffect(effect, skill, 'player')) {
             enteredCascade = true;
@@ -2562,11 +2566,12 @@ export default class BattleController {
       }
 
       case SKILL_EFFECT_TYPES.LOCK_COLOR: {
-        // Lock all tiles of a color (unmatchable + unmovable, both sides) for N
-        // turns. No woven color → lock the OPPONENT's most-abundant matchable
-        // color (auto-denial). See decision #40.
+        // NON-targeted lock fallback (the `random`-bonus variant, which carries a
+        // preset color). The woven `lock` action is TARGETED and resolves via
+        // _executeLockColor (clicked tile's color); this path only fires for an
+        // instant skill with a preset `cfg.color`, else most-abundant. Decision #40.
         const cfg = effect.lockColor || {};
-        const turns = (typeof cfg.turns === 'number' && cfg.turns > 0) ? cfg.turns : 2;
+        const turns = (typeof cfg.turns === 'number' && cfg.turns > 0) ? cfg.turns : 1;
         let color = cfg.color;
         if (!color) color = this._mostAbundantBoardColor();
         if (color) {
@@ -2619,6 +2624,31 @@ export default class BattleController {
       if (n > bestN) { best = c; bestN = n; }
     }
     return best;
+  }
+
+  /**
+   * Targeted `lock`: lock the color of the CLICKED tile (and every tile of that
+   * color), board-wide, for `turns`. Locks any matchable type the player clicks
+   * (the 5 mana colors + skull); a non-lockable click (wild/disease/empty) falls
+   * back to the effect's `color` or the most-abundant color. See decision #40.
+   * @param {number} col @param {number} row
+   * @param {object} effect — { lockColor: { color?, turns } }
+   * @param {string} skillName
+   */
+  _executeLockColor(col, row, effect, skillName) {
+    const cfg = effect.lockColor || {};
+    const turns = (typeof cfg.turns === 'number' && cfg.turns > 0) ? cfg.turns : 1;
+    const LOCKABLE = [...MANA_COLORS, 'skull'];
+    let color = this.board.get(col, row);
+    if (!color || !LOCKABLE.includes(color)) {
+      color = (cfg.color && LOCKABLE.includes(cfg.color)) ? cfg.color : this._mostAbundantBoardColor();
+    }
+    if (color && LOCKABLE.includes(color)) {
+      this.board.lockColor(color, turns);
+      this.log.add(`${skillName || 'A spell'} locks all ${color} tiles for ${turns} turns.`);
+    } else {
+      this.log.add(`${skillName || 'A spell'}: no valid tile to lock.`);
+    }
   }
 
   /**

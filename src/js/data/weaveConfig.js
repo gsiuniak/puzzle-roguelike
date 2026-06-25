@@ -138,9 +138,9 @@ export const TAG_VALUE_TABLES = Object.freeze({
   mark:      { 2: 26, 3: 28, 4: 20, 5: 14, 6: 8, 7: 4 },
   // `leech`: lifesteal PERCENT of damage dealt (divided by 100 at synthesis).
   leech:     { 25: 40, 33: 35, 50: 20, 66: 5 },
-  // `lock N`: turns a color stays locked (unmatchable + unmovable for BOTH
-  // sides). Min 2 so a lock cast on your turn covers the opponent's next turn.
-  lock:      { 2: 60, 3: 40 },
+  // `lock N`: turns the targeted color stays locked (unmatchable + unmovable for
+  // BOTH sides). 1 or 2 turns.
+  lock:      { 1: 55, 2: 45 },
   // `reflect N`: flat damage reflected back to attackers per hit taken. The
   // duration is a fixed constant (skillSynthesizer REFLECT_DURATION), not rolled.
   reflect:   { 2: 28, 3: 30, 4: 22, 5: 13, 6: 7 },

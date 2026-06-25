@@ -1128,16 +1128,18 @@ export function synthesize(recipe, options = {}) {
   };
 
   /**
-   * Emit a lock_color effect: lock a color (unmatchable + unmovable) for `turns`.
-   * `color` null → the effect picks the enemy's strongest color at cast. Decision #40.
+   * Emit a lock_color effect (unmatchable + unmovable for `turns`). With a
+   * `color` it's a NON-targeted lock of that color (the `random`-bonus variant);
+   * with no color it's the TARGETED variant — the action case claims the
+   * targeting slot and the clicked tile's color is locked at cast. See decision #40.
    */
   const emitLock = (turns, color) => {
     const lockColor = { turns };
     if (color) lockColor.color = color;
     effects.push({ effectType: 'lock_color', lockColor });
     lines.push(color
-      ? `Lock all ${TILE_LABEL[color]} [[tiles]] for ${turns} turns`
-      : `Lock the enemy's strongest color for ${turns} turns`);
+      ? `[[Lock]] all ${TILE_LABEL[color]} [[tiles]] for ${turns} turns`
+      : `[[Lock]] the target tile's color for ${turns} turns`);
     power += turns * POWER.lockTurn;
   };
 
@@ -1224,7 +1226,7 @@ export function synthesize(recipe, options = {}) {
       case 'consume': { emitConsume(rollTagValue('consume') || 2, pickRandom(COST_COLORS)); return true; }
       case 'mark':    { emitMark(rollTagValue('mark') || 3); return true; }
       case 'transmute': { emitTransmute(rollTagValue('transmute') || 3, pickRandom(COST_COLORS)); return true; }
-      case 'lock':    { emitLock(rollTagValue('lock') || 2, pickRandom(COST_COLORS)); return true; }
+      case 'lock':    { emitLock(rollTagValue('lock') || 1, pickRandom(COST_COLORS)); return true; }
       case 'reflect': { emitReflect(rollTagValue('reflect') || 3); return true; }
       case 'leech': {
         // Leech needs a damage vehicle — emit a damage effect with lifesteal.
@@ -1362,12 +1364,17 @@ export function synthesize(recipe, options = {}) {
         break;
       }
       case 'lock': {
-        let turns = roll('lock', 2);
+        // TARGETED: the player clicks a tile; that tile's color is locked. Claims
+        // the single targeting slot (wasted if another targeted action took it).
+        if (targeting) {
+          used.delete('lock');
+          markWasted('lock', 'spell can have only one targeted effect');
+          break;
+        }
+        let turns = roll('lock', 1);
         if (consumeGreater()) turns = greaterBoost(turns);
-        // Lock target = a woven color (consumed); null → the effect picks the
-        // enemy's strongest color at cast. See decision #40.
-        const color = takeColorType();
-        emitLock(turns, color);
+        targeting = { targeting: 'board_tile', area: { radius: 0 } };
+        emitLock(turns, null); // color comes from the clicked tile at cast
         break;
       }
       case 'drain': {
