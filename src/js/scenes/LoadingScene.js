@@ -107,10 +107,18 @@ export default class LoadingScene extends UIPanel {
 
   // ── Render ────────────────────────────────────────────
 
-  /** Paint the dark base across the entire physical canvas (covers the bars). */
+  /**
+   * Paint the dark base AND the radial vignette across the entire physical
+   * canvas (covers the letterbox/pillarbox bars). The vignette must live here
+   * rather than in renderSelf — renderSelf is clipped to the 1920×1080 design
+   * viewport, so on wider screens its vignette stopped at the viewport edge and
+   * left the pillarbox bars an un-vignetted flat fill (a visible seam).
+   */
   renderBackground(ctx) {
     if (!this._sceneManager) return;
-    this._sceneManager._app.fillFullCanvas(BG_COLOR);
+    const app = this._sceneManager._app;
+    app.fillFullCanvas(BG_COLOR);
+    this._drawVignetteFullCanvas(app);
   }
 
   /** UIPanel hook — drawn in design space (inside the viewport clip). */
@@ -120,7 +128,6 @@ export default class LoadingScene extends UIPanel {
     ctx.globalAlpha = alpha;
 
     const cx = this.rect.w / 2;
-    this._drawVignette(ctx);
     this._drawText(ctx, cx);
     this._drawBar(ctx, cx);
 
@@ -129,14 +136,25 @@ export default class LoadingScene extends UIPanel {
 
   // ── Drawing helpers ───────────────────────────────────
 
-  _drawVignette(ctx) {
-    const w = this.rect.w;
-    const h = this.rect.h;
+  /**
+   * Draw the radial vignette across the FULL physical canvas (CSS pixels),
+   * bypassing the design-space transform — same approach as
+   * CanvasApp.fillFullCanvas — so it covers the pillarbox/letterbox bars
+   * seamlessly. Centered on the canvas; radius scales with canvas height.
+   * @param {import('../engine/CanvasApp.js').default} app
+   */
+  _drawVignetteFullCanvas(app) {
+    const ctx = app.ctx;
+    const w = app.cssWidth;
+    const h = app.cssHeight;
+    ctx.save();
+    ctx.setTransform(app.dpr, 0, 0, app.dpr, 0, 0);
     const grad = ctx.createRadialGradient(w / 2, h / 2, h * 0.15, w / 2, h / 2, h * 0.75);
     grad.addColorStop(0, 'rgba(0,0,0,0)');
     grad.addColorStop(1, 'rgba(0,0,0,0.55)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
 
   _drawText(ctx, cx) {
