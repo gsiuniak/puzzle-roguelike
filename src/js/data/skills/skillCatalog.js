@@ -405,15 +405,17 @@ const SKILL_CATALOG = {
   blood_gorge: {
     id: 'blood_gorge',
     name: 'Blood Gorge',
-    description: 'Drain 5 of all [[mana]] from the enemy.\nGain 10 Max HP.\n[[Heal]] 10 HP.',
+    description: 'Drain 5 of all [[mana]] from the enemy.\nGain 3 Attack.\n[[Create]] 8 Skulls',
     icon: 'skill_blood_gorge',  // dedicated icon (enemy-skills sheet)
     sound: 'skill_blood_gorge', // dedicated SFX
     cost: { purple: 6 },
     effects: [
       { effectType: 'drain_mana', drainMana: { amount: 5 } },
-      // Raises the ceiling first, then the heal fills into the new space.
-      { effectType: 'gain_max_hp', gainMaxHp: { amount: 10 } },
-      { effectType: 'heal', heal: { amount: 10 } },
+      { effectType: 'gain_attack', gainAttack: { amount: 3 } },
+      { effectType: 'create_tiles', createTiles: { amount: 8, type: 'skull' } },
+      // // Raises the ceiling first, then the heal fills into the new space.
+      // { effectType: 'gain_max_hp', gainMaxHp: { amount: 10 } },
+      // { effectType: 'heal', heal: { amount: 10 } },
     ],
   },
   anemic_feast: {
@@ -421,14 +423,14 @@ const SKILL_CATALOG = {
     name: 'Anemic Feast',
     // Worded like the synthesizer's `skull + damage` line (skillSynthesizer
     // emitDamage): "Deal <<n>> <type>, plus N per [[Skull]] on the board".
-    description: 'Deal <<10>> [[mag]], plus 1 per [[Skull]] on the board.\nGain 6 purple.\nGain an [[extra turn]].',
+    description: 'Deal <<10>> [[phys]], plus 1 per [[Skull]] on the board.\nGain 6 purple.\nGain an [[extra turn]].',
     icon: 'skill_anemic_feast',  // dedicated icon (enemy-skills sheet)
     sound: 'skill_anemic_feast', // dedicated SFX
     cost: { red: 10 },
     effects: [
       // perSkull adds the live board Skull count at cast; magic scaling keeps it
       // consistent with the [[mag]] tag (enemy Magic is 0, so <<10>> shows 10).
-      { effectType: 'damage', damage: { amount: 10, perSkull: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._50 } } },
+      { effectType: 'damage', damage: { amount: 10, perSkull: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
       { effectType: 'gain_mana', gainMana: { color: 'purple', amount: 6 } },
       { effectType: 'extra_turn' },
     ],
