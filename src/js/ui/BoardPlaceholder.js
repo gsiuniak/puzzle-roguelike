@@ -384,6 +384,15 @@ export default class BoardPlaceholder extends UIElement {
         if (isWild(colorKey)) {
           wildBorders.push({ x: drawX, y: drawY, cs: drawCs });
         }
+
+        // Locked tiles (woven `lock`): the `locked_tile` frame overlay. Data-
+        // driven off the board model so it appears/clears with the lock. See decision #40.
+        if (this._boardModel && this._boardModel.isColorLocked(colorKey)) {
+          const prevA = ctx.globalAlpha;
+          if (tileAlpha < 1) ctx.globalAlpha = prevA * tileAlpha;
+          this._drawLockedTileOverlay(ctx, drawX, drawY, drawCs);
+          if (tileAlpha < 1) ctx.globalAlpha = prevA;
+        }
       }
     }
 
@@ -505,6 +514,26 @@ export default class BoardPlaceholder extends UIElement {
 
     // Restore smoothing to previous state
     ctx.imageSmoothingEnabled = prevSmoothing;
+  }
+
+  // ── Locked tile overlay (woven `lock`) ────────────────
+
+  /**
+   * Draw the `locked_tile` frame image over a locked tile at (x, y) with side
+   * `size`, sized to the cell. Drawn with high-quality smoothing (detailed art).
+   * No-op if the sprite is missing. See decision #40.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x @param {number} y @param {number} size
+   */
+  _drawLockedTileOverlay(ctx, x, y, size) {
+    if (size <= 0) return;
+    const img = this._assetManager ? this._assetManager.get('locked_tile') : null;
+    if (!img) return;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, img.width, img.height, Math.round(x), Math.round(y), size, size);
+    ctx.restore();
   }
 
   // ── Wild (Thrall) tile border overlay ─────────────────

@@ -35,6 +35,15 @@ export default class BoardModel {
      */
     this.spawnRateBoosts = {};
 
+    /**
+     * @type {Object<string, number>} tile type → turns remaining LOCKED. A
+     * locked color is unmatchable (skipped in _scanLineRuns) AND unmovable
+     * (excluded from getValidSwaps + rejected by the swap guard), for BOTH
+     * sides. Set by the woven `lock` action (BattleController.lockColor) and
+     * ticked down each turn start (tickLocks). See decision #40.
+     */
+    this.lockedColors = {};
+
     /** @type {Array<Array<string|null>>} grid[col][row] = typeId or null */
     this.grid = [];
     for (let x = 0; x < this.cols; x++) {
@@ -60,6 +69,34 @@ export default class BoardModel {
    */
   setSpawnRateBoosts(boosts) {
     this.spawnRateBoosts = { ...(boosts || {}) };
+  }
+
+  // ── Locked colors (woven `lock` action) ──────────────
+
+  /**
+   * Lock a tile color for `turns` turn-starts: it becomes unmatchable and
+   * unmovable for BOTH sides. Refreshing keeps the longer duration.
+   * @param {string} type @param {number} turns
+   */
+  lockColor(type, turns) {
+    if (!type || !(turns > 0)) return;
+    this.lockedColors[type] = Math.max(this.lockedColors[type] || 0, turns);
+  }
+
+  /** Whether `type` is currently locked. */
+  isColorLocked(type) {
+    return (this.lockedColors[type] || 0) > 0;
+  }
+
+  /**
+   * Decrement every lock by one and drop expired ones. Called once per turn
+   * start (BattleController._completeTurnIntro).
+   */
+  tickLocks() {
+    for (const c of Object.keys(this.lockedColors)) {
+      this.lockedColors[c] -= 1;
+      if (this.lockedColors[c] <= 0) delete this.lockedColors[c];
+    }
   }
 
   getEffectiveWeights() {
@@ -287,9 +324,12 @@ export default class BoardModel {
 
     // Concrete matchable types present (skip empty + wild tiles; inert tiles
     // are included but only ever match as themselves — see allowWild below).
+    // LOCKED colors are skipped entirely so they can't form a run (denial). A
+    // wild also can't complete a locked color's run, since the color is absent
+    // from `colors`.
     const colors = new Set();
     for (const t of line) {
-      if (t && !isWild(t)) colors.add(t);
+      if (t && !isWild(t) && !this.isColorLocked(t)) colors.add(t);
     }
 
     for (const c of colors) {
@@ -584,6 +624,8 @@ export default class BoardModel {
     clone.spawnWeights = { ...this.spawnWeights };
     clone.weightModifiers = { ...this.weightModifiers };
     clone.spawnRateBoosts = { ...this.spawnRateBoosts };
+    clone.lockedColors = { ...this.lockedColors }; // AI sim respects locks
+
     for (let x = 0; x < this.cols; x++) {
       for (let y = 0; y < this.rows; y++) {
         clone.grid[x][y] = this.grid[x][y];
@@ -602,11 +644,14 @@ export default class BoardModel {
     const swaps = [];
     for (let x = 0; x < this.cols; x++) {
       for (let y = 0; y < this.rows; y++) {
-        if (!this.grid[x][y]) continue;
-        if (x + 1 < this.cols && this.grid[x + 1][y]) {
+        const here = this.grid[x][y];
+        if (!here || this.isColorLocked(here)) continue; // locked tiles can't move
+        const right = this.grid[x + 1] && this.grid[x + 1][y];
+        if (x + 1 < this.cols && right && !this.isColorLocked(right)) {
           swaps.push({ col1: x, row1: y, col2: x + 1, row2: y });
         }
-        if (y + 1 < this.rows && this.grid[x][y + 1]) {
+        const down = this.grid[x][y + 1];
+        if (y + 1 < this.rows && down && !this.isColorLocked(down)) {
           swaps.push({ col1: x, row1: y, col2: x, row2: y + 1 });
         }
       }

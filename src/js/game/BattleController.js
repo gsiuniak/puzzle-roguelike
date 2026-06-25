@@ -577,6 +577,10 @@ export default class BattleController {
       // armor-piercing damage equal to the stack count, then the stacks halve.
       // Runtime-only — always starts at 0. See _applyPoison / _tickPoison.
       poison: 0,
+      // MARK pool: a flat bonus banked onto this combatant's NEXT damage
+      // instance, consumed in _applyDamage. Persists until consumed (no timer).
+      // Runtime-only — always starts at 0. See decision #40.
+      mark: 0,
       mana: d.mana ? { ...d.mana } : {},
       portrait: d.portrait || '',
       skills: (d.skills || []).map(s => ({ ...s })),
@@ -752,6 +756,12 @@ export default class BattleController {
     if (this.state !== BattleState.PLAYER_TURN) return false;
     if (!this.board.isAdjacent(col1, row1, col2, row2)) return false;
     if (!this.board.get(col1, row1) || !this.board.get(col2, row2)) return false;
+    // Locked tiles (woven `lock`) can't be moved by either side. See decision #40.
+    if (this.board.isColorLocked(this.board.get(col1, row1))
+      || this.board.isColorLocked(this.board.get(col2, row2))) {
+      this.log.add('Those tiles are locked and cannot be moved.');
+      return false;
+    }
 
     // Do pre-check: would this swap create a match?
     this.board.swap(col1, row1, col2, row2);
@@ -1729,6 +1739,10 @@ export default class BattleController {
       turnState.barrier = 0;
     }
 
+    // Tick down any locked colors (woven `lock`) once per turn start, so a lock
+    // cast on one turn covers the opponent's next turn then expires. See decision #40.
+    this.board.tickLocks();
+
     // Dispatch onTurnStart AFTER state is set so relic effects can
     // observe the active side correctly.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_START, { side });
@@ -1836,6 +1850,9 @@ export default class BattleController {
         const applier = this._getStateBySide(applierSide);
         const atk = (applier && applier.attack) || 1;
         st.tickDamage = Math.max(1, Math.ceil(atk / 2));
+      } else if (id === 'reflecting') {
+        // Flat damage reflected back to attackers per hit (see _applyDamage).
+        st.reflectValue = Math.max(1, (typeof params.reflectValue === 'number') ? params.reflectValue : 1);
       }
     }
     if (def.kind === 'buff') this.log.add(`${targetState.name} gains ${def.name}.`);
@@ -2233,6 +2250,10 @@ export default class BattleController {
         this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
         this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
         this._dispatchDamageEvent(side, side === 'player' ? 'enemy' : 'player', r);
+        // LEECH (woven modifier): heal the caster for a fraction of the damage
+        // dealt. `leech` is a 0..1 fraction attached to the damage payload by the
+        // synthesizer. See decision #40.
+        this._applyLeech(src, side, r.actualDamage, effect.damage && effect.damage.leech);
         return false;
       }
 
@@ -2441,7 +2462,7 @@ export default class BattleController {
         }
         const turns = typeof cfg.turns === 'number' ? cfg.turns : 1;
         const targetState = cfg.target === 'self' ? src : tgt;
-        this._applyStatus(targetState, cfg.id, { turns, attackValue: cfg.attackValue }, side);
+        this._applyStatus(targetState, cfg.id, { turns, attackValue: cfg.attackValue, reflectValue: cfg.reflectValue }, side);
         return false;
       }
 
@@ -2468,10 +2489,136 @@ export default class BattleController {
         return false;
       }
 
+      case SKILL_EFFECT_TYPES.TRANSMUTE_MANA: {
+        // Convert the caster's OTHER mana into a destination color — a battery
+        // for next turn. Pulls from the most-abundant other colors first; finite,
+        // so it can't loop. Fires onGainMana so reactor relics see the gain.
+        // See decision #40.
+        const cfg = effect.transmuteMana || {};
+        const dest = cfg.color;
+        let budget = (typeof cfg.amount === 'number') ? cfg.amount : 0;
+        if (!dest || budget <= 0) return false;
+        if (!this._canGainMana(side)) {
+          this.log.add(`${src.name} is Enfeebled and cannot transmute mana.`);
+          return false;
+        }
+        if (!src.mana) src.mana = {};
+        const others = MANA_COLORS.filter((c) => c !== dest)
+          .sort((a, b) => (src.mana[b] || 0) - (src.mana[a] || 0));
+        let moved = 0;
+        for (const c of others) {
+          if (budget <= 0) break;
+          const take = Math.min(src.mana[c] || 0, budget);
+          if (take > 0) { src.mana[c] -= take; budget -= take; moved += take; }
+        }
+        if (moved > 0) {
+          src.mana[dest] = (src.mana[dest] || 0) + moved;
+          this._recomputeDynamicAttack(src);
+          this.log.add(`${src.name} transmutes ${moved} mana into ${dest}.`);
+          this._dispatchManaGain(side, dest, moved);
+        } else {
+          this.log.add(`${src.name} has no other mana to transmute.`);
+        }
+        return false;
+      }
+
+      case SKILL_EFFECT_TYPES.CONSUME: {
+        // Spend a built-up pool for damage = poolSize × perUnit. 'mana' (with a
+        // color = that color's leftover, no color = ALL leftover mana); 'armor'/
+        // 'barrier' = that shield pool (a Shield Bash). See decision #40.
+        const cfg = effect.consume || {};
+        const perUnit = Math.max(0, (cfg.perUnit || 1) + scaledBonus(cfg.scaling, src));
+        let units = 0;
+        if (cfg.resource === 'armor') { units = src.armor || 0; src.armor = 0; }
+        else if (cfg.resource === 'barrier') { units = src.barrier || 0; src.barrier = 0; }
+        else {
+          if (!src.mana) src.mana = {};
+          const cols = cfg.color ? [cfg.color] : MANA_COLORS;
+          for (const c of cols) { units += src.mana[c] || 0; src.mana[c] = 0; }
+          this._recomputeDynamicAttack(src);
+        }
+        const amount = units * perUnit;
+        if (amount > 0) {
+          const r = this._applyDamage(tgt, amount);
+          this.log.add(`${src.name} consumes ${units} ${cfg.resource || 'mana'}, dealing ${r.actualDamage} damage.`);
+          this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
+          this._dispatchDamageEvent(side, side === 'player' ? 'enemy' : 'player', r);
+        } else {
+          this.log.add(`${src.name} has nothing to consume.`);
+        }
+        return false;
+      }
+
+      case SKILL_EFFECT_TYPES.MARK: {
+        // Bank a flat bonus onto the caster's NEXT damage instance (consumed in
+        // _applyDamage). Persists until consumed. See decision #40.
+        const amount = (effect.mark && typeof effect.mark.amount === 'number')
+          ? effect.mark.amount : 0;
+        if (amount > 0) {
+          src.mark = (src.mark || 0) + amount;
+          this.log.add(`${src.name} marks the next strike (+${amount}).`);
+        }
+        return false;
+      }
+
+      case SKILL_EFFECT_TYPES.LOCK_COLOR: {
+        // Lock all tiles of a color (unmatchable + unmovable, both sides) for N
+        // turns. No woven color → lock the OPPONENT's most-abundant matchable
+        // color (auto-denial). See decision #40.
+        const cfg = effect.lockColor || {};
+        const turns = (typeof cfg.turns === 'number' && cfg.turns > 0) ? cfg.turns : 2;
+        let color = cfg.color;
+        if (!color) color = this._mostAbundantBoardColor();
+        if (color) {
+          this.board.lockColor(color, turns);
+          this.log.add(`${src.name} locks ${color} tiles for ${turns} turns.`);
+        }
+        return false;
+      }
+
       default:
         console.warn(`[BattleController] Unknown effect type: "${effect.effectType}". Skipping.`);
         return false;
     }
+  }
+
+  /**
+   * Heal the caster for a fraction of damage just dealt (woven `leech`). No-op
+   * when there's no leech fraction or no damage landed. See decision #40.
+   * @param {object} src @param {'player'|'enemy'} side
+   * @param {number} dealt @param {number|undefined} fraction — 0..1
+   */
+  _applyLeech(src, side, dealt, fraction) {
+    if (!src || !(fraction > 0) || !(dealt > 0)) return;
+    const heal = Math.floor(dealt * fraction);
+    if (heal <= 0) return;
+    const before = src.hp;
+    src.hp = Math.min(src.maxHp, src.hp + heal);
+    const actual = src.hp - before;
+    if (actual > 0) {
+      this._emitFloatingStat(side, 'heal', actual);
+      this.log.add(`${src.name} leeches ${actual} HP.`);
+    }
+  }
+
+  /**
+   * The most abundant matchable (non-skull, non-wild, non-inert, non-locked)
+   * tile color on the board — used as the default `lock` target when no color
+   * is woven. Returns null if the board has no matchable color.
+   * @returns {string|null}
+   */
+  _mostAbundantBoardColor() {
+    const counts = {};
+    for (const color of MANA_COLORS) {
+      if (this.board.isColorLocked(color)) continue;
+      const n = this.board.getTilesOfType(color).length;
+      if (n > 0) counts[color] = n;
+    }
+    let best = null, bestN = 0;
+    for (const [c, n] of Object.entries(counts)) {
+      if (n > bestN) { best = c; bestN = n; }
+    }
+    return best;
   }
 
   /**
@@ -2598,6 +2745,14 @@ export default class BattleController {
     // tunable. (Barrier is NOT a status — it's a numeric shield pool absorbed in
     // resolver.applyDamage AFTER this mitigation, alongside armor. See decision #38.)
     let dmg = Math.max(0, payload.amount | 0);
+    // MARK (woven): the attacker banks a flat bonus onto its NEXT damage
+    // instance. Added to the raw damage (so it shares the target's mitigation)
+    // then consumed. Skipped for reflected damage so reflect can't burn a mark.
+    // See decision #40.
+    if (attacker && attacker.mark > 0 && !opts.isReflect) {
+      dmg += attacker.mark;
+      attacker.mark = 0;
+    }
     const attackerBerserk = !!attacker && this._hasStatus(attacker, 'berserk');
     if (attackerBerserk) {
       dmg *= 2;
@@ -2609,6 +2764,23 @@ export default class BattleController {
 
     const finalAmount = Math.max(0, dmg | 0);
     const result = this.resolver.applyDamage(target, finalAmount);
+
+    // REFLECT (woven buff): if the target carries the `reflecting` buff, deal its
+    // flat reflectValue back to the attacker. Guarded against recursion (a
+    // reflected hit can't itself reflect). The nested _applyDamage handles the
+    // attacker's floating "-x" + sticky death; we add log + shake here. Decision #40.
+    if (result.actualDamage > 0 && attacker && !opts.isReflect && !this._reflecting) {
+      const refl = this._getStatus(target, 'reflecting');
+      if (refl && refl.reflectValue > 0) {
+        this._reflecting = true;
+        const rr = this._applyDamage(attacker, refl.reflectValue, { attackerSide: side, isReflect: true });
+        this._reflecting = false;
+        if (rr.actualDamage > 0) {
+          this.log.add(`${target.name} reflects ${rr.actualDamage} damage to ${attacker.name}.`);
+          this._setShakeFromDamage(rr.actualDamage, attacker.maxHp);
+        }
+      }
+    }
     // Floating "-x" damage text over the damaged side's portrait. This is the
     // single chokepoint for ALL damage (skill, skull, passive), so every hit
     // animates here. Uses actualDamage to match the combat-log number.
@@ -3045,6 +3217,7 @@ export default class BattleController {
     e.armor = cloned.armor || 0;
     e.block = 0;
     e.barrier = 0;                 // a fresh body — clear any magic shield
+    e.mark = 0;                    // clear any banked damage mark
     e.portrait = cloned.portrait;
     e.skills = cloned.skills;
     e.allSkills = cloned.allSkills;

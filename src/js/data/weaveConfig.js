@@ -126,6 +126,25 @@ export const TAG_VALUE_TABLES = Object.freeze({
   // `gain N magic` — counterpart to attack, same small permanent-stat rolls.
   magic:  { 1: 53, 2: 37, 3: 9, 5: 1 },
 
+  // ── New mechanic magnitudes ──
+  // `transmute N mana` — how much of your OTHER mana is converted into the
+  // destination color (a battery for next turn — see emitTransmute).
+  transmute: { 2: 20, 3: 30, 4: 22, 5: 14, 6: 9, 7: 5 },
+  // `consume`: damage dealt PER unit of the consumed pool (leftover mana / armor
+  // / barrier). The pool size at cast is the multiplier — see emitConsume.
+  consume:   { 1: 30, 2: 40, 3: 20, 4: 10 },
+  // `mark`: a FLAT bonus added to the caster's NEXT damage instance. Persists
+  // until consumed (no timer), so it never relies on Extra Turn. See decision #40.
+  mark:      { 2: 26, 3: 28, 4: 20, 5: 14, 6: 8, 7: 4 },
+  // `leech`: lifesteal PERCENT of damage dealt (divided by 100 at synthesis).
+  leech:     { 25: 40, 33: 35, 50: 20, 66: 5 },
+  // `lock N`: turns a color stays locked (unmatchable + unmovable for BOTH
+  // sides). Min 2 so a lock cast on your turn covers the opponent's next turn.
+  lock:      { 2: 60, 3: 40 },
+  // `reflect N`: flat damage reflected back to attackers per hit taken. The
+  // duration is a fixed constant (skillSynthesizer REFLECT_DURATION), not rolled.
+  reflect:   { 2: 28, 3: 30, 4: 22, 5: 13, 6: 7 },
+
   // ── Status durations (turn cycles) ──
   silence:    { 2: 50, 3: 35 },
   cripple:    { 2: 70, 3: 30 },

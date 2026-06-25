@@ -48,6 +48,13 @@ const EFFECT_SPRITE_ALIAS = Object.freeze({
   strike: 'damage',
   blast: 'damage',
   poison: 'damage',
+  // New mechanics reuse the closest existing foreground until dedicated art lands.
+  transmute: 'convert',
+  consume: 'damage',
+  mark: 'brittle',
+  lock: 'frozen',
+  leech: 'heal',
+  reflect: 'armor',
 });
 /** Sprite-key prefix for an effect tag's foreground (variants are `<prefix>_<n>`). */
 const effectKeyPrefix = (tag) => `foreground_${EFFECT_SPRITE_ALIAS[tag] || tag}`;
@@ -73,15 +80,15 @@ const ELEMENT_TO_COLOR = Object.freeze({
  */
 const EFFECT_TAG_PRIORITY = Object.freeze({
   // actions (the readable subject)
-  explode: 100, strike: 96, blast: 96, damage: 96, poison: 94, attack: 92, magic: 92, destroy: 90, convert: 86,
-  change: 85, shuffle: 84, create: 83, heal: 82, armor: 80, barrier: 79, drain: 76,
+  explode: 100, strike: 96, blast: 96, damage: 96, poison: 94, attack: 92, magic: 92, destroy: 90, consume: 88, convert: 86,
+  change: 85, shuffle: 84, create: 83, heal: 82, transmute: 81, armor: 80, barrier: 79, lock: 78, drain: 76, mark: 74,
   // statuses (distinct subjects, secondary to a hard action)
-  bleed: 60, frozen: 58, berserk: 56, silence: 54,
+  bleed: 60, frozen: 58, berserk: 56, reflect: 55, silence: 54,
   cripple: 52, enfeeble: 50, brittle: 48, intangible: 46,
   // shapes (read well as the embedded minor layer)
   area: 40, row: 36, column: 36, tile: 30,
   // modifiers
-  wild: 28, extra_turn: 20,
+  wild: 28, leech: 26, extra_turn: 20,
 });
 
 /** When a bag carries no effect-bearing tag, the icon still needs a subject. */

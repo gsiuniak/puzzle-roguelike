@@ -84,12 +84,20 @@ const STATUS_TAG_TO_ID = Object.freeze({
   frozen: 'frozen',
   intangible: 'intangible',
   berserk: 'berserk',
+  // `reflect` → the `reflecting` self-buff (carries a rolled reflectValue). Decision #40.
+  reflect: 'reflecting',
   // NOTE: `barrier` is NOT here — it's no longer a status. It's an ACTION that
   // emits a `barrier` shield effect (see emitBarrier / the action switch).
 });
 
 /** Status tags that BUFF the caster (apply_status target 'self'). */
-const SELF_STATUS_TAGS = new Set(['intangible', 'berserk']);
+const SELF_STATUS_TAGS = new Set(['intangible', 'berserk', 'reflect']);
+
+/** Fixed duration (turn cycles) for the woven `reflect` buff (its rolled value
+ *  is the reflect amount, not the duration). See decision #40. */
+const REFLECT_DURATION = 2;
+/** Assumed pool size when power-pricing `consume` (leftover mana/armor varies). */
+const EST_CONSUMED = 4;
 
 /** The five mana colors a cost may be paid in (skull is never a cost). */
 const COST_COLORS = Object.freeze(['red', 'blue', 'green', 'yellow', 'purple']);
@@ -139,6 +147,10 @@ const SYNERGY_BY_ACTION = Object.freeze({
   drain:    ['enfeeble', 'blast'],
   attack:   ['strike', 'extra_turn'],
   magic:    ['blast', 'extra_turn'],
+  consume:  ['mark', 'extra_turn'],
+  mark:     ['strike', 'blast'],
+  transmute:['create', 'extra_turn'],
+  lock:     ['drain', 'extra_turn'],
 });
 
 /** Primary action → cost-color AFFINITY (a weight, not a rule — see
@@ -151,6 +163,9 @@ const ACTION_COST_AFFINITY = Object.freeze({
   convert: 'purple', change: 'purple', drain: 'purple', shuffle: 'yellow',
   // Poison's preferred cost color is GREEN (the rot/attrition color).
   poison: 'green',
+  // New actions (decision #40): consume/mark lean physical-red, transmute purple
+  // (mana alchemy), lock blue (control/ice).
+  consume: 'red', mark: 'red', transmute: 'purple', lock: 'blue',
 });
 
 // ── Generic SFX pool (sfx_audio_generic_sprite — see SoundConfig.js) ──
@@ -204,6 +219,10 @@ const GENERIC_SOUND_FALLBACK_BY_ACTION = Object.freeze({
   drain:   { family: 'damage',  versions: 3, colored: true }, // siphon ≈ damage
   shuffle: { family: 'convert', versions: 3 },               // board transformation
   poison:  { family: 'damage',  versions: 3, colored: true }, // venom ≈ damage (green cost color)
+  consume: { family: 'damage',  versions: 3, colored: true }, // a burst of spent power
+  mark:    { family: 'change',  versions: 3 },                // a sigil/brand shimmer
+  transmute: { family: 'convert', versions: 3 },              // mana alchemy
+  lock:    { family: 'convert', versions: 3 },                // board lockdown
 });
 
 /** Last-resort generic family when a bag has no action that maps to any of the
@@ -250,6 +269,12 @@ const POWER = Object.freeze({
   perSkullDamage: 0.5,    // `skull + damage`: weight per "+N per Skull" (× est. skulls)
   destroySkull: 2,        // `skull + destroy`: weight per Skull tile destroyed
   destroyByColor: 9,      // `destroy + all + color`: board-wide color wipe
+  // ── New mechanics (decision #40) ──
+  perConsumeUnit: 0.5,    // `consume`: per-unit damage × est. pool size (EST_CONSUMED)
+  perMark: 0.5,           // `mark`: flat bonus ≈ deferred damage (priced like damage)
+  lockTurn: 3,            // `lock`: denial, priced like a debuff turn
+  perReflect: 0.6,        // `reflect`: flat reflect × est. hits over its duration
+  // leech adds POWER as estimated healed = est. damage × fraction × perHeal.
 });
 
 /**
@@ -268,6 +293,7 @@ const POWER = Object.freeze({
  * lockstep, so what the player reads is exactly what resolves.
  */
 const EFFECT_RESOLUTION_ORDER = Object.freeze({
+  lock_color: 12,           // board control, before board-shaping
   shuffle: 10,
   create_tiles: 20,
   convert_tiles_by_type: 30,
@@ -277,6 +303,7 @@ const EFFECT_RESOLUTION_ORDER = Object.freeze({
   destroy_tiles: 42,
   destroy_tiles_by_type: 45,
   damage: 50,
+  consume: 51,              // damage that spends a pool, just after flat damage
   apply_poison: 52,
   gain_max_hp: 58,
   heal: 60,
@@ -285,7 +312,9 @@ const EFFECT_RESOLUTION_ORDER = Object.freeze({
   gain_attack: 70,
   gain_magic: 72,
   drain_mana: 80,
+  transmute_mana: 81,       // mana economy, with the other mana riders
   gain_mana: 82,
+  mark: 88,                 // bank the next-hit bonus (resolves after this skill's own damage)
   apply_status: 90,
   extra_turn: 1000,
 });
@@ -417,6 +446,22 @@ const ACTION_NOUNS = Object.freeze({
     'Pandemonium', 'Vortex', 'Whirl', 'Turmoil', 'Scramble', 'Chaos', 'Cascade',
     'Convulsion', 'Riot',
   ],
+  consume: [
+    'Devouring', 'Consumption', 'Glut', 'Unleashing', 'Overload', 'Outburst', 'Release',
+    'Expenditure', 'Discharge', 'Cataclysm', 'Eruption', 'Spending', 'Voracity', 'Gorging',
+  ],
+  mark: [
+    'Mark', 'Brand', 'Sigil', 'Quarry', 'Omen', 'Hex Mark', 'Target', 'Doom Mark',
+    'Stigma', 'Reckoning', 'Sentence', 'Verdict', 'Tell', 'Curse Mark',
+  ],
+  transmute: [
+    'Transmutation', 'Alchemy', 'Conversion', 'Catalysis', 'Refinement', 'Distillation',
+    'Sublimation', 'Synthesis', 'Reagent', 'Permutation', 'Crucible', 'Transfusion',
+  ],
+  lock: [
+    'Lockdown', 'Seal', 'Fetter', 'Binding', 'Shackle', 'Stasis', 'Imprisonment',
+    'Confinement', 'Manacle', 'Quarantine', 'Clamp', 'Lock', 'Bind', 'Entombment',
+  ],
 });
 const DEFAULT_NOUNS = Object.freeze([
   'Weaving', 'Working', 'Rite', 'Invocation', 'Sigil', 'Incantation', 'Hex', 'Charm',
@@ -451,6 +496,12 @@ const TAG_SUFFIXES = Object.freeze({
   attack:     ['of Fury', 'Rising', 'of Bloodlust'],
   magic:      ['of Power', 'Ascendant', 'of the Arcane'],
   explode:    ['of Cataclysm', 'Bursting', 'of the Blast'],
+  consume:    ['Unleashed', 'of Hunger', 'Devouring'],
+  mark:       ['of the Quarry', 'Marked', 'of Dooming'],
+  transmute:  ['of Alchemy', 'Transmuting', 'of Flux'],
+  lock:       ['of Binding', 'Sealing', 'of Stasis'],
+  leech:      ['of Leeching', 'Vampiric', 'of the Leech'],
+  reflect:    ['of Mirrors', 'Reflecting', 'of Thorns'],
   // Modifiers / shapes / statuses.
   greater:    ['Greater', 'Empowered', 'of Might'],
   extra_turn: ['of Haste', 'of Tempo', 'Quickening'],
@@ -730,6 +781,8 @@ function loopRiskColors(effects) {
       case 'convert_tile': if (e.convertTile) add(e.convertTile.type); break;
       case 'convert_tiles_by_type': if (e.convertByType) add(e.convertByType.to); break;
       case 'gain_mana': if (e.gainMana) add(e.gainMana.color); break;
+      // Transmute hands back the destination color, so never cost it (would loop).
+      case 'transmute_mana': if (e.transmuteMana) add(e.transmuteMana.color); break;
       default: break;
     }
   }
@@ -1036,6 +1089,66 @@ export function synthesize(recipe, options = {}) {
   };
 
   /**
+   * Emit a transmute_mana effect: convert up to `amount` of the caster's OTHER
+   * mana into `dest`. A battery for next turn (decision #40). `dest` must be a
+   * mana color (TILE_LABEL key).
+   */
+  const emitTransmute = (amount, dest) => {
+    effects.push({ effectType: 'transmute_mana', transmuteMana: { color: dest, amount } });
+    lines.push(`Convert up to ${amount} of your other [[mana]] into ${TILE_LABEL[dest]}`);
+    power += amount * POWER.perManaGained;
+  };
+
+  /**
+   * Emit a consume effect: deal damage = pool size × perUnit, spending that pool.
+   * `poolColor` (a cost color) eats that color's LEFTOVER mana after the cost is
+   * paid; null eats ALL leftover mana. perUnit scales with Attack (rolled preset).
+   * The displayed `<<perUnit>>` is the per-mana damage. See decision #40.
+   */
+  const emitConsume = (perUnit, poolColor) => {
+    const presetKey = rollDamageScalingPreset();
+    const mult = DAMAGE_SCALING_PRESETS[presetKey] != null
+      ? DAMAGE_SCALING_PRESETS[presetKey] : DAMAGE_SCALE_PER_POINT;
+    scalingRolls.consume = presetKey;
+    const consume = { resource: 'mana', perUnit, scaling: { attack: mult } };
+    if (poolColor) consume.color = poolColor;
+    effects.push({ effectType: 'consume', consume });
+    lines.push(poolColor
+      ? `Consume your remaining ${TILE_LABEL[poolColor]} [[mana]]: deal <<${perUnit}>> [[phys]] per mana`
+      : `Consume all your remaining [[mana]]: deal <<${perUnit}>> [[phys]] per mana`);
+    const sp = DAMAGE_SCALING_POWER;
+    power += perUnit * EST_CONSUMED * POWER.perConsumeUnit + mult * sp.estStat * sp.perScaledPoint;
+  };
+
+  /** Emit a mark effect: bank a flat bonus onto the caster's NEXT damage. Decision #40. */
+  const emitMark = (amount) => {
+    effects.push({ effectType: 'mark', mark: { amount } });
+    lines.push(`Mark the enemy: your next hit deals +${amount} [[Damage]]`);
+    power += amount * POWER.perMark;
+  };
+
+  /**
+   * Emit a lock_color effect: lock a color (unmatchable + unmovable) for `turns`.
+   * `color` null → the effect picks the enemy's strongest color at cast. Decision #40.
+   */
+  const emitLock = (turns, color) => {
+    const lockColor = { turns };
+    if (color) lockColor.color = color;
+    effects.push({ effectType: 'lock_color', lockColor });
+    lines.push(color
+      ? `Lock all ${TILE_LABEL[color]} [[tiles]] for ${turns} turns`
+      : `Lock the enemy's strongest color for ${turns} turns`);
+    power += turns * POWER.lockTurn;
+  };
+
+  /** Emit a reflect self-buff (apply_status 'reflecting' with reflectValue). Decision #40. */
+  const emitReflect = (reflectValue) => {
+    effects.push({ effectType: 'apply_status', applyStatus: { id: 'reflecting', target: 'self', turns: REFLECT_DURATION, reflectValue } });
+    lines.push(`Reflect ${reflectValue} [[Damage]] back to attackers for ${REFLECT_DURATION} turns`);
+    power += reflectValue * POWER.perReflect * REFLECT_DURATION + REFLECT_DURATION * POWER.perBuffTurn * 0.5;
+  };
+
+  /**
    * Emit a shaped board destruction, claiming the skill's single targeting
    * slot (shared by destroy/explode actions and the orphan-shape injection).
    * @returns {boolean} false when the targeting slot was already taken
@@ -1107,6 +1220,23 @@ export function synthesize(recipe, options = {}) {
       }
       case 'row': case 'column': case 'area': case 'tile': {
         return emitDestroyShaped(tag); // a bare shape's bonus is a destroy of it
+      }
+      case 'consume': { emitConsume(rollTagValue('consume') || 2, pickRandom(COST_COLORS)); return true; }
+      case 'mark':    { emitMark(rollTagValue('mark') || 3); return true; }
+      case 'transmute': { emitTransmute(rollTagValue('transmute') || 3, pickRandom(COST_COLORS)); return true; }
+      case 'lock':    { emitLock(rollTagValue('lock') || 2, pickRandom(COST_COLORS)); return true; }
+      case 'reflect': { emitReflect(rollTagValue('reflect') || 3); return true; }
+      case 'leech': {
+        // Leech needs a damage vehicle — emit a damage effect with lifesteal.
+        const t = pickRandom(DAMAGE_TAGS);
+        emitDamage(t, rollTagValue(t) || 5);
+        const frac = (rollTagValue('leech') || 33) / 100;
+        const d = effects[effects.length - 1];
+        if (d && d.damage) {
+          d.damage.leech = frac;
+          lines[lines.length - 1] = `${lines[lines.length - 1]}, and [[Heal]] ${Math.round(frac * 100)}% of the damage`;
+        }
+        return true;
       }
       default: {
         const statusId = STATUS_TAG_TO_ID[tag];
@@ -1202,6 +1332,42 @@ export function synthesize(recipe, options = {}) {
         lines.push('[[Shuffle]] the board');
         forceExtraTurn = true;
         power += POWER.shuffleBoard;
+        break;
+      }
+      case 'consume': {
+        let perUnit = roll('consume', 2);
+        if (consumeGreater()) perUnit = greaterBoost(perUnit);
+        // Bind to a woven color's LEFTOVER mana but DON'T consume the color —
+        // it stays dangling so it still pays the cost (you over-buy it, then cash
+        // the rest). No woven color → consume ALL leftover mana. See decision #40.
+        const poolColor = tileTypes.find((t) => COST_COLORS.includes(t) && !used.has(t)) || null;
+        emitConsume(perUnit, poolColor);
+        break;
+      }
+      case 'mark': {
+        let amount = roll('mark', 3);
+        if (consumeGreater()) amount = greaterBoost(amount);
+        emitMark(amount);
+        break;
+      }
+      case 'transmute': {
+        let amount = roll('transmute', 3);
+        if (consumeGreater()) amount = greaterBoost(amount);
+        // Destination = a woven color (consumed as the target so cost falls to
+        // another color/affinity), else the character's affinity, else random.
+        const dest = takeColorType()
+          || affinityColors.find((c) => COST_COLORS.includes(c))
+          || pickRandom(COST_COLORS);
+        emitTransmute(amount, dest);
+        break;
+      }
+      case 'lock': {
+        let turns = roll('lock', 2);
+        if (consumeGreater()) turns = greaterBoost(turns);
+        // Lock target = a woven color (consumed); null → the effect picks the
+        // enemy's strongest color at cast. See decision #40.
+        const color = takeColorType();
+        emitLock(turns, color);
         break;
       }
       case 'drain': {
@@ -1312,6 +1478,26 @@ export function synthesize(recipe, options = {}) {
     }
   }
 
+  // ── LEECH (modifier): attach lifesteal to every `damage` effect the weave
+  //    emitted (strike/blast/random damage). Heals the caster for a percent of
+  //    the damage dealt (resolved in BattleController._applyLeech). Wasted (a
+  //    downside reason) if the bag has no damage to attach to. See decision #40. ──
+  if (modifiers.has('leech') && !used.has('leech')) {
+    const dmgEffects = effects.filter((e) => e.effectType === 'damage' && e.damage);
+    if (dmgEffects.length) {
+      used.add('leech');
+      const frac = (roll('leech', 33)) / 100;
+      let estHeal = 0;
+      for (const e of dmgEffects) {
+        e.damage.leech = frac;
+        estHeal += (e.damage.amount || 0) * frac;
+      }
+      const idx = effects.findIndex((e) => e.effectType === 'damage' && e.damage);
+      if (idx >= 0) lines[idx] = `${lines[idx]}, and [[Heal]] ${Math.round(frac * 100)}% of the damage dealt`;
+      power += estHeal * POWER.perHeal;
+    }
+  }
+
   // ── Tile-type floors: `wild` ALWAYS at least creates Wild tiles, and a lone
   //    `skull` creates Skulls — neither can be a cost color, so creation is
   //    their irreducible minimum (they never just fizzle). Only fires when a
@@ -1369,6 +1555,8 @@ export function synthesize(recipe, options = {}) {
     const statusId = STATUS_TAG_TO_ID[tag];
     if (!statusId) continue;
     used.add(tag);
+    // Reflect carries a rolled reflect AMOUNT (not a duration) — fixed duration.
+    if (tag === 'reflect') { emitReflect(roll('reflect', 3)); continue; }
     const turns = roll(tag, 1);
     const isSelf = SELF_STATUS_TAGS.has(tag);
     const applyStatus = { id: statusId, target: isSelf ? 'self' : 'opponent', turns };

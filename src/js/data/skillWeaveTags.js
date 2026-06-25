@@ -114,6 +114,20 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   explode: { id: 'explode', label: 'Explode', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE,     icon: 'weave_icon_explode' },
   // Shuffle randomizes the board and ALWAYS grants an extra turn (synthesizer-forced).
   shuffle: { id: 'shuffle', label: 'Shuffle', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.LEGENDARY,     icon: null },
+  // `transmute` is a MANA-pool economy action: it converts your OTHER mana into a
+  // woven destination color (a battery for next turn). No board targeting — see
+  // skillSynthesizer emitTransmute. See decision #40.
+  transmute: { id: 'transmute', label: 'Transmute', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: 'weave_icon_convert' },
+  // `consume` deals damage scaling with a built-up pool it then SPENDS — leftover
+  // mana of the cost color (or all leftover mana if no color is woven). The same
+  // effect type backs an armor/barrier-eating Shield Bash skill. See decision #40.
+  consume: { id: 'consume', label: 'Consume', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: 'weave_icon_damage' },
+  // `mark` banks a FLAT bonus onto your NEXT damage instance — persists until
+  // consumed, so it never depends on Extra Turn. See decision #40.
+  mark: { id: 'mark', label: 'Mark', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.UNCOMMON, icon: null },
+  // `lock` makes all tiles of a woven color unmatchable + unmovable (for BOTH
+  // sides) for N turns — a board-denial control tool. See decision #40.
+  lock: { id: 'lock', label: 'Lock', category: TAG_CATEGORY.ACTION, rarity: TAG_RARITY.RARE, icon: null },
 
   // ── Shapes / targets (where the action lands) ──
   row:    { id: 'row',    label: 'Row',    category: TAG_CATEGORY.SHAPE, rarity: TAG_RARITY.UNCOMMON, icon: 'weave_icon_row' },
@@ -134,6 +148,10 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   // (Create / Strike / Blast / Attack / Magic / Armor / Heal / Drain) OR widens an
   // area destruction (3x3 → 5x5), AND has a chance to surge (extra synergy effect).
   greater:    { id: 'greater',    label: 'Greater',    category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
+  // `leech` is a lifesteal qualifier: it heals the caster for a PERCENT of the
+  // damage a Strike/Blast in the same weave deals. Needs a damage verb to attach
+  // to (else it's a wasted pick). See decision #40.
+  leech:      { id: 'leech',      label: 'Leech',      category: TAG_CATEGORY.MODIFIER, rarity: TAG_RARITY.UNCOMMON,  icon: null },
 
   // ── Status effects (synthesized into apply_status effects — debuffs hit the
   //    enemy, buffs (intangible/berserk) buff the caster) ──
@@ -145,6 +163,10 @@ export const SKILL_WEAVE_TAGS = Object.freeze({
   berserk:    { id: 'berserk',    label: 'Berserk',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.LEGENDARY, icon: null },
   bleed:      { id: 'bleed',      label: 'Bleed',      category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null, disabled: true },
   frozen:     { id: 'frozen',     label: 'Frozen',     category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
+  // `reflect` is a self BUFF: for a fixed few turns the caster reflects a flat
+  // amount of damage back to attackers (see statusEffects `reflecting`). Carries
+  // a rolled reflect amount via the apply_status payload's reflectValue. Decision #40.
+  reflect:    { id: 'reflect',    label: 'Reflect',    category: TAG_CATEGORY.STATUS, rarity: TAG_RARITY.RARE,      icon: null },
 });
 
 /** Default tag-icon asset key (gold flame placeholder from the mock). */

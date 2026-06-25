@@ -149,5 +149,10 @@ function scalablePayload(e) {
   if (e.effectType === 'barrier' && e.barrier) return e.barrier;
   // Poison application stacks scale with the caster's stat (Magic). See decision #39.
   if (e.effectType === 'apply_poison' && e.poison) return e.poison;
+  // Consume's PER-UNIT damage scales with the caster's stat (the displayed `<<n>>`
+  // is the per-unit value; total = per-unit × pool size at cast). See decision #40.
+  if (e.effectType === 'consume' && e.consume) {
+    return { amount: e.consume.perUnit, scaling: e.consume.scaling };
+  }
   return null;
 }

@@ -89,6 +89,16 @@ export const STATUS_EFFECTS = {
     icon: 'buff_berserk',
     description: 'Deal double [[Damage]] and ignore all effects, but take double [[Damage]].',
   },
+  // The woven `reflect` buff. Carries a per-instance `reflectValue` (set on the
+  // status entry by _applyStatus) = flat damage dealt back to attackers per hit.
+  // Reuses the now-unused barrier crest art as a placeholder. See decision #40.
+  reflecting: {
+    id: 'reflecting',
+    kind: STATUS_KIND.BUFF,
+    name: 'Reflect',
+    icon: 'buff_barrier',
+    description: 'Reflects [[Damage]] back to attackers.',
+  },
   // NOTE: Barrier is NO LONGER a status effect. It is now a one-round numeric
   // shield pool (state.barrier) that absorbs damage like armor and renders as a
   // purple "temporary HP" bar overlay — NOT a portrait overlay. See decision #38
