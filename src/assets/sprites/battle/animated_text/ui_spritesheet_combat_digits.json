@@ -1,0 +1,121 @@
+{
+  "meta": {
+    "sheet_w": 1113,
+    "sheet_h": 1406,
+    "sprite_count": 10,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "digit_0": {
+      "x": 271,
+      "y": 371,
+      "w": 253,
+      "h": 318,
+      "index": 0,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 16,
+      "trim_y": 13
+    },
+    "digit_1": {
+      "x": 4,
+      "y": 1062,
+      "w": 197,
+      "h": 340,
+      "index": 1,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 1,
+      "trim_y": 3
+    },
+    "digit_2": {
+      "x": 831,
+      "y": 4,
+      "w": 278,
+      "h": 325,
+      "index": 2,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 1,
+      "trim_y": 16
+    },
+    "digit_3": {
+      "x": 270,
+      "y": 4,
+      "w": 278,
+      "h": 333,
+      "index": 3,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 10,
+      "trim_y": 6
+    },
+    "digit_4": {
+      "x": 4,
+      "y": 371,
+      "w": 263,
+      "h": 348,
+      "index": 4,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 9,
+      "trim_y": 4
+    },
+    "digit_5": {
+      "x": 552,
+      "y": 4,
+      "w": 275,
+      "h": 331,
+      "index": 5,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 11,
+      "trim_y": 1
+    },
+    "digit_6": {
+      "x": 243,
+      "y": 723,
+      "w": 237,
+      "h": 329,
+      "index": 6,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 14,
+      "trim_y": 2
+    },
+    "digit_7": {
+      "x": 4,
+      "y": 4,
+      "w": 262,
+      "h": 363,
+      "index": 7,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 2,
+      "trim_y": 1
+    },
+    "digit_8": {
+      "x": 528,
+      "y": 371,
+      "w": 243,
+      "h": 313,
+      "index": 8,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 8,
+      "trim_y": 19
+    },
+    "digit_9": {
+      "x": 4,
+      "y": 723,
+      "w": 235,
+      "h": 335,
+      "index": 9,
+      "source_w": 289,
+      "source_h": 365,
+      "trim_x": 13,
+      "trim_y": 13
+    }
+  }
+}
