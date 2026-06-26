@@ -54,6 +54,9 @@ const ATTACK_GROWTH_AMOUNT = 1;
 const ATTACK_GROWTH_EVERY_N_VICTORIES = 2;
 
 // ── Tunable layout constants ─────────────────────────────
+// Vertical position of the accumulating damage counter as a fraction of the
+// board height (0 = top edge, 0.5 = center). Parked near the top of the grid.
+const DAMAGE_COUNTER_Y_FRAC = 0.2;
 const MAIN_ROW_MAX_WIDTH = 1820;
 // Horizontal gap between the side columns and the central board panel.
 // Negative = the column rects overlap, which pulls the visible side
@@ -466,6 +469,12 @@ export default class BattleScene extends UIPanel {
     this._selectedCell = null;
     this._hoveredCell = null;
     this._dragStartCell = null;
+
+    // Hold the turn from passing until a just-dealt damage counter has flown to
+    // and impacted the target portrait (see DamageCounterEffect / decision #41).
+    if (this._battleController && this._battleController.setTurnGate) {
+      this._battleController.setTurnGate(() => this._hasPendingDamageDelivery());
+    }
 
     // ── Borrow MapView from MapScene for 'm' overlay ──
     // Ensure overlay starts closed (MapView.resetOverlay was already
@@ -1110,17 +1119,20 @@ export default class BattleScene extends UIPanel {
       }
     }
 
-    // Re-anchor live damage counters to the portraits and feed them the
-    // "resolving" hint so a cascade stays as one accumulating counter and only
-    // finalizes once the board settles (the end of the damage sequence).
+    // Keep live damage counters anchored: the accumulation parks at board
+    // center, and the number flies to the RECEIVER's portrait on finalize.
+    // Feed the "resolving" hint so a cascade stays as one accumulating counter
+    // and only finalizes once the board settles (the end of the sequence).
     {
       const resolving = state.state === BattleState.RESOLVING || state.state === BattleState.SWAPPING;
+      const boardCenter = this._getDamageCounterAnchor();
       for (const side of ['player', 'enemy']) {
         const counter = this._damageCounters[side];
         if (!counter || counter.done) continue;
+        if (boardCenter) counter.setCenter(boardCenter.x, boardCenter.y);
         const pane = side === 'player' ? this._playerPane : this._enemyPane;
-        const center = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
-        if (center) counter.setAnchor(center.x, center.y);
+        const portrait = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
+        if (portrait) counter.setTarget(portrait.x, portrait.y);
         // Only hold the counter open while its side is the one being attacked
         // (the opponent is the active, resolving side). Once it's this side's
         // own turn, let its received-damage total finalize promptly.
@@ -1196,6 +1208,17 @@ export default class BattleScene extends UIPanel {
     if (!this._board) return null;
     const r = this._board.rect;
     return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  }
+
+  /**
+   * Anchor for the accumulating damage counter — horizontally centered, parked
+   * near the TOP of the grid so it doesn't cover the play area mid-cascade.
+   * @returns {{x:number, y:number}|null}
+   */
+  _getDamageCounterAnchor() {
+    if (!this._board) return null;
+    const r = this._board.rect;
+    return { x: r.x + r.w / 2, y: r.y + r.h * DAMAGE_COUNTER_Y_FRAC };
   }
 
   /**
@@ -1366,13 +1389,38 @@ export default class BattleScene extends UIPanel {
    * @param {number} amount
    * @param {number} maxHp - receiver max HP (drives relative intensity)
    */
+  /**
+   * True while a damage counter still needs to fly to + impact a portrait.
+   * Used as the BattleController turn gate so the turn doesn't pass until the
+   * dealt damage has been "delivered" to the target. Releases at impact (the
+   * burst fades after the turn proceeds).
+   * @returns {boolean}
+   */
+  _hasPendingDamageDelivery() {
+    for (const side of ['player', 'enemy']) {
+      const c = this._damageCounters[side];
+      if (c && !c.done && !c.delivered) return true;
+    }
+    return false;
+  }
+
   _addDamageToCounter(side, amount, maxHp) {
     let counter = this._damageCounters[side];
     if (!counter || counter.done || counter.finalizing) {
+      // Accumulate near the top of the grid; the number flies to the receiver's
+      // portrait when the sequence finalizes (anchors fed each frame below).
+      const boardCenter = this._getDamageCounterAnchor();
       const pane = side === 'player' ? this._playerPane : this._enemyPane;
-      const center = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
-      if (!center) return;
-      counter = new DamageCounterEffect(center.x, center.y);
+      const portrait = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
+      const start = boardCenter || portrait;
+      if (!start) return;
+      counter = new DamageCounterEffect(start.x, start.y);
+      if (portrait) counter.setTarget(portrait.x, portrait.y);
+      // On impact at the portrait: a quick punch of screen shake (the actual
+      // damage already applied earlier — this is the ceremonial delivery).
+      counter.onImpact = (intensity) => {
+        if (this._screenShake) this._screenShake.trigger(7 + 13 * (intensity || 0));
+      };
       this._damageCounters[side] = counter;
       this._floatingEffects.push(counter);
     }

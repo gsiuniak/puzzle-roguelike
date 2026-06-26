@@ -48,6 +48,9 @@ const SWAP_BASE_DURATION = 120;
 const MAGIC_MANA_PER_POINT = 9;
 /** Turn intro animation delay in ms (NOT scaled — presentation timing) */
 const TURN_INTRO_DURATION = 600;
+/** Max extra ms the turn will wait on `_turnGate` (damage-delivery animation)
+ *  before proceeding anyway — a safety cap so a stuck effect can't hang. */
+const TURN_GATE_MAX_HOLD = 2000;
 /**
  * How long (ms) the boss waits at turn start while the Usurper's Heart harvest
  * energy tendrils stay connected from each Thrall tile to its portrait before it
@@ -125,6 +128,22 @@ export default class BattleController {
     this._nextTurnSide = 'player';
     /** Timer for TURN_INTRO delay before transitioning to the actual turn. */
     this._turnIntroTimer = 0;
+    /**
+     * Optional gate the scene can set so the turn does NOT pass until a
+     * just-dealt-damage delivery animation (the flying damage counter) has
+     * impacted the target portrait. `() => true` holds the TURN_INTRO; capped
+     * by TURN_GATE_MAX_HOLD so a stuck animation can never freeze the battle.
+     */
+    this._turnGate = null;
+    this._turnGateHold = 0;
+    /**
+     * TURN_INTRO runs in two phases: (A) a silent hold while a just-dealt
+     * damage counter flies to + impacts the target portrait (no announcement),
+     * then (B) the "Player/Enemy Turn" announcement + the normal intro delay.
+     * `_introAnnounced` flips false→true at the A→B handoff. Starts true so the
+     * very first turn (no damage pending) announces immediately as before.
+     */
+    this._introAnnounced = true;
 
     /**
      * Board position (col, row) of the swap that triggered the current
@@ -611,6 +630,16 @@ export default class BattleController {
   _swapDuration()  { return SWAP_BASE_DURATION / this.speedMultiplier; }
 
   // ── Public API ────────────────────────────────────────
+
+  /**
+   * Supply a gate predicate that holds the turn from passing while it returns
+   * true (e.g. the scene's flying damage counter has not yet impacted the
+   * target portrait). Capped by TURN_GATE_MAX_HOLD. Pass null to clear.
+   * @param {(() => boolean)|null} fn
+   */
+  setTurnGate(fn) {
+    this._turnGate = typeof fn === 'function' ? fn : null;
+  }
 
   getState() {
     // Capture extraTurnTriggerPos and clear it so scene only
@@ -1694,9 +1723,25 @@ export default class BattleController {
     // floating image effect (Player Turn / Enemy Turn).
     const nextSide = side === 'player' ? 'enemy' : 'player';
     this.state = BattleState.TURN_INTRO;
-    this._turnAnnouncement = nextSide;
+    // Announcement is DEFERRED to phase B (after damage delivery) — see update().
+    this._turnAnnouncement = null;
     this._nextTurnSide = nextSide;
+    this._introAnnounced = false;
     this._turnIntroTimer = 0;
+    this._turnGateHold = 0;
+    if (this.onStateChange) this.onStateChange();
+  }
+
+  /**
+   * Phase A → B of TURN_INTRO: damage delivery is done, so now raise the
+   * "Player/Enemy Turn" announcement (the scene reads `_turnAnnouncement` to
+   * spawn the popup + sound) and start the normal intro delay before the turn.
+   */
+  _beginTurnAnnouncement() {
+    this._introAnnounced = true;
+    this._turnAnnouncement = this._nextTurnSide;
+    this._turnIntroTimer = 0;
+    this._turnGateHold = 0;
     if (this.onStateChange) this.onStateChange();
   }
 
@@ -2001,9 +2046,22 @@ export default class BattleController {
 
     // ── Turn intro delay ──
     if (this.state === BattleState.TURN_INTRO) {
-      this._turnIntroTimer += dt;
-      if (this._turnIntroTimer >= TURN_INTRO_DURATION) {
-        this._completeTurnIntro();
+      if (!this._introAnnounced) {
+        // Phase A: hold SILENTLY (no announcement) while a just-dealt damage
+        // counter is still flying to + impacting the target portrait. Capped by
+        // TURN_GATE_MAX_HOLD so a stuck effect can never freeze the battle.
+        if (this._turnGate && this._turnGate()) {
+          this._turnGateHold += dt;
+          if (this._turnGateHold >= TURN_GATE_MAX_HOLD) this._beginTurnAnnouncement();
+        } else {
+          this._beginTurnAnnouncement();
+        }
+      } else {
+        // Phase B: the announcement is up; run the intro delay then transition.
+        this._turnIntroTimer += dt;
+        if (this._turnIntroTimer >= TURN_INTRO_DURATION) {
+          this._completeTurnIntro();
+        }
       }
     }
 
