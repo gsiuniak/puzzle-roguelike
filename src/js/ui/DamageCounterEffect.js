@@ -30,39 +30,86 @@
  * hint each frame.
  */
 
-const FONT_FAMILY = '"Marcellus SC", Georgia, serif';
+// ── Forged-text look (ported from sim/emberforge.html `drawLine()`) ──────────
+// EMBER is the EmberForge "Forged Ember" settings tuned in that studio: the text
+// is one line drawn as a deliberate stack of passes — fire glow → drop shadow →
+// extruded 3D side → dark edge → metal-face gradient (with the dark reflection
+// line) → inner sheen. All PIXEL params (widths, blurs, depth, tracking) are
+// authored at the REF SIZES below and scaled per-line by fontPx/refSize so the
+// proportions hold at any rendered size. To retune the look, edit EMBER (it's
+// the exact JSON the studio's "Copy settings" produces, minus text/sizes).
+const EMBER = {
+  font: '"Cinzel", "Marcellus SC", Georgia, serif',
+  weight: 800,
+  letterSpacing: 2,        // px @ ref size
+  slant: -20,              // ° — horizontal shear of the whole block
+  tilt: -8,                // ° — rotation of the whole block
+  // metal face (vertical gradient with the reflection line)
+  topColor: '#fdf5d8',
+  bodyColor: '#eb9641',
+  reflectColor: '#eca434',
+  underglowColor: '#f8e449',
+  reflectPos: 0.29,
+  reflectSharp: 0.03,
+  // forge depth (the chunky 3D side)
+  extrudeDepth: 13,        // px @ ref size
+  extrudeDir: 201,         // °
+  extrudeColor: '#4d0b00',
+  // edge + inner sheen
+  edgeWidth: 9.5,          // px @ ref size
+  edgeColor: '#500202',
+  innerWidth: 1.5,         // px @ ref size
+  innerColor: '#f9e6a3',
+  // fire glow (behind the stack)
+  glowColor: '#e7692d',
+  glowSpread: 30,          // px @ ref size
+  glowIntensity: 2,        // stacked passes
+  // drop shadow (grounds the text)
+  shadowColor: '#fea62a',
+  shadowAlpha: 0.65,
+  shadowBlur: 6,           // px @ ref size
+  shadowDY: 6,             // px @ ref size
+};
 
-// Intensity (relative damage 0..1) → number color ramp. Fiery gold → red. Even
-// a small hit reads as a rich molten orange (not pale yellow) for drama.
+// Sizes the EMBER pixel params were authored at — pixel params scale by
+// fontPx / refSize. The number's rendered size ramps with intensity up to
+// EMBER_NUM_SIZE; the words are drawn at their ref sizes (× phase scale).
+const EMBER_NUM_SIZE = 224;
+const EMBER_HEAD_SIZE = 105;   // "DAMAGE"
+const EMBER_SUB_SIZE = 43;     // "CHAIN xN"
+const EMBER_LINE_GAP = 11;     // px @ scale 1, between stacked lines
+
+// Intensity (relative damage 0..1) → accent color ramp for the IMPACT burst +
+// slash flicks (yellow-gold → fiery red). The forged number/words get their
+// colors from EMBER, not this ramp; this only tints the spark effects.
 const COLOR_STOPS = [
-  { t: 0.00, c: [255, 196, 64] },
-  { t: 0.30, c: [255, 138, 36] },
-  { t: 0.60, c: [255, 80, 36] },
-  { t: 1.00, c: [255, 44, 40] },
+  { t: 0.00, c: [255, 210, 74] },   // yellow-gold (low relative dmg)
+  { t: 0.35, c: [255, 152, 40] },   // amber
+  { t: 0.65, c: [255, 88, 30] },    // hot orange
+  { t: 1.00, c: [228, 30, 26] },    // fiery red (high relative dmg)
 ];
 
 // Damage as a fraction of max HP that reads as "full intensity". Lower = hits
 // the hot colors / big sizes sooner (more dramatic on ordinary hits).
 const INTENSITY_FULL_FRACTION = 0.4;
 
-// Number sizing (px font at scale 1.0). Big and bold.
-const NUMBER_BASE_FONT = 122;
-const NUMBER_INTENSITY_GROWTH = 70;   // extra px at full intensity
-const WORD_FONT = 46;                 // "DAMAGE"
-const CHAIN_FONT = 36;                // "CHAIN xN"
+// Number sizing (px font at phase scale 1.0). Ramps with intensity from
+// NUMBER_MIN_SIZE (chip damage) up to EMBER_NUM_SIZE (heavy relative hit), so a
+// big hit visibly dwarfs a small one. The words use the EMBER ref sizes.
+const NUMBER_MIN_SIZE = 140;
 
-// Phase scales. Compact while accumulating so the board stays readable.
-const ACCUMULATE_SCALE = 0.92;
-const FINAL_SCALE = 1.6;              // settled finalize size (rest)
-const FINAL_OVERSHOOT = 1.9;          // bounce peak before settling back
-const FLY_END_SCALE = 0.55;           // shrunk size as it reaches the portrait
+// Phase scales (multiply the per-line ref sizes). Compact while accumulating so
+// the board stays readable; finalize settles near the EmberForge design size.
+const ACCUMULATE_SCALE = 0.72;
+const FINAL_SCALE = 1.0;              // settled finalize size (= design size)
+const FINAL_OVERSHOOT = 1.18;        // bounce peak before settling back
+const FLY_END_SCALE = 0.46;          // shrunk size as it reaches the portrait
 
 // Per-hit "tick" punch (replayed on every accumulation).
 const PUNCH_MS = 260;
 const PUNCH_AMP = 0.55;               // peak extra scale
 const PUNCH_ROT = 0.12;               // peak wobble (radians)
 const SHAKE_AMP = 12;                 // peak positional shake (px), decays
-const FLARE_GLOW = 40;                // extra glow blur on a fresh hit, decays
 
 // Idle → finalize. No new damage for this long (while NOT resolving) ends the
 // sequence. Held off while the board is still resolving so a long cascade stays
@@ -84,10 +131,6 @@ const IMPACT_RING_MAX = 90;           // burst ring radius (px)
 const SPARK_COUNT = 10;
 const SPARK_LEN = 34;
 const SPARK_SPEED = 0.4;              // px/ms outward
-
-// Glow (drop-shadow bloom) base + intensity for the number.
-const GLOW_BASE = 12;
-const GLOW_INTENSITY = 34;
 
 function clamp01(v) {
   return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -114,13 +157,38 @@ function rgb([r, g, b], a) {
   return a == null ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`;
 }
 
-function shade([r, g, b], f) {
-  // f<1 darken, f>1 lighten (clamped).
-  return [
-    Math.max(0, Math.min(255, Math.round(r * f))),
-    Math.max(0, Math.min(255, Math.round(g * f))),
-    Math.max(0, Math.min(255, Math.round(b * f))),
-  ];
+// Hex "#rrggbb" → "rgba(r,g,b,a)" (EmberForge colors are hex strings).
+function hexA(hex, a) {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// The metal-face gradient stops (ported verbatim from EmberForge gradientStops):
+// bright top sheen → body → a hard dark REFLECTION line near reflectPos → body
+// → lower underglow. The reflection band is what reads as polished metal.
+function emberGradientStops(e) {
+  const p = e.reflectPos;
+  const w = e.reflectSharp;
+  const stops = [
+    [0, e.topColor],
+    [p * 0.5, e.bodyColor],
+    [p - w, e.bodyColor],
+    [p, e.reflectColor],
+    [p + w, e.bodyColor],
+    [Math.min(0.999, p + 0.3), e.underglowColor],
+    [1, e.underglowColor],
+  ].map(([o, c]) => [clamp01(o), c]).sort((a, b) => a[0] - b[0]);
+  // Nudge any colliding offsets so addColorStop offsets strictly increase.
+  let last = -1;
+  for (const st of stops) {
+    if (st[0] <= last) st[0] = Math.min(1, last + 0.0006);
+    last = st[0];
+  }
+  return stops;
 }
 
 const PHASE = { ACCUMULATE: 0, FINALIZE: 1, FLY: 2, IMPACT: 3 };
@@ -347,30 +415,52 @@ export default class DamageCounterEffect {
 
     ctx.save();
     ctx.translate(cx, cy);
-    if (rot) ctx.rotate(rot);
+    // Whole-block tilt + slant (EmberForge `tilt`/`slant`), plus the punch wobble.
+    ctx.rotate(rot + EMBER.tilt * Math.PI / 180);
+    ctx.transform(1, 0, Math.tan(EMBER.slant * Math.PI / 180), 1, 0, 0);
 
-    const numFont = (NUMBER_BASE_FONT + NUMBER_INTENSITY_GROWTH * intensity) * scale;
-    const glowBoost = FLARE_GLOW * fresh;
+    const numFontPx = this._numberFont(intensity, scale);
+    const headFontPx = EMBER_HEAD_SIZE * scale;
+    const subFontPx = EMBER_SUB_SIZE * scale;
 
-    // Number sits slightly above center so the words tuck below it.
-    const numY = -numFont * 0.18;
-    this._drawNumber(ctx, String(this.total), 0, numY, numFont, intensity, numAlpha, glowBoost);
+    // Stack the lines (number / DAMAGE / CHAIN) and center the block. The words'
+    // contribution to height scales with their fade so the number settles to
+    // center smoothly as they vanish at finalize.
+    const CAP = 0.36;                 // ≈ half cap-height as a fraction of fontPx
+    const gap = EMBER_LINE_GAP * scale;
+    const numHalf = numFontPx * CAP;
+    const headHalf = headFontPx * CAP;
+    const subHalf = subFontPx * CAP;
+    const wa = clamp01(wordAlpha);
+    const wordsH = (gap + 2 * headHalf + gap + 2 * subHalf) * wa;
+    const numCenterY = -wordsH / 2;
+    const headCenterY = numCenterY + numHalf + gap + headHalf;
+    const subCenterY = headCenterY + headHalf + gap + subHalf;
 
-    // Slash accents flick across on a fresh hit (accumulate only).
+    this._drawForged(ctx, String(this.total), 0, numCenterY, numFontPx, EMBER_NUM_SIZE, numAlpha);
+
+    // Slash accents flick across the number on a fresh hit (accumulate only).
     if (this._phase === PHASE.ACCUMULATE && fresh > 0.25) {
-      this._drawSlashes(ctx, numFont, fresh, intensity);
+      ctx.save();
+      ctx.translate(0, numCenterY);
+      this._drawSlashes(ctx, numFontPx, fresh, intensity);
+      ctx.restore();
     }
 
     // "DAMAGE" + "CHAIN xN" (fade out during finalize).
     if (wordAlpha > 0.01) {
-      const wordY = numY + numFont * 0.5;
-      this._drawWord(ctx, 'DAMAGE', 0, wordY, WORD_FONT * scale, wordAlpha, intensity);
-      const chainY = wordY + WORD_FONT * scale * 0.95;
+      this._drawForged(ctx, 'DAMAGE', 0, headCenterY, headFontPx, EMBER_HEAD_SIZE, wordAlpha);
       const bang = this.chain >= 4 ? '!' : '';
-      this._drawWord(ctx, `CHAIN x${this.chain}${bang}`, 0, chainY, CHAIN_FONT * scale, wordAlpha * 0.92, intensity, true);
+      this._drawForged(ctx, `CHAIN x${this.chain}${bang}`, 0, subCenterY, subFontPx, EMBER_SUB_SIZE, wordAlpha * 0.95);
     }
 
     ctx.restore();
+  }
+
+  /** Number font px for an intensity + phase scale: ramps NUMBER_MIN_SIZE →
+   *  EMBER_NUM_SIZE with relative damage, then × the phase scale. */
+  _numberFont(intensity, scale) {
+    return (NUMBER_MIN_SIZE + (EMBER_NUM_SIZE - NUMBER_MIN_SIZE) * intensity) * scale;
   }
 
   // ── Fly + impact: just the number arcs to the portrait, then bursts ──────
@@ -396,10 +486,12 @@ export default class DamageCounterEffect {
       this._drawImpactBurst(ctx, x, y, p, intensity);
     }
 
-    const numFont = (NUMBER_BASE_FONT + NUMBER_INTENSITY_GROWTH * intensity) * scale;
+    const numFontPx = this._numberFont(intensity, scale);
     ctx.save();
     ctx.translate(x, y);
-    this._drawNumber(ctx, String(this.total), 0, 0, numFont, intensity, alpha, 0);
+    ctx.rotate(EMBER.tilt * Math.PI / 180);
+    ctx.transform(1, 0, Math.tan(EMBER.slant * Math.PI / 180), 1, 0, 0);
+    this._drawForged(ctx, String(this.total), 0, 0, numFontPx, EMBER_NUM_SIZE, alpha);
     ctx.restore();
   }
 
@@ -446,83 +538,78 @@ export default class DamageCounterEffect {
 
   // ── Drawing primitives ───────────────────────────────────────────────────
 
-  _drawNumber(ctx, text, x, y, fontPx, intensity, alpha, glowBoost) {
+  /**
+   * Draw one line as the EmberForge forged stack (ported from
+   * sim/emberforge.html `drawLine()`), centered horizontally at `cx` and
+   * vertically on `cyCenter`. All EMBER pixel params scale by fontPx/refSize so
+   * the look holds at any rendered size. The caller owns the tilt/slant.
+   */
+  _drawForged(ctx, text, cx, cyCenter, fontPx, refSize, alpha) {
     if (alpha <= 0 || fontPx < 1) return;
-    const col = rampRGB(intensity);
+    const e = EMBER;
+    const k = fontPx / refSize;   // scale EMBER's px params from its ref size
 
     ctx.save();
     ctx.globalAlpha *= alpha;
+    ctx.font = `${e.weight} ${Math.round(fontPx)}px ${e.font}`;
+    try { ctx.letterSpacing = (e.letterSpacing * k) + 'px'; } catch (_) {}
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    ctx.textBaseline = 'alphabetic';
     ctx.lineJoin = 'round';
-    ctx.font = `bold ${Math.round(fontPx)}px ${FONT_FAMILY}`;
+    ctx.miterLimit = 2;
 
-    // Heavy dark outline for legibility against any background.
-    ctx.shadowColor = 'transparent';
-    ctx.lineWidth = Math.max(3, fontPx * 0.14);
-    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-    ctx.strokeText(text, x, y);
+    // Measure → center the caps on cyCenter and map the gradient to the glyph's
+    // own ascent/descent (so the reflection line lands consistently).
+    const m = ctx.measureText(text);
+    const asc = m.actualBoundingBoxAscent || fontPx * 0.7;
+    const desc = m.actualBoundingBoxDescent || fontPx * 0.04;
+    const baseY = cyCenter + (asc - desc) / 2;
 
-    // Gold→hot vertical gradient fill, with an intensity-scaled glow.
-    const grad = ctx.createLinearGradient(0, y - fontPx * 0.55, 0, y + fontPx * 0.55);
-    grad.addColorStop(0, rgb(shade(col, 1.35)));
-    grad.addColorStop(0.5, rgb(col));
-    grad.addColorStop(1, rgb(shade(col, 0.62)));
-    ctx.shadowColor = rgb(col);
-    ctx.shadowBlur = (GLOW_BASE + GLOW_INTENSITY * intensity) + glowBoost;
+    // (1) FIRE GLOW — colored fill + big blur, stacked for a punchy halo.
+    if (e.glowIntensity > 0 && e.glowSpread > 0) {
+      ctx.save();
+      ctx.shadowColor = e.glowColor;
+      ctx.shadowBlur = e.glowSpread * k;
+      ctx.fillStyle = e.glowColor;
+      for (let i = 0; i < e.glowIntensity; i++) ctx.fillText(text, cx, baseY);
+      ctx.restore();
+    }
+    // (2) DROP SHADOW — offset-down soft shadow, grounds the text.
+    if (e.shadowAlpha > 0) {
+      ctx.save();
+      ctx.shadowColor = hexA(e.shadowColor, e.shadowAlpha);
+      ctx.shadowBlur = e.shadowBlur * k;
+      ctx.shadowOffsetY = e.shadowDY * k;
+      ctx.fillStyle = '#000';
+      ctx.fillText(text, cx, baseY);
+      ctx.restore();
+    }
+    // (3) FORGE DEPTH — dark copies nudged along extrudeDir = the 3D side.
+    if (e.extrudeDepth > 0) {
+      const a = e.extrudeDir * Math.PI / 180;
+      const dx = Math.cos(a), dy = Math.sin(a);
+      const depth = Math.max(1, Math.round(e.extrudeDepth * k));
+      ctx.fillStyle = e.extrudeColor;
+      for (let i = depth; i >= 1; i--) ctx.fillText(text, cx + dx * i, baseY + dy * i);
+    }
+    // (4) EDGE — thick dark outline around the front face.
+    if (e.edgeWidth > 0) {
+      ctx.strokeStyle = e.edgeColor;
+      ctx.lineWidth = e.edgeWidth * k;
+      ctx.strokeText(text, cx, baseY);
+    }
+    // (5) METAL FACE — vertical gradient with the dark reflection line.
+    const grad = ctx.createLinearGradient(0, baseY - asc, 0, baseY + desc);
+    for (const [o, col] of emberGradientStops(e)) grad.addColorStop(o, col);
     ctx.fillStyle = grad;
-    ctx.fillText(text, x, y);
-
-    // Bright bevel highlight skimming the top edge.
-    ctx.shadowColor = 'transparent';
-    ctx.globalAlpha *= 0.5;
-    ctx.fillStyle = rgb([255, 250, 225]);
-    ctx.fillText(text, x, y - fontPx * 0.04);
-    ctx.globalAlpha /= 0.5;
-
-    // Additive bloom at higher intensity for a "hot" look.
-    if (intensity > 0.3) {
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha *= (intensity - 0.3) / 0.7 * 0.45;
-      ctx.shadowColor = rgb(col);
-      ctx.shadowBlur = (GLOW_BASE + GLOW_INTENSITY * intensity) * 1.4 + glowBoost;
-      ctx.fillStyle = rgb(col);
-      ctx.fillText(text, x, y);
+    ctx.fillText(text, cx, baseY);
+    // (6) INNER SHEEN — thin bright rim, a catch of light on the bevel.
+    if (e.innerWidth > 0) {
+      ctx.strokeStyle = e.innerColor;
+      ctx.lineWidth = e.innerWidth * k;
+      ctx.strokeText(text, cx, baseY);
     }
 
-    ctx.restore();
-  }
-
-  _drawWord(ctx, text, x, y, fontPx, alpha, intensity, dim) {
-    if (alpha <= 0 || fontPx < 1) return;
-    ctx.save();
-    ctx.globalAlpha *= alpha;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.lineJoin = 'round';
-    // Letter-spaced caps for a banner feel (drawn char-by-char).
-    const spacing = fontPx * 0.12;
-    ctx.font = `bold ${Math.round(fontPx)}px ${FONT_FAMILY}`;
-    const widths = [];
-    let totalW = 0;
-    for (const ch of text) {
-      const w = ctx.measureText(ch).width;
-      widths.push(w);
-      totalW += w + spacing;
-    }
-    totalW -= spacing;
-    let cx = x - totalW / 2;
-    const gold = dim ? [255, 226, 150] : [255, 214, 120];
-    ctx.lineWidth = Math.max(2, fontPx * 0.16);
-    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-    ctx.fillStyle = rgb(gold);
-    for (let i = 0; i < widths.length; i++) {
-      const ch = text[i];
-      const chx = cx + widths[i] / 2;
-      ctx.strokeText(ch, chx, y);
-      ctx.fillText(ch, chx, y);
-      cx += widths[i] + spacing;
-    }
     ctx.restore();
   }
 

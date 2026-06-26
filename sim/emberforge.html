@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EmberForge — Damage Text Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Cinzel+Decorative:wght@400;700;900&family=Marcellus+SC&family=Metamorphous&family=MedievalSharp&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0b0907;
+    --panel:#15110a;
+    --panel-2:#1d160d;
+    --inset:#0d0a06;
+    --line:#3a2c1c;
+    --line-soft:#271e13;
+    --amber:#e8a33d;
+    --amber-bright:#ffc566;
+    --ember:#ff6a2a;
+    --text:#dccaa8;
+    --text-dim:#988a6e;
+    --text-faint:#6a5f4b;
+    --ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --display: "Cinzel", Georgia, serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{
+    font-family:var(--ui);
+    color:var(--text);
+    background:
+      radial-gradient(1200px 700px at 70% -10%, #1c1409 0%, rgba(28,20,9,0) 55%),
+      radial-gradient(900px 600px at -10% 110%, #1a1108 0%, rgba(26,17,8,0) 50%),
+      var(--ink);
+    min-height:100%;
+    -webkit-font-smoothing:antialiased;
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex; align-items:center; gap:16px;
+    padding:16px 22px;
+    border-bottom:1px solid var(--line-soft);
+    background:linear-gradient(180deg, rgba(40,30,16,.35), rgba(0,0,0,0));
+  }
+  .mark{
+    width:38px; height:38px; flex:0 0 auto;
+    display:grid; place-items:center;
+    border:1px solid var(--line); border-radius:9px;
+    background:radial-gradient(circle at 35% 30%, #2a200f, #100c07);
+    box-shadow:inset 0 1px 0 rgba(255,200,120,.12), 0 2px 8px rgba(0,0,0,.5);
+    color:var(--amber);
+  }
+  .title-wrap{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  h1{
+    margin:0; font-family:var(--display); font-weight:800;
+    font-size:21px; letter-spacing:.13em; color:#f3e2bd;
+    text-shadow:0 1px 0 #000, 0 0 16px rgba(232,163,61,.25);
+  }
+  h1 b{ color:var(--amber); font-weight:800; }
+  .subtitle{ font-size:12.5px; color:var(--text-dim); letter-spacing:.01em; }
+  .header-spacer{ flex:1; }
+
+  /* ---------- Layout ---------- */
+  main{
+    display:grid;
+    grid-template-columns: minmax(0,1fr) 392px;
+    gap:18px;
+    padding:18px 22px 8px;
+    align-items:start;
+  }
+  @media (max-width: 980px){
+    main{ grid-template-columns:1fr; }
+    .console{ position:static !important; max-height:none !important; }
+  }
+
+  /* ---------- Preview ---------- */
+  .stage{ display:flex; flex-direction:column; gap:12px; position:sticky; top:14px; }
+  @media (max-width: 980px){ .stage{ position:static; } }
+  .well{
+    position:relative;
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:14px;
+    background:
+      linear-gradient(180deg, rgba(50,38,20,.18), rgba(0,0,0,.25)),
+      var(--inset);
+    box-shadow: inset 0 2px 20px rgba(0,0,0,.65), 0 14px 40px rgba(0,0,0,.45);
+    overflow:hidden;
+  }
+  .well::after{ /* warm rim light */
+    content:""; position:absolute; inset:0; pointer-events:none; border-radius:16px;
+    box-shadow: inset 0 0 60px rgba(255,120,40,.05), inset 0 1px 0 rgba(255,210,140,.10);
+  }
+  .canvas-frame{
+    position:relative; border-radius:9px; overflow:hidden;
+    /* checkerboard shows through transparent areas of the canvas */
+    background-image:
+      linear-gradient(45deg, #1a1611 25%, transparent 25%),
+      linear-gradient(-45deg, #1a1611 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #1a1611 75%),
+      linear-gradient(-45deg, transparent 75%, #1a1611 75%);
+    background-size:22px 22px;
+    background-position:0 0, 0 11px, 11px -11px, -11px 0;
+    background-color:#120f0b;
+  }
+  canvas#preview{ display:block; width:100%; height:auto; }
+  .stage-bar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .hint{ font-size:11.5px; color:var(--text-faint); }
+  .hint b{ color:var(--text-dim); font-weight:600; }
+
+  /* ---------- Console ---------- */
+  .console{
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:linear-gradient(180deg, var(--panel), #100c07);
+    box-shadow:0 10px 30px rgba(0,0,0,.4);
+    overflow:hidden;
+    position:sticky; top:14px;
+    max-height:calc(100vh - 28px);
+    display:flex; flex-direction:column;
+  }
+  .console-scroll{ overflow:auto; padding:4px; }
+  .console-scroll::-webkit-scrollbar{ width:11px; }
+  .console-scroll::-webkit-scrollbar-thumb{ background:#2c2114; border-radius:8px; border:3px solid transparent; background-clip:content-box; }
+
+  .panel-head{
+    padding:12px 14px 8px; font-size:11px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--text-faint);
+  }
+
+  /* Presets */
+  .presets{ display:flex; flex-wrap:wrap; gap:7px; padding:0 12px 12px; }
+  .preset{
+    font-family:var(--ui); font-size:12px; color:var(--text);
+    padding:7px 11px; border-radius:999px; cursor:pointer;
+    border:1px solid var(--line-soft);
+    background:linear-gradient(180deg, #211a10, #161009);
+    display:flex; align-items:center; gap:7px; transition:border-color .15s, transform .05s;
+  }
+  .preset:hover{ border-color:#5a4527; }
+  .preset:active{ transform:translateY(1px); }
+  .preset.active{ border-color:var(--amber); box-shadow:inset 0 0 0 1px rgba(232,163,61,.25); }
+  .swatch{ width:12px; height:12px; border-radius:50%; box-shadow:0 0 6px currentColor, inset 0 0 0 1px rgba(0,0,0,.4); }
+
+  /* Accordion sections */
+  details.section{ border-top:1px solid var(--line-soft); }
+  details.section[open]{ background:rgba(255,255,255,.012); }
+  summary{
+    list-style:none; cursor:pointer; user-select:none;
+    display:flex; align-items:center; gap:10px;
+    padding:13px 14px; font-size:13px; letter-spacing:.03em; color:#e7d6b3;
+  }
+  summary::-webkit-details-marker{ display:none; }
+  .sec-mark{ width:7px; height:7px; transform:rotate(45deg); background:var(--amber); box-shadow:0 0 8px rgba(232,163,61,.6); flex:0 0 auto; }
+  .chev{ margin-left:auto; color:var(--text-faint); transition:transform .18s; font-size:16px; }
+  details[open] .chev{ transform:rotate(90deg); }
+  .sec-body{ padding:2px 14px 14px; display:flex; flex-direction:column; gap:11px; }
+
+  /* Control rows */
+  .row{ display:grid; grid-template-columns: 116px 1fr; align-items:center; gap:12px; }
+  .lbl{ font-size:12.5px; color:var(--text-dim); }
+  .ctrl{ display:flex; align-items:center; gap:10px; min-width:0; }
+  .val{ font-family:var(--mono); font-size:11.5px; color:var(--amber-bright); min-width:48px; text-align:right; }
+
+  input[type=text]{
+    width:100%; font-family:var(--display); font-size:14px; letter-spacing:.04em;
+    color:#f1e3c4; padding:7px 9px; border-radius:8px;
+    background:var(--inset); border:1px solid var(--line-soft);
+  }
+  input[type=text]:focus, select:focus{ outline:none; border-color:var(--amber); box-shadow:0 0 0 3px rgba(232,163,61,.15); }
+
+  select{
+    width:100%; font-family:var(--ui); font-size:13px; color:var(--text);
+    padding:7px 9px; border-radius:8px;
+    background:var(--inset); border:1px solid var(--line-soft);
+    appearance:none;
+    background-image:linear-gradient(45deg, transparent 50%, var(--text-faint) 50%), linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px;
+    background-size:5px 5px, 5px 5px; background-repeat:no-repeat;
+  }
+
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:22px; background:transparent; cursor:pointer; }
+  input[type=range]::-webkit-slider-runnable-track{ height:4px; border-radius:3px; background:linear-gradient(90deg,#4a3a22,#2a2014); }
+  input[type=range]::-moz-range-track{ height:4px; border-radius:3px; background:#2a2014; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:15px; height:15px; margin-top:-5.5px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #ffd98a, var(--amber)); box-shadow:0 0 8px rgba(232,163,61,.6), 0 1px 3px rgba(0,0,0,.6); border:1px solid #6a4a1e; }
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; border-radius:50%; background:var(--amber); border:1px solid #6a4a1e; box-shadow:0 0 8px rgba(232,163,61,.6); }
+  input[type=range]:focus{ outline:none; }
+  input[type=range]:focus-visible::-webkit-slider-thumb{ outline:2px solid var(--amber-bright); outline-offset:2px; }
+
+  input[type=color]{
+    -webkit-appearance:none; appearance:none; width:40px; height:28px; padding:0;
+    border:1px solid var(--line); border-radius:7px; background:transparent; cursor:pointer; flex:0 0 auto;
+  }
+  input[type=color]::-webkit-color-swatch-wrapper{ padding:3px; }
+  input[type=color]::-webkit-color-swatch{ border:none; border-radius:4px; }
+  input[type=color]::-moz-color-swatch{ border:none; border-radius:4px; }
+
+  /* checkbox toggle */
+  input[type=checkbox]{
+    -webkit-appearance:none; appearance:none; width:42px; height:23px; border-radius:999px;
+    background:var(--inset); border:1px solid var(--line-soft); position:relative; cursor:pointer; flex:0 0 auto; transition:background .15s, border-color .15s;
+  }
+  input[type=checkbox]::after{ content:""; position:absolute; top:2px; left:2px; width:17px; height:17px; border-radius:50%; background:#5a4d36; transition:left .15s, background .15s; }
+  input[type=checkbox]:checked{ background:rgba(232,163,61,.22); border-color:var(--amber); }
+  input[type=checkbox]:checked::after{ left:21px; background:radial-gradient(circle at 35% 30%, #ffd98a, var(--amber)); box-shadow:0 0 8px rgba(232,163,61,.6); }
+
+  /* Action bar (fixed at bottom of console) */
+  .actions{
+    border-top:1px solid var(--line);
+    padding:12px 14px;
+    display:grid; grid-template-columns: 1fr 1fr; gap:9px;
+    background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.25));
+  }
+  .actions .row-inline{ grid-column:1 / -1; display:flex; align-items:center; gap:10px; }
+  .btn{
+    font-family:var(--ui); font-size:13px; font-weight:600; letter-spacing:.02em;
+    padding:10px 12px; border-radius:9px; cursor:pointer; text-align:center;
+    border:1px solid var(--line); color:var(--text);
+    background:linear-gradient(180deg, #241c11, #161009); transition:border-color .15s, transform .05s;
+  }
+  .btn:hover{ border-color:#5a4527; }
+  .btn:active{ transform:translateY(1px); }
+  .btn.primary{
+    grid-column:1 / -1;
+    color:#1a1206; font-weight:700; letter-spacing:.04em;
+    border-color:#b27c2a;
+    background:linear-gradient(180deg, #ffd277, #e8992f);
+    box-shadow:0 6px 18px rgba(232,153,47,.28), inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .btn.primary:hover{ border-color:#d89a3a; }
+  .seg{ display:flex; border:1px solid var(--line-soft); border-radius:8px; overflow:hidden; }
+  .seg button{ font-family:var(--mono); font-size:12px; padding:6px 10px; border:none; cursor:pointer; color:var(--text-dim); background:var(--inset); }
+  .seg button.on{ color:#1a1206; background:var(--amber); font-weight:700; }
+  .seg-label{ font-size:12px; color:var(--text-dim); }
+
+  *:focus-visible{ outline:2px solid var(--amber-bright); outline-offset:2px; }
+
+  /* ---------- Guide ---------- */
+  .guide{
+    margin:8px 22px 30px;
+    border:1px solid var(--line-soft); border-radius:14px;
+    background:linear-gradient(180deg, rgba(30,22,12,.5), rgba(0,0,0,.2));
+    overflow:hidden;
+  }
+  .guide > summary{ padding:15px 18px; font-family:var(--display); font-weight:700; font-size:15px; letter-spacing:.08em; color:#f1e3c4; }
+  .guide .sec-mark{ transform:rotate(45deg); }
+  .guide-body{ padding:4px 22px 22px; max-width:920px; }
+  .guide-body h3{ font-family:var(--display); font-size:14px; letter-spacing:.06em; color:var(--amber); margin:22px 0 8px; }
+  .guide-body p{ font-size:13.5px; line-height:1.62; color:#cabfa6; margin:0 0 10px; }
+  .guide-body code{ font-family:var(--mono); font-size:12px; color:var(--amber-bright); background:rgba(232,163,61,.08); padding:1px 5px; border-radius:4px; }
+  .layers{ display:flex; flex-direction:column; gap:0; margin:6px 0 4px; counter-reset:layer; }
+  .layer{ display:flex; gap:12px; align-items:baseline; padding:9px 0; border-bottom:1px solid var(--line-soft); }
+  .layer:last-child{ border-bottom:none; }
+  .layer .n{ counter-increment:layer; font-family:var(--mono); font-size:11px; color:var(--ember); flex:0 0 22px; }
+  .layer .ln{ font-weight:600; color:#e7d6b3; font-size:13px; flex:0 0 132px; }
+  .layer .ld{ font-size:13px; color:#bcb098; line-height:1.5; }
+  @media (max-width:620px){ .layer{ flex-wrap:wrap; } .layer .ln{ flex-basis:100%; } }
+
+  .toast{
+    position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+    background:#241c11; color:#f1e3c4; border:1px solid var(--amber);
+    padding:10px 18px; border-radius:999px; font-size:13px;
+    box-shadow:0 8px 24px rgba(0,0,0,.5); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:50;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7h11l-2 4H5z"/><path d="M14 7l5 -2v4l-5 2"/><path d="M9 11v6"/><path d="M6 20h6"/>
+    </svg>
+  </div>
+  <div class="title-wrap">
+    <h1>EMBER<b>FORGE</b></h1>
+    <div class="subtitle">Forge molten damage text for your game. Tune the metal, the fire, and the impact — then export a transparent PNG.</div>
+  </div>
+  <div class="header-spacer"></div>
+</header>
+
+<main>
+  <!-- PREVIEW -->
+  <section class="stage" aria-label="Preview">
+    <div class="well">
+      <div class="canvas-frame">
+        <canvas id="preview" width="1000" height="680"></canvas>
+      </div>
+    </div>
+    <div class="stage-bar">
+      <button class="btn" id="shuffle" style="padding:8px 12px;">↻ Shuffle sparks</button>
+      <span class="hint" id="transparent-hint" style="display:none;"><b>Checkerboard</b> = transparent area. It won't appear in your exported PNG.</span>
+    </div>
+  </section>
+
+  <!-- CONSOLE -->
+  <section class="console" aria-label="Controls">
+    <div class="console-scroll">
+      <div class="panel-head">Presets</div>
+      <div class="presets" id="presets"></div>
+      <div id="sections"></div>
+    </div>
+    <div class="actions">
+      <div class="row-inline">
+        <span class="seg-label">Export size</span>
+        <div class="seg" id="scaleSeg" role="group" aria-label="Export scale">
+          <button data-scale="1">1×</button>
+          <button data-scale="2" class="on">2×</button>
+          <button data-scale="3">3×</button>
+        </div>
+      </div>
+      <button class="btn primary" id="exportBtn">⬇ Export PNG</button>
+      <button class="btn" id="copyBtn">Copy settings</button>
+      <button class="btn" id="resetBtn">Reset</button>
+    </div>
+  </section>
+</main>
+
+<!-- GUIDE -->
+<details class="guide" id="guide">
+  <summary><span class="sec-mark"></span>The forging guide — how this effect is built</summary>
+  <div class="guide-body">
+    <p>The whole look is one word drawn <b>many times</b> onto the same spot, in a deliberate order. Each pass adds one quality of forged metal. From back to front:</p>
+    <div class="layers">
+      <div class="layer"><span class="n"></span><span class="ln">Fire glow</span><span class="ld">The text painted in the fire colour with a big <code>shadowBlur</code>, drawn 2–4 times so the halo builds up. Layered passes stay punchy; one giant blur just goes muddy.</span></div>
+      <div class="layer"><span class="n"></span><span class="ln">Drop shadow</span><span class="ld">A soft, offset-down shadow that grounds the text so it floats above a busy board instead of getting lost in it.</span></div>
+      <div class="layer"><span class="n"></span><span class="ln">Forge depth</span><span class="ld">The text re-stamped in a dark colour, nudged one pixel at a time along a direction. The stack of copies reads as the chunky 3D side of each letter.</span></div>
+      <div class="layer"><span class="n"></span><span class="ln">Edge outline</span><span class="ld">A thick dark stroke with rounded joins, wrapping the front face. Keeps letters legible over anything and defines the silhouette.</span></div>
+      <div class="layer"><span class="n"></span><span class="ln">Metal face</span><span class="ld">A vertical gradient — bright sheen up top, a sudden dark <i>reflection line</i> near the middle, then brightening again toward the bottom. That hard dark band is the whole trick: it's what makes a flat fill read as polished, reflective metal.</span></div>
+      <div class="layer"><span class="n"></span><span class="ln">Inner sheen</span><span class="ld">A thin bright stroke over the front rim, like a catch of light on a beveled edge.</span></div>
+    </div>
+
+    <h3>Dialing it in</h3>
+    <p><b>The reflection line is everything.</b> Keep <b>Reflection height</b> near the vertical middle (≈50–55%) and the <b>width</b> thin. Make the line genuinely dark — much darker than the body. If your metal looks flat and cheap, your reflection line is too pale or too wide.</p>
+    <p><b>Let the sheen do the brightening, not the body.</b> Keep the body colour mid-bright. Push the <b>Top sheen</b> toward white and the <b>Lower glow</b> bright — that two-tone (cool-bright top, warm-bright bottom) sells the rounded surface while the reflection line still reads.</p>
+    <p><b>Depth direction = opposite the light.</b> If the light feels top-left, point <b>Forge depth → Direction</b> down-right (≈45°). Straight down (90°) gives a flatter, "stacked UI badge" look that's very game-y. A short depth (5–9px) is plenty.</p>
+    <p><b>Outline thicker than feels natural.</b> At big sizes a 7–11px dark edge looks right; thin outlines disappear over textured backgrounds. Joins are rounded so sharp corners don't spike out.</p>
+
+    <h3>Fonts</h3>
+    <p><b>Cinzel</b> is the free stand-in for Trajan — the classic carved-Roman face you see on fantasy posters and exactly what's in your screenshot, so it's the default here. <b>Cinzel Decorative</b> adds flourishes for splashier words; <b>Marcellus SC</b> is a lighter, more refined cousin; <b>Metamorphous</b> and <b>MedievalSharp</b> lean more storybook/runic. All load live, so switching re-renders instantly.</p>
+
+    <h3>Getting it into your game</h3>
+    <p>Hit <b>Copy settings</b> to put every value on your clipboard as JSON — drop those numbers straight into your own canvas draw code and you'll reproduce the look pixel-for-pixel. Or <b>Export PNG</b> on a transparent background to overlay the rendered text directly over your board. Export at <b>2×</b> and display at half size for crisp edges on high-DPI screens.</p>
+    <p>The draw order in this tool's source matches the layer list above, so the file itself doubles as a working reference — view source and lift the <code>drawLine()</code> function.</p>
+  </div>
+</details>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   EMBERFORGE — forged damage-text studio
+   The effect = the same text drawn in layers (see drawLine()).
+   ============================================================ */
+
+// ---------- tiny helpers ----------
+const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function toRGB(hex){ hex=hex.replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join(''); return [parseInt(hex.slice(0,2),16), parseInt(hex.slice(2,4),16), parseInt(hex.slice(4,6),16)]; }
+function hexA(hex,a){ const [r,g,b]=toRGB(hex); return `rgba(${r},${g},${b},${a})`; }
+function mix(h1,h2,t){ const a=toRGB(h1), b=toRGB(h2); const v=a.map((x,i)=>Math.round(x+(b[i]-x)*t)); return '#'+v.map(n=>n.toString(16).padStart(2,'0')).join(''); }
+
+// ---------- default config (the "Forged Ember" / fire look) ----------
+const DEFAULTS = {
+  numText:'34', numSize:230,
+  headText:'DAMAGE', headSize:92,
+  subText:'CHAIN x3!', subSize:40,
+  font:'Cinzel', weight:800, letterSpacing:2, lineGap:6, slant:8, tilt:-3,
+
+  topColor:'#fff3cf', bodyColor:'#ffc445', reflectColor:'#6e1f08', underglowColor:'#ffce5a',
+  reflectPos:0.54, reflectSharp:0.03,
+
+  extrudeDepth:7, extrudeDir:90, extrudeColor:'#3a1505',
+  edgeWidth:9, edgeColor:'#2a0e05', innerWidth:1.5, innerColor:'#ffe6a0',
+
+  glowColor:'#ff5a1e', glowSpread:38, glowIntensity:3,
+  shadowColor:'#000000', shadowAlpha:0.65, shadowBlur:14, shadowDY:10,
+
+  emberCount:26, streaks:true,
+  bg:'Forge', bgColor:'#0c0a08',
+
+  exportScale:2, _seed:1337
+};
+
+// ---------- presets (override material + fire only; your text/size/font stay) ----------
+const PRESETS = {
+  'Fire':    { swatch:'#ff7a2a', ...pick({topColor:'#fff3cf',bodyColor:'#ffc445',reflectColor:'#6e1f08',underglowColor:'#ffce5a',reflectPos:0.54,reflectSharp:0.03,extrudeColor:'#3a1505',extrudeDepth:7,edgeColor:'#2a0e05',innerColor:'#ffe6a0',glowColor:'#ff5a1e',glowSpread:38,glowIntensity:3}) },
+  'Frost':   { swatch:'#5ec1ff', ...pick({topColor:'#f4fbff',bodyColor:'#a9e2ff',reflectColor:'#0c3a5a',underglowColor:'#d9f3ff',reflectPos:0.52,reflectSharp:0.025,extrudeColor:'#0a2c44',extrudeDepth:6,edgeColor:'#06243a',innerColor:'#eaf8ff',glowColor:'#49b6ff',glowSpread:40,glowIntensity:3}) },
+  'Venom':   { swatch:'#9bff3a', ...pick({topColor:'#f4ffd9',bodyColor:'#b4f04a',reflectColor:'#1d3a06',underglowColor:'#d9ff8a',reflectPos:0.55,reflectSharp:0.03,extrudeColor:'#16280a',extrudeDepth:7,edgeColor:'#122309',innerColor:'#eaffc2',glowColor:'#8fff3a',glowSpread:38,glowIntensity:3}) },
+  'Radiant': { swatch:'#ffe6a0', ...pick({topColor:'#ffffff',bodyColor:'#ffe6a0',reflectColor:'#b9852a',underglowColor:'#fff3cf',reflectPos:0.5,reflectSharp:0.04,extrudeColor:'#6b4a12',extrudeDepth:5,edgeColor:'#6b4a12',innerColor:'#fffefb',glowColor:'#ffeeb0',glowSpread:50,glowIntensity:4}) },
+  'Arcane':  { swatch:'#c46aff', ...pick({topColor:'#fbe6ff',bodyColor:'#d68bff',reflectColor:'#2e0a4a',underglowColor:'#f0c2ff',reflectPos:0.53,reflectSharp:0.03,extrudeColor:'#1c0833',extrudeDepth:7,edgeColor:'#170630',innerColor:'#f6dcff',glowColor:'#b14bff',glowSpread:42,glowIntensity:3}) },
+  'Crimson': { swatch:'#ff5040', ...pick({topColor:'#ffe2d6',bodyColor:'#ff624a',reflectColor:'#3a0604',underglowColor:'#ff9a78',reflectPos:0.55,reflectSharp:0.03,extrudeColor:'#2a0604',extrudeDepth:8,edgeColor:'#220402',innerColor:'#ffd2c2',glowColor:'#ff3a2a',glowSpread:40,glowIntensity:3}) },
+};
+function pick(o){ return o; } // identity, keeps preset literals tidy
+
+// ---------- control schema ----------
+const FONTS = ['Cinzel','Cinzel Decorative','Marcellus SC','Metamorphous','MedievalSharp','Georgia','Impact'];
+const SCHEMA = [
+  { group:'Text & layout', open:true, items:[
+    {k:'numText',  label:'Number',   type:'text'},
+    {k:'numSize',  label:'Number size', type:'range', min:40, max:360, step:1, unit:'px'},
+    {k:'headText', label:'Headline', type:'text'},
+    {k:'headSize', label:'Headline size', type:'range', min:20, max:200, step:1, unit:'px'},
+    {k:'subText',  label:'Subline',  type:'text'},
+    {k:'subSize',  label:'Subline size', type:'range', min:0, max:120, step:1, unit:'px'},
+    {k:'font',     label:'Font',     type:'select', options:FONTS},
+    {k:'weight',   label:'Weight',   type:'range', min:400, max:900, step:100},
+    {k:'letterSpacing', label:'Tracking', type:'range', min:-4, max:30, step:0.5, unit:'px'},
+    {k:'lineGap',  label:'Line gap', type:'range', min:-40, max:90, step:1, unit:'px'},
+    {k:'slant',    label:'Slant',    type:'range', min:-25, max:25, step:1, unit:'°'},
+    {k:'tilt',     label:'Tilt',     type:'range', min:-15, max:15, step:1, unit:'°'},
+  ]},
+  { group:'Metal face', open:true, items:[
+    {k:'topColor',       label:'Top sheen',    type:'color'},
+    {k:'bodyColor',      label:'Body',         type:'color'},
+    {k:'reflectColor',   label:'Reflection',   type:'color'},
+    {k:'underglowColor', label:'Lower glow',   type:'color'},
+    {k:'reflectPos',     label:'Reflect height', type:'range', min:0.2, max:0.8, step:0.01},
+    {k:'reflectSharp',   label:'Reflect width',  type:'range', min:0.005, max:0.12, step:0.005},
+  ]},
+  { group:'Forge depth', items:[
+    {k:'extrudeDepth', label:'Depth',     type:'range', min:0, max:24, step:1, unit:'px'},
+    {k:'extrudeDir',   label:'Direction', type:'range', min:0, max:360, step:1, unit:'°'},
+    {k:'extrudeColor', label:'Side colour', type:'color'},
+  ]},
+  { group:'Edge', items:[
+    {k:'edgeWidth',  label:'Outline',     type:'range', min:0, max:30, step:0.5, unit:'px'},
+    {k:'edgeColor',  label:'Outline colour', type:'color'},
+    {k:'innerWidth', label:'Inner sheen', type:'range', min:0, max:6, step:0.5, unit:'px'},
+    {k:'innerColor', label:'Sheen colour', type:'color'},
+  ]},
+  { group:'Fire & shadow', items:[
+    {k:'glowColor',     label:'Fire colour',  type:'color'},
+    {k:'glowSpread',    label:'Fire spread',  type:'range', min:0, max:90, step:1, unit:'px'},
+    {k:'glowIntensity', label:'Fire passes',  type:'range', min:0, max:5, step:1},
+    {k:'shadowColor',   label:'Shadow colour', type:'color'},
+    {k:'shadowAlpha',   label:'Shadow opacity', type:'range', min:0, max:1, step:0.05},
+    {k:'shadowBlur',    label:'Shadow blur',  type:'range', min:0, max:40, step:1, unit:'px'},
+    {k:'shadowDY',      label:'Shadow drop',  type:'range', min:-20, max:40, step:1, unit:'px'},
+  ]},
+  { group:'Atmosphere', items:[
+    {k:'emberCount', label:'Embers',  type:'range', min:0, max:80, step:1},
+    {k:'streaks',    label:'Impact streaks', type:'check'},
+    {k:'bg',         label:'Background', type:'select', options:['Forge','Solid','Transparent']},
+    {k:'bgColor',    label:'Solid colour', type:'color'},
+  ]},
+];
+const ITEMS = {}; SCHEMA.forEach(g=>g.items.forEach(it=>ITEMS[it.k]=it));
+
+let state = structuredClone(DEFAULTS);
+
+// ============================================================
+//  RENDERING
+// ============================================================
+const canvas = document.getElementById('preview');
+const ctx = canvas.getContext('2d');
+const LOGW = 1000, LOGH = 680;
+
+function gradientStops(s){
+  const p = s.reflectPos, w = s.reflectSharp;
+  let stops = [
+    [0, s.topColor],
+    [p*0.5, s.bodyColor],
+    [p - w, s.bodyColor],
+    [p, s.reflectColor],
+    [p + w, s.bodyColor],
+    [Math.min(0.999, p + 0.30), s.underglowColor],
+    [1, s.underglowColor],
+  ].map(([o,c])=>[clamp(o,0,1),c]).sort((a,b)=>a[0]-b[0]);
+  let last = -1;
+  for (const st of stops){ if (st[0] <= last) st[0] = Math.min(1, last + 0.0006); last = st[0]; }
+  return stops;
+}
+
+function setSpacing(c, px){ try{ c.letterSpacing = px + 'px'; }catch(e){} }
+
+// ---- ONE LINE drawn as the full forged stack ----
+function drawLine(c, s, text, size, cx, baseY){
+  c.font = `${s.weight} ${size}px "${s.font}"`;
+  setSpacing(c, s.letterSpacing);
+  c.textAlign = 'center';
+  c.textBaseline = 'alphabetic';
+  c.lineJoin = 'round';
+  c.miterLimit = 2;
+
+  // (1) FIRE GLOW — bright fill + big blur, stacked for punch
+  if (s.glowIntensity > 0 && s.glowSpread > 0){
+    c.save();
+    c.shadowColor = s.glowColor;
+    c.shadowBlur = s.glowSpread;
+    c.fillStyle = s.glowColor;
+    for (let i=0;i<s.glowIntensity;i++) c.fillText(text, cx, baseY);
+    c.restore();
+  }
+  // (2) DROP SHADOW — offset-down soft shadow, grounds the text
+  if (s.shadowAlpha > 0){
+    c.save();
+    c.shadowColor = hexA(s.shadowColor, s.shadowAlpha);
+    c.shadowBlur = s.shadowBlur;
+    c.shadowOffsetY = s.shadowDY;
+    c.fillStyle = '#000';
+    c.fillText(text, cx, baseY);
+    c.restore();
+  }
+  // (3) FORGE DEPTH — dark copies nudged along a direction = the 3D side
+  if (s.extrudeDepth > 0){
+    const a = s.extrudeDir * Math.PI/180;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    c.fillStyle = s.extrudeColor;
+    for (let i=s.extrudeDepth; i>=1; i--) c.fillText(text, cx + dx*i, baseY + dy*i);
+  }
+  // (4) EDGE — thick dark outline around the front face
+  if (s.edgeWidth > 0){
+    c.strokeStyle = s.edgeColor;
+    c.lineWidth = s.edgeWidth;
+    c.strokeText(text, cx, baseY);
+  }
+  // (5) METAL FACE — vertical gradient with the dark reflection line
+  const m = c.measureText(text);
+  const asc = m.actualBoundingBoxAscent  || size*0.72;
+  const desc = m.actualBoundingBoxDescent || size*0.20;
+  const grad = c.createLinearGradient(0, baseY - asc, 0, baseY + desc);
+  for (const [o,col] of gradientStops(s)) grad.addColorStop(o, col);
+  c.fillStyle = grad;
+  c.fillText(text, cx, baseY);
+  // (6) INNER SHEEN — thin bright rim
+  if (s.innerWidth > 0){
+    c.strokeStyle = s.innerColor;
+    c.lineWidth = s.innerWidth;
+    c.strokeText(text, cx, baseY);
+  }
+}
+
+function drawBackground(c, s, W, H){
+  if (s.bg === 'Transparent') return;        // leave it clear → checkerboard shows in preview only
+  if (s.bg === 'Solid'){ c.fillStyle = s.bgColor; c.fillRect(0,0,W,H); return; }
+  // Forge: dark radial + faint warm glow behind the text
+  const g = c.createRadialGradient(W/2,H/2,40, W/2,H/2, Math.max(W,H)*0.78);
+  g.addColorStop(0,'#1b130b'); g.addColorStop(0.5,'#120c07'); g.addColorStop(1,'#070503');
+  c.fillStyle = g; c.fillRect(0,0,W,H);
+  const wg = c.createRadialGradient(W/2,H/2,10, W/2,H/2, Math.min(W,H)*0.45);
+  wg.addColorStop(0, hexA(s.glowColor, 0.16)); wg.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = wg; c.fillRect(0,0,W,H);
+}
+
+function drawStreaks(c, s, W, H){
+  const rng = mulberry32((s._seed ^ 0x9e3779b9) >>> 0);
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  c.translate(W/2, H/2);
+  for (let i=0;i<7;i++){
+    const a = (-25 + rng()*50) * Math.PI/180;
+    const r = (0.15 + rng()*0.5) * Math.min(W,H);
+    const dir = rng() < 0.5 ? -1 : 1;
+    const len = (0.08 + rng()*0.18) * Math.min(W,H);
+    const px = Math.cos(a)*r*dir, py = Math.sin(a)*r*dir*0.6;
+    c.save();
+    c.translate(px, py); c.rotate(a);
+    const grad = c.createLinearGradient(-len/2,0,len/2,0);
+    grad.addColorStop(0,'rgba(0,0,0,0)');
+    grad.addColorStop(0.5, hexA(s.glowColor, 0.45));
+    grad.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle = grad;
+    const th = 2 + rng()*4;
+    c.fillRect(-len/2, -th/2, len, th);
+    c.restore();
+  }
+  c.restore();
+}
+
+function drawEmbers(c, s, W, H){
+  if (s.emberCount <= 0) return;
+  const rng = mulberry32(s._seed >>> 0);
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  for (let i=0;i<s.emberCount;i++){
+    const ang = rng()*Math.PI*2;
+    const rad = (0.1 + Math.pow(rng(),0.6)*0.6) * Math.min(W,H);
+    const x = W/2 + Math.cos(ang)*rad;
+    const y = H/2 + Math.sin(ang)*rad*0.7;
+    const size = 1 + rng()*3.5;
+    const g = c.createRadialGradient(x,y,0, x,y, size*3);
+    g.addColorStop(0, hexA(mix(s.glowColor,'#ffffff', rng()*0.5), 0.9));
+    g.addColorStop(0.4, hexA(s.glowColor, 0.5));
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(x,y, size*3, 0, Math.PI*2); c.fill();
+  }
+  c.restore();
+}
+
+function drawText(c, s, W, H){
+  const lines = [
+    {text:s.numText,  size:s.numSize},
+    {text:s.headText, size:s.headSize},
+    {text:s.subText,  size:s.subSize},
+  ].filter(l => l.text && l.size > 0);
+  if (!lines.length) return;
+
+  // measure pass → total block height for vertical centering
+  let totalH = 0;
+  const measured = lines.map(l=>{
+    c.font = `${s.weight} ${l.size}px "${s.font}"`;
+    setSpacing(c, s.letterSpacing);
+    const m = c.measureText(l.text);
+    const asc  = m.actualBoundingBoxAscent  || l.size*0.72;
+    const desc = m.actualBoundingBoxDescent || l.size*0.20;
+    totalH += asc + desc;
+    return {...l, asc, desc};
+  });
+  totalH += s.lineGap * (measured.length - 1);
+
+  c.save();
+  // tilt + slant the whole block around the canvas centre
+  c.translate(W/2, H/2);
+  c.rotate(s.tilt * Math.PI/180);
+  c.transform(1, 0, Math.tan(s.slant * Math.PI/180), 1, 0, 0);
+  c.translate(-W/2, -H/2);
+
+  let cursor = (H - totalH)/2;
+  for (const l of measured){
+    const baseY = cursor + l.asc;
+    drawLine(c, s, l.text, l.size, W/2, baseY);
+    cursor += l.asc + l.desc + s.lineGap;
+  }
+  c.restore();
+}
+
+function render(c, W, H, scale){
+  c.setTransform(scale,0,0,scale,0,0);
+  c.clearRect(0,0,W,H);
+  drawBackground(c, state, W, H);
+  if (state.streaks) drawStreaks(c, state, W, H);
+  drawText(c, state, W, H);
+  drawEmbers(c, state, W, H);
+}
+
+function draw(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (canvas.width !== Math.round(LOGW*dpr)){ canvas.width = Math.round(LOGW*dpr); canvas.height = Math.round(LOGH*dpr); }
+  render(ctx, LOGW, LOGH, dpr);
+}
+
+// font loading (canvas needs the face ready before it can use it)
+const fontCache = new Set();
+async function ensureFont(family, weight){
+  const key = weight + '|' + family;
+  if (fontCache.has(key)) return;
+  try{ await document.fonts.load(`${weight} 64px "${family}"`); }catch(e){}
+  fontCache.add(key);
+}
+let queued = false;
+function scheduleDraw(){
+  if (queued) return; queued = true;
+  requestAnimationFrame(async ()=>{ queued = false; await ensureFont(state.font, state.weight); draw(); });
+}
+
+// ============================================================
+//  UI WIRING
+// ============================================================
+function fmtVal(item, v){
+  if (item.type !== 'range') return '';
+  if (['reflectPos','reflectSharp','shadowAlpha'].includes(item.k)) return Math.round(v*100) + '%';
+  const s = Number.isInteger(v) ? v : (Math.round(v*10)/10);
+  return s + (item.unit ? ' ' + item.unit : '');
+}
+
+function makeControl(item){
+  const row = document.createElement('div'); row.className='row'; row.id='row-'+item.k;
+  const lab = document.createElement('label'); lab.className='lbl'; lab.htmlFor='ctl-'+item.k; lab.textContent=item.label;
+  const ctrl = document.createElement('div'); ctrl.className='ctrl';
+  let el;
+  if (item.type==='text'){ el=document.createElement('input'); el.type='text'; }
+  else if (item.type==='range'){ el=document.createElement('input'); el.type='range'; el.min=item.min; el.max=item.max; el.step=item.step; }
+  else if (item.type==='color'){ el=document.createElement('input'); el.type='color'; }
+  else if (item.type==='check'){ el=document.createElement('input'); el.type='checkbox'; }
+  else if (item.type==='select'){ el=document.createElement('select'); item.options.forEach(o=>{ const op=document.createElement('option'); op.value=o; op.textContent=o; el.appendChild(op); }); }
+  el.id='ctl-'+item.k; el.dataset.key=item.k;
+  ctrl.appendChild(el);
+  if (item.type==='range'){ const out=document.createElement('span'); out.className='val'; out.id='val-'+item.k; ctrl.appendChild(out); }
+  row.appendChild(lab); row.appendChild(ctrl);
+  return row;
+}
+
+const sectionsEl = document.getElementById('sections');
+SCHEMA.forEach(grp=>{
+  const d = document.createElement('details'); d.className='section'; if (grp.open) d.open = true;
+  const sum = document.createElement('summary');
+  sum.innerHTML = `<span class="sec-mark"></span><span>${grp.group}</span><span class="chev">›</span>`;
+  const body = document.createElement('div'); body.className='sec-body';
+  grp.items.forEach(it=> body.appendChild(makeControl(it)));
+  d.appendChild(sum); d.appendChild(body); sectionsEl.appendChild(d);
+});
+
+function onCtl(e){
+  const k = e.target.dataset.key; if (!k) return;
+  const item = ITEMS[k];
+  let v;
+  if (item.type==='check') v = e.target.checked;
+  else if (item.type==='range') v = parseFloat(e.target.value);
+  else v = e.target.value;
+  state[k] = v;
+  const out = document.getElementById('val-'+k); if (out) out.textContent = fmtVal(item, v);
+  if (k==='bg'){ toggleBgColor(); updateHints(); }
+  if (['topColor','bodyColor','reflectColor','underglowColor','glowColor','extrudeColor','edgeColor','innerColor'].includes(k) || k==='reflectPos') markPresetCustom();
+  scheduleDraw();
+}
+sectionsEl.addEventListener('input', onCtl);
+sectionsEl.addEventListener('change', onCtl);
+
+function syncInputs(){
+  Object.values(ITEMS).forEach(item=>{
+    const el = document.getElementById('ctl-'+item.k); if (!el) return;
+    if (item.type==='check') el.checked = !!state[item.k];
+    else el.value = state[item.k];
+    const out = document.getElementById('val-'+item.k); if (out) out.textContent = fmtVal(item, state[item.k]);
+  });
+  toggleBgColor(); updateHints();
+}
+function toggleBgColor(){ const r=document.getElementById('row-bgColor'); if (r) r.style.display = state.bg==='Solid' ? '' : 'none'; }
+function updateHints(){ const h=document.getElementById('transparent-hint'); if (h) h.style.display = state.bg==='Transparent' ? '' : 'none'; }
+
+// presets
+const presetsEl = document.getElementById('presets');
+Object.entries(PRESETS).forEach(([name,p])=>{
+  const b = document.createElement('button'); b.className='preset'; b.dataset.preset=name;
+  b.innerHTML = `<span class="swatch" style="color:${p.swatch}"></span>${name}`;
+  b.addEventListener('click', ()=>{
+    const {swatch, ...fields} = p;
+    Object.assign(state, fields);
+    syncInputs();
+    setActivePreset(name);
+    scheduleDraw();
+  });
+  presetsEl.appendChild(b);
+});
+function setActivePreset(name){ document.querySelectorAll('.preset').forEach(el=> el.classList.toggle('active', el.dataset.preset===name)); }
+function markPresetCustom(){ document.querySelectorAll('.preset').forEach(el=> el.classList.remove('active')); }
+
+// actions
+document.getElementById('shuffle').addEventListener('click', ()=>{ state._seed = (Math.random()*1e9)|0; scheduleDraw(); });
+document.getElementById('resetBtn').addEventListener('click', ()=>{ const seed=state._seed; state=structuredClone(DEFAULTS); state._seed=seed; syncInputs(); setActivePreset('Fire'); scheduleDraw(); toast('Reset to Forged Ember'); });
+document.getElementById('copyBtn').addEventListener('click', ()=>{
+  const clean = {...state}; delete clean._seed; delete clean.exportScale;
+  navigator.clipboard?.writeText(JSON.stringify(clean, null, 2)).then(()=>toast('Settings copied as JSON'), ()=>toast('Copy failed'));
+});
+
+// export scale segmented control
+document.getElementById('scaleSeg').addEventListener('click', (e)=>{
+  const b = e.target.closest('button'); if (!b) return;
+  state.exportScale = parseInt(b.dataset.scale,10);
+  document.querySelectorAll('#scaleSeg button').forEach(x=> x.classList.toggle('on', x===b));
+});
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const scale = state.exportScale || 2;
+  const off = document.createElement('canvas');
+  off.width = LOGW*scale; off.height = LOGH*scale;
+  render(off.getContext('2d'), LOGW, LOGH, scale);
+  off.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `forged-${(state.numText||'text').replace(/\W+/g,'')||'text'}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1500);
+  }, 'image/png');
+  toast(`Exported ${scale}× PNG`);
+});
+
+// toast
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=> t.classList.remove('show'), 1900);
+}
+
+window.addEventListener('resize', scheduleDraw);
+document.fonts && document.fonts.ready.then(scheduleDraw);
+
+// boot
+syncInputs();
+setActivePreset('Fire');
+(async ()=>{ await ensureFont(state.font, state.weight); draw(); })();
+</script>
+</body>
+</html>

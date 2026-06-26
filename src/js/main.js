@@ -201,6 +201,13 @@ const DESIGN_HEIGHT = 1080;
 
 // ── Initialize ─────────────────────────────────────────
 async function init() {
+  // 0. Warm the custom display fonts so the first damage-counter draw isn't a
+  //    fallback-face flash (canvas can't trigger a font load on its own). Fire
+  //    and forget — they decode while assets stream behind the loading screen.
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('800 100px "Cinzel"');
+  }
+
   // 1. AssetManager — register every asset, but do NOT block on loading yet.
   //    The loading screen below appears immediately and the assets stream in
   //    behind it (see step 12).
