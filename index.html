@@ -23,6 +23,26 @@
     font-display: swap;
   }
 
+  /* Damage-counter display faces: Cinzel for the DAMAGE/CHAIN words,
+     Avengeance Mightiest Avenger for the big numbers. Self-hosted (no network)
+     so they work on raw serve + offline PWA, like Marcellus above. */
+  @font-face {
+    font-family: 'Cinzel';
+    src: url('./bundle/Cinzel-Bold-CfyjOJCS.otf') format('opentype');
+    /* Declare a weight RANGE so the damage text's 800 request maps to this one
+       bold OTF without the browser synthesizing a faux-heavier weight. */
+    font-weight: 700 900;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Avengeance Mightiest Avenger';
+    src: url('./bundle/AVENGEANCE%20MIGHTIEST%20AVENGER-DMe_4YVP.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
   * {
     margin: 0;
     padding: 0;
@@ -149,7 +169,7 @@
     #install-btn      { display: none !important; }
   }
 </style>
-  <script type="module" crossorigin src="./bundle/index-mBIPCEsU.js"></script>
+  <script type="module" crossorigin src="./bundle/index-BMcxjbeO.js"></script>
 <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
 <body>
   <div id="rotate-overlay">
