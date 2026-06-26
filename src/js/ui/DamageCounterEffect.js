@@ -70,16 +70,16 @@ const FLARE_GLOW = 40;                // extra glow blur on a fresh hit, decays
 const FINALIZE_IDLE_MS = 150;
 
 // Finalize timeline: a bounce-up grow, then a readable hold (words fade early).
-const FINAL_GROW_MS = 160;
-const FINAL_HOLD_MS = 140;
+const FINAL_GROW_MS = 140;
+const FINAL_HOLD_MS = 130;
 const WORD_FADE_MS = 150;             // "DAMAGE"/chain fade window at finalize start
 
 // Fly-to-portrait.
-const FLY_MS = 230;
+const FLY_MS = 200;
 const FLY_ARC_LIFT = 110;             // peak upward bow of the arc (px)
 
 // Impact burst at the portrait.
-const IMPACT_MS = 240;
+const IMPACT_MS = 220;
 const IMPACT_RING_MAX = 90;           // burst ring radius (px)
 const SPARK_COUNT = 10;
 const SPARK_LEN = 34;
