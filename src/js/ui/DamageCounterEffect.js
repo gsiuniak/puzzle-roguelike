@@ -116,12 +116,11 @@ const SHAKE_AMP = 12;                 // peak positional shake (px), decays
 // as ONE accumulating counter.
 const FINALIZE_IDLE_MS = 150;
 
-// Finalize timeline — SEQUENCED to avoid the number growing into the fading
-// words: (1) words fade out while the number holds its size + glides to center,
-// (2) the number pops to FINAL_SCALE (easeOutBack), (3) a readable hold.
-const FINALIZE_WORD_FADE_MS = 140;   // DAMAGE/CHAIN fade out first (number unchanged)
-const FINAL_GROW_MS = 160;           // then the number grows (words already gone)
-const FINAL_HOLD_MS = 110;
+// Finalize timeline: the whole block (number + DAMAGE + CHAIN) pops to
+// FINAL_SCALE (easeOutBack) then holds briefly before flying to the portrait
+// AS ONE COMPOSED UNIT — the words don't fade out, they travel with the number.
+const FINAL_GROW_MS = 160;
+const FINAL_HOLD_MS = 150;
 
 // Fly-to-portrait.
 const FLY_MS = 200;
@@ -475,7 +474,7 @@ export default class DamageCounterEffect {
     this._phaseElapsed += dt;
 
     if (this._phase === PHASE.FINALIZE) {
-      if (this._phaseElapsed >= FINALIZE_WORD_FADE_MS + FINAL_GROW_MS + FINAL_HOLD_MS) {
+      if (this._phaseElapsed >= FINAL_GROW_MS + FINAL_HOLD_MS) {
         this._phase = PHASE.FLY;
         this._phaseElapsed = 0;
         this._flyFromX = this.x;
@@ -543,27 +542,16 @@ export default class DamageCounterEffect {
     const intensity = this._intensity();
     const fresh = this._hitFresh();
 
-    // Scale + word alpha by phase.
+    // Phase scale: accumulate ease, or the finalize pop to FINAL_SCALE.
     let scale = this._scaleBase + this._punchScale();
-    let wordAlpha = 1;
-    let numAlpha = 1;
     if (this._phase === PHASE.FINALIZE) {
       const e = this._phaseElapsed;
-      // Sub-phase 1: words fade out while the number HOLDS its accumulate size
-      // (and glides to center via the wordsH layout below) — no overlap.
-      wordAlpha = clamp01(1 - e / FINALIZE_WORD_FADE_MS);
-      // Sub-phase 2: once the words are gone, the number pops to FINAL_SCALE.
-      const ge = e - FINALIZE_WORD_FADE_MS;
-      if (ge <= 0) {
-        scale = ACCUMULATE_SCALE;
-      } else if (ge < FINAL_GROW_MS) {
-        scale = ACCUMULATE_SCALE + (FINAL_SCALE - ACCUMULATE_SCALE) * easeOutBack(ge / FINAL_GROW_MS);
-      } else {
-        scale = FINAL_SCALE;
-      }
+      scale = e < FINAL_GROW_MS
+        ? ACCUMULATE_SCALE + (FINAL_SCALE - ACCUMULATE_SCALE) * easeOutBack(e / FINAL_GROW_MS)
+        : FINAL_SCALE;
     }
 
-    // Positional shake on a fresh hit (only while accumulating).
+    // Positional shake + punch wobble on a fresh hit (accumulate only).
     let sx = 0, sy = 0;
     if (this._phase === PHASE.ACCUMULATE && fresh > 0) {
       sx = (Math.random() - 0.5) * 2 * SHAKE_AMP * fresh;
@@ -571,51 +559,12 @@ export default class DamageCounterEffect {
     }
     const rot = this._phase === PHASE.ACCUMULATE ? this._punchRot() : 0;
 
-    const cx = this.x + sx;
-    const cy = this.y + sy;
-
     ctx.save();
-    ctx.translate(cx, cy);
+    ctx.translate(this.x + sx, this.y + sy);
     // Whole-block tilt + slant (EmberForge `tilt`/`slant`), plus the punch wobble.
     ctx.rotate(rot + EMBER.tilt * Math.PI / 180);
     ctx.transform(1, 0, Math.tan(EMBER.slant * Math.PI / 180), 1, 0, 0);
-
-    const numFontPx = this._numberFont(intensity, scale);
-    const headFontPx = EMBER_HEAD_SIZE * scale;
-    const subFontPx = EMBER_SUB_SIZE * scale;
-
-    // Stack the lines (number / DAMAGE / CHAIN) and center the block. The words'
-    // contribution to height scales with their fade so the number settles to
-    // center smoothly as they vanish at finalize.
-    const CAP = 0.36;                 // ≈ half cap-height as a fraction of fontPx
-    const gap = EMBER_LINE_GAP * scale;
-    const numHalf = numFontPx * CAP;
-    const headHalf = headFontPx * CAP;
-    const subHalf = subFontPx * CAP;
-    const wa = clamp01(wordAlpha);
-    const wordsH = (gap + 2 * headHalf + gap + 2 * subHalf) * wa;
-    const numCenterY = -wordsH / 2;
-    const headCenterY = numCenterY + numHalf + gap + headHalf;
-    const subCenterY = headCenterY + headHalf + gap + subHalf;
-
-    this._blitSprite(ctx, this._numberSprite(), 0, numCenterY, numFontPx, numAlpha);
-
-    // Slash accents flick across the number on a fresh hit (accumulate only).
-    if (this._phase === PHASE.ACCUMULATE && fresh > 0.25) {
-      ctx.save();
-      ctx.translate(0, numCenterY);
-      this._drawSlashes(ctx, numFontPx, fresh, intensity);
-      ctx.restore();
-    }
-
-    // "DAMAGE" + "CHAIN xN" (fade out during finalize).
-    if (wordAlpha > 0.01) {
-      this._blitSprite(ctx, getDamageSprite(), 0, headCenterY, headFontPx, wordAlpha);
-      const bang = this.chain >= 4 ? '!' : '';
-      const chainSprite = this._chainSprite_(`CHAIN x${this.chain}${bang}`);
-      this._blitSprite(ctx, chainSprite, 0, subCenterY, subFontPx, wordAlpha * 0.95);
-    }
-
+    this._drawBlock(ctx, scale, intensity, 1, fresh, this._phase === PHASE.ACCUMULATE);
     ctx.restore();
   }
 
@@ -625,7 +574,46 @@ export default class DamageCounterEffect {
     return (NUMBER_MIN_SIZE + (EMBER_NUM_SIZE - NUMBER_MIN_SIZE) * intensity) * scale;
   }
 
-  // ── Fly + impact: just the number arcs to the portrait, then bursts ──────
+  /**
+   * Draw the composed block (number / DAMAGE / CHAIN) centered on the current
+   * transform origin. The whole block scales as ONE unit, so it stays composed
+   * whether parked at center or flying to the portrait. The caller owns the
+   * translate/rotate/shear; this owns the line layout + sprite blits. `alpha` is
+   * the whole-block opacity (for the impact fade).
+   */
+  _drawBlock(ctx, scale, intensity, alpha, fresh, allowSlashes) {
+    const numFontPx = this._numberFont(intensity, scale);
+    const headFontPx = EMBER_HEAD_SIZE * scale;
+    const subFontPx = EMBER_SUB_SIZE * scale;
+
+    // Stack the three lines and center the FULL block vertically on the origin.
+    const CAP = 0.36;                 // ≈ half cap-height as a fraction of fontPx
+    const gap = EMBER_LINE_GAP * scale;
+    const numHalf = numFontPx * CAP;
+    const headHalf = headFontPx * CAP;
+    const subHalf = subFontPx * CAP;
+    const totalH = 2 * numHalf + gap + 2 * headHalf + gap + 2 * subHalf;
+    const numCenterY = -totalH / 2 + numHalf;
+    const headCenterY = numCenterY + numHalf + gap + headHalf;
+    const subCenterY = headCenterY + headHalf + gap + subHalf;
+
+    this._blitSprite(ctx, this._numberSprite(), 0, numCenterY, numFontPx, alpha);
+
+    // Slash accents flick across the number on a fresh hit (accumulate only).
+    if (allowSlashes && fresh > 0.25) {
+      ctx.save();
+      ctx.translate(0, numCenterY);
+      this._drawSlashes(ctx, numFontPx, fresh, intensity);
+      ctx.restore();
+    }
+
+    this._blitSprite(ctx, getDamageSprite(), 0, headCenterY, headFontPx, alpha);
+    const bang = this.chain >= 4 ? '!' : '';
+    const chainSprite = this._chainSprite_(`CHAIN x${this.chain}${bang}`);
+    this._blitSprite(ctx, chainSprite, 0, subCenterY, subFontPx, alpha * 0.95);
+  }
+
+  // ── Fly + impact: the WHOLE block arcs to the portrait, then bursts ───────
 
   _renderFlying(ctx) {
     const intensity = this._intensity();
@@ -648,12 +636,11 @@ export default class DamageCounterEffect {
       this._drawImpactBurst(ctx, x, y, p, intensity);
     }
 
-    const numFontPx = this._numberFont(intensity, scale);
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(EMBER.tilt * Math.PI / 180);
     ctx.transform(1, 0, Math.tan(EMBER.slant * Math.PI / 180), 1, 0, 0);
-    this._blitSprite(ctx, this._numberSprite(), 0, 0, numFontPx, alpha);
+    this._drawBlock(ctx, scale, intensity, alpha, 0, false);
     ctx.restore();
   }
 
