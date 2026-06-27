@@ -205,7 +205,8 @@ async function init() {
   //    fallback-face flash (canvas can't trigger a font load on its own). Fire
   //    and forget — they decode while assets stream behind the loading screen.
   if (document.fonts && document.fonts.load) {
-    document.fonts.load('800 100px "Cinzel"');
+    document.fonts.load('700 100px "Cinzel"');      // damage numbers
+    document.fonts.load('400 100px "ExtraOld"');    // DAMAGE/CHAIN words
   }
 
   // 1. AssetManager — register every asset, but do NOT block on loading yet.

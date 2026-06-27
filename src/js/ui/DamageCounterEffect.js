@@ -39,45 +39,57 @@
 // proportions hold at any rendered size. To retune the look, edit EMBER (it's
 // the exact JSON the studio's "Copy settings" produces, minus text/sizes).
 const EMBER = {
-  font: '"Cinzel", "Marcellus SC", Georgia, serif',
-  weight: 800,
-  letterSpacing: 2,        // px @ ref size
-  slant: -20,              // ° — horizontal shear of the whole block
-  tilt: -8,                // ° — rotation of the whole block
+  font: '"Marcellus SC", "Cinzel", Georgia, serif',
+  weight: 800,             // Marcellus SC ships only `normal` — 900 would faux-bold
+  letterSpacing: 3,        // px @ ref size
+  slant: 0,                // ° — horizontal shear of the whole block
+  tilt: 0,                 // ° — rotation of the whole block
   // metal face (vertical gradient with the reflection line)
-  topColor: '#fdf5d8',
-  bodyColor: '#eb9641',
-  reflectColor: '#eca434',
-  underglowColor: '#f8e449',
-  reflectPos: 0.29,
-  reflectSharp: 0.03,
+  topColor: '#fff3a6',
+  bodyColor: '#fed506',
+  reflectColor: '#ffd747',
+  underglowColor: '#de7421',
+  reflectPos: 0.39,
+  reflectSharp: 0.12,
   // forge depth (the chunky 3D side)
   extrudeDepth: 13,        // px @ ref size
-  extrudeDir: 201,         // °
-  extrudeColor: '#4d0b00',
+  extrudeDir: 156,         // °
+  extrudeColor: '#190000',
   // edge + inner sheen
-  edgeWidth: 9.5,          // px @ ref size
-  edgeColor: '#500202',
-  innerWidth: 1.5,         // px @ ref size
-  innerColor: '#f9e6a3',
+  edgeWidth: 5,            // px @ ref size
+  edgeColor: '#8b0404',
+  innerWidth: 0,           // px @ ref size (0 = no inner sheen pass)
+  innerColor: '#ff772e',
   // fire glow (behind the stack)
-  glowColor: '#e7692d',
-  glowSpread: 30,          // px @ ref size
+  glowColor: '#ff0000',
+  glowSpread: 12,          // px @ ref size
   glowIntensity: 2,        // stacked passes
   // drop shadow (grounds the text)
-  shadowColor: '#fea62a',
+  shadowColor: '#ff0000',
   shadowAlpha: 0.65,
-  shadowBlur: 6,           // px @ ref size
-  shadowDY: 6,             // px @ ref size
+  shadowBlur: 40,          // px @ ref size
+  shadowDY: 7,             // px @ ref size
 };
+
+// Per-line font overrides merged over EMBER at render time (everything not set
+// here — colors, extrude, glow, shadow, slant — comes from EMBER). The big
+// damage NUMBER uses Cinzel (bold); the DAMAGE/CHAIN words use ExtraOld. Both
+// faces are bundled (@font-face in index.html, warmed at boot in main.js).
+// NUMBERS (the big damage total AND the chain count digits) use Cinzel; the
+// non-numeric WORDS ("DAMAGE", "CHAIN x") use ExtraOld. The chain line is drawn
+// as two parts so its digits get Cinzel explicitly (font fallback is unreliable —
+// ExtraOld may ship its own digit glyphs).
+const NUMBER_OVERRIDES = { font: '"Cinzel", "Marcellus SC", Georgia, serif', weight: 700 };
+const WORD_OVERRIDES = { font: '"ExtraOld", "Marcellus SC", Georgia, serif', weight: 400 };
 
 // Sizes the EMBER pixel params were authored at — pixel params scale by
 // fontPx / refSize. The number's rendered size ramps with intensity up to
 // EMBER_NUM_SIZE; the words are drawn at their ref sizes (× phase scale).
-const EMBER_NUM_SIZE = 224;
-const EMBER_HEAD_SIZE = 105;   // "DAMAGE"
-const EMBER_SUB_SIZE = 43;     // "CHAIN xN"
-const EMBER_LINE_GAP = 11;     // px @ scale 1, between stacked lines
+const EMBER_NUM_SIZE = 240;
+const EMBER_HEAD_SIZE = 100;   // "DAMAGE"
+const EMBER_SUB_SIZE = 39;     // "CHAIN xN"
+const EMBER_LINE_GAP = 10;      // px @ scale 1, between stacked lines
+const CHAIN_GAP = 10;           // px @ scale 1, between "CHAIN x" and the digits
 
 // Intensity (relative damage 0..1) → accent color ramp for the IMPACT burst +
 // slash flicks (yellow-gold → fiery red). The forged number/words get their
@@ -96,7 +108,9 @@ const INTENSITY_FULL_FRACTION = 0.4;
 // Number sizing (px font at phase scale 1.0). Ramps with intensity from
 // NUMBER_MIN_SIZE (chip damage) up to EMBER_NUM_SIZE (heavy relative hit), so a
 // big hit visibly dwarfs a small one. The words use the EMBER ref sizes.
-const NUMBER_MIN_SIZE = 140;
+// MIN raised so a small hit (e.g. a level-1 Bash) is still comfortably readable
+// rather than tiny — the floor sits closer to the max now.
+const NUMBER_MIN_SIZE = 200;
 
 // Phase scales (multiply the per-line ref sizes). Compact while accumulating so
 // the board stays readable; finalize settles near the EmberForge design size.
@@ -228,9 +242,9 @@ function getScratchCtx() {
 }
 
 // Paint the EmberForge forged stack at (cx, baseY) into ctx. Same 6 passes as
-// the studio's drawLine(); pixel params scale by fontPx/refSize.
-function paintForgedStack(ctx, text, cx, baseY, asc, desc, fontPx, refSize) {
-  const e = EMBER;
+// the studio's drawLine(); pixel params scale by fontPx/refSize. `e` is the
+// effective config (EMBER, optionally with per-line color overrides).
+function paintForgedStack(ctx, text, cx, baseY, asc, desc, fontPx, refSize, e) {
   const k = fontPx / refSize;
   ctx.font = `${e.weight} ${Math.round(fontPx)}px ${e.font}`;
   try { ctx.letterSpacing = (e.letterSpacing * k) + 'px'; } catch (_) {}
@@ -291,8 +305,8 @@ function paintForgedStack(ctx, text, cx, baseY, asc, desc, fontPx, refSize) {
  * visual (metal-face) center, so blitting the canvas centered lands it right.
  * Reuses `reuse.canvas` if provided (avoids per-regen allocation).
  */
-function renderForgedSprite(text, refSize, nativeFontPx, reuse) {
-  const e = EMBER;
+function renderForgedSprite(text, refSize, nativeFontPx, reuse, overrides) {
+  const e = overrides ? { ...EMBER, ...overrides } : EMBER;
   const k = nativeFontPx / refSize;
   const sc = getScratchCtx();
   sc.font = `${e.weight} ${Math.round(nativeFontPx)}px ${e.font}`;
@@ -319,15 +333,22 @@ function renderForgedSprite(text, refSize, nativeFontPx, reuse) {
   c.setTransform(FORGE_DPR, 0, 0, FORGE_DPR, 0, 0);
   c.clearRect(0, 0, lw, lh);
   // baseY chosen so the glyph's visual center (baseY-(asc-desc)/2) == lh/2.
-  paintForgedStack(c, text, lw / 2, pad + asc, asc, desc, nativeFontPx, refSize);
-  return { canvas, lw, lh, nativeFontPx, text };
+  paintForgedStack(c, text, lw / 2, pad + asc, asc, desc, nativeFontPx, refSize, e);
+  // textW = the glyph advance (at native size) for laying parts side by side.
+  return { canvas, lw, lh, nativeFontPx, text, textW: width };
 }
 
-// "DAMAGE" never changes → one shared sprite for the whole app.
+// "DAMAGE" and the "CHAIN x" prefix never change → shared module sprites
+// (ExtraOld). The chain DIGITS are a separate per-instance Cinzel sprite.
 let _damageSprite = null;
 function getDamageSprite() {
-  if (!_damageSprite) _damageSprite = renderForgedSprite('DAMAGE', EMBER_HEAD_SIZE, EMBER_HEAD_SIZE);
+  if (!_damageSprite) _damageSprite = renderForgedSprite('DAMAGE', EMBER_HEAD_SIZE, EMBER_HEAD_SIZE, null, WORD_OVERRIDES);
   return _damageSprite;
+}
+let _chainWordSprite = null;
+function getChainWordSprite() {
+  if (!_chainWordSprite) _chainWordSprite = renderForgedSprite('CHAIN x', EMBER_SUB_SIZE, EMBER_SUB_SIZE, null, WORD_OVERRIDES);
+  return _chainWordSprite;
 }
 
 const PHASE = { ACCUMULATE: 0, FINALIZE: 1, FLY: 2, IMPACT: 3 };
@@ -381,15 +402,15 @@ export default class DamageCounterEffect {
   _numberSprite() {
     const text = String(this.total);
     if (!this._numSprite || this._numSprite.text !== text) {
-      this._numSprite = renderForgedSprite(text, EMBER_NUM_SIZE, NUMBER_NATIVE_SIZE, this._numSprite);
+      this._numSprite = renderForgedSprite(text, EMBER_NUM_SIZE, NUMBER_NATIVE_SIZE, this._numSprite, NUMBER_OVERRIDES);
     }
     return this._numSprite;
   }
 
-  /** Current "CHAIN xN" sprite, regenerated when the chain text changes. */
-  _chainSprite_(text) {
+  /** The chain COUNT digits (e.g. "3" / "12!") in Cinzel, regenerated on change. */
+  _chainNumSprite(text) {
     if (!this._chainSprite || this._chainSprite.text !== text) {
-      this._chainSprite = renderForgedSprite(text, EMBER_SUB_SIZE, EMBER_SUB_SIZE, this._chainSprite);
+      this._chainSprite = renderForgedSprite(text, EMBER_SUB_SIZE, EMBER_SUB_SIZE, this._chainSprite, NUMBER_OVERRIDES);
     }
     return this._chainSprite;
   }
@@ -608,9 +629,20 @@ export default class DamageCounterEffect {
     }
 
     this._blitSprite(ctx, getDamageSprite(), 0, headCenterY, headFontPx, alpha);
+
+    // CHAIN line: "CHAIN x" (ExtraOld) + the count digits (Cinzel) placed side by
+    // side and centered as a pair, since ExtraOld has no/ugly digit glyphs.
     const bang = this.chain >= 4 ? '!' : '';
-    const chainSprite = this._chainSprite_(`CHAIN x${this.chain}${bang}`);
-    this._blitSprite(ctx, chainSprite, 0, subCenterY, subFontPx, alpha * 0.95);
+    const chainWord = getChainWordSprite();
+    const chainNum = this._chainNumSprite(`${this.chain}${bang}`);
+    const sSub = subFontPx / EMBER_SUB_SIZE;     // display scale for the sub line
+    const wordW = chainWord.textW * sSub;
+    const numW = chainNum.textW * sSub;
+    const chainGap = CHAIN_GAP * sSub;
+    const pairW = wordW + chainGap + numW;
+    const chainAlpha = alpha * 0.95;
+    this._blitSprite(ctx, chainWord, -pairW / 2 + wordW / 2, subCenterY, subFontPx, chainAlpha);
+    this._blitSprite(ctx, chainNum, -pairW / 2 + wordW + chainGap + numW / 2, subCenterY, subFontPx, chainAlpha);
   }
 
   // ── Fly + impact: the WHOLE block arcs to the portrait, then bursts ───────
