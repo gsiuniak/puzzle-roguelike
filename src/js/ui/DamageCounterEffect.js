@@ -102,8 +102,8 @@ const NUMBER_MIN_SIZE = 140;
 // the board stays readable; finalize settles near the EmberForge design size.
 const ACCUMULATE_SCALE = 0.72;
 const FINAL_SCALE = 1.0;              // settled finalize size (= design size)
-const FINAL_OVERSHOOT = 1.18;        // bounce peak before settling back
 const FLY_END_SCALE = 0.46;          // shrunk size as it reaches the portrait
+const FINAL_BACK = 1.5;              // easeOutBack overshoot (lower = gentler pop)
 
 // Per-hit "tick" punch (replayed on every accumulation).
 const PUNCH_MS = 260;
@@ -116,10 +116,12 @@ const SHAKE_AMP = 12;                 // peak positional shake (px), decays
 // as ONE accumulating counter.
 const FINALIZE_IDLE_MS = 150;
 
-// Finalize timeline: a bounce-up grow, then a readable hold (words fade early).
-const FINAL_GROW_MS = 140;
-const FINAL_HOLD_MS = 130;
-const WORD_FADE_MS = 150;             // "DAMAGE"/chain fade window at finalize start
+// Finalize timeline — SEQUENCED to avoid the number growing into the fading
+// words: (1) words fade out while the number holds its size + glides to center,
+// (2) the number pops to FINAL_SCALE (easeOutBack), (3) a readable hold.
+const FINALIZE_WORD_FADE_MS = 140;   // DAMAGE/CHAIN fade out first (number unchanged)
+const FINAL_GROW_MS = 160;           // then the number grows (words already gone)
+const FINAL_HOLD_MS = 110;
 
 // Fly-to-portrait.
 const FLY_MS = 200;
@@ -134,6 +136,14 @@ const SPARK_SPEED = 0.4;              // px/ms outward
 
 function clamp01(v) {
   return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+// easeOutBack: overshoots past 1 then settles. FINAL_BACK tunes the overshoot.
+function easeOutBack(p) {
+  const c1 = FINAL_BACK;
+  const c3 = c1 + 1;
+  const q = p - 1;
+  return 1 + c3 * q * q * q + c1 * q * q;
 }
 
 function rampRGB(t) {
@@ -191,6 +201,136 @@ function emberGradientStops(e) {
   return stops;
 }
 
+// ── Forged-text sprite cache (performance) ───────────────────────────────────
+// The forged stack (6 passes, several with shadowBlur + a ~13-copy extrude loop)
+// is far too expensive to run per frame, ON MOBILE ESPECIALLY. Instead each line
+// is rendered ONCE into an offscreen canvas when its TEXT changes, then every
+// frame we just drawImage() it with the animated transform (scale/rotate/blit) —
+// one cheap GPU blit vs. ~19 text rasterizations per line. The expensive blur
+// work happens only on a text change (a few times per damage sequence), not 60×/s.
+//
+// Each sprite renders at a NATIVE font size and is only ever scaled DOWN for
+// display, so it stays crisp. "DAMAGE" is constant → a single shared sprite;
+// the number + "CHAIN xN" vary → per-instance sprites regenerated on change.
+
+// Cap the offscreen backing-store DPR so retina phones don't allocate huge
+// canvases (the sprite is downscaled anyway).
+const FORGE_DPR = Math.min(
+  (typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2
+);
+// Render the number a touch oversized so its finalize pop (easeOutBack past
+// FINAL_SCALE) still only scales the sprite DOWN.
+const NUMBER_NATIVE_SIZE = Math.round(EMBER_NUM_SIZE * 1.12);
+
+let _scratchCtx = null;
+function getScratchCtx() {
+  if (!_scratchCtx) _scratchCtx = document.createElement('canvas').getContext('2d');
+  return _scratchCtx;
+}
+
+// Paint the EmberForge forged stack at (cx, baseY) into ctx. Same 6 passes as
+// the studio's drawLine(); pixel params scale by fontPx/refSize.
+function paintForgedStack(ctx, text, cx, baseY, asc, desc, fontPx, refSize) {
+  const e = EMBER;
+  const k = fontPx / refSize;
+  ctx.font = `${e.weight} ${Math.round(fontPx)}px ${e.font}`;
+  try { ctx.letterSpacing = (e.letterSpacing * k) + 'px'; } catch (_) {}
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+
+  // (1) FIRE GLOW — colored fill + big blur, stacked for a punchy halo.
+  if (e.glowIntensity > 0 && e.glowSpread > 0) {
+    ctx.save();
+    ctx.shadowColor = e.glowColor;
+    ctx.shadowBlur = e.glowSpread * k;
+    ctx.fillStyle = e.glowColor;
+    for (let i = 0; i < e.glowIntensity; i++) ctx.fillText(text, cx, baseY);
+    ctx.restore();
+  }
+  // (2) DROP SHADOW — offset-down soft shadow, grounds the text.
+  if (e.shadowAlpha > 0) {
+    ctx.save();
+    ctx.shadowColor = hexA(e.shadowColor, e.shadowAlpha);
+    ctx.shadowBlur = e.shadowBlur * k;
+    ctx.shadowOffsetY = e.shadowDY * k;
+    ctx.fillStyle = '#000';
+    ctx.fillText(text, cx, baseY);
+    ctx.restore();
+  }
+  // (3) FORGE DEPTH — dark copies nudged along extrudeDir = the 3D side.
+  if (e.extrudeDepth > 0) {
+    const a = e.extrudeDir * Math.PI / 180;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    const depth = Math.max(1, Math.round(e.extrudeDepth * k));
+    ctx.fillStyle = e.extrudeColor;
+    for (let i = depth; i >= 1; i--) ctx.fillText(text, cx + dx * i, baseY + dy * i);
+  }
+  // (4) EDGE — thick dark outline around the front face.
+  if (e.edgeWidth > 0) {
+    ctx.strokeStyle = e.edgeColor;
+    ctx.lineWidth = e.edgeWidth * k;
+    ctx.strokeText(text, cx, baseY);
+  }
+  // (5) METAL FACE — vertical gradient with the dark reflection line.
+  const grad = ctx.createLinearGradient(0, baseY - asc, 0, baseY + desc);
+  for (const [o, col] of emberGradientStops(e)) grad.addColorStop(o, col);
+  ctx.fillStyle = grad;
+  ctx.fillText(text, cx, baseY);
+  // (6) INNER SHEEN — thin bright rim, a catch of light on the bevel.
+  if (e.innerWidth > 0) {
+    ctx.strokeStyle = e.innerColor;
+    ctx.lineWidth = e.innerWidth * k;
+    ctx.strokeText(text, cx, baseY);
+  }
+}
+
+/**
+ * Render `text` as a forged sprite at `nativeFontPx`. Returns
+ * { canvas, lw, lh, nativeFontPx, text } where (lw/2, lh/2) is the glyph's
+ * visual (metal-face) center, so blitting the canvas centered lands it right.
+ * Reuses `reuse.canvas` if provided (avoids per-regen allocation).
+ */
+function renderForgedSprite(text, refSize, nativeFontPx, reuse) {
+  const e = EMBER;
+  const k = nativeFontPx / refSize;
+  const sc = getScratchCtx();
+  sc.font = `${e.weight} ${Math.round(nativeFontPx)}px ${e.font}`;
+  try { sc.letterSpacing = (e.letterSpacing * k) + 'px'; } catch (_) {}
+  sc.textAlign = 'center';
+  sc.textBaseline = 'alphabetic';
+  const m = sc.measureText(text);
+  const asc = m.actualBoundingBoxAscent || nativeFontPx * 0.7;
+  const desc = m.actualBoundingBoxDescent || nativeFontPx * 0.04;
+  const width = m.width;
+
+  // Pad to contain glow blur, drop shadow, extrude offset, and edge stroke.
+  const pad = Math.ceil(
+    e.glowSpread * k + e.edgeWidth * k + e.extrudeDepth * k +
+    e.shadowBlur * k + Math.abs(e.shadowDY) * k + nativeFontPx * 0.1 + 6
+  );
+  const lw = Math.ceil(width + 2 * pad);
+  const lh = Math.ceil(asc + desc + 2 * pad);
+
+  const canvas = (reuse && reuse.canvas) || document.createElement('canvas');
+  canvas.width = Math.ceil(lw * FORGE_DPR);
+  canvas.height = Math.ceil(lh * FORGE_DPR);
+  const c = canvas.getContext('2d');
+  c.setTransform(FORGE_DPR, 0, 0, FORGE_DPR, 0, 0);
+  c.clearRect(0, 0, lw, lh);
+  // baseY chosen so the glyph's visual center (baseY-(asc-desc)/2) == lh/2.
+  paintForgedStack(c, text, lw / 2, pad + asc, asc, desc, nativeFontPx, refSize);
+  return { canvas, lw, lh, nativeFontPx, text };
+}
+
+// "DAMAGE" never changes → one shared sprite for the whole app.
+let _damageSprite = null;
+function getDamageSprite() {
+  if (!_damageSprite) _damageSprite = renderForgedSprite('DAMAGE', EMBER_HEAD_SIZE, EMBER_HEAD_SIZE);
+  return _damageSprite;
+}
+
 const PHASE = { ACCUMULATE: 0, FINALIZE: 1, FLY: 2, IMPACT: 3 };
 
 export default class DamageCounterEffect {
@@ -230,6 +370,29 @@ export default class DamageCounterEffect {
     this._flyFromY = y;
     this._impactFired = false;
     this._sparks = null;
+
+    // Cached forged sprites (regenerated only when their text changes). The
+    // number renders at NUMBER_NATIVE_SIZE and is blitted scaled; "CHAIN xN"
+    // renders at its ref size. "DAMAGE" uses the shared module sprite.
+    this._numSprite = null;
+    this._chainSprite = null;
+  }
+
+  /** Current number sprite, regenerated (reusing its canvas) when total changes. */
+  _numberSprite() {
+    const text = String(this.total);
+    if (!this._numSprite || this._numSprite.text !== text) {
+      this._numSprite = renderForgedSprite(text, EMBER_NUM_SIZE, NUMBER_NATIVE_SIZE, this._numSprite);
+    }
+    return this._numSprite;
+  }
+
+  /** Current "CHAIN xN" sprite, regenerated when the chain text changes. */
+  _chainSprite_(text) {
+    if (!this._chainSprite || this._chainSprite.text !== text) {
+      this._chainSprite = renderForgedSprite(text, EMBER_SUB_SIZE, EMBER_SUB_SIZE, this._chainSprite);
+    }
+    return this._chainSprite;
   }
 
   /** Has the counter begun its end-of-sequence finalize (or later)? */
@@ -312,7 +475,7 @@ export default class DamageCounterEffect {
     this._phaseElapsed += dt;
 
     if (this._phase === PHASE.FINALIZE) {
-      if (this._phaseElapsed >= FINAL_GROW_MS + FINAL_HOLD_MS) {
+      if (this._phaseElapsed >= FINALIZE_WORD_FADE_MS + FINAL_GROW_MS + FINAL_HOLD_MS) {
         this._phase = PHASE.FLY;
         this._phaseElapsed = 0;
         this._flyFromX = this.x;
@@ -386,20 +549,18 @@ export default class DamageCounterEffect {
     let numAlpha = 1;
     if (this._phase === PHASE.FINALIZE) {
       const e = this._phaseElapsed;
-      if (e < FINAL_GROW_MS) {
-        const p = e / FINAL_GROW_MS;
-        // Overshoot to the peak (eased) over the first 60%, then settle back.
-        if (p < 0.6) {
-          const q = p / 0.6;
-          scale = FINAL_OVERSHOOT * (1 - Math.pow(1 - q, 3));
-        } else {
-          const q = (p - 0.6) / 0.4;
-          scale = FINAL_OVERSHOOT + (FINAL_SCALE - FINAL_OVERSHOOT) * q;
-        }
+      // Sub-phase 1: words fade out while the number HOLDS its accumulate size
+      // (and glides to center via the wordsH layout below) — no overlap.
+      wordAlpha = clamp01(1 - e / FINALIZE_WORD_FADE_MS);
+      // Sub-phase 2: once the words are gone, the number pops to FINAL_SCALE.
+      const ge = e - FINALIZE_WORD_FADE_MS;
+      if (ge <= 0) {
+        scale = ACCUMULATE_SCALE;
+      } else if (ge < FINAL_GROW_MS) {
+        scale = ACCUMULATE_SCALE + (FINAL_SCALE - ACCUMULATE_SCALE) * easeOutBack(ge / FINAL_GROW_MS);
       } else {
         scale = FINAL_SCALE;
       }
-      wordAlpha = clamp01(1 - this._phaseElapsed / WORD_FADE_MS);
     }
 
     // Positional shake on a fresh hit (only while accumulating).
@@ -437,7 +598,7 @@ export default class DamageCounterEffect {
     const headCenterY = numCenterY + numHalf + gap + headHalf;
     const subCenterY = headCenterY + headHalf + gap + subHalf;
 
-    this._drawForged(ctx, String(this.total), 0, numCenterY, numFontPx, EMBER_NUM_SIZE, numAlpha);
+    this._blitSprite(ctx, this._numberSprite(), 0, numCenterY, numFontPx, numAlpha);
 
     // Slash accents flick across the number on a fresh hit (accumulate only).
     if (this._phase === PHASE.ACCUMULATE && fresh > 0.25) {
@@ -449,9 +610,10 @@ export default class DamageCounterEffect {
 
     // "DAMAGE" + "CHAIN xN" (fade out during finalize).
     if (wordAlpha > 0.01) {
-      this._drawForged(ctx, 'DAMAGE', 0, headCenterY, headFontPx, EMBER_HEAD_SIZE, wordAlpha);
+      this._blitSprite(ctx, getDamageSprite(), 0, headCenterY, headFontPx, wordAlpha);
       const bang = this.chain >= 4 ? '!' : '';
-      this._drawForged(ctx, `CHAIN x${this.chain}${bang}`, 0, subCenterY, subFontPx, EMBER_SUB_SIZE, wordAlpha * 0.95);
+      const chainSprite = this._chainSprite_(`CHAIN x${this.chain}${bang}`);
+      this._blitSprite(ctx, chainSprite, 0, subCenterY, subFontPx, wordAlpha * 0.95);
     }
 
     ctx.restore();
@@ -491,7 +653,7 @@ export default class DamageCounterEffect {
     ctx.translate(x, y);
     ctx.rotate(EMBER.tilt * Math.PI / 180);
     ctx.transform(1, 0, Math.tan(EMBER.slant * Math.PI / 180), 1, 0, 0);
-    this._drawForged(ctx, String(this.total), 0, 0, numFontPx, EMBER_NUM_SIZE, alpha);
+    this._blitSprite(ctx, this._numberSprite(), 0, 0, numFontPx, alpha);
     ctx.restore();
   }
 
@@ -539,77 +701,22 @@ export default class DamageCounterEffect {
   // ── Drawing primitives ───────────────────────────────────────────────────
 
   /**
-   * Draw one line as the EmberForge forged stack (ported from
-   * sim/emberforge.html `drawLine()`), centered horizontally at `cx` and
-   * vertically on `cyCenter`. All EMBER pixel params scale by fontPx/refSize so
-   * the look holds at any rendered size. The caller owns the tilt/slant.
+   * Blit a cached forged sprite (see renderForgedSprite) centered on
+   * (cx, cyCenter) at `displayFontPx`. The sprite is rendered once at its native
+   * size and only ever scaled DOWN here, so it stays crisp. The caller owns the
+   * tilt/slant transform. This is the per-frame path — one drawImage, no text.
    */
-  _drawForged(ctx, text, cx, cyCenter, fontPx, refSize, alpha) {
-    if (alpha <= 0 || fontPx < 1) return;
-    const e = EMBER;
-    const k = fontPx / refSize;   // scale EMBER's px params from its ref size
-
+  _blitSprite(ctx, sprite, cx, cyCenter, displayFontPx, alpha) {
+    if (!sprite || alpha <= 0 || displayFontPx < 1) return;
+    const s = displayFontPx / sprite.nativeFontPx;
     ctx.save();
     ctx.globalAlpha *= alpha;
-    ctx.font = `${e.weight} ${Math.round(fontPx)}px ${e.font}`;
-    try { ctx.letterSpacing = (e.letterSpacing * k) + 'px'; } catch (_) {}
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.lineJoin = 'round';
-    ctx.miterLimit = 2;
-
-    // Measure → center the caps on cyCenter and map the gradient to the glyph's
-    // own ascent/descent (so the reflection line lands consistently).
-    const m = ctx.measureText(text);
-    const asc = m.actualBoundingBoxAscent || fontPx * 0.7;
-    const desc = m.actualBoundingBoxDescent || fontPx * 0.04;
-    const baseY = cyCenter + (asc - desc) / 2;
-
-    // (1) FIRE GLOW — colored fill + big blur, stacked for a punchy halo.
-    if (e.glowIntensity > 0 && e.glowSpread > 0) {
-      ctx.save();
-      ctx.shadowColor = e.glowColor;
-      ctx.shadowBlur = e.glowSpread * k;
-      ctx.fillStyle = e.glowColor;
-      for (let i = 0; i < e.glowIntensity; i++) ctx.fillText(text, cx, baseY);
-      ctx.restore();
-    }
-    // (2) DROP SHADOW — offset-down soft shadow, grounds the text.
-    if (e.shadowAlpha > 0) {
-      ctx.save();
-      ctx.shadowColor = hexA(e.shadowColor, e.shadowAlpha);
-      ctx.shadowBlur = e.shadowBlur * k;
-      ctx.shadowOffsetY = e.shadowDY * k;
-      ctx.fillStyle = '#000';
-      ctx.fillText(text, cx, baseY);
-      ctx.restore();
-    }
-    // (3) FORGE DEPTH — dark copies nudged along extrudeDir = the 3D side.
-    if (e.extrudeDepth > 0) {
-      const a = e.extrudeDir * Math.PI / 180;
-      const dx = Math.cos(a), dy = Math.sin(a);
-      const depth = Math.max(1, Math.round(e.extrudeDepth * k));
-      ctx.fillStyle = e.extrudeColor;
-      for (let i = depth; i >= 1; i--) ctx.fillText(text, cx + dx * i, baseY + dy * i);
-    }
-    // (4) EDGE — thick dark outline around the front face.
-    if (e.edgeWidth > 0) {
-      ctx.strokeStyle = e.edgeColor;
-      ctx.lineWidth = e.edgeWidth * k;
-      ctx.strokeText(text, cx, baseY);
-    }
-    // (5) METAL FACE — vertical gradient with the dark reflection line.
-    const grad = ctx.createLinearGradient(0, baseY - asc, 0, baseY + desc);
-    for (const [o, col] of emberGradientStops(e)) grad.addColorStop(o, col);
-    ctx.fillStyle = grad;
-    ctx.fillText(text, cx, baseY);
-    // (6) INNER SHEEN — thin bright rim, a catch of light on the bevel.
-    if (e.innerWidth > 0) {
-      ctx.strokeStyle = e.innerColor;
-      ctx.lineWidth = e.innerWidth * k;
-      ctx.strokeText(text, cx, baseY);
-    }
-
+    ctx.translate(cx, cyCenter);
+    ctx.scale(s, s);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    // The sprite's metal-face center is at (lw/2, lh/2); center it on the origin.
+    ctx.drawImage(sprite.canvas, -sprite.lw / 2, -sprite.lh / 2, sprite.lw, sprite.lh);
     ctx.restore();
   }
 
