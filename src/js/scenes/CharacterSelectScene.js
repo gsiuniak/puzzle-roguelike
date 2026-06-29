@@ -113,10 +113,16 @@ export default class CharacterSelectScene extends UIPanel {
     // ── Choose-hero splash video intro ─────────────────
     // When a hero with a `splashVideo` is confirmed, the UI fades out while a
     // full-canvas video plays; the scene cross-fades to the next scene as the
-    // video nears its end. The <video> is off-DOM (not an AssetManager entry).
-    /** @type {HTMLVideoElement|null} */
+    // video nears its end. The <video>s are off-DOM (not AssetManager entries).
+    //
+    // ALL heroes' intro videos are preloaded into a pool on enter and primed
+    // (first frame decoded via a muted play→pause) so any hero plays instantly
+    // with no buffering/decode stall — see _preloadAllVideos / _primeVideo.
+    /** @type {Map<string, HTMLVideoElement>} preloaded intro videos keyed by src */
+    this._videoPool = new Map();
+    /** @type {HTMLVideoElement|null} the active intro video during a choose transition */
     this._video = null;
-    /** @type {string|null} src of the currently held/preloaded video */
+    /** @type {string|null} src of the active intro video */
     this._videoSrc = null;
     /** @type {boolean} true while the choose-hero video intro is playing */
     this._choosingActive = false;
@@ -128,10 +134,6 @@ export default class CharacterSelectScene extends UIPanel {
     this._chooseTransitionStarted = false;
     /** @type {number} 1→0 fade applied to all UI during the video intro */
     this._uiFadeAlpha = 1;
-    /** Bound <video> listeners, retained for teardown. */
-    this._onVideoMeta = null;
-    this._onVideoEnded = null;
-    this._onVideoError = null;
 
     // ── UI fill scale ──────────────────────────────────
     // Multiplier applied to all UI sizes so the layout fills more of the
@@ -833,9 +835,9 @@ export default class CharacterSelectScene extends UIPanel {
     // Rebuild info panel for new character
     this._updateInfoPanel();
 
-    // Pre-buffer the newly selected hero's intro video (if any); idempotent and
-    // swaps out a previously buffered video when the src differs.
-    this._ensureVideoPreloaded(newDef);
+    // All hero intro videos are preloaded into the pool up front (see
+    // _preloadAllVideos in onEnter), so the newly selected hero is already
+    // buffered + primed and needs no per-selection work here.
   }
 
   // ═══════════════════════════════════════════════════════
@@ -863,8 +865,9 @@ export default class CharacterSelectScene extends UIPanel {
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
     this._uiFadeAlpha = 1;
-    // Pre-buffer the selected hero's intro video (if any) so it starts cleanly.
-    this._ensureVideoPreloaded(def);
+    // Preload + prime EVERY hero's intro video so whichever hero is confirmed
+    // plays instantly with no buffering/decode stall.
+    this._preloadAllVideos();
 
     // Initialize aura color to selected character
     if (def && def.auraColor) {
@@ -937,9 +940,9 @@ export default class CharacterSelectScene extends UIPanel {
       this._onKeyDown = null;
     }
 
-    // Release the choose-hero intro video (the transition to the next scene is
+    // Release all preloaded intro videos (the transition to the next scene is
     // already underway by the time this fires).
-    this._destroyVideo();
+    this._destroyVideoPool();
   }
 
   /** Recursively set assetManager on all UIImage children */
@@ -1081,8 +1084,10 @@ export default class CharacterSelectScene extends UIPanel {
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
 
-    this._ensureVideoPreloaded(def);
-    const video = this._video;
+    // Grab the (already preloaded + primed) pooled video for this hero.
+    const video = this._ensurePooledVideo(def.splashVideo);
+    this._video = video;
+    this._videoSrc = def.splashVideo;
     if (!video) {
       // No video element (build/preload failed) — just transition.
       this._startChooseTransition();
@@ -1152,30 +1157,40 @@ export default class CharacterSelectScene extends UIPanel {
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Build + buffer the given definition's `splashVideo` (if any) ahead of time
-   * so it starts cleanly when the hero is confirmed. Idempotent: re-calling for
-   * the same src is a no-op; a different src (or no video) replaces/clears the
-   * held element.
-   * @param {object} def
+   * Preload + prime EVERY enabled hero's `splashVideo` into the pool so that
+   * whichever hero is confirmed, its intro video plays the instant `play()` is
+   * called — no network buffering or first-frame decode stall. Idempotent.
    */
-  _ensureVideoPreloaded(def) {
-    const src = def && def.splashVideo;
-    if (!src) {
-      // Selected hero has no video — drop any previously buffered one (unless
-      // an intro is actively playing it).
-      if (this._video && !this._choosingActive) this._destroyVideo();
-      return;
+  _preloadAllVideos() {
+    for (const def of this._definitions) {
+      const src = def && def.splashVideo;
+      if (src) this._ensurePooledVideo(src);
     }
-    if (this._video && this._videoSrc === src) return; // already buffering this one
-    this._destroyVideo();
-    this._buildVideo(src);
-    try { this._video.load(); } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Ensure the off-DOM <video> for `src` exists in the pool (building + kicking
+   * off its load on first request) and return it. Re-calling for an already
+   * pooled src returns the existing element.
+   * @param {string} src
+   * @returns {HTMLVideoElement|null}
+   */
+  _ensurePooledVideo(src) {
+    if (!src) return null;
+    let video = this._videoPool.get(src);
+    if (video) return video;
+    video = this._buildVideo(src);
+    this._videoPool.set(src, video);
+    try { video.load(); } catch (e) { /* ignore */ }
+    return video;
   }
 
   /**
    * Create the off-DOM <video> for `src` and wire its listeners. Plays muted so
    * autoplay is allowed; the character-select music keeps playing underneath.
+   * Listeners are stashed on the element (`_csListeners`) for teardown.
    * @param {string} src
+   * @returns {HTMLVideoElement}
    */
   _buildVideo(src) {
     const video = document.createElement('video');
@@ -1187,33 +1202,70 @@ export default class CharacterSelectScene extends UIPanel {
 
     // CanvasApp.drawFullCanvasImage reads img.width/height — mirror the
     // intrinsic video size so the cover-fit math works for the <video>.
-    this._onVideoMeta = () => {
+    const onMeta = () => {
       video.width = video.videoWidth;
       video.height = video.videoHeight;
     };
     // The video ending / failing is a hard cue to finish (no-op until the intro
-    // is actually active).
-    this._onVideoEnded = () => this._startChooseTransition();
-    this._onVideoError = () => this._startChooseTransition();
-    video.addEventListener('loadedmetadata', this._onVideoMeta);
-    video.addEventListener('ended', this._onVideoEnded);
-    video.addEventListener('error', this._onVideoError);
+    // is actually active; _startChooseTransition guards on _choosingActive).
+    const onEnded = () => this._startChooseTransition();
+    const onError = () => this._startChooseTransition();
+    // Once the first frame is available, prime the decoder so playback starts
+    // with zero stall when this hero is chosen.
+    const onLoadedData = () => this._primeVideo(video);
 
-    this._video = video;
-    this._videoSrc = src;
+    video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('ended', onEnded);
+    video.addEventListener('error', onError);
+    video.addEventListener('loadeddata', onLoadedData);
+    video._csListeners = { onMeta, onEnded, onError, onLoadedData };
+
+    return video;
   }
 
-  /** Stop and release the held <video> element. */
-  _destroyVideo() {
-    const video = this._video;
+  /**
+   * Warm a pooled video's decode pipeline by briefly play→pause-ing it (muted,
+   * so this is allowed without a gesture and is inaudible), then rewinding to
+   * frame 0. This forces the first frame to decode ahead of time so the real
+   * `play()` on confirm has no buffering/decode hitch. Runs once per video and
+   * never disturbs the video that's actively playing the intro.
+   * @param {HTMLVideoElement} video
+   */
+  _primeVideo(video) {
+    if (video._csPrimed) return;
+    if (this._choosingActive && this._video === video) return; // it's live — leave it
+    video._csPrimed = true;
+
+    const settle = () => {
+      if (this._choosingActive && this._video === video) return; // became live mid-prime
+      try { video.pause(); } catch (e) { /* ignore */ }
+      try { video.currentTime = 0; } catch (e) { /* ignore */ }
+    };
+    const p = video.play();
+    if (p && typeof p.then === 'function') p.then(settle).catch(() => { /* ignore */ });
+    else settle();
+  }
+
+  /** Stop, unwire, and release a single pooled <video> element. */
+  _destroyPooledVideo(video) {
     if (!video) return;
-    if (this._onVideoMeta) video.removeEventListener('loadedmetadata', this._onVideoMeta);
-    if (this._onVideoEnded) video.removeEventListener('ended', this._onVideoEnded);
-    if (this._onVideoError) video.removeEventListener('error', this._onVideoError);
-    this._onVideoMeta = this._onVideoEnded = this._onVideoError = null;
+    const L = video._csListeners;
+    if (L) {
+      video.removeEventListener('loadedmetadata', L.onMeta);
+      video.removeEventListener('ended', L.onEnded);
+      video.removeEventListener('error', L.onError);
+      video.removeEventListener('loadeddata', L.onLoadedData);
+    }
+    video._csListeners = null;
     try { video.pause(); } catch (e) { /* ignore */ }
     video.removeAttribute('src');
     try { video.load(); } catch (e) { /* ignore */ }
+  }
+
+  /** Release every pooled intro video. */
+  _destroyVideoPool() {
+    for (const video of this._videoPool.values()) this._destroyPooledVideo(video);
+    this._videoPool.clear();
     this._video = null;
     this._videoSrc = null;
   }
