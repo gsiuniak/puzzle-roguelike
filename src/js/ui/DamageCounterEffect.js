@@ -64,7 +64,7 @@ const NUMBER_DIGIT_GAP_FRAC = 0.04;   // gap between big-number digits ÷ glyph 
 
 // Chain-count placement — fractions of the DISPLAYED label rect. The count digit
 // sits just right of the baked "CHAIN X" text, matched to its size.
-const CHAIN_DIGIT_H_FRAC = 0.30;      // chain digit height ÷ label height
+const CHAIN_DIGIT_H_FRAC = 0.29;      // chain digit height ÷ label height
 const CHAIN_DIGIT_LEFT_FRAC = 0.72;   // left edge of the chain count ÷ label width
 const CHAIN_DIGIT_CY_FRAC = 0.77;     // chain count vertical center ÷ label height
 const CHAIN_DIGIT_GAP_FRAC = 0.04;    // gap between chain-count digits ÷ glyph height
