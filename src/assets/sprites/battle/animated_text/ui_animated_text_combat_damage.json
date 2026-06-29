@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "sheet_w": 1010,
+    "sheet_h": 1492,
+    "sprite_count": 11,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "ui_animated_text_damage_chain": {
+      "x": 4,
+      "y": 4,
+      "w": 889,
+      "h": 280,
+      "index": 0,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_0": {
+      "x": 4,
+      "y": 288,
+      "w": 258,
+      "h": 298,
+      "index": 1,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_1": {
+      "x": 258,
+      "y": 590,
+      "w": 187,
+      "h": 294,
+      "index": 2,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_2": {
+      "x": 4,
+      "y": 590,
+      "w": 250,
+      "h": 295,
+      "index": 3,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_3": {
+      "x": 4,
+      "y": 1190,
+      "w": 240,
+      "h": 298,
+      "index": 4,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_4": {
+      "x": 266,
+      "y": 288,
+      "w": 251,
+      "h": 294,
+      "index": 5,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_5": {
+      "x": 521,
+      "y": 288,
+      "w": 246,
+      "h": 294,
+      "index": 6,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_6": {
+      "x": 252,
+      "y": 889,
+      "w": 238,
+      "h": 297,
+      "index": 7,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_7": {
+      "x": 771,
+      "y": 288,
+      "w": 235,
+      "h": 288,
+      "index": 8,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_8": {
+      "x": 4,
+      "y": 889,
+      "w": 244,
+      "h": 297,
+      "index": 9,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "digit_9": {
+      "x": 494,
+      "y": 889,
+      "w": 238,
+      "h": 297,
+      "index": 10,
+      "source_w": 889,
+      "source_h": 298,
+      "trim_x": 0,
+      "trim_y": 0
+    }
+  }
+}
