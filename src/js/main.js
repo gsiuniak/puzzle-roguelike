@@ -112,6 +112,14 @@ const SPRITESHEET_MAP = {
     json:  'assets/sprites/battle/animated_text/ui_spritesheet_animated_text.json',
     trim:  false, // sprite names match the `animated_text_*` keys directly (no aliases)
   },
+  // Combat-damage counter art (DamageCounterEffect): the "DAMAGE / CHAIN X" label
+  // (ui_animated_text_damage_chain) + the gold digit glyphs (digit_0 … digit_9)
+  // used for the big damage total AND the chain count.
+  ui_spritesheet_combat_damage: {
+    image: 'assets/sprites/battle/animated_text/ui_spritesheet_combat_damage.png',
+    json:  'assets/sprites/battle/animated_text/ui_spritesheet_combat_damage.json',
+    trim:  false, // sprite names (ui_animated_text_damage_chain / digit_<n>) used directly
+  },
   // Spell-icon compositing layers (icons/spellIconRecipe.js + spellIconCompositor.js):
   //   weave_base    — circular colored mana-orb backgrounds (weave_base_<color>[_n])
   //   weave_generic — effect foreground sprites (weave_generic_<tag>[_n]) + icon_border_2

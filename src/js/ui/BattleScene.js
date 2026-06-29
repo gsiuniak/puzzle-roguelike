@@ -1414,7 +1414,7 @@ export default class BattleScene extends UIPanel {
       const portrait = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
       const start = boardCenter || portrait;
       if (!start) return;
-      counter = new DamageCounterEffect(start.x, start.y);
+      counter = new DamageCounterEffect(start.x, start.y, this._assetManager);
       if (portrait) counter.setTarget(portrait.x, portrait.y);
       // On impact at the portrait: a quick punch of screen shake (the actual
       // damage already applied earlier — this is the ceremonial delivery).

@@ -5,22 +5,27 @@
  * sequence begins and ACCUMULATES every hit of that sequence instead of
  * spawning one popup per hit. It shows the running total + a chain count:
  *
- *     34 DAMAGE
- *     CHAIN x3
+ *     34          ← big damage digits
+ *     DAMAGE      ⎫ the "DAMAGE / CHAIN X" label sprite
+ *     CHAIN X 3   ⎭ (the "3" is the chain count, drawn over the CHAIN X line)
  *
  * Lifecycle (a four-phase timeline):
  *   1. ACCUMULATE — compact, parked at board center. Each new hit bumps the
  *      total + chain and replays a punchy "tick": scale pop, small positional
- *      shake, a glow flare, and a couple of slash accents. Stays small so it
- *      doesn't block the board while damage is still landing.
+ *      shake, and a couple of slash accents. Stays small so it doesn't block the
+ *      board while damage is still landing.
  *   2. FINALIZE  — once no new damage arrives (and the board has settled), the
- *      number grows large with a bounce/overshoot and holds for readability,
- *      while the "DAMAGE" word + chain line fade out, leaving just the number.
- *   3. FLY       — the bare number detaches and arcs toward the target's
+ *      block grows large with a bounce/overshoot and holds for readability.
+ *   3. FLY       — the whole block detaches and arcs toward the target's
  *      portrait with a fast ease, shrinking as it travels.
  *   4. IMPACT    — at the portrait it bursts: a quick scale pop + radial flash
  *      + spark fan, fires the onImpact() callback (so the scene can shake /
  *      flash the target), then fades and ends.
+ *
+ * RENDERING is sprite-based (decision #41 / combat-damage spritesheet): the
+ * "DAMAGE / CHAIN X" label and every digit are authored sprites sliced from
+ * ui_spritesheet_combat_damage, fetched from the AssetManager by key. No text
+ * rasterization happens at runtime — each frame is just a few drawImage blits.
  *
  * Not a UIElement — uses absolute design-space coordinates and is managed
  * externally by BattleScene's _floatingEffects list (same contract as
@@ -30,70 +35,43 @@
  * hint each frame.
  */
 
-// ── Forged-text look (ported from sim/emberforge.html `drawLine()`) ──────────
-// EMBER is the EmberForge "Forged Ember" settings tuned in that studio: the text
-// is one line drawn as a deliberate stack of passes — fire glow → drop shadow →
-// extruded 3D side → dark edge → metal-face gradient (with the dark reflection
-// line) → inner sheen. All PIXEL params (widths, blurs, depth, tracking) are
-// authored at the REF SIZES below and scaled per-line by fontPx/refSize so the
-// proportions hold at any rendered size. To retune the look, edit EMBER (it's
-// the exact JSON the studio's "Copy settings" produces, minus text/sizes).
-const EMBER = {
-  font: '"Marcellus SC", "Cinzel", Georgia, serif',
-  weight: 800,             // Marcellus SC ships only `normal` — 900 would faux-bold
-  letterSpacing: 3,        // px @ ref size
-  slant: 0,                // ° — horizontal shear of the whole block
-  tilt: 0,                 // ° — rotation of the whole block
-  // metal face (vertical gradient with the reflection line)
-  topColor: '#fff3a6',
-  bodyColor: '#fed506',
-  reflectColor: '#ffd747',
-  underglowColor: '#de7421',
-  reflectPos: 0.39,
-  reflectSharp: 0.12,
-  // forge depth (the chunky 3D side)
-  extrudeDepth: 13,        // px @ ref size
-  extrudeDir: 156,         // °
-  extrudeColor: '#190000',
-  // edge + inner sheen
-  edgeWidth: 5,            // px @ ref size
-  edgeColor: '#8b0404',
-  innerWidth: 0,           // px @ ref size (0 = no inner sheen pass)
-  innerColor: '#ff772e',
-  // fire glow (behind the stack)
-  glowColor: '#ff0000',
-  glowSpread: 12,          // px @ ref size
-  glowIntensity: 2,        // stacked passes
-  // drop shadow (grounds the text)
-  shadowColor: '#ff0000',
-  shadowAlpha: 0.65,
-  shadowBlur: 40,          // px @ ref size
-  shadowDY: 7,             // px @ ref size
-};
+// ── Combat-damage spritesheet (ui_spritesheet_combat_damage) ─────────────────
+// Sprites sliced from the sheet (registered in main.js SPRITESHEET_MAP):
+//   ui_animated_text_damage_chain_single_digit — "DAMAGE" (big) over "CHAIN X"
+//   ui_animated_text_damage_chain_double_digit    on a dark plaque. The plaque
+//                                    is widened on the _double_ variant so a
+//                                    two-digit chain count fits; we pick the
+//                                    variant by the chain count's digit count.
+//   digit_0 … digit_9             — individual gold digit glyphs, reused for
+//                                    both the big damage total and the chain
+//                                    count.
+// All frames were packed at a common DIGIT_NATIVE_H source height with NO top
+// trim (trim_y = 0), so glyphs share a top origin and lay out cleanly top-
+// aligned (scaling each by glyphH / DIGIT_NATIVE_H keeps a uniform baseline).
+const LABEL_KEY_SINGLE = 'ui_animated_text_damage_chain_single_digit';
+const LABEL_KEY_DOUBLE = 'ui_animated_text_damage_chain_double_digit';
+const DIGIT_NATIVE_H = 298;
 
-// Per-line font overrides merged over EMBER at render time (everything not set
-// here — colors, extrude, glow, shadow, slant — comes from EMBER). The big
-// damage NUMBER uses Cinzel (bold); the DAMAGE/CHAIN words use ExtraOld. Both
-// faces are bundled (@font-face in index.html, warmed at boot in main.js).
-// NUMBERS (the big damage total AND the chain count digits) use Cinzel; the
-// non-numeric WORDS ("DAMAGE", "CHAIN x") use ExtraOld. The chain line is drawn
-// as two parts so its digits get Cinzel explicitly (font fallback is unreliable —
-// ExtraOld may ship its own digit glyphs).
-const NUMBER_OVERRIDES = { font: '"Cinzel", "Marcellus SC", Georgia, serif', weight: 700 };
-const WORD_OVERRIDES = { font: '"ExtraOld", "Marcellus SC", Georgia, serif', weight: 400 };
+// Layout (design-space px @ phase scale 1.0). The block stacks vertically:
+//     [ big damage number ]          ← digit sprites; height ramps with intensity
+//     [ DAMAGE / CHAIN X label ]     ← the label sprite (chain count overlaid)
+// The chain-count digits are drawn ON TOP of the label's baked "CHAIN X" line.
+const LABEL_DISPLAY_H = 160;          // label height @ scale 1 (label width follows its aspect)
+const BLOCK_GAP = 5;                  // gap between the number row and the label
+const NUMBER_MIN_H = 128;             // big-number glyph height @ intensity 0
+const NUMBER_MAX_H = 170;             // big-number glyph height @ intensity 1
+const NUMBER_DIGIT_GAP_FRAC = 0.04;   // gap between big-number digits ÷ glyph height
 
-// Sizes the EMBER pixel params were authored at — pixel params scale by
-// fontPx / refSize. The number's rendered size ramps with intensity up to
-// EMBER_NUM_SIZE; the words are drawn at their ref sizes (× phase scale).
-const EMBER_NUM_SIZE = 240;
-const EMBER_HEAD_SIZE = 100;   // "DAMAGE"
-const EMBER_SUB_SIZE = 39;     // "CHAIN xN"
-const EMBER_LINE_GAP = 10;      // px @ scale 1, between stacked lines
-const CHAIN_GAP = 10;           // px @ scale 1, between "CHAIN x" and the digits
+// Chain-count placement — fractions of the DISPLAYED label rect. The count digit
+// sits just right of the baked "CHAIN X" text, matched to its size.
+const CHAIN_DIGIT_H_FRAC = 0.30;      // chain digit height ÷ label height
+const CHAIN_DIGIT_LEFT_FRAC = 0.72;   // left edge of the chain count ÷ label width
+const CHAIN_DIGIT_CY_FRAC = 0.77;     // chain count vertical center ÷ label height
+const CHAIN_DIGIT_GAP_FRAC = 0.04;    // gap between chain-count digits ÷ glyph height
 
 // Intensity (relative damage 0..1) → accent color ramp for the IMPACT burst +
-// slash flicks (yellow-gold → fiery red). The forged number/words get their
-// colors from EMBER, not this ramp; this only tints the spark effects.
+// slash flicks (yellow-gold → fiery red). The gold sprites carry their own
+// color; this only tints the spark / flash / slash accents.
 const COLOR_STOPS = [
   { t: 0.00, c: [255, 210, 74] },   // yellow-gold (low relative dmg)
   { t: 0.35, c: [255, 152, 40] },   // amber
@@ -105,15 +83,8 @@ const COLOR_STOPS = [
 // the hot colors / big sizes sooner (more dramatic on ordinary hits).
 const INTENSITY_FULL_FRACTION = 0.4;
 
-// Number sizing (px font at phase scale 1.0). Ramps with intensity from
-// NUMBER_MIN_SIZE (chip damage) up to EMBER_NUM_SIZE (heavy relative hit), so a
-// big hit visibly dwarfs a small one. The words use the EMBER ref sizes.
-// MIN raised so a small hit (e.g. a level-1 Bash) is still comfortably readable
-// rather than tiny — the floor sits closer to the max now.
-const NUMBER_MIN_SIZE = 200;
-
 // Phase scales (multiply the per-line ref sizes). Compact while accumulating so
-// the board stays readable; finalize settles near the EmberForge design size.
+// the board stays readable; finalize settles at the design size.
 const ACCUMULATE_SCALE = 0.72;
 const FINAL_SCALE = 1.0;              // settled finalize size (= design size)
 const FLY_END_SCALE = 0.46;          // shrunk size as it reaches the portrait
@@ -130,9 +101,8 @@ const SHAKE_AMP = 12;                 // peak positional shake (px), decays
 // as ONE accumulating counter.
 const FINALIZE_IDLE_MS = 150;
 
-// Finalize timeline: the whole block (number + DAMAGE + CHAIN) pops to
-// FINAL_SCALE (easeOutBack) then holds briefly before flying to the portrait
-// AS ONE COMPOSED UNIT — the words don't fade out, they travel with the number.
+// Finalize timeline: the whole block (number + label) pops to FINAL_SCALE
+// (easeOutBack) then holds briefly before flying to the portrait AS ONE UNIT.
 const FINAL_GROW_MS = 160;
 const FINAL_HOLD_MS = 150;
 
@@ -180,188 +150,19 @@ function rgb([r, g, b], a) {
   return a == null ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`;
 }
 
-// Hex "#rrggbb" → "rgba(r,g,b,a)" (EmberForge colors are hex strings).
-function hexA(hex, a) {
-  let h = hex.replace('#', '');
-  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${a})`;
-}
-
-// The metal-face gradient stops (ported verbatim from EmberForge gradientStops):
-// bright top sheen → body → a hard dark REFLECTION line near reflectPos → body
-// → lower underglow. The reflection band is what reads as polished metal.
-function emberGradientStops(e) {
-  const p = e.reflectPos;
-  const w = e.reflectSharp;
-  const stops = [
-    [0, e.topColor],
-    [p * 0.5, e.bodyColor],
-    [p - w, e.bodyColor],
-    [p, e.reflectColor],
-    [p + w, e.bodyColor],
-    [Math.min(0.999, p + 0.3), e.underglowColor],
-    [1, e.underglowColor],
-  ].map(([o, c]) => [clamp01(o), c]).sort((a, b) => a[0] - b[0]);
-  // Nudge any colliding offsets so addColorStop offsets strictly increase.
-  let last = -1;
-  for (const st of stops) {
-    if (st[0] <= last) st[0] = Math.min(1, last + 0.0006);
-    last = st[0];
-  }
-  return stops;
-}
-
-// ── Forged-text sprite cache (performance) ───────────────────────────────────
-// The forged stack (6 passes, several with shadowBlur + a ~13-copy extrude loop)
-// is far too expensive to run per frame, ON MOBILE ESPECIALLY. Instead each line
-// is rendered ONCE into an offscreen canvas when its TEXT changes, then every
-// frame we just drawImage() it with the animated transform (scale/rotate/blit) —
-// one cheap GPU blit vs. ~19 text rasterizations per line. The expensive blur
-// work happens only on a text change (a few times per damage sequence), not 60×/s.
-//
-// Each sprite renders at a NATIVE font size and is only ever scaled DOWN for
-// display, so it stays crisp. "DAMAGE" is constant → a single shared sprite;
-// the number + "CHAIN xN" vary → per-instance sprites regenerated on change.
-
-// Cap the offscreen backing-store DPR so retina phones don't allocate huge
-// canvases (the sprite is downscaled anyway).
-const FORGE_DPR = Math.min(
-  (typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2
-);
-// Render the number a touch oversized so its finalize pop (easeOutBack past
-// FINAL_SCALE) still only scales the sprite DOWN.
-const NUMBER_NATIVE_SIZE = Math.round(EMBER_NUM_SIZE * 1.12);
-
-let _scratchCtx = null;
-function getScratchCtx() {
-  if (!_scratchCtx) _scratchCtx = document.createElement('canvas').getContext('2d');
-  return _scratchCtx;
-}
-
-// Paint the EmberForge forged stack at (cx, baseY) into ctx. Same 6 passes as
-// the studio's drawLine(); pixel params scale by fontPx/refSize. `e` is the
-// effective config (EMBER, optionally with per-line color overrides).
-function paintForgedStack(ctx, text, cx, baseY, asc, desc, fontPx, refSize, e) {
-  const k = fontPx / refSize;
-  ctx.font = `${e.weight} ${Math.round(fontPx)}px ${e.font}`;
-  try { ctx.letterSpacing = (e.letterSpacing * k) + 'px'; } catch (_) {}
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  ctx.lineJoin = 'round';
-  ctx.miterLimit = 2;
-
-  // (1) FIRE GLOW — colored fill + big blur, stacked for a punchy halo.
-  if (e.glowIntensity > 0 && e.glowSpread > 0) {
-    ctx.save();
-    ctx.shadowColor = e.glowColor;
-    ctx.shadowBlur = e.glowSpread * k;
-    ctx.fillStyle = e.glowColor;
-    for (let i = 0; i < e.glowIntensity; i++) ctx.fillText(text, cx, baseY);
-    ctx.restore();
-  }
-  // (2) DROP SHADOW — offset-down soft shadow, grounds the text.
-  if (e.shadowAlpha > 0) {
-    ctx.save();
-    ctx.shadowColor = hexA(e.shadowColor, e.shadowAlpha);
-    ctx.shadowBlur = e.shadowBlur * k;
-    ctx.shadowOffsetY = e.shadowDY * k;
-    ctx.fillStyle = '#000';
-    ctx.fillText(text, cx, baseY);
-    ctx.restore();
-  }
-  // (3) FORGE DEPTH — dark copies nudged along extrudeDir = the 3D side.
-  if (e.extrudeDepth > 0) {
-    const a = e.extrudeDir * Math.PI / 180;
-    const dx = Math.cos(a), dy = Math.sin(a);
-    const depth = Math.max(1, Math.round(e.extrudeDepth * k));
-    ctx.fillStyle = e.extrudeColor;
-    for (let i = depth; i >= 1; i--) ctx.fillText(text, cx + dx * i, baseY + dy * i);
-  }
-  // (4) EDGE — thick dark outline around the front face.
-  if (e.edgeWidth > 0) {
-    ctx.strokeStyle = e.edgeColor;
-    ctx.lineWidth = e.edgeWidth * k;
-    ctx.strokeText(text, cx, baseY);
-  }
-  // (5) METAL FACE — vertical gradient with the dark reflection line.
-  const grad = ctx.createLinearGradient(0, baseY - asc, 0, baseY + desc);
-  for (const [o, col] of emberGradientStops(e)) grad.addColorStop(o, col);
-  ctx.fillStyle = grad;
-  ctx.fillText(text, cx, baseY);
-  // (6) INNER SHEEN — thin bright rim, a catch of light on the bevel.
-  if (e.innerWidth > 0) {
-    ctx.strokeStyle = e.innerColor;
-    ctx.lineWidth = e.innerWidth * k;
-    ctx.strokeText(text, cx, baseY);
-  }
-}
-
-/**
- * Render `text` as a forged sprite at `nativeFontPx`. Returns
- * { canvas, lw, lh, nativeFontPx, text } where (lw/2, lh/2) is the glyph's
- * visual (metal-face) center, so blitting the canvas centered lands it right.
- * Reuses `reuse.canvas` if provided (avoids per-regen allocation).
- */
-function renderForgedSprite(text, refSize, nativeFontPx, reuse, overrides) {
-  const e = overrides ? { ...EMBER, ...overrides } : EMBER;
-  const k = nativeFontPx / refSize;
-  const sc = getScratchCtx();
-  sc.font = `${e.weight} ${Math.round(nativeFontPx)}px ${e.font}`;
-  try { sc.letterSpacing = (e.letterSpacing * k) + 'px'; } catch (_) {}
-  sc.textAlign = 'center';
-  sc.textBaseline = 'alphabetic';
-  const m = sc.measureText(text);
-  const asc = m.actualBoundingBoxAscent || nativeFontPx * 0.7;
-  const desc = m.actualBoundingBoxDescent || nativeFontPx * 0.04;
-  const width = m.width;
-
-  // Pad to contain glow blur, drop shadow, extrude offset, and edge stroke.
-  const pad = Math.ceil(
-    e.glowSpread * k + e.edgeWidth * k + e.extrudeDepth * k +
-    e.shadowBlur * k + Math.abs(e.shadowDY) * k + nativeFontPx * 0.1 + 6
-  );
-  const lw = Math.ceil(width + 2 * pad);
-  const lh = Math.ceil(asc + desc + 2 * pad);
-
-  const canvas = (reuse && reuse.canvas) || document.createElement('canvas');
-  canvas.width = Math.ceil(lw * FORGE_DPR);
-  canvas.height = Math.ceil(lh * FORGE_DPR);
-  const c = canvas.getContext('2d');
-  c.setTransform(FORGE_DPR, 0, 0, FORGE_DPR, 0, 0);
-  c.clearRect(0, 0, lw, lh);
-  // baseY chosen so the glyph's visual center (baseY-(asc-desc)/2) == lh/2.
-  paintForgedStack(c, text, lw / 2, pad + asc, asc, desc, nativeFontPx, refSize, e);
-  // textW = the glyph advance (at native size) for laying parts side by side.
-  return { canvas, lw, lh, nativeFontPx, text, textW: width };
-}
-
-// "DAMAGE" and the "CHAIN x" prefix never change → shared module sprites
-// (ExtraOld). The chain DIGITS are a separate per-instance Cinzel sprite.
-let _damageSprite = null;
-function getDamageSprite() {
-  if (!_damageSprite) _damageSprite = renderForgedSprite('DAMAGE', EMBER_HEAD_SIZE, EMBER_HEAD_SIZE, null, WORD_OVERRIDES);
-  return _damageSprite;
-}
-let _chainWordSprite = null;
-function getChainWordSprite() {
-  if (!_chainWordSprite) _chainWordSprite = renderForgedSprite('CHAIN x', EMBER_SUB_SIZE, EMBER_SUB_SIZE, null, WORD_OVERRIDES);
-  return _chainWordSprite;
-}
-
 const PHASE = { ACCUMULATE: 0, FINALIZE: 1, FLY: 2, IMPACT: 3 };
 
 export default class DamageCounterEffect {
   /**
    * @param {number} x - center anchor X (board center, design space)
    * @param {number} y - center anchor Y
+   * @param {object} [assetManager] - AssetManager (for the sliced damage sprites)
    */
-  constructor(x, y) {
+  constructor(x, y, assetManager = null) {
     this.x = x;
     this.y = y;
-    // Where the number flies on finalize (receiver portrait). Defaults to the
+    this._am = assetManager;
+    // Where the block flies on finalize (receiver portrait). Defaults to the
     // center anchor until the scene supplies it.
     this.targetX = x;
     this.targetY = y;
@@ -390,29 +191,6 @@ export default class DamageCounterEffect {
     this._flyFromY = y;
     this._impactFired = false;
     this._sparks = null;
-
-    // Cached forged sprites (regenerated only when their text changes). The
-    // number renders at NUMBER_NATIVE_SIZE and is blitted scaled; "CHAIN xN"
-    // renders at its ref size. "DAMAGE" uses the shared module sprite.
-    this._numSprite = null;
-    this._chainSprite = null;
-  }
-
-  /** Current number sprite, regenerated (reusing its canvas) when total changes. */
-  _numberSprite() {
-    const text = String(this.total);
-    if (!this._numSprite || this._numSprite.text !== text) {
-      this._numSprite = renderForgedSprite(text, EMBER_NUM_SIZE, NUMBER_NATIVE_SIZE, this._numSprite, NUMBER_OVERRIDES);
-    }
-    return this._numSprite;
-  }
-
-  /** The chain COUNT digits (e.g. "3" / "12!") in Cinzel, regenerated on change. */
-  _chainNumSprite(text) {
-    if (!this._chainSprite || this._chainSprite.text !== text) {
-      this._chainSprite = renderForgedSprite(text, EMBER_SUB_SIZE, EMBER_SUB_SIZE, this._chainSprite, NUMBER_OVERRIDES);
-    }
-    return this._chainSprite;
   }
 
   /** Has the counter begun its end-of-sequence finalize (or later)? */
@@ -420,7 +198,7 @@ export default class DamageCounterEffect {
     return this._phase !== PHASE.ACCUMULATE;
   }
 
-  /** True once the flying number has reached the portrait (impact fired). The
+  /** True once the flying block has reached the portrait (impact fired). The
    *  turn gate releases here so the turn can pass as the burst fades. */
   get delivered() {
     return this._impactFired;
@@ -542,7 +320,7 @@ export default class DamageCounterEffect {
     return PUNCH_ROT * (1 - p) * Math.sin(p * Math.PI * 3);
   }
 
-  /** Decaying 0..1 "fresh hit" factor driving shake + glow flare. */
+  /** Decaying 0..1 "fresh hit" factor driving shake + slash accents. */
   _hitFresh() {
     if (this._punchElapsed >= PUNCH_MS) return 0;
     return 1 - this._punchElapsed / PUNCH_MS;
@@ -557,7 +335,21 @@ export default class DamageCounterEffect {
     }
   }
 
-  // ── Accumulate + finalize: number + DAMAGE + CHAIN at the center ──────────
+  // ── Sprite lookups ─────────────────────────────────────────────────────────
+
+  _digitSprite(ch) {
+    return this._am ? this._am.get(`digit_${ch}`) : null;
+  }
+
+  /** The "DAMAGE / CHAIN X" label, choosing the wider-plaque variant when the
+   *  chain count is 10+ (two digits) so the count fits. */
+  _labelSprite() {
+    if (!this._am) return null;
+    const key = this.chain >= 10 ? LABEL_KEY_DOUBLE : LABEL_KEY_SINGLE;
+    return this._am.get(key);
+  }
+
+  // ── Accumulate + finalize: number + label at the center ───────────────────
 
   _renderCentered(ctx) {
     const intensity = this._intensity();
@@ -582,67 +374,102 @@ export default class DamageCounterEffect {
 
     ctx.save();
     ctx.translate(this.x + sx, this.y + sy);
-    // Whole-block tilt + slant (EmberForge `tilt`/`slant`), plus the punch wobble.
-    ctx.rotate(rot + EMBER.tilt * Math.PI / 180);
-    ctx.transform(1, 0, Math.tan(EMBER.slant * Math.PI / 180), 1, 0, 0);
+    ctx.rotate(rot);
     this._drawBlock(ctx, scale, intensity, 1, fresh, this._phase === PHASE.ACCUMULATE);
     ctx.restore();
   }
 
-  /** Number font px for an intensity + phase scale: ramps NUMBER_MIN_SIZE →
-   *  EMBER_NUM_SIZE with relative damage, then × the phase scale. */
-  _numberFont(intensity, scale) {
-    return (NUMBER_MIN_SIZE + (EMBER_NUM_SIZE - NUMBER_MIN_SIZE) * intensity) * scale;
-  }
-
   /**
-   * Draw the composed block (number / DAMAGE / CHAIN) centered on the current
-   * transform origin. The whole block scales as ONE unit, so it stays composed
-   * whether parked at center or flying to the portrait. The caller owns the
-   * translate/rotate/shear; this owns the line layout + sprite blits. `alpha` is
-   * the whole-block opacity (for the impact fade).
+   * Draw the composed block (big number / label / chain count) centered on the
+   * current transform origin. The whole block scales as ONE unit, so it stays
+   * composed whether parked at center or flying to the portrait. The caller owns
+   * the translate/rotate; this owns the layout + sprite blits. `alpha` is the
+   * whole-block opacity (for the impact fade).
    */
   _drawBlock(ctx, scale, intensity, alpha, fresh, allowSlashes) {
-    const numFontPx = this._numberFont(intensity, scale);
-    const headFontPx = EMBER_HEAD_SIZE * scale;
-    const subFontPx = EMBER_SUB_SIZE * scale;
+    const label = this._labelSprite();
+    if (!label || !label.width) return; // sheet not loaded yet — draw nothing
 
-    // Stack the three lines and center the FULL block vertically on the origin.
-    const CAP = 0.36;                 // ≈ half cap-height as a fraction of fontPx
-    const gap = EMBER_LINE_GAP * scale;
-    const numHalf = numFontPx * CAP;
-    const headHalf = headFontPx * CAP;
-    const subHalf = subFontPx * CAP;
-    const totalH = 2 * numHalf + gap + 2 * headHalf + gap + 2 * subHalf;
-    const numCenterY = -totalH / 2 + numHalf;
-    const headCenterY = numCenterY + numHalf + gap + headHalf;
-    const subCenterY = headCenterY + headHalf + gap + subHalf;
+    const labelH = LABEL_DISPLAY_H * scale;
+    const labelW = labelH * (label.width / label.height);
+    const numberH = (NUMBER_MIN_H + (NUMBER_MAX_H - NUMBER_MIN_H) * intensity) * scale;
+    const gap = BLOCK_GAP * scale;
 
-    this._blitSprite(ctx, this._numberSprite(), 0, numCenterY, numFontPx, alpha);
+    // Stack the number row + label and center the FULL block on the origin.
+    const totalH = numberH + gap + labelH;
+    const numTopY = -totalH / 2;
+    const numCenterY = numTopY + numberH / 2;     // for the slash accents
+    const labelTopY = numTopY + numberH + gap;
+
+    // (1) Big damage number — digit sprites, centered horizontally.
+    this._drawDigits(ctx, String(this.total), 0, numTopY, numberH, NUMBER_DIGIT_GAP_FRAC, alpha);
 
     // Slash accents flick across the number on a fresh hit (accumulate only).
     if (allowSlashes && fresh > 0.25) {
       ctx.save();
       ctx.translate(0, numCenterY);
-      this._drawSlashes(ctx, numFontPx, fresh, intensity);
+      this._drawSlashes(ctx, numberH, fresh, intensity);
       ctx.restore();
     }
 
-    this._blitSprite(ctx, getDamageSprite(), 0, headCenterY, headFontPx, alpha);
+    // (2) The "DAMAGE / CHAIN X" label.
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(label, -labelW / 2, labelTopY, labelW, labelH);
+    ctx.restore();
 
-    // CHAIN line: "CHAIN x" (ExtraOld) + the count digits (Cinzel) placed side by
-    // side and centered as a pair, since ExtraOld has no/ugly digit glyphs.
-    const bang = this.chain >= 4 ? '!' : '';
-    const chainWord = getChainWordSprite();
-    const chainNum = this._chainNumSprite(`${this.chain}${bang}`);
-    const sSub = subFontPx / EMBER_SUB_SIZE;     // display scale for the sub line
-    const wordW = chainWord.textW * sSub;
-    const numW = chainNum.textW * sSub;
-    const chainGap = CHAIN_GAP * sSub;
-    const pairW = wordW + chainGap + numW;
-    const chainAlpha = alpha * 0.95;
-    this._blitSprite(ctx, chainWord, -pairW / 2 + wordW / 2, subCenterY, subFontPx, chainAlpha);
-    this._blitSprite(ctx, chainNum, -pairW / 2 + wordW + chainGap + numW / 2, subCenterY, subFontPx, chainAlpha);
+    // (3) Chain count — digit sprites overlaid just right of the "CHAIN X" text,
+    // left-aligned at CHAIN_DIGIT_LEFT_FRAC of the label width.
+    const chainStr = String(this.chain);
+    const chainH = labelH * CHAIN_DIGIT_H_FRAC;
+    const chainW = this._measureDigits(chainStr, chainH, CHAIN_DIGIT_GAP_FRAC);
+    const chainLeftX = -labelW / 2 + labelW * CHAIN_DIGIT_LEFT_FRAC;
+    const chainCx = chainLeftX + chainW / 2;
+    const chainTopY = labelTopY + labelH * CHAIN_DIGIT_CY_FRAC - chainH / 2;
+    this._drawDigits(ctx, chainStr, chainCx, chainTopY, chainH, CHAIN_DIGIT_GAP_FRAC, alpha);
+  }
+
+  /** Total display width of a digit string at `glyphH` (no trailing gap). */
+  _measureDigits(str, glyphH, gapFrac) {
+    const f = glyphH / DIGIT_NATIVE_H;
+    const gap = glyphH * gapFrac;
+    let w = 0;
+    let n = 0;
+    for (const ch of str) {
+      const sp = this._digitSprite(ch);
+      if (!sp || !sp.width) continue;
+      w += sp.width * f;
+      n++;
+    }
+    return n > 0 ? w + gap * (n - 1) : 0;
+  }
+
+  /**
+   * Draw a digit string centered horizontally on `cx`, top-aligned at `topY`.
+   * Each glyph scales by glyphH / DIGIT_NATIVE_H (uniform factor) so the shared
+   * top origin keeps the run on a consistent baseline.
+   */
+  _drawDigits(ctx, str, cx, topY, glyphH, gapFrac, alpha) {
+    if (alpha <= 0 || glyphH < 1) return;
+    const f = glyphH / DIGIT_NATIVE_H;
+    const gap = glyphH * gapFrac;
+    const totalW = this._measureDigits(str, glyphH, gapFrac);
+    let x = cx - totalW / 2;
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    for (const ch of str) {
+      const sp = this._digitSprite(ch);
+      if (!sp || !sp.width) continue;
+      const dw = sp.width * f;
+      const dh = sp.height * f;
+      ctx.drawImage(sp, x, topY, dw, dh);
+      x += dw + gap;
+    }
+    ctx.restore();
   }
 
   // ── Fly + impact: the WHOLE block arcs to the portrait, then bursts ───────
@@ -670,8 +497,6 @@ export default class DamageCounterEffect {
 
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(EMBER.tilt * Math.PI / 180);
-    ctx.transform(1, 0, Math.tan(EMBER.slant * Math.PI / 180), 1, 0, 0);
     this._drawBlock(ctx, scale, intensity, alpha, 0, false);
     ctx.restore();
   }
@@ -718,26 +543,6 @@ export default class DamageCounterEffect {
   }
 
   // ── Drawing primitives ───────────────────────────────────────────────────
-
-  /**
-   * Blit a cached forged sprite (see renderForgedSprite) centered on
-   * (cx, cyCenter) at `displayFontPx`. The sprite is rendered once at its native
-   * size and only ever scaled DOWN here, so it stays crisp. The caller owns the
-   * tilt/slant transform. This is the per-frame path — one drawImage, no text.
-   */
-  _blitSprite(ctx, sprite, cx, cyCenter, displayFontPx, alpha) {
-    if (!sprite || alpha <= 0 || displayFontPx < 1) return;
-    const s = displayFontPx / sprite.nativeFontPx;
-    ctx.save();
-    ctx.globalAlpha *= alpha;
-    ctx.translate(cx, cyCenter);
-    ctx.scale(s, s);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    // The sprite's metal-face center is at (lw/2, lh/2); center it on the origin.
-    ctx.drawImage(sprite.canvas, -sprite.lw / 2, -sprite.lh / 2, sprite.lw, sprite.lh);
-    ctx.restore();
-  }
 
   _drawSlashes(ctx, fontPx, fresh, intensity) {
     const col = rampRGB(intensity);
