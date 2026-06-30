@@ -71,6 +71,16 @@ const ATTACK_ANIMATIONS = Object.freeze({
     alpha: 1,
     fadeOutFrames: 15, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
   },
+  witch_doctor: {
+    enabled: true,
+    sheetKey: 'ui_spritesheet_witch_doctor_attack_animation',
+    jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.json',
+    scale: 4.03,
+    offset: { x: 74, y: 10 },
+    fps: 60,
+    alpha: 1,
+    fadeOutFrames: 5, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
+  },
 });
 
 // ── Post-victory growth ──────────────────────────────────

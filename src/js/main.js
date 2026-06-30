@@ -190,6 +190,11 @@ const SPRITESHEET_MAP = {
     json:  'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.json',
     trim:  false,
   },
+  ui_spritesheet_witch_doctor_attack_animation: {
+    image: 'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.png',
+    json:  'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.json',
+    trim:  false,
+  },
 };
 
 // ── Asset aliases (existing key → spritesheet sprite name) ──
