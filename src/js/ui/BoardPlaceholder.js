@@ -1,5 +1,5 @@
 import UIElement from './UIElement.js';
-import { isWild } from '../game/TileTypes.js';
+import { isWild, isMana } from '../game/TileTypes.js';
 
 /**
  * Wild-tile (Thrall) animated rainbow border.
@@ -76,6 +76,29 @@ const WILD_TILE_BORDER_FLEX = {
 };
 
 /**
+ * Board "sleeping" idle glint/sheen.
+ *
+ * While the board is IDLE (no cascade / swap / shuffle / targeting), every few
+ * seconds 1–2 random mana tiles get a brief diagonal sheen sweep so the board
+ * feels alive at rest. Purely cosmetic — never touches the model or layout.
+ *
+ * Flip `enabled` to false to disable the whole effect (the update + render both
+ * early-out, so a disabled glint costs nothing). All timings/look are tunable
+ * here. Mana tiles only (skull/disease/wild are excluded via isMana).
+ */
+const IDLE_GLINT_CONFIG = {
+  enabled: true,            // master flag — set false to disable idle glints
+  intervalMinMs: 2200,      // min delay between glint bursts
+  intervalMaxMs: 4800,      // max delay between glint bursts
+  minTiles: 1,              // tiles glinted per burst (inclusive range)
+  maxTiles: 2,
+  durationMs: 850,          // length of a single tile's sheen sweep
+  widthFrac: 0.42,          // sheen band width, fraction of cell size
+  angleDeg: -35,            // sweep direction (degrees)
+  maxAlpha: 0.45,           // peak sheen opacity (fades in then out)
+};
+
+/**
  * BoardRenderer — renders the 8×8 match-3 grid from a BoardModel.
  *
  * Visual cascade states (set externally from BattleController):
@@ -119,6 +142,11 @@ export default class BoardPlaceholder extends UIElement {
     // Board-shuffle fly-in animation (purely cosmetic; the model is already
     // reshuffled). { time, offsets: Map<"col,row", {dx,dy,startScale,delay}> }
     this._shuffleAnim = null;
+
+    // Idle "sleeping" glints (cosmetic sheen on resting mana tiles).
+    /** @type {Array<{col:number,row:number,t:number}>} */
+    this._idleGlints = [];
+    this._glintTimer = this._rollGlintInterval();
 
     if (!boardModel) this._generatePlaceholder();
   }
@@ -218,7 +246,113 @@ export default class BoardPlaceholder extends UIElement {
         this._shuffleAnim = null;
       }
     }
+    this._updateIdleGlints(dt);
     super.update(dt);
+  }
+
+  // ── Idle "sleeping" glints ────────────────────────────
+
+  /** Random delay (ms) until the next glint burst. @private */
+  _rollGlintInterval() {
+    const c = IDLE_GLINT_CONFIG;
+    return c.intervalMinMs + Math.random() * (c.intervalMaxMs - c.intervalMinMs);
+  }
+
+  /** True when the board is at rest (nothing animating/targeting). @private */
+  _isBoardIdle() {
+    return this.highlightCells.length === 0
+      && this.emptyCells.length === 0
+      && this.fallCells.length === 0
+      && !this.swapAnim
+      && !this._shuffleAnim
+      && !(this.targetingOverlayCells && this.targetingOverlayCells.length > 0);
+  }
+
+  /**
+   * Advance active glints and, while the board is idle, periodically spawn a
+   * new burst. Glints are cleared (and the timer reset) whenever the board is
+   * animating, so the sheen only ever appears at rest. @private
+   */
+  _updateIdleGlints(dt) {
+    if (!IDLE_GLINT_CONFIG.enabled) {
+      if (this._idleGlints.length) this._idleGlints = [];
+      return;
+    }
+    if (!this._isBoardIdle()) {
+      if (this._idleGlints.length) this._idleGlints = [];
+      this._glintTimer = this._rollGlintInterval();
+      return;
+    }
+    if (this._idleGlints.length) {
+      for (const g of this._idleGlints) g.t += dt;
+      this._idleGlints = this._idleGlints.filter(g => g.t < IDLE_GLINT_CONFIG.durationMs);
+    }
+    this._glintTimer -= dt;
+    if (this._glintTimer <= 0) {
+      this._spawnIdleGlints();
+      this._glintTimer = this._rollGlintInterval();
+    }
+  }
+
+  /** Pick 1–2 random resting mana tiles to glint. @private */
+  _spawnIdleGlints() {
+    const c = IDLE_GLINT_CONFIG;
+    const cells = [];
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        const t = this.getTileAt(row, col);
+        if (t && isMana(t)) cells.push({ col, row });
+      }
+    }
+    if (!cells.length) return;
+    const active = new Set(this._idleGlints.map(g => `${g.col},${g.row}`));
+    const n = c.minTiles + Math.floor(Math.random() * (c.maxTiles - c.minTiles + 1));
+    for (let i = 0; i < n && cells.length; i++) {
+      const cell = cells.splice(Math.floor(Math.random() * cells.length), 1)[0];
+      const key = `${cell.col},${cell.row}`;
+      if (active.has(key)) continue;
+      active.add(key);
+      this._idleGlints.push({ col: cell.col, row: cell.row, t: 0 });
+    }
+  }
+
+  /**
+   * Draw the active idle glints: a bright diagonal sheen band sweeping across
+   * each glinting tile, clipped to the cell, additive, fading in then out.
+   * @private
+   */
+  _renderIdleGlints(ctx, ox, oy, cs) {
+    const c = IDLE_GLINT_CONFIG;
+    if (!c.enabled || this._idleGlints.length === 0) return;
+    for (const g of this._idleGlints) {
+      const colorKey = this.getTileAt(g.row, g.col);
+      if (!colorKey || !isMana(colorKey)) continue; // tile changed/cleared
+      const p = g.t / c.durationMs;
+      if (p < 0 || p >= 1) continue;
+      const alpha = Math.sin(p * Math.PI) * c.maxAlpha; // fade in → out
+      if (alpha <= 0) continue;
+
+      const x = ox + g.col * cs;
+      const y = oy + g.row * cs;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, cs, cs);
+      ctx.clip();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = alpha;
+      ctx.translate(x + cs / 2, y + cs / 2);
+      ctx.rotate(c.angleDeg * Math.PI / 180);
+      const diag = cs * 1.5;                 // covers the rotated cell fully
+      const pos = -diag + p * 2 * diag;      // sweep position along local x
+      const bandW = cs * c.widthFrac;
+      const grad = ctx.createLinearGradient(pos - bandW, 0, pos + bandW, 0);
+      grad.addColorStop(0, 'rgba(255,255,255,0)');
+      grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(-diag, -diag, diag * 2, diag * 2);
+      ctx.restore();
+    }
   }
 
   // ── Render ───────────────────────────────────────────
@@ -401,6 +535,10 @@ export default class BoardPlaceholder extends UIElement {
     for (const b of wildBorders) {
       this._drawWildTileBorder(ctx, b.x, b.y, b.cs != null ? b.cs : cs);
     }
+
+    // Idle "sleeping" glints — sheen sweep on resting mana tiles (only spawns
+    // while the board is idle; see _updateIdleGlints).
+    this._renderIdleGlints(ctx, ox, oy, cs);
 
     // ═══════════════════════════════════════════════════════
     // OVERLAYS (rendered above tiles)
