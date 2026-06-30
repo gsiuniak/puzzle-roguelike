@@ -175,14 +175,19 @@ const SPRITESHEET_MAP = {
     trim:  false, // packer emits tight per-sprite frames; sprite names match the
                   // status `icon` keys (buff_*/debuff_*) directly (no aliases)
   },
-  // PROOF OF CONCEPT — warrior attack flash played over the portrait on a skull
-  // match (see SpriteSheetAnimation.js + BattleScene WARRIOR_ATTACK_ANIM). This
-  // entry only loads the PNG so the full sheet is retrievable under the sheet
-  // key; the animation reads the JSON itself (it needs the per-frame trim
-  // offsets the slicer drops). Easy to remove: delete this entry + its uses.
+  // PROOF OF CONCEPT — per-character attack flash played over the portrait on a
+  // skull match (see SpriteSheetAnimation.js + BattleScene ATTACK_ANIMATIONS).
+  // These entries only load the PNG so the full sheet is retrievable under the
+  // sheet key; the animation reads the JSON itself (it needs the per-frame trim
+  // offsets the slicer drops). Easy to remove: delete these entries + their uses.
   ui_spritesheet_warrior_attack_animation: {
     image: 'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.png',
     json:  'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.json',
+    trim:  false,
+  },
+  ui_spritesheet_mage_attack_animation: {
+    image: 'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.png',
+    json:  'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.json',
     trim:  false,
   },
 };

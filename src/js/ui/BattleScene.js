@@ -28,32 +28,46 @@ import Metrics from '../engine/Metrics.js';
 import { generateRelicRewardOptions } from '../data/relics/relicRewards.js';
 import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../audio/BattleMusicConfig.js';
 
-// ── Warrior attack animation (PROOF OF CONCEPT) ──────────
-// A sprite-sheet flash played ONCE over the player portrait when the WARRIOR
-// matches skulls. Self-contained and easy to disable/remove: flip `enabled` to
-// false here (then de-register the sheet in main.js + delete SpriteSheetAnimation.js
-// when done). Tunables: scale = box height vs portrait height (width follows the
-// art's aspect, no squish); offset nudges from the portrait center; fps = speed.
+// ── Character attack animations (PROOF OF CONCEPT) ───────
+// A sprite-sheet flash played ONCE over the PLAYER portrait when the player
+// matches skulls — ONE ENTRY PER CHARACTER, keyed by `cd.portrait` (warrior,
+// mage, …). Each character has its OWN sheet + placement (scale/offset/fps).
+// Self-contained and easy to disable/remove: per-entry `enabled` flag (or flip
+// ATTACK_ANIM_DEBUG off), then de-register the sheets in main.js + delete
+// SpriteSheetAnimation.js when done. Tunables: scale = box height vs portrait
+// height (width follows the art's aspect, no squish); offset nudges from the
+// portrait center; fps = speed.
 //
-// `debug: true` enables a LIVE TUNER (in battle, no skull match needed):
+// ATTACK_ANIM_DEBUG enables a LIVE TUNER (in battle, no skull match needed) that
+// targets WHICHEVER character the player is — it tunes that character's entry:
 //   J            summon/replay the animation, looping & held so it stays visible
 //   P            pause / resume (pause to inspect a single frame)
 //   ← ↑ → ↓      nudge offset (hold Shift = bigger step)
 //   [  /  ]      shrink / grow scale (hold Shift = bigger step)
 //   ,  /  .      step to previous / next frame (auto-pauses)
-//   C            log the current scale/offset to the console (copy into this config)
-// A small HUD top-left shows the live numbers. Tuned values persist across J
-// replays AND feed the real skull-match trigger, so what you dial in is what you get.
-const WARRIOR_ATTACK_ANIM = Object.freeze({
-  enabled: true,
-  debug:  false, // ← live tuner (see key map above); set false for the plain one-shot
-  sheetKey: 'ui_spritesheet_warrior_attack_animation',
-  jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.json',
-  characterPortrait: 'warrior', // only plays for this player character (cd.portrait)
-  scale: 2.17,
-  offset: { x: 1, y: 3 },
-  fps: 60,
-  alpha: 1,
+//   C            log the current scale/offset to the console (copy into the entry)
+// A small HUD shows the live numbers. Tuned values persist across J replays AND
+// feed the real skull-match trigger, so what you dial in is what you get.
+const ATTACK_ANIM_DEBUG = false; // live tuner for the player's character; false = plain one-shot
+const ATTACK_ANIMATIONS = Object.freeze({
+  warrior: {
+    enabled: true,
+    sheetKey: 'ui_spritesheet_warrior_attack_animation',
+    jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.json',
+    scale: 2.17,
+    offset: { x: 1, y: 3 },
+    fps: 60,
+    alpha: 1,
+  },
+  mage: {
+    enabled: true,
+    sheetKey: 'ui_spritesheet_mage_attack_animation',
+    jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.json',
+    scale: 2.26,
+    offset: { x: 10, y: 10 },
+    fps: 60,
+    alpha: 1,
+  },
 });
 
 // ── Post-victory growth ──────────────────────────────────
@@ -284,10 +298,14 @@ export default class BattleScene extends UIPanel {
     /** @type {FloatingImageEffect[]} */
     this._floatingEffects = [];
 
-    // ── Warrior attack animation (POC) — one-shot sheet flash over the player
-    // portrait on skull match. Updated/rendered alongside floating effects. ──
+    // ── Character attack animation (POC) — one-shot sheet flash over the player
+    // portrait on skull match (per-character; see ATTACK_ANIMATIONS). Updated/
+    // rendered alongside floating effects. Live-tuned values persist in
+    // _attackAnimTuning (keyed by portrait). ──
     /** @type {SpriteSheetAnimation|null} */
-    this._warriorAttackAnim = null;
+    this._attackAnim = null;
+    /** @type {Object<string,{scale:number,offset:{x:number,y:number}}>|null} */
+    this._attackAnimTuning = null;
 
     // ── Accumulating damage counters (one per side, over the portrait) ──
     // Each is a DamageCounterEffect that accumulates all damage to that side
@@ -690,8 +708,8 @@ export default class BattleScene extends UIPanel {
     if (this._playerPane && this._playerPane.destroy) this._playerPane.destroy();
     if (this._enemyPane && this._enemyPane.destroy) this._enemyPane.destroy();
 
-    // Drop the warrior attack animation POC so it doesn't carry over.
-    this._warriorAttackAnim = null;
+    // Drop the attack animation POC so it doesn't carry over.
+    this._attackAnim = null;
 
     const input = this._sceneManager._input;
     if (!input) return;
@@ -973,8 +991,8 @@ export default class BattleScene extends UIPanel {
       return;
     }
 
-    // ── Warrior attack animation live tuner (POC; no-op unless debug on) ──
-    if (this._handleWarriorAnimDebugKey(e)) return;
+    // ── Attack animation live tuner (POC; no-op unless ATTACK_ANIM_DEBUG on) ──
+    if (this._handleAttackAnimDebugKey(e)) return;
 
     // ── Debug: instant win with 'K' key ──
     if ((e.key === 'k' || e.key === 'K') && window.__DEBUG_MODE) {
@@ -1067,9 +1085,9 @@ export default class BattleScene extends UIPanel {
           skullMatchedByPlayer = true;
         }
       }
-      // POC: warrior attack flash when the player (if they're the Warrior)
-      // matches skulls. Played once per resolution, even on multi-skull cascades.
-      if (skullMatchedByPlayer) this._maybePlayWarriorAttackAnim();
+      // POC: the player character's attack flash when they match skulls (per
+      // character — see ATTACK_ANIMATIONS). Once per resolution, even on cascades.
+      if (skullMatchedByPlayer) this._maybePlayAttackAnim();
     }
 
     // ── Play skull damage SFX ──
@@ -1489,89 +1507,115 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * PROOF OF CONCEPT: play the warrior attack sprite-sheet flash once over the
-   * player portrait, when the player is the Warrior and matches skulls. Guarded
-   * so a multi-skull cascade only spawns one flash (the previous one must finish
-   * first). See the WARRIOR_ATTACK_ANIM tunables at the top of this file.
+   * The attack-anim config + portrait key for the CURRENT player character, or
+   * null if there's no (enabled) entry for it. POC. @private
    */
-  _maybePlayWarriorAttackAnim() {
-    const cfg = WARRIOR_ATTACK_ANIM;
-    if (!cfg.enabled) return;
-    if (!this._playerData || this._playerData.portrait !== cfg.characterPortrait) return;
-    if (this._warriorAttackAnim && !this._warriorAttackAnim.done) return; // already playing
-    this._spawnWarriorAttackAnim(false);
+  _currentAttackAnimConfig() {
+    const portrait = this._playerData && this._playerData.portrait;
+    if (!portrait) return null;
+    const cfg = ATTACK_ANIMATIONS[portrait];
+    if (!cfg || !cfg.enabled) return null;
+    return { portrait, cfg };
   }
 
   /**
-   * Spawn the warrior attack animation over the player portrait. Uses the
-   * live-tuned scale/offset (if the debug tuner has nudged them) so the real
-   * skull-match flash matches what was dialed in. `debug` makes it loop + hold
-   * so it stays on screen for tuning. POC. @private
+   * Persisted, live-tuned scale/offset for a character (seeded from its config
+   * the first time). Lets the debug tuner's nudges survive J replays AND feed
+   * the real skull-match flash. POC. @private
    */
-  _spawnWarriorAttackAnim(debug = false) {
-    const cfg = WARRIOR_ATTACK_ANIM;
+  _attackTuning(portrait, cfg) {
+    if (!this._attackAnimTuning) this._attackAnimTuning = {};
+    if (!this._attackAnimTuning[portrait]) {
+      this._attackAnimTuning[portrait] = { scale: cfg.scale, offset: { ...cfg.offset } };
+    }
+    return this._attackAnimTuning[portrait];
+  }
+
+  /**
+   * PROOF OF CONCEPT: play the current character's attack sprite-sheet flash once
+   * over the player portrait when they match skulls. Guarded so a multi-skull
+   * cascade only spawns one flash (the previous one must finish first). See
+   * ATTACK_ANIMATIONS at the top of this file.
+   */
+  _maybePlayAttackAnim() {
+    if (!this._currentAttackAnimConfig()) return;
+    if (this._attackAnim && !this._attackAnim.done) return; // already playing
+    this._spawnAttackAnim(false);
+  }
+
+  /**
+   * Spawn the current character's attack animation over the player portrait,
+   * using its live-tuned scale/offset. `debug` makes it loop + hold so it stays
+   * on screen for tuning. POC. @private
+   */
+  _spawnAttackAnim(debug = false) {
+    const entry = this._currentAttackAnimConfig();
+    if (!entry) return;
+    const { portrait, cfg } = entry;
     const rect = this._playerPane && typeof this._playerPane.getPortraitRect === 'function'
       ? this._playerPane.getPortraitRect() : null;
     if (!rect) return;
-    const scale = this._warriorAnimScale != null ? this._warriorAnimScale : cfg.scale;
-    const offset = this._warriorAnimOffset || { ...cfg.offset };
-    this._warriorAttackAnim = new SpriteSheetAnimation(
+    const tune = this._attackTuning(portrait, cfg);
+    this._attackAnim = new SpriteSheetAnimation(
       cfg.sheetKey, cfg.jsonPath, this._assetManager,
-      { anchorRect: rect, scale, offset: { ...offset }, fps: cfg.fps, alpha: cfg.alpha,
-        loop: debug, hold: debug }
+      { anchorRect: rect, scale: tune.scale, offset: { ...tune.offset },
+        fps: cfg.fps, alpha: cfg.alpha, loop: debug, hold: debug }
     );
   }
 
   /**
-   * Live tuner key handling for the warrior attack animation POC. Returns true
-   * if it consumed the key. No-op unless WARRIOR_ATTACK_ANIM.debug is on. See
-   * the key map in the WARRIOR_ATTACK_ANIM config comment. @private
+   * Live tuner key handling for the attack-animation POC — targets the current
+   * player character's entry. Returns true if it consumed the key. No-op unless
+   * ATTACK_ANIM_DEBUG is on. See the key map in the ATTACK_ANIMATIONS comment.
+   * @private
    */
-  _handleWarriorAnimDebugKey(e) {
-    const cfg = WARRIOR_ATTACK_ANIM;
-    if (!cfg.debug) return false;
-    if (this._warriorAnimScale == null) this._warriorAnimScale = cfg.scale;
-    if (this._warriorAnimOffset == null) this._warriorAnimOffset = { ...cfg.offset };
+  _handleAttackAnimDebugKey(e) {
+    if (!ATTACK_ANIM_DEBUG) return false;
+    const entry = this._currentAttackAnimConfig();
+    if (!entry) return false;
+    const { portrait, cfg } = entry;
+    const tune = this._attackTuning(portrait, cfg);
 
     const moveStep = e.shiftKey ? 10 : 1;
     const scaleStep = e.shiftKey ? 0.2 : 0.01;
-    const anim = this._warriorAttackAnim;
+    const anim = this._attackAnim;
     let handled = true;
     switch (e.key) {
-      case 'j': case 'J': this._spawnWarriorAttackAnim(true); break;
+      case 'j': case 'J': this._spawnAttackAnim(true); break;
       case 'p': case 'P': if (anim) anim.togglePause(); break;
-      case 'ArrowLeft':  this._warriorAnimOffset.x -= moveStep; break;
-      case 'ArrowRight': this._warriorAnimOffset.x += moveStep; break;
-      case 'ArrowUp':    this._warriorAnimOffset.y -= moveStep; break;
-      case 'ArrowDown':  this._warriorAnimOffset.y += moveStep; break;
-      case '[': this._warriorAnimScale = Math.max(0.05, this._warriorAnimScale - scaleStep); break;
-      case ']': this._warriorAnimScale += scaleStep; break;
+      case 'ArrowLeft':  tune.offset.x -= moveStep; break;
+      case 'ArrowRight': tune.offset.x += moveStep; break;
+      case 'ArrowUp':    tune.offset.y -= moveStep; break;
+      case 'ArrowDown':  tune.offset.y += moveStep; break;
+      case '[': tune.scale = Math.max(0.05, tune.scale - scaleStep); break;
+      case ']': tune.scale += scaleStep; break;
       case ',': if (anim) anim.stepFrame(-1); break;
       case '.': if (anim) anim.stepFrame(1); break;
       case 'c': case 'C':
-        console.log(`[WARRIOR_ATTACK_ANIM] scale: ${this._warriorAnimScale.toFixed(2)}, offset: { x: ${Math.round(this._warriorAnimOffset.x)}, y: ${Math.round(this._warriorAnimOffset.y)} }`);
+        console.log(`[ATTACK_ANIMATIONS.${portrait}] scale: ${tune.scale.toFixed(2)}, offset: { x: ${Math.round(tune.offset.x)}, y: ${Math.round(tune.offset.y)} }`);
         break;
       default: handled = false;
     }
     if (handled) {
-      if (this._warriorAttackAnim) {
-        this._warriorAttackAnim.setScale(this._warriorAnimScale);
-        this._warriorAttackAnim.setOffset(this._warriorAnimOffset.x, this._warriorAnimOffset.y);
+      if (this._attackAnim) {
+        this._attackAnim.setScale(tune.scale);
+        this._attackAnim.setOffset(tune.offset.x, tune.offset.y);
       }
       e.preventDefault();
     }
     return handled;
   }
 
-  /** Draw the warrior-anim debug HUD (top-left, design space). POC. @private */
-  _renderWarriorAnimDebugHud(ctx) {
-    const cfg = WARRIOR_ATTACK_ANIM;
-    const scale = this._warriorAnimScale != null ? this._warriorAnimScale : cfg.scale;
-    const off = this._warriorAnimOffset || cfg.offset;
-    const info = this._warriorAttackAnim ? this._warriorAttackAnim.getDebugInfo() : null;
+  /** Draw the attack-anim debug HUD (design space). POC. @private */
+  _renderAttackAnimDebugHud(ctx) {
+    const entry = this._currentAttackAnimConfig();
+    if (!entry) return;
+    const { portrait, cfg } = entry;
+    const tune = this._attackTuning(portrait, cfg);
+    const info = this._attackAnim ? this._attackAnim.getDebugInfo() : null;
     const lines = [
-      'WARRIOR ATTACK ANIM — debug',
-      `scale ${scale.toFixed(2)}   offset { x:${Math.round(off.x)}, y:${Math.round(off.y)} }`,
+      `${portrait.toUpperCase()} ATTACK ANIM — debug`,
+      `scale ${tune.scale.toFixed(2)}   offset { x:${Math.round(tune.offset.x)}, y:${Math.round(tune.offset.y)} }`,
       info ? `frame ${info.frame + 1}/${info.frameCount}   ${info.paused ? 'PAUSED' : 'playing'}` : '(press J to summon)',
       'J replay · P pause · arrows move · [ ] scale · , . frame · C log',
     ];
@@ -1805,10 +1849,10 @@ export default class BattleScene extends UIPanel {
       }
     }
 
-    // Update the warrior attack animation POC (one-shot; cleared when done).
-    if (this._warriorAttackAnim) {
-      this._warriorAttackAnim.update(dt);
-      if (this._warriorAttackAnim.done) this._warriorAttackAnim = null;
+    // Update the character attack animation POC (one-shot; cleared when done).
+    if (this._attackAnim) {
+      this._attackAnim.update(dt);
+      if (this._attackAnim.done) this._attackAnim = null;
     }
 
     // Update particle effects, remove completed ones
@@ -2117,9 +2161,9 @@ export default class BattleScene extends UIPanel {
       effect.render(ctx);
     }
 
-    // Warrior attack animation POC — drawn over the portrait, above effects.
-    if (this._warriorAttackAnim) this._warriorAttackAnim.render(ctx);
-    if (WARRIOR_ATTACK_ANIM.debug) this._renderWarriorAnimDebugHud(ctx);
+    // Character attack animation POC — drawn over the portrait, above effects.
+    if (this._attackAnim) this._attackAnim.render(ctx);
+    if (ATTACK_ANIM_DEBUG) this._renderAttackAnimDebugHud(ctx);
 
     // Restore context after shake offset
     if (shake.x !== 0 || shake.y !== 0) {
