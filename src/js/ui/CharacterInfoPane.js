@@ -481,6 +481,18 @@ export default class CharacterInfoPane extends UIPanel {
   }
 
   /**
+   * The portrait's rect in design-space coordinates ({x,y,w,h}), or null until
+   * laid out. Used to overlay effects (e.g. the warrior attack animation POC)
+   * exactly over the portrait.
+   * @returns {{x:number,y:number,w:number,h:number}|null}
+   */
+  getPortraitRect() {
+    const r = this._portrait && this._portrait.rect;
+    if (!r || r.w <= 0) return null;
+    return { x: r.x, y: r.y, w: r.w, h: r.h };
+  }
+
+  /**
    * Center of a mana orb (by color) in design-space coordinates — the
    * convergence point for incoming mana streams. Biased slightly upward toward
    * the orb symbol. Returns null until laid out.
