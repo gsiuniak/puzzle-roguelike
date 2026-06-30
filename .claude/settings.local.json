@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(wsl bash -lc \"cd ~/test/game/gems && which node; ls node_modules/.bin/ 2>/dev/null | head; command -v nodejs\")"
+      "PowerShell(wsl bash -lc \"cd ~/test/game/gems && which node; ls node_modules/.bin/ 2>/dev/null | head; command -v nodejs\")",
+      "Read(//home/g/test/game/gems/src/js/data/enemies/act1/**)",
+      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/js/data/enemies/act1/**)",
+      "Read(//home/g/test/game/gems/src/js/data/skills/**)",
+      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/js/data/skills/**)",
+      "Read(//home/g/test/game/gems/src/js/audio/**)",
+      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/js/audio/**)",
+      "Read(//home/g/test/game/gems/src/assets/audio/sfx/**)",
+      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/assets/audio/sfx/**)"
+    ],
+    "additionalDirectories": [
+      "\\home\\g\\test\\game\\gems\\src\\js\\audio",
+      "\\\\wsl.localhost\\Ubuntu\\home\\g\\test\\game\\gems\\src\\js\\audio",
+      "\\home\\g\\test\\game\\gems\\src\\js\\data\\enemies\\act1",
+      "\\\\wsl.localhost\\Ubuntu\\home\\g\\test\\game\\gems\\src\\js\\data\\enemies\\act1"
     ]
   }
 }

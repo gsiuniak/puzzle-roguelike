@@ -55,6 +55,24 @@ const CHOOSE_VIDEO_MAX_DURATION = 30000;
 
 const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
 
+/**
+ * Horizontal center of the floating UI block, as a fraction of canvas width.
+ * The character splash art occupies the RIGHT side of the screen, so the
+ * info / heroes / button block floats on the LEFT — centered around this
+ * fraction — with no containing panel behind it.
+ */
+const LEFT_BLOCK_CENTER_FRAC = 0.36;
+
+/**
+ * Left-side readability scrim: a subtle black gradient over the splash that is
+ * darkest at the left edge and fades to fully transparent by
+ * LEFT_OVERLAY_FADE_END_FRAC across the screen, lifting the floating left-side
+ * text off the artwork. Set LEFT_OVERLAY_ALPHA to 0 to disable.
+ */
+const LEFT_OVERLAY_ALPHA = 0.65;
+const LEFT_OVERLAY_HOLD_FRAC = 0.45;
+const LEFT_OVERLAY_FADE_END_FRAC = 0.75;
+
 export default class CharacterSelectScene extends UIPanel {
   constructor() {
     super();
@@ -718,8 +736,13 @@ export default class CharacterSelectScene extends UIPanel {
     const startY = Math.max(0, Math.floor((H - totalBlockH) / 2));
 
     // ── 4. Position elements ────────────────────────────
+    // The info content floats on the LEFT of the splash (opposite the character
+    // art), centered around LEFT_BLOCK_CENTER_FRAC. The heroes portrait row and
+    // the Choose Hero button stay centered mid-screen.
+    const blockCenterX = Math.floor(W * LEFT_BLOCK_CENTER_FRAC);
+
     if (panel) {
-      panel.rect.x = Math.floor((W - panelW) / 2);
+      panel.rect.x = Math.floor(blockCenterX - panelW / 2);
       panel.rect.y = startY;
       panel.rect.w = panelW;
       panel.rect.h = panelH;
@@ -1355,6 +1378,18 @@ export default class CharacterSelectScene extends UIPanel {
       if (currImg) app.drawFullCanvasImage(currImg, Math.min(1.0, this._crossFadeAlpha));
     }
 
+    // Subtle dark scrim fading from the left edge to ~66% across, to lift the
+    // floating left-side text off the splash. Drawn over the splash but under
+    // the UI; fades out alongside the UI during the choose-hero intro.
+    if (LEFT_OVERLAY_ALPHA > 0 && this._uiFadeAlpha > 0.001) {
+      const a = LEFT_OVERLAY_ALPHA * this._uiFadeAlpha;
+      app.fillFullCanvasHGradient([
+        { at: 0, color: `rgba(0,0,0,${a})` },
+        { at: LEFT_OVERLAY_HOLD_FRAC, color: `rgba(0,0,0,${a})` },
+        { at: LEFT_OVERLAY_FADE_END_FRAC, color: 'rgba(0,0,0,0)' },
+      ]);
+    }
+
     // Choose-hero intro video, drawn full-canvas on top of the splash with the
     // same cover-fit framing (the video matches the splash resolution). The
     // splash underneath covers any gap until the first frame is decodable.
@@ -1444,8 +1479,8 @@ export default class CharacterSelectScene extends UIPanel {
     // 2. Draw animated aura strands (over splash, under all UI)
     this._auraEffect.render(ctx, this.rect);
 
-    // 3. Draw info panel background (over aura, under panel text/icons)
-    this._drawInfoPanelBackground(ctx);
+    // 3. Info panel contents now float directly on the splash (no containing
+    //    panel background) — _drawInfoPanelBackground is intentionally not called.
 
     // 4. Draw children (info panel contents, heroes row, button)
     this.renderChildren(ctx);

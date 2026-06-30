@@ -184,6 +184,7 @@ const SOUNDS = {
   skill_boulder_throw: { sprite: 'sfx_skill_boulder_throw', category: AudioCategory.SFX },
   skill_smash:         { sprite: 'sfx_smash',               category: AudioCategory.SFX },
   skill_hound:         { sprite: 'sfx_hound',               category: AudioCategory.SFX },
+  skill_claw:          { sprite: 'sfx_skill_claw',          category: AudioCategory.SFX },
   skill_infected_bite: { sprite: 'sfx_skill_infected_bite', category: AudioCategory.SFX },
   skill_cyst_burst:    { sprite: 'sfx_skill_cyst_burst',    category: AudioCategory.SFX },
   skill_frenzy:        { sprite: 'sfx_skill_frenzy',        category: AudioCategory.SFX },

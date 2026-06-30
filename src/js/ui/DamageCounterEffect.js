@@ -56,7 +56,7 @@ const DIGIT_NATIVE_H = 298;
 //     [ big damage number ]          ← digit sprites; height ramps with intensity
 //     [ DAMAGE / CHAIN X label ]     ← the label sprite (chain count overlaid)
 // The chain-count digits are drawn ON TOP of the label's baked "CHAIN X" line.
-const LABEL_DISPLAY_H = 160;          // label height @ scale 1 (label width follows its aspect)
+const LABEL_DISPLAY_H = 120;          // label height @ scale 1 (label width follows its aspect) Initiak: 160
 const BLOCK_GAP = 5;                  // gap between the number row and the label
 const NUMBER_MIN_H = 128;             // big-number glyph height @ intensity 0
 const NUMBER_MAX_H = 170;             // big-number glyph height @ intensity 1
@@ -66,7 +66,7 @@ const NUMBER_DIGIT_GAP_FRAC = 0.04;   // gap between big-number digits ÷ glyph 
 // sits just right of the baked "CHAIN X" text, matched to its size.
 const CHAIN_DIGIT_H_FRAC = 0.29;      // chain digit height ÷ label height
 const CHAIN_DIGIT_LEFT_FRAC = 0.72;   // left edge of the chain count ÷ label width
-const CHAIN_DIGIT_CY_FRAC = 0.78;     // chain count vertical center ÷ label height
+const CHAIN_DIGIT_CY_FRAC = 0.79;     // chain count vertical center ÷ label height
 const CHAIN_DIGIT_GAP_FRAC = 0.04;    // gap between chain-count digits ÷ glyph height
 
 // Intensity (relative damage 0..1) → accent color ramp for the IMPACT burst +

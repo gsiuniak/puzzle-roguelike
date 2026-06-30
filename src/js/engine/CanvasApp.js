@@ -222,6 +222,29 @@ export default class CanvasApp {
   }
 
   /**
+   * Fill the entire physical canvas with a horizontal left→right linear
+   * gradient, bypassing the design-space transform so it also covers the
+   * letterbox/pillarbox bars. Companion to `fillFullCanvas` for directional
+   * tints / readability scrims.
+   *
+   * @param {Array<{at:number,color:string}>} stops — gradient color stops,
+   *   `at` being a 0..1 fraction of the physical canvas width.
+   */
+  fillFullCanvasHGradient(stops) {
+    if (!stops || stops.length === 0) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const grad = ctx.createLinearGradient(0, 0, this._cssWidth, 0);
+    for (const s of stops) {
+      grad.addColorStop(Math.max(0, Math.min(1, s.at)), s.color);
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);
+    ctx.restore();
+  }
+
+  /**
    * Push a clip rect equal to the design viewport so scenes cannot draw into
    * the letterbox bars. Pair with endViewportClip().
    */

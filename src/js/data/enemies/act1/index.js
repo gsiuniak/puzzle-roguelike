@@ -12,6 +12,7 @@ import orcTaskmaster from './orcTaskmaster.js';
 import chokeweed from './chokeweed.js';
 import goresnoutTrackers from './goresnoutTrackers.js';
 import abomination from './abomination.js';
+import thrall from './thrall.js';
 import sanguinePhoenix from './sanguinePhoenix.js';
 import sanguineEgg from './sanguineEgg.js';
 import lordMalakor from './lordMalakor.js';
@@ -29,6 +30,7 @@ const ACT1_ENEMIES = [
   chokeweed,
   goresnoutTrackers,
   abomination,
+  thrall,
   sanguinePhoenix,
   sanguineEgg, // never spawns (floors: []) — transform target for the Phoenix
   lordMalakor,
@@ -46,6 +48,7 @@ export {
   chokeweed,
   goresnoutTrackers,
   abomination,
+  thrall,
   sanguinePhoenix,
   sanguineEgg,
   lordMalakor,

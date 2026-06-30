@@ -450,6 +450,20 @@ const SKILL_CATALOG = {
       { effectType: 'damage', damage: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
     ],
   },
+
+  // Thrall — a basic minion that ramps its attack while clawing the player.
+  claw: {
+    id: 'claw',
+    name: 'Claw',
+    description: 'Deal <<5>> [[damage]].\nGain +2 [[Attack]].',
+    icon: 'skill_claw',
+    sound: 'skill_claw',
+    cost: { red: 3 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 5, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
+      { effectType: 'gain_attack', gainAttack: { amount: 2 } },
+    ],
+  },
 };
 
 /**
