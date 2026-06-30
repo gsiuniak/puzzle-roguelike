@@ -44,8 +44,9 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 //   P            pause / resume (pause to inspect a single frame)
 //   ← ↑ → ↓      nudge offset (hold Shift = bigger step)
 //   [  /  ]      shrink / grow scale (hold Shift = bigger step)
+//   -  /  =      fewer / more tail fade-out frames (cross-fade into the portrait)
 //   ,  /  .      step to previous / next frame (auto-pauses)
-//   C            log the current scale/offset to the console (copy into the entry)
+//   C            log the current scale/offset/fadeOutFrames to the console (copy into the entry)
 // A small HUD shows the live numbers. Tuned values persist across J replays AND
 // feed the real skull-match trigger, so what you dial in is what you get.
 const ATTACK_ANIM_DEBUG = false; // live tuner for the player's character; false = plain one-shot
@@ -58,15 +59,17 @@ const ATTACK_ANIMATIONS = Object.freeze({
     offset: { x: 1, y: 3 },
     fps: 60,
     alpha: 1,
+    fadeOutFrames: 15, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
   },
   mage: {
     enabled: true,
     sheetKey: 'ui_spritesheet_mage_attack_animation',
     jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.json',
-    scale: 2.26,
-    offset: { x: 10, y: 10 },
+    scale: 2.25,
+    offset: { x: 10, y: 9 },
     fps: 60,
     alpha: 1,
+    fadeOutFrames: 15, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
   },
 });
 
@@ -1529,7 +1532,11 @@ export default class BattleScene extends UIPanel {
   _attackTuning(portrait, cfg) {
     if (!this._attackAnimTuning) this._attackAnimTuning = {};
     if (!this._attackAnimTuning[portrait]) {
-      this._attackAnimTuning[portrait] = { scale: cfg.scale, offset: { ...cfg.offset } };
+      this._attackAnimTuning[portrait] = {
+        scale: cfg.scale,
+        offset: { ...cfg.offset },
+        fadeOutFrames: cfg.fadeOutFrames || 0,
+      };
     }
     return this._attackAnimTuning[portrait];
   }
@@ -1562,7 +1569,8 @@ export default class BattleScene extends UIPanel {
     this._attackAnim = new SpriteSheetAnimation(
       cfg.sheetKey, cfg.jsonPath, this._assetManager,
       { anchorRect: rect, scale: tune.scale, offset: { ...tune.offset },
-        fps: cfg.fps, alpha: cfg.alpha, loop: debug, hold: debug }
+        fps: cfg.fps, alpha: cfg.alpha, fadeOutFrames: tune.fadeOutFrames,
+        loop: debug, hold: debug }
     );
   }
 
@@ -1592,10 +1600,12 @@ export default class BattleScene extends UIPanel {
       case 'ArrowDown':  tune.offset.y += moveStep; break;
       case '[': tune.scale = Math.max(0.05, tune.scale - scaleStep); break;
       case ']': tune.scale += scaleStep; break;
+      case '-': tune.fadeOutFrames = Math.max(0, tune.fadeOutFrames - 1); break;
+      case '=': tune.fadeOutFrames += 1; break;
       case ',': if (anim) anim.stepFrame(-1); break;
       case '.': if (anim) anim.stepFrame(1); break;
       case 'c': case 'C':
-        console.log(`[ATTACK_ANIMATIONS.${portrait}] scale: ${tune.scale.toFixed(2)}, offset: { x: ${Math.round(tune.offset.x)}, y: ${Math.round(tune.offset.y)} }`);
+        console.log(`[ATTACK_ANIMATIONS.${portrait}] scale: ${tune.scale.toFixed(2)}, offset: { x: ${Math.round(tune.offset.x)}, y: ${Math.round(tune.offset.y)} }, fadeOutFrames: ${tune.fadeOutFrames}`);
         break;
       default: handled = false;
     }
@@ -1603,6 +1613,7 @@ export default class BattleScene extends UIPanel {
       if (this._attackAnim) {
         this._attackAnim.setScale(tune.scale);
         this._attackAnim.setOffset(tune.offset.x, tune.offset.y);
+        this._attackAnim.setFadeOutFrames(tune.fadeOutFrames);
       }
       e.preventDefault();
     }
@@ -1619,8 +1630,9 @@ export default class BattleScene extends UIPanel {
     const lines = [
       `${portrait.toUpperCase()} ATTACK ANIM — debug`,
       `scale ${tune.scale.toFixed(2)}   offset { x:${Math.round(tune.offset.x)}, y:${Math.round(tune.offset.y)} }`,
+      `fadeOutFrames ${tune.fadeOutFrames}${info ? `   fade ${info.fadeAlpha.toFixed(2)}` : ''}`,
       info ? `frame ${info.frame + 1}/${info.frameCount}   ${info.paused ? 'PAUSED' : 'playing'}` : '(press J to summon)',
-      'J replay · P pause · arrows move · [ ] scale · , . frame · C log',
+      'J replay · P pause · arrows move · [ ] scale · - = fade · , . frame · C log',
     ];
     ctx.save();
     ctx.font = '20px monospace';

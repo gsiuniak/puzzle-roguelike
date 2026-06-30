@@ -78,6 +78,9 @@ export default class SpriteSheetAnimation {
    * @param {boolean} [opts.loop=false]  - repeat instead of completing (debug preview)
    * @param {boolean} [opts.hold=false]  - hold on the last frame instead of completing (never `done`)
    * @param {boolean} [opts.paused=false]- start paused (debug: step frames by hand)
+   * @param {number} [opts.fadeOutFrames=0] - over the LAST N frames, ramp opacity 1→0 so the
+   *   animation cross-fades into the portrait beneath it (smooths the hand-off, hides end-frame
+   *   artifacts). 0 = no fade. Continuous (time-based), not stepped.
    */
   constructor(sheetKey, jsonPath, assetManager, opts = {}) {
     this._sheetKey = sheetKey;
@@ -87,6 +90,7 @@ export default class SpriteSheetAnimation {
     this._offset = opts.offset ? { ...opts.offset } : { x: 0, y: 0 };
     this._fps = opts.fps ?? 18;
     this._alpha = opts.alpha ?? 1;
+    this._fadeOutFrames = Math.max(0, opts.fadeOutFrames || 0);
     this._loop = !!opts.loop;
     this._hold = !!opts.hold;
     this._paused = !!opts.paused;
@@ -126,6 +130,20 @@ export default class SpriteSheetAnimation {
   togglePause() { if (this._paused) this.play(); else this.pause(); }
   setScale(s) { this._scale = Math.max(0.05, s); }
   setOffset(x, y) { this._offset.x = x; this._offset.y = y; }
+  setFadeOutFrames(n) { this._fadeOutFrames = Math.max(0, n || 0); }
+
+  /**
+   * Opacity multiplier for the tail cross-fade: 1 until the last `fadeOutFrames`
+   * frames, then ramps linearly to 0 at the end (continuous, time-based). @private
+   */
+  _fadeAlpha() {
+    const n = this._frames ? this._frames.length : 0;
+    if (this._fadeOutFrames <= 0 || n <= 0) return 1;
+    const framePos = this._time * this._fps; // continuous position in [0, n)
+    const fadeStart = n - this._fadeOutFrames;
+    if (framePos <= fadeStart) return 1;
+    return Math.max(0, Math.min(1, 1 - (framePos - fadeStart) / this._fadeOutFrames));
+  }
   /** Jump to a frame and pause (clamped). */
   setFrame(i) {
     if (!this._frames || !this._frames.length) return;
@@ -143,6 +161,8 @@ export default class SpriteSheetAnimation {
       frame: this._currentIndex(),
       frameCount: this._frames ? this._frames.length : 0,
       paused: this._paused,
+      fadeOutFrames: this._fadeOutFrames,
+      fadeAlpha: this._fadeAlpha(),
     };
   }
 
@@ -174,7 +194,7 @@ export default class SpriteSheetAnimation {
     const dh = f.h * sy;
 
     ctx.save();
-    ctx.globalAlpha = (ctx.globalAlpha ?? 1) * this._alpha;
+    ctx.globalAlpha = (ctx.globalAlpha ?? 1) * this._alpha * this._fadeAlpha();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(sheet, f.x, f.y, f.w, f.h, dx, dy, dw, dh);
