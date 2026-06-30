@@ -305,6 +305,15 @@ export default class BattleController {
     this._skullDamageCount = 0;
 
     /**
+     * One-shot per-side "dealt DIRECT damage" flags (skill DAMAGE/CONSUME effects
+     * + skull damage — NOT incidental damage like reflect / relic echo / poison /
+     * bleed / passive reactors, which mark nothing). Set via _markDirectDamage();
+     * read-and-cleared each frame in getState(). Drives the attack-animation POC.
+     * @type {{player: boolean, enemy: boolean}}
+     */
+    this._directDamageBySide = { player: false, enemy: false };
+
+    /**
      * Pending skill resolve sound key. Set when a skill actually resolves
      * (not on button click). The scene reads and clears this each frame.
      * If the skill has no `sound` field, remains null (no error).
@@ -660,6 +669,10 @@ export default class BattleController {
     const skullDamageDealt = this._skullDamageCount > 0;
     this._skullDamageCount = 0;
 
+    // Capture + clear the one-shot direct-damage flags (drives the attack-anim POC).
+    const directDamageBySide = this._directDamageBySide;
+    this._directDamageBySide = { player: false, enemy: false };
+
     // Capture turn announcement and clear so scene spawns once per intro.
     const turnAnnouncement = this._turnAnnouncement;
     this._turnAnnouncement = null;
@@ -724,6 +737,7 @@ export default class BattleController {
       matchTextTriggers,
       shakeIntensity,
       skullDamageDealt,
+      directDamageBySide,
       turnAnnouncement,
       destroyedTiles,
       convertedTiles,
@@ -1145,6 +1159,7 @@ export default class BattleController {
       this.log.add(`Destroyed skulls deal ${r.actualDamage} damage to ${targetState.name}.`);
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
+      this._markDirectDamage(this.activeSide, r.actualDamage);
       this._dispatchDamageEvent(
         this.activeSide,
         this.activeSide === 'player' ? 'enemy' : 'player',
@@ -1534,6 +1549,7 @@ export default class BattleController {
       // Trigger screen shake scaled by damage % of target's max HP
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
+      this._markDirectDamage(this.activeSide, r.actualDamage);
       this._dispatchDamageEvent(
         this.activeSide,
         this.activeSide === 'player' ? 'enemy' : 'player',
@@ -2353,6 +2369,7 @@ export default class BattleController {
         const r = this._applyDamage(tgt, amount);
         this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
         this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
+        this._markDirectDamage(side, r.actualDamage);
         this._dispatchDamageEvent(side, side === 'player' ? 'enemy' : 'player', r);
         // LEECH (woven modifier): heal the caster for a fraction of the damage
         // dealt. `leech` is a 0..1 fraction attached to the damage payload by the
@@ -2647,6 +2664,7 @@ export default class BattleController {
           const r = this._applyDamage(tgt, amount);
           this.log.add(`${src.name} consumes ${units} ${cfg.resource || 'mana'}, dealing ${r.actualDamage} damage.`);
           this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
+          this._markDirectDamage(side, r.actualDamage);
           this._dispatchDamageEvent(side, side === 'player' ? 'enemy' : 'player', r);
         } else {
           this.log.add(`${src.name} has nothing to consume.`);
@@ -2840,6 +2858,19 @@ export default class BattleController {
   _emitFloatingStat(side, kind, amount) {
     if (!amount || amount <= 0) return;
     this._floatingStatEvents.push({ side, kind, amount: amount | 0 });
+  }
+
+  /**
+   * Mark that `side` dealt DIRECT damage this frame (a damaging spell, or skull
+   * damage) — i.e. the character's own attack, NOT incidental damage (reflect,
+   * relic echo, poison, bleed, passive reactors). One-shot, read-and-cleared in
+   * getState(); drives the attack-animation POC. No-op for amount <= 0 so a fully
+   * blocked hit doesn't count as a landed attack.
+   * @param {'player'|'enemy'} side — the attacker
+   * @param {number} amount — actual damage dealt
+   */
+  _markDirectDamage(side, amount) {
+    if (amount > 0 && this._directDamageBySide) this._directDamageBySide[side] = true;
   }
 
   /**

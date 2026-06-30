@@ -1076,18 +1076,21 @@ export default class BattleScene extends UIPanel {
     // Mana from matches is credited to the ACTIVE side, so the wisps fly to
     // that side's mana orbs. Skull/inert matches grant no mana → no stream.
     if (state.matchTextTriggers && state.matchTextTriggers.length > 0 && this._board) {
-      let skullMatchedByPlayer = false;
       for (const trigger of state.matchTextTriggers) {
         this._spawnMatchTextEffect(trigger);
         if (isMana(trigger.typeId)) {
           this._spawnManaStream(trigger, state.activeSide);
-        } else if (trigger.typeId === 'skull' && state.activeSide === 'player') {
-          skullMatchedByPlayer = true;
         }
       }
-      // POC: the player character's attack flash when they match skulls (per
-      // character — see ATTACK_ANIMATIONS). Once per resolution, even on cascades.
-      if (skullMatchedByPlayer) this._maybePlayAttackAnim();
+    }
+
+    // ── Character attack animation (POC) ──
+    // Play the player character's attack flash whenever the player deals DIRECT
+    // damage — a damaging spell or skull damage (NOT incidental damage like
+    // reflect / relic echo / poison / bleed). The spawn guard skips if it's
+    // already playing (no restart, no queue). See ATTACK_ANIMATIONS.
+    if (state.directDamageBySide && state.directDamageBySide.player) {
+      this._maybePlayAttackAnim();
     }
 
     // ── Play skull damage SFX ──
