@@ -529,6 +529,11 @@ export default class BattleScene extends UIPanel {
     const input = this._sceneManager._input;
     if (!input) return;
 
+    // Pre-warm the player character's attack animation (JSON + sheet decode/GPU
+    // upload) so its FIRST play in combat doesn't hitch — paid here during the
+    // scene fade-in instead of mid-fight. POC. See ATTACK_ANIMATIONS.
+    this._preloadAttackAnim();
+
     // ── Full-canvas background (covers letterbox/pillarbox bars) ──
     // Data-driven: enemy defs may specify a `background` asset key (passed
     // through userData by MapScene); fall back to the default battle backdrop.
@@ -1549,6 +1554,18 @@ export default class BattleScene extends UIPanel {
       };
     }
     return this._attackAnimTuning[portrait];
+  }
+
+  /**
+   * Pre-warm the current player character's attack animation so its first play
+   * doesn't hitch (decode + GPU-upload the big sheet + prefetch the JSON now,
+   * during the scene fade-in). No-op if there's no entry for the character. POC.
+   * @private
+   */
+  _preloadAttackAnim() {
+    const entry = this._currentAttackAnimConfig();
+    if (!entry) return;
+    SpriteSheetAnimation.preload(entry.cfg.sheetKey, entry.cfg.jsonPath, this._assetManager);
   }
 
   /**

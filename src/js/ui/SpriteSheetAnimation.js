@@ -64,7 +64,50 @@ function _loadFrames(jsonPath) {
   return p;
 }
 
+// Sheets that have already been GPU-warmed this session (by sheetKey), so a
+// repeat preload is a no-op.
+const _warmed = new Set();
+let _warmScratch = null;
+
+/**
+ * Force the browser to DECODE + GPU-UPLOAD a big sheet image once, so the first
+ * real frame draw doesn't hitch (the 5–10 MB packed sheets cost a noticeable
+ * upload on first use). Drawing the whole image once to a scratch canvas uploads
+ * the texture; img.decode() (if supported) does the decode off the main thread
+ * first so only the cheap upload runs synchronously.
+ */
+function _warmSheet(sheetKey, img) {
+  if (!img || _warmed.has(sheetKey)) return;
+  const draw = () => {
+    try {
+      if (!_warmScratch) _warmScratch = document.createElement('canvas');
+      _warmScratch.width = 16;
+      _warmScratch.height = 16;
+      _warmScratch.getContext('2d').drawImage(img, 0, 0, img.width, img.height, 0, 0, 16, 16);
+      _warmed.add(sheetKey);
+    } catch (e) { /* image not ready yet — leave unwarmed, retry next preload */ }
+  };
+  if (typeof img.decode === 'function') img.decode().then(draw).catch(draw);
+  else draw();
+}
+
 export default class SpriteSheetAnimation {
+  /**
+   * Pre-warm an animation so its FIRST play is smooth: prefetch the JSON frame
+   * map (one-time) and decode + GPU-upload the packed sheet bitmap up front.
+   * Call this ahead of time (e.g. on battle enter) so the decode/upload cost is
+   * paid during a scene transition instead of mid-combat. Safe to call repeatedly
+   * (each sheet warms once). No-op until the sheet image has loaded.
+   * @param {string} sheetKey
+   * @param {string} jsonPath
+   * @param {import('../engine/AssetManager.js').default} assetManager
+   */
+  static preload(sheetKey, jsonPath, assetManager) {
+    _loadFrames(jsonPath);
+    const img = assetManager ? assetManager.get(sheetKey) : null;
+    _warmSheet(sheetKey, img);
+  }
+
   /**
    * @param {string} sheetKey    - AssetManager key of the FULL packed sheet image
    * @param {string} jsonPath    - path to the sheet's JSON sidecar (page-relative)
