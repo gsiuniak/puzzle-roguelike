@@ -117,10 +117,10 @@ export const TAG_VALUE_TABLES = Object.freeze({
   barrier: { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 12: 1.5 },
   heal:   { 4: 16, 5: 20, 6: 20, 7: 15, 8: 11, 9: 8, 10: 5, 11: 3, 12: 2 },
   // `gain N mana` of a color.
-  gain:   { 3: 25, 4: 25, 5: 20, 6: 14, 7: 9, 8: 7 },
+  gain:   { 4: 25, 6: 25, 6: 20, 7: 14, 8: 9, 9: 7 },
   // `drain N mana` from the opponent (drains EVERY color when un-elemented,
   // so the table stays modest).
-  drain:  { 2: 0, 3: 40, 4: 32, 5: 12, 6: 6 },
+  drain:  { 2: 0, 4: 40, 5: 32, 6: 12, 7: 6 },
   // `gain N attack` — permanent for the battle, so the rolls are small.
   attack: { 1: 53, 2: 37, 3: 9, 4: 1 },
   // `gain N magic` — counterpart to attack, same small permanent-stat rolls.
@@ -129,11 +129,11 @@ export const TAG_VALUE_TABLES = Object.freeze({
   // ── New mechanic magnitudes ──
   // `transmute N mana` — how much of your OTHER mana is converted into the
   // destination color (a battery for next turn — see emitTransmute).
-  transmute: { 2: 20, 3: 30, 4: 22, 5: 14, 6: 9, 7: 5 },
+  transmute: { 5: 20, 6: 30, 7: 22, 8: 14, 8: 9, 10: 5 },
   // `consume`: the DIVISOR — consume N units of a pool (leftover mana / armor /
   // barrier) per 1 damage. 2 (the cap = 1/2 damage per mana) is the lucky roll;
   // 3/4 are weaker. No stat scaling — the payoff is hoarding a big pool. See decision #40.
-  consume:   { 2: 30, 3: 40, 4: 30 },
+  consume:   { 1: 3, 2: 20, 3: 60 },
   // `leech`: lifesteal PERCENT of damage dealt (divided by 100 at synthesis).
   leech:     { 25: 40, 33: 35, 50: 20, 66: 5 },
   // `lock N`: turns the targeted color stays locked (unmatchable + unmovable for

@@ -2,7 +2,7 @@
  * Act 1 enemy roster. Add new Act 1 enemies here.
  */
 import goblin from './goblin.js';
-import orc from './orc.js';
+// import orc from './orc.js';
 import goblinSapper from './goblinSapper.js';
 import acolyte from './acolyte.js';
 // import shadowWeaver from './shadowWeaver.js';
@@ -20,7 +20,7 @@ import lordMalakor from './lordMalakor.js';
 /** All Act 1 enemy definitions. */
 const ACT1_ENEMIES = [
   goblin,
-  orc,
+  // orc,
   goblinSapper,
   acolyte,
   // shadowWeaver,
@@ -38,7 +38,7 @@ const ACT1_ENEMIES = [
 
 export {
   goblin,
-  orc,
+  // orc,
   goblinSapper,
   acolyte,
   // shadowWeaver,

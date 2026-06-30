@@ -53,6 +53,16 @@ const HP_GROWTH_PER_VICTORY = 4;
 const ATTACK_GROWTH_AMOUNT = 1;
 const ATTACK_GROWTH_EVERY_N_VICTORIES = 2;
 
+// ── Damage-counter turn gating ───────────────────────────
+// When true, the accumulating combat-damage counter only shows for damage
+// DEALT BY the side whose turn it is (the active side's OUTGOING damage).
+// Damage the active side RECEIVES on its own turn — e.g. Reflect/thorns hitting
+// the attacker back, or Bleed/Poison ticks — gets no counter. So on the enemy's
+// turn, only the enemy's hit on the player shows a counter; the reflected hit
+// back at the enemy is suppressed. Set false to restore the old behavior where
+// every damage instance (both sides) spawns its own counter.
+const ONLY_SHOW_ACTIVE_TURN_DAMAGE = true;
+
 // ── Tunable layout constants ─────────────────────────────
 // Vertical position of the accumulating damage counter as a fraction of the
 // board height (0 = top edge, 0.5 = center). Parked near the top of the grid.
@@ -1108,8 +1118,13 @@ export default class BattleScene extends UIPanel {
     // / poison (green) still float as independent text, stacked when concurrent.
     if (state.floatingStatEvents && state.floatingStatEvents.length > 0) {
       const stackBySide = { player: 0, enemy: 0 };
+      // Gate counters to the active turn-taker's OUTGOING damage when enabled:
+      // suppress damage the active side RECEIVES on its own turn (reflect, etc).
+      // Only gate once we know whose turn it is — fall back to showing all.
+      const restrictToActiveTurn = ONLY_SHOW_ACTIVE_TURN_DAMAGE && !!state.activeSide;
       for (const ev of state.floatingStatEvents) {
         if (ev.kind === 'damage') {
+          if (restrictToActiveTurn && ev.side === state.activeSide) continue;
           const receiver = ev.side === 'player' ? state.playerState : state.enemyState;
           this._addDamageToCounter(ev.side, ev.amount, receiver ? receiver.maxHp : 0);
         } else {
