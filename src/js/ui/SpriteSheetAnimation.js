@@ -23,22 +23,38 @@
 // per sheet regardless of how many times the animation plays.
 const _frameCache = new Map();
 
+/** Numeric suffix of a sprite name (e.g. "frame_00007_" → 7), or null. */
+function _nameOrder(name) {
+  const m = String(name).match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 function _loadFrames(jsonPath) {
   if (_frameCache.has(jsonPath)) return _frameCache.get(jsonPath);
   const p = fetch(jsonPath)
     .then((r) => r.json())
     .then((data) => {
       const sprites = (data && data.sprites) || {};
-      return Object.values(sprites)
-        .map((f) => ({
+      // Play in FRAME-NAME order (frame_00001_, frame_00002_, …) — the name's
+      // numeric suffix is the true timeline order. Do NOT trust the JSON `index`
+      // field: some packers set it to bin-PACKING order, which scrambles the
+      // animation (e.g. frame_00043_ packed as index 0). Fall back to `index`
+      // only for sprite names that carry no number.
+      return Object.entries(sprites)
+        .map(([name, f]) => ({
           x: f.x, y: f.y, w: f.w, h: f.h,
+          order: _nameOrder(name),
           index: f.index ?? 0,
           trimX: f.trim_x ?? 0,
           trimY: f.trim_y ?? 0,
           sourceW: f.source_w || f.w,
           sourceH: f.source_h || f.h,
         }))
-        .sort((a, b) => a.index - b.index);
+        .sort((a, b) => {
+          const ka = a.order != null ? a.order : a.index;
+          const kb = b.order != null ? b.order : b.index;
+          return ka - kb;
+        });
     })
     .catch((err) => {
       console.warn(`SpriteSheetAnimation: failed to load frames "${jsonPath}":`, err);

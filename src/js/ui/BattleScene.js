@@ -46,13 +46,13 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 // replays AND feed the real skull-match trigger, so what you dial in is what you get.
 const WARRIOR_ATTACK_ANIM = Object.freeze({
   enabled: true,
-  debug: false, // true, // ← live tuner (see key map above); set false for the plain one-shot
+  debug:  false, // ← live tuner (see key map above); set false for the plain one-shot
   sheetKey: 'ui_spritesheet_warrior_attack_animation',
   jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.json',
   characterPortrait: 'warrior', // only plays for this player character (cd.portrait)
-  scale: 2.4,
-  offset: { x: 10, y: 12 },
-  fps: 30,
+  scale: 2.17,
+  offset: { x: 1, y: 3 },
+  fps: 60,
   alpha: 1,
 });
 
@@ -1533,8 +1533,8 @@ export default class BattleScene extends UIPanel {
     if (this._warriorAnimScale == null) this._warriorAnimScale = cfg.scale;
     if (this._warriorAnimOffset == null) this._warriorAnimOffset = { ...cfg.offset };
 
-    const moveStep = e.shiftKey ? 10 : 2;
-    const scaleStep = e.shiftKey ? 0.2 : 0.05;
+    const moveStep = e.shiftKey ? 10 : 1;
+    const scaleStep = e.shiftKey ? 0.2 : 0.01;
     const anim = this._warriorAttackAnim;
     let handled = true;
     switch (e.key) {
