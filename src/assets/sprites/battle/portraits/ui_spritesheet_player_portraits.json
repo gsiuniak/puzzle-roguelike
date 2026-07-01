@@ -1,42 +1,42 @@
 {
   "meta": {
-    "sheet_w": 736,
-    "sheet_h": 742,
+    "sheet_w": 1016,
+    "sheet_h": 1016,
     "sprite_count": 3,
     "mode": "bin_pack",
     "padding": 4
   },
   "sprites": {
-    "portrait_witch_doctor": {
+    "mage_portrait_floating": {
       "x": 4,
-      "y": 4,
-      "w": 362,
-      "h": 365,
+      "y": 510,
+      "w": 476,
+      "h": 502,
       "index": 0,
-      "source_w": 362,
-      "source_h": 365,
+      "source_w": 502,
+      "source_h": 502,
       "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_mage": {
-      "x": 370,
+    "witch_doctor_portrait_floating": {
+      "x": 510,
       "y": 4,
-      "w": 362,
-      "h": 365,
+      "w": 502,
+      "h": 501,
       "index": 1,
-      "source_w": 362,
-      "source_h": 365,
+      "source_w": 502,
+      "source_h": 502,
       "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_warrior": {
+    "warrior_portrait_floating": {
       "x": 4,
-      "y": 373,
-      "w": 362,
-      "h": 365,
+      "y": 4,
+      "w": 502,
+      "h": 502,
       "index": 2,
-      "source_w": 362,
-      "source_h": 365,
+      "source_w": 502,
+      "source_h": 502,
       "trim_x": 0,
       "trim_y": 0
     }

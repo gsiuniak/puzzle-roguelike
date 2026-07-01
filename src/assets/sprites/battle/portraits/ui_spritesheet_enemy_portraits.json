@@ -1,175 +1,142 @@
 {
   "meta": {
-    "sheet_w": 1388,
-    "sheet_h": 1395,
-    "sprite_count": 15,
+    "sheet_w": 2045,
+    "sheet_h": 2202,
+    "sprite_count": 12,
     "mode": "bin_pack",
     "padding": 4
   },
   "sprites": {
-    "portrait_thrall": {
-      "x": 692,
-      "y": 1048,
-      "w": 339,
-      "h": 342,
+    "orc_taskmaster_portrait_floating": {
+      "x": 512,
+      "y": 768,
+      "w": 504,
+      "h": 496,
       "index": 0,
-      "source_w": 345,
-      "source_h": 346,
+      "source_w": 804,
+      "source_h": 760,
       "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_sanguine_phoenix_egg": {
-      "x": 353,
+    "sanguine_phoenix_portrait_floating": {
+      "x": 4,
       "y": 4,
-      "w": 341,
-      "h": 344,
+      "w": 804,
+      "h": 760,
       "index": 1,
-      "source_w": 345,
-      "source_h": 346,
+      "source_w": 804,
+      "source_h": 760,
       "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_sanguine_phoenix": {
+    "sanguine_egg_portrait_floating": {
       "x": 4,
-      "y": 1048,
-      "w": 340,
-      "h": 343,
+      "y": 1774,
+      "w": 289,
+      "h": 424,
       "index": 2,
-      "source_w": 345,
-      "source_h": 346,
+      "source_w": 804,
+      "source_h": 760,
       "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_abomination": {
-      "x": 692,
-      "y": 354,
-      "w": 341,
-      "h": 342,
+    "chokeweed_sapper_portrait_floating": {
+      "x": 1020,
+      "y": 768,
+      "w": 500,
+      "h": 486,
       "index": 3,
-      "source_w": 345,
-      "source_h": 346,
-      "trim_x": 0,
-      "trim_y": 0
+      "source_w": 804,
+      "source_h": 760,
+      "trim_x": 4,
+      "trim_y": 7
     },
-    "portrait_malakor": {
-      "x": 4,
-      "y": 354,
-      "w": 340,
-      "h": 344,
+    "goblin_sapper_portrait_floating": {
+      "x": 507,
+      "y": 1271,
+      "w": 466,
+      "h": 499,
       "index": 4,
-      "source_w": 345,
-      "source_h": 346,
-      "trim_x": 1,
+      "source_w": 804,
+      "source_h": 760,
+      "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_goresnout_trackers": {
-      "x": 348,
-      "y": 1048,
-      "w": 340,
-      "h": 343,
+    "cyclops_portrait_floating": {
+      "x": 1524,
+      "y": 768,
+      "w": 504,
+      "h": 462,
       "index": 5,
-      "source_w": 345,
-      "source_h": 346,
+      "source_w": 804,
+      "source_h": 760,
       "trim_x": 0,
-      "trim_y": 0
+      "trim_y": 19
     },
-    "portrait_chokeweed": {
-      "x": 1037,
-      "y": 354,
-      "w": 341,
-      "h": 342,
+    "goblin_portrait_floating": {
+      "x": 977,
+      "y": 1271,
+      "w": 479,
+      "h": 474,
       "index": 6,
-      "source_w": 345,
-      "source_h": 346,
+      "source_w": 804,
+      "source_h": 760,
       "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_stone_gargoyle": {
-      "x": 348,
-      "y": 354,
-      "w": 340,
-      "h": 344,
+    "malakor_portrait_floating": {
+      "x": 4,
+      "y": 768,
+      "w": 504,
+      "h": 499,
       "index": 7,
-      "source_w": 345,
-      "source_h": 346,
+      "source_w": 804,
+      "source_h": 760,
       "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_orc_taskmaster": {
-      "x": 1035,
-      "y": 1048,
-      "w": 337,
-      "h": 341,
+    "goresnout_trackers_portrait_floating": {
+      "x": 1537,
+      "y": 4,
+      "w": 504,
+      "h": 503,
       "index": 8,
-      "source_w": 345,
-      "source_h": 346,
-      "trim_x": 1,
-      "trim_y": 1
+      "source_w": 804,
+      "source_h": 760,
+      "trim_x": 0,
+      "trim_y": 0
     },
-    "portrait_shadow_weaver": {
-      "x": 1043,
-      "y": 4,
-      "w": 341,
-      "h": 343,
+    "acolyte_portrait_floating": {
+      "x": 4,
+      "y": 1271,
+      "w": 499,
+      "h": 499,
       "index": 9,
-      "source_w": 345,
-      "source_h": 346,
+      "source_w": 804,
+      "source_h": 760,
       "trim_x": 0,
       "trim_y": 0
     },
-    "portrait_goblin_sapper": {
-      "x": 4,
-      "y": 702,
-      "w": 341,
-      "h": 342,
+    "abomination_portrait_floating": {
+      "x": 812,
+      "y": 4,
+      "w": 721,
+      "h": 694,
       "index": 10,
-      "source_w": 345,
-      "source_h": 346,
+      "source_w": 804,
+      "source_h": 760,
       "trim_x": 0,
-      "trim_y": 0
+      "trim_y": 7
     },
-    "portrait_acolyte": {
-      "x": 349,
-      "y": 702,
-      "w": 341,
-      "h": 341,
+    "thrall_portrait_floating": {
+      "x": 1460,
+      "y": 1271,
+      "w": 330,
+      "h": 383,
       "index": 11,
-      "source_w": 345,
-      "source_h": 346,
-      "trim_x": 0,
-      "trim_y": 1
-    },
-    "portrait_orc": {
-      "x": 698,
-      "y": 4,
-      "w": 341,
-      "h": 344,
-      "index": 12,
-      "source_w": 345,
-      "source_h": 346,
-      "trim_x": 0,
-      "trim_y": 0
-    },
-    "portrait_cyclops": {
-      "x": 694,
-      "y": 702,
-      "w": 340,
-      "h": 340,
-      "index": 13,
-      "source_w": 345,
-      "source_h": 346,
-      "trim_x": 1,
-      "trim_y": 1
-    },
-    "portrait_goblin": {
-      "x": 4,
-      "y": 4,
-      "w": 345,
-      "h": 346,
-      "index": 14,
-      "source_w": 345,
-      "source_h": 346,
-      "trim_x": 0,
+      "source_w": 804,
+      "source_h": 760,
+      "trim_x": 21,
       "trim_y": 0
     }
   }
