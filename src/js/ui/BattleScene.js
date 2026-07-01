@@ -133,6 +133,17 @@ const MAIN_ROW_GAP = -40;
 // frame can stretch to a taller square.
 const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 
+// ── Background readability scrim ──────────────────────────
+// A 3-segment full-canvas darkening drawn over the battle background (in
+// renderBackground, so it sits BEHIND the UI but covers the letterbox bars):
+//   left screen edge → player panel : gradient, transparent → SCRIM_ALPHA
+//   player panel → enemy panel       : flat SCRIM_ALPHA (the play area)
+//   enemy panel → right screen edge  : gradient, SCRIM_ALPHA → transparent
+// This darkens the central play area for contrast while letting the
+// decorative side art at the screen edges show through. Tunable alpha.
+const SCRIM_ALPHA = 0.6;
+const SCRIM_COLOR = '0, 0, 0';   // rgb triplet; alpha applied per stop
+
 // Width of each side (player/enemy) column. Reduce to bring the
 // visible panel art closer to the board frame; the side panel
 // images include some transparent inner margin so the column rect
@@ -1919,6 +1930,38 @@ export default class BattleScene extends UIPanel {
   }
 
   // ── Render (override) ───────────────────────────────
+
+  /**
+   * Paint a full-canvas readability scrim over the battle background BEFORE
+   * the UI is drawn (called by SceneManager after clear(), before the viewport
+   * clip). Three joined segments darken the central play area while fading to
+   * transparent toward the screen edges so the decorative side art shows
+   * through. Boundaries track the player/enemy character panels. See
+   * SCRIM_ALPHA / SCRIM_COLOR.
+   */
+  renderBackground(ctx) {
+    const app = this._sceneManager && this._sceneManager._app;
+    if (!app || typeof app.designXToCanvasFraction !== 'function') return;
+    if (!this._playerPane || !this._enemyPane) return;
+
+    const left = this._playerPane.rect;
+    const right = this._enemyPane.rect;
+    if (!left || !right || right.w <= 0) return;
+
+    // Panel edges → 0..1 fractions of the physical canvas width.
+    const f1 = app.designXToCanvasFraction(left.x);          // player panel start
+    const f2 = app.designXToCanvasFraction(right.x + right.w); // enemy panel end
+    if (!(f2 > f1)) return;
+
+    const dark = `rgba(${SCRIM_COLOR}, ${SCRIM_ALPHA})`;
+    const clear = `rgba(${SCRIM_COLOR}, 0)`;
+    app.fillFullCanvasHGradient([
+      { at: 0,  color: clear },   // left screen edge: transparent
+      { at: f1, color: dark },    // ramp to full over the empty left band
+      { at: f2, color: dark },    // flat across the play area
+      { at: 1,  color: clear },   // fade back out to the right screen edge
+    ]);
+  }
 
   /**
    * Paint full-canvas overlays that sit on top of the battle UI and must

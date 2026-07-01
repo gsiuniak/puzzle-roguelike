@@ -23,6 +23,7 @@ import BossIntroScene from './scenes/BossIntroScene.js';
 import SkillWeaveScene from './scenes/SkillWeaveScene.js';
 import AudioManager from './audio/AudioManager.js';
 import SoundConfig from './audio/SoundConfig.js';
+import SpriteSheetAnimation from './ui/SpriteSheetAnimation.js';
 
 // ── Debug flags ─────────────────────────────────────────
 const DEBUG_UI_LAYOUT = false;
@@ -323,6 +324,21 @@ async function init() {
     console.log(`Assets loaded: ${loadedCount} / ${assetManager.count}`);
     // Spell icons composite from the weave_base / weave_generic sheets at render
     // time (icons/spellIcons.js) — no boot-time glyph registration needed.
+
+    // Pre-warm the per-character attack-animation sheets NOW (once the sheet PNGs
+    // are loaded), instead of on battle-enter. This decodes + GPU-uploads the big
+    // packed sheets and prefetches their JSON frame maps up front, so the first
+    // attack flash never hitches mid-combat for ANY character. Idempotent per
+    // sheet (SpriteSheetAnimation.preload guards on a warmed set + a frame cache),
+    // so BattleScene._preloadAttackAnim() becomes a no-op. Derived from the
+    // `*_attack_animation` entries in SPRITESHEET_MAP so adding a character's
+    // sheet there auto-warms it. Removing the POC: delete those entries (this
+    // loop then warms nothing) — see SpriteSheetAnimation.js / BattleScene.
+    for (const [key, paths] of Object.entries(SPRITESHEET_MAP)) {
+      if (key.endsWith('_attack_animation')) {
+        SpriteSheetAnimation.preload(key, paths.json, assetManager);
+      }
+    }
   });
 
   // AudioManager initialization runs in parallel (Howler lazily streams audio).

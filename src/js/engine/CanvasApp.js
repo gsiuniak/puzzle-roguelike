@@ -262,6 +262,19 @@ export default class CanvasApp {
   }
 
   /**
+   * Convert a design-space X coordinate into a 0..1 fraction of the physical
+   * canvas width (including the letterbox/pillarbox bars). Companion to
+   * `fillFullCanvasHGradient`, whose stops are expressed in that same fraction,
+   * so a scene can align a full-canvas gradient to design-space UI positions.
+   * @param {number} designX
+   * @returns {number} 0..1 fraction of physical canvas width
+   */
+  designXToCanvasFraction(designX) {
+    const w = this._cssWidth || 1;
+    return (this._offsetX + designX * (this._scale || 1)) / w;
+  }
+
+  /**
    * Convert a CSS-pixel coordinate (e.g. from a pointer event relative to
    * the canvas top-left) into design-space coordinates.
    * @param {number} cssX

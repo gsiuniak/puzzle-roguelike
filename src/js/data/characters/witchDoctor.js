@@ -29,7 +29,7 @@ const witchDoctor = {
   },
 
   skills: ['summon_dead', 'oungan'],
-  relics: ['poison_vial'],
+  relics: [],
 
   /**
    * Per-victory growth (AUTO-applied; stat picking is disabled — decision #36).
