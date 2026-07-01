@@ -330,14 +330,14 @@ export default class CharacterInfoPane extends UIPanel {
       : { top: INFO_PAD_TOP, left: INFO_PAD_PORTRAIT_SIDE, right: INFO_PAD_OUTER };
     this._infoCol = info;
 
-    // Name — LEFT-aligned in the info column on both panes; wraps onto a
-    // second line when wider than NAME_MAX_WIDTH.
+    // Name — CENTERED in the info column on both panes; wraps onto a second
+    // line when wider than NAME_MAX_WIDTH.
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: NAME_FONT_SIZE,
       color: '#d0d0c4',
       bold: true,
-      alignH: 'left',
+      alignH: 'center',
       alignV: 'top',
       maxWidth: NAME_MAX_WIDTH,
       lineHeight: NAME_LINE_HEIGHT,
@@ -345,12 +345,12 @@ export default class CharacterInfoPane extends UIPanel {
     });
     info.addChild(this._nameText);
 
-    // Stats row (attack | magic) — left-aligned under the name, the two
-    // groups sitting close together (fixed group widths — see STAT_GROUP_*).
+    // Stats row (attack | magic) — CENTERED under the name, the two groups
+    // sitting close together (fixed group widths — see STAT_GROUP_*).
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
     statsRow.alignItems = 'center';
-    statsRow.justifyContent = 'start';
+    statsRow.justifyContent = 'center';
     statsRow.gap = STATS_ROW_GAP;
     statsRow.height = STATS_HEIGHT;
     statsRow.padding = { left: 10 };
