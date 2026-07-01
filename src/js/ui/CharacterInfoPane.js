@@ -559,7 +559,29 @@ export default class CharacterInfoPane extends UIPanel {
     r.x = this._side === 'enemy' ? slot.x + slot.w - r.w : slot.x;
     r.y = slot.y - PORTRAIT_OVERHANG.top;
     r.h = slot.h + PORTRAIT_OVERHANG.top;
+
+    // External opacity override (attack-animation hand-off: the portrait hides
+    // while the flash plays and fades back in with its tail). Rect is still
+    // computed above so getPortraitRect()/overlays keep working while hidden.
+    const alpha = this._portraitAlpha != null ? this._portraitAlpha : 1;
+    if (alpha <= 0) return;
+    if (alpha >= 1) {
+      this._portrait.renderSelf(ctx);
+      return;
+    }
+    ctx.save();
+    ctx.globalAlpha = (ctx.globalAlpha ?? 1) * alpha;
     this._portrait.renderSelf(ctx);
+    ctx.restore();
+  }
+
+  /**
+   * Set the portrait's opacity multiplier (0..1, default 1). Used by
+   * BattleScene to hide the portrait while an attack animation plays over it
+   * and fade it back in as the animation's tail cross-fades out.
+   */
+  setPortraitAlpha(alpha) {
+    this._portraitAlpha = Math.max(0, Math.min(1, alpha == null ? 1 : alpha));
   }
 
   /**

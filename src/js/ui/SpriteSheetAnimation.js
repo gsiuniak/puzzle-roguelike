@@ -64,8 +64,39 @@ function _loadFrames(jsonPath) {
   return p;
 }
 
+// Pinned decoded copies of each sheet (sheetKey → ImageBitmap). An
+// HTMLImageElement's decoded pixels live in the browser's image cache and can
+// be EVICTED under memory pressure — the next drawImage then synchronously
+// re-decodes the whole multi-MB PNG (a mid-battle hitch). createImageBitmap
+// holds the decoded pixels for the bitmap's lifetime, so pinning one at
+// preload guarantees battle-time draws never re-decode. render() prefers the
+// pinned bitmap over the AssetManager image.
+const _bitmaps = new Map();
+const _pinning = new Set();
+
+function _pinBitmap(sheetKey, img) {
+  if (_bitmaps.has(sheetKey) || _pinning.has(sheetKey)) return;
+  // Not loaded yet → skip; a later preload call (BattleScene.onEnter) retries.
+  if (!img || img.complete === false || !img.width) return;
+  if (typeof createImageBitmap !== 'function') {
+    _warmSheet(sheetKey, img); // legacy fallback: decode + GPU warm draw
+    return;
+  }
+  _pinning.add(sheetKey);
+  createImageBitmap(img)
+    .then((bmp) => {
+      _bitmaps.set(sheetKey, bmp);
+      _pinning.delete(sheetKey);
+    })
+    .catch(() => {
+      // Per-sheet failure (rare) — fall back to the warm-draw path for it.
+      _pinning.delete(sheetKey);
+      _warmSheet(sheetKey, img);
+    });
+}
+
 // Sheets that have already been GPU-warmed this session (by sheetKey), so a
-// repeat preload is a no-op.
+// repeat preload is a no-op. Fallback path only (no createImageBitmap).
 const _warmed = new Set();
 let _warmScratch = null;
 
@@ -105,7 +136,7 @@ export default class SpriteSheetAnimation {
   static preload(sheetKey, jsonPath, assetManager) {
     _loadFrames(jsonPath);
     const img = assetManager ? assetManager.get(sheetKey) : null;
-    _warmSheet(sheetKey, img);
+    _pinBitmap(sheetKey, img);
   }
 
   /**
@@ -141,6 +172,10 @@ export default class SpriteSheetAnimation {
     this._frames = null;
     this._time = 0;       // seconds since start
     this.done = false;
+
+    // Safety net: if preload was never called for this sheet, pin it now
+    // (no-op when already pinned/pinning).
+    _pinBitmap(sheetKey, assetManager ? assetManager.get(sheetKey) : null);
 
     _loadFrames(jsonPath).then((frames) => {
       this._frames = frames;
@@ -187,6 +222,16 @@ export default class SpriteSheetAnimation {
     if (framePos <= fadeStart) return 1;
     return Math.max(0, Math.min(1, 1 - (framePos - fadeStart) / this._fadeOutFrames));
   }
+  /**
+   * Public read of the tail cross-fade opacity (1 while fully playing, ramping
+   * to 0 over the last `fadeOutFrames`, 0 once done). Hosts use the INVERSE to
+   * fade the portrait beneath back in at the same rate.
+   */
+  get fadeAlpha() {
+    if (this.done) return 0;
+    return this._fadeAlpha();
+  }
+
   /** Jump to a frame and pause (clamped). */
   setFrame(i) {
     if (!this._frames || !this._frames.length) return;
@@ -211,7 +256,9 @@ export default class SpriteSheetAnimation {
 
   render(ctx) {
     if (this.done || !this._frames || this._frames.length === 0) return;
-    const sheet = this._am ? this._am.get(this._sheetKey) : null;
+    // Prefer the pinned decoded bitmap (never re-decodes); fall back to the
+    // AssetManager image if pinning isn't done/supported.
+    const sheet = _bitmaps.get(this._sheetKey) || (this._am ? this._am.get(this._sheetKey) : null);
     if (!sheet) return;
 
     const f = this._frames[this._currentIndex()];

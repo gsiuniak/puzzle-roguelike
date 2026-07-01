@@ -180,21 +180,29 @@ const SPRITESHEET_MAP = {
   // skull match (see SpriteSheetAnimation.js + BattleScene ATTACK_ANIMATIONS).
   // These entries only load the PNG so the full sheet is retrievable under the
   // sheet key; the animation reads the JSON itself (it needs the per-frame trim
-  // offsets the slicer drops). Easy to remove: delete these entries + their uses.
+  // offsets the slicer drops), so `slice: false` skips creating dozens of
+  // per-frame canvases nothing would ever read. Every registered sheet is
+  // downloaded, decoded AND pinned resident by the boot warm below — if a
+  // character's animation is ever disabled long-term, comment its entry out
+  // here too to save the download + pinned memory.
+  // Easy to remove: delete these entries + their uses.
   ui_spritesheet_warrior_attack_animation: {
     image: 'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.png',
     json:  'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.json',
     trim:  false,
+    slice: false,
   },
   ui_spritesheet_mage_attack_animation: {
     image: 'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.png',
     json:  'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.json',
     trim:  false,
+    slice: false,
   },
   ui_spritesheet_witch_doctor_attack_animation: {
     image: 'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.png',
     json:  'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.json',
     trim:  false,
+    slice: false,
   },
 };
 
@@ -265,7 +273,7 @@ async function init() {
     assetManager.add(key, path);
   }
   for (const [key, paths] of Object.entries(SPRITESHEET_MAP)) {
-    assetManager.addSpriteSheet(key, paths.image, paths.json, { trim: paths.trim });
+    assetManager.addSpriteSheet(key, paths.image, paths.json, { trim: paths.trim, slice: paths.slice });
   }
   for (const [aliasKey, targetKey] of Object.entries(ASSET_ALIASES)) {
     assetManager.alias(aliasKey, targetKey);
@@ -345,14 +353,16 @@ async function init() {
     // time (icons/spellIcons.js) — no boot-time glyph registration needed.
 
     // Pre-warm the per-character attack-animation sheets NOW (once the sheet PNGs
-    // are loaded), instead of on battle-enter. This decodes + GPU-uploads the big
-    // packed sheets and prefetches their JSON frame maps up front, so the first
-    // attack flash never hitches mid-combat for ANY character. Idempotent per
-    // sheet (SpriteSheetAnimation.preload guards on a warmed set + a frame cache),
-    // so BattleScene._preloadAttackAnim() becomes a no-op. Derived from the
-    // `*_attack_animation` entries in SPRITESHEET_MAP so adding a character's
-    // sheet there auto-warms it. Removing the POC: delete those entries (this
-    // loop then warms nothing) — see SpriteSheetAnimation.js / BattleScene.
+    // are loaded), instead of on battle-enter. This PINS a decoded ImageBitmap of
+    // each big packed sheet (immune to browser image-cache eviction — no mid-battle
+    // re-decode ever) and prefetches their JSON frame maps up front, so the first
+    // attack flash never hitches mid-combat for ANY registered character.
+    // Idempotent per sheet (SpriteSheetAnimation.preload guards on the bitmap
+    // cache + a frame cache), so BattleScene._preloadAttackAnim() becomes a
+    // retry-if-missed no-op. Derived from the `*_attack_animation` entries in
+    // SPRITESHEET_MAP so adding a character's sheet there auto-warms it.
+    // Removing the POC: delete those entries (this loop then warms nothing) —
+    // see SpriteSheetAnimation.js / BattleScene.
     for (const [key, paths] of Object.entries(SPRITESHEET_MAP)) {
       if (key.endsWith('_attack_animation')) {
         SpriteSheetAnimation.preload(key, paths.json, assetManager);

@@ -52,34 +52,34 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 const ATTACK_ANIM_DEBUG = false; // live tuner for the player's character; false = plain one-shot
 const ATTACK_ANIMATIONS = Object.freeze({
   warrior: {
-    enabled: false, // disabled for now — awaiting new attack animations
+    enabled: true, // disabled for now — awaiting new attack animations
     sheetKey: 'ui_spritesheet_warrior_attack_animation',
     jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.json',
-    scale: 2.17,
-    offset: { x: 1, y: 3 },
+    scale: 1.48,
+    offset: { x: 225, y: -55 },
     fps: 60,
     alpha: 1,
-    fadeOutFrames: 15, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
+    fadeOutFrames: 0, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
   },
   mage: {
-    enabled: false, // disabled for now — awaiting new attack animations
+    enabled: true,
     sheetKey: 'ui_spritesheet_mage_attack_animation',
     jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.json',
-    scale: 2.25,
-    offset: { x: 10, y: 9 },
+    scale: 1.48,
+    offset: { x: 225, y: -55 },
     fps: 60,
     alpha: 1,
-    fadeOutFrames: 15, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
+    fadeOutFrames: 0, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
   },
   witch_doctor: {
-    enabled: false, // disabled for now — awaiting new attack animations
+    enabled: true, // disabled for now — awaiting new attack animations
     sheetKey: 'ui_spritesheet_witch_doctor_attack_animation',
     jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.json',
-    scale: 4.03,
-    offset: { x: 74, y: 10 },
+    scale: 1.48,
+    offset: { x: 225, y: -55 },
     fps: 60,
     alpha: 1,
-    fadeOutFrames: 5, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
+    fadeOutFrames: 0, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
   },
 });
 
@@ -1968,6 +1968,12 @@ export default class BattleScene extends UIPanel {
     if (this._attackAnim) {
       this._attackAnim.update(dt);
       if (this._attackAnim.done) this._attackAnim = null;
+    }
+    // Portrait hand-off: while the flash plays the portrait is hidden (the
+    // animation replaces it), then fades back in as the INVERSE of the anim's
+    // fadeOutFrames tail — the two cross-fade at the same rate. No anim → 1.
+    if (this._playerPane && this._playerPane.setPortraitAlpha) {
+      this._playerPane.setPortraitAlpha(this._attackAnim ? 1 - this._attackAnim.fadeAlpha : 1);
     }
 
     // Update particle effects, remove completed ones

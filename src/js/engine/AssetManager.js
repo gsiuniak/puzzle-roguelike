@@ -89,6 +89,12 @@ export default class AssetManager {
    *   whose glyphs sit at inconsistent sizes/offsets inside uniform cells, so
    *   every icon ends up tightly framed (consistent visible size + centered).
    *   Leave false for sheets where the cell padding is meaningful.
+   * @param {boolean} [opts.slice=true] - when false, NO per-sprite canvases are
+   *   created; only the full sheet is registered under `sheetKey`. Use for
+   *   sheets consumed whole (e.g. the attack-animation sheets, which
+   *   SpriteSheetAnimation blits directly from the full image because the
+   *   slicer drops the per-frame trim offsets) — slicing those would allocate
+   *   dozens of large canvases that are never read.
    */
   addSpriteSheet(sheetKey, imagePath, jsonPath, opts = {}) {
     if (this._sheets.has(sheetKey)) {
@@ -96,7 +102,7 @@ export default class AssetManager {
     } else {
       this._count++;
     }
-    this._sheets.set(sheetKey, { imagePath, jsonPath, trim: !!opts.trim });
+    this._sheets.set(sheetKey, { imagePath, jsonPath, trim: !!opts.trim, slice: opts.slice !== false });
   }
 
   /**
@@ -193,6 +199,13 @@ export default class AssetManager {
 
       // Make the full sheet retrievable under its own key too.
       this._assets.set(sheetKey, { path: entry.imagePath, image: img });
+
+      // slice:false sheets are consumed whole (SpriteSheetAnimation) — skip
+      // allocating a canvas per sprite that nothing would ever read.
+      if (entry.slice === false) {
+        console.log(`AssetManager: loaded spritesheet "${sheetKey}" (unsliced)`);
+        return;
+      }
 
       const sprites = (data && data.sprites) || {};
       let sliced = 0;

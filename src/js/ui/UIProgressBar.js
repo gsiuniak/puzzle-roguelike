@@ -51,6 +51,20 @@ export default class UIProgressBar extends UIElement {
     this._prevValue = null;    // last-seen `value`, to detect fresh drops
     this._ghostHold = 0;       // ms remaining to hold before the white bar drains
     /**
+     * "Gained health" heal bar — the opposite of the ghost. When `value` rises,
+     * the normal fill HOLDS at the pre-heal value while a light-green slice
+     * FILLS UP from there toward the new HP; once it catches up it holds
+     * briefly, then fades out to reveal the normal fill beneath (the green
+     * "becomes" real health). Successive heals extend the same slice. Damage
+     * cancels it (the ghost takes over). Purely cosmetic.
+     */
+    this.healColor = '#8fe88a';
+    this.healAlpha = 0.9;
+    this._healBase = null;     // pre-heal value the normal fill holds at; null = idle
+    this._healFront = null;    // green slice's leading edge (grows toward `value`)
+    this._healHold = 0;        // ms remaining to hold once caught up, before fading
+    this._healFade = null;     // ms remaining in the fade-out; null = not fading
+    /**
      * Armor overlay (semi-transparent blue) drawn OVER the fill, hugging the
      * right edge of current health: it first fills the empty-health region
      * (forward), then — if armor exceeds the missing health — extends BACKWARD
@@ -103,11 +117,26 @@ export default class UIProgressBar extends UIElement {
     }
 
     // Fresh damage this frame → keep the white slice where it is and (re)arm
-    // the hold so successive combo hits keep accumulating into it.
+    // the hold so successive combo hits keep accumulating into it. Damage also
+    // cancels any in-flight heal fill (the ghost takes over).
     if (v < this._prevValue - UIProgressBar.GHOST_EPS) {
       this._ghostHold = UIProgressBar.GHOST_HOLD_MS;
+      this._resetHeal();
+    } else if (v > this._prevValue + UIProgressBar.GHOST_EPS) {
+      // Fresh heal → start the light-green fill-up from the pre-heal value.
+      // Mid-grow/hold heals extend the SAME slice (the front just keeps
+      // growing toward the new HP); a heal that lands mid-fade (or idle)
+      // starts a fresh slice covering only the new gain.
+      if (this._healBase === null || this._healFade !== null) {
+        this._healBase = this._prevValue;
+        this._healFront = this._prevValue;
+      }
+      this._healFade = null;
+      this._healHold = 0;
     }
     this._prevValue = v;
+
+    this._updateHeal(dt, v);
 
     if (v >= this._ghostValue - UIProgressBar.GHOST_EPS) {
       // Caught up or healed — no trailing bar.
@@ -126,6 +155,38 @@ export default class UIProgressBar extends UIElement {
     this._ghostValue = Math.max(v, this._ghostValue - rate * dt);
   }
 
+  /**
+   * Drive the "gained health" heal bar: GROW the green front toward current
+   * HP at a bar-relative rate, HOLD once caught up, then FADE the green out
+   * to reveal the normal fill (drawn to full HP during the fade).
+   */
+  _updateHeal(dt, v) {
+    if (this._healBase === null) return;
+    if (this._healFade !== null) {
+      this._healFade -= dt;
+      if (this._healFade <= 0) this._resetHeal();
+      return;
+    }
+    if (this._healFront < v - UIProgressBar.GHOST_EPS) {
+      const span = this.maxValue > 0 ? this.maxValue : 100;
+      const rate = span / UIProgressBar.HEAL_GROW_MS; // HP units per ms
+      this._healFront = Math.min(v, this._healFront + rate * dt);
+      this._healHold = UIProgressBar.HEAL_HOLD_MS;
+      return;
+    }
+    this._healFront = v;
+    this._healHold -= dt;
+    if (this._healHold <= 0) this._healFade = UIProgressBar.HEAL_FADE_MS;
+  }
+
+  /** Clear the heal-fill animation state (back to idle). */
+  _resetHeal() {
+    this._healBase = null;
+    this._healFront = null;
+    this._healHold = 0;
+    this._healFade = null;
+  }
+
   /** Clamp a value to [0, maxValue]. */
   _clampToBar(v) {
     if (this.maxValue <= 0) return 0;
@@ -135,7 +196,13 @@ export default class UIProgressBar extends UIElement {
   renderSelf(ctx) {
     const r = this.rect;
     const cr = this.cornerRadius;
-    const ratio = this.maxValue > 0 ? Math.min(1, Math.max(0, this.value / this.maxValue)) : 0;
+    // While a heal is growing/holding, the normal fill HOLDS at the pre-heal
+    // value (the green slice covers the gain). During the fade — and when
+    // idle — it draws to the true HP.
+    const fillTo = (this._healBase !== null && this._healFade === null)
+      ? Math.min(this._clampToBar(this.value), this._clampToBar(this._healBase))
+      : this.value;
+    const ratio = this.maxValue > 0 ? Math.min(1, Math.max(0, fillTo / this.maxValue)) : 0;
 
     ctx.save();
 
@@ -188,6 +255,29 @@ export default class UIProgressBar extends UIElement {
         ctx.globalAlpha = this.ghostAlpha;
         ctx.fillStyle = this.ghostColor;
         ctx.fillRect(r.x + hp * pxPerUnit, r.y, (ghost - hp) * pxPerUnit, r.h);
+        ctx.restore();
+      }
+    }
+
+    // "Gained health" heal bar — the light-green slice between the pre-heal
+    // value and the animated front, drawn over the empty-health region as it
+    // fills up; during the fade it sits over the (now full) normal fill and
+    // its alpha ramps to 0. Driven by _updateHeal(dt). Sits under the shield
+    // overlays + border + label, like the ghost.
+    if (this._healBase !== null && this.maxValue > 0) {
+      const pxPerUnit = r.w / this.maxValue;
+      const base = this._clampToBar(this._healBase);
+      const front = this._clampToBar(this._healFront);
+      if (front > base + UIProgressBar.GHOST_EPS) {
+        const fadeT = this._healFade !== null
+          ? Math.max(0, this._healFade / UIProgressBar.HEAL_FADE_MS) : 1;
+        ctx.save();
+        ctx.beginPath();
+        this._roundRectPath(ctx, r.x, r.y, r.w, r.h, cr);
+        ctx.clip();
+        ctx.globalAlpha = this.healAlpha * fadeT;
+        ctx.fillStyle = this.healColor;
+        ctx.fillRect(r.x + base * pxPerUnit, r.y, (front - base) * pxPerUnit, r.h);
         ctx.restore();
       }
     }
@@ -299,6 +389,8 @@ export default class UIProgressBar extends UIElement {
     if (props.backgroundColor !== undefined) this.backgroundColor = props.backgroundColor;
     if (props.ghostColor !== undefined) this.ghostColor = props.ghostColor;
     if (props.ghostAlpha !== undefined) this.ghostAlpha = props.ghostAlpha;
+    if (props.healColor !== undefined) this.healColor = props.healColor;
+    if (props.healAlpha !== undefined) this.healAlpha = props.healAlpha;
     if (props.armorValue !== undefined) this.armorValue = props.armorValue;
     if (props.armorColor !== undefined) this.armorColor = props.armorColor;
     if (props.armorFillAlpha !== undefined) this.armorFillAlpha = props.armorFillAlpha;
@@ -330,3 +422,15 @@ UIProgressBar.GHOST_HOLD_MS = 450;
 UIProgressBar.GHOST_DRAIN_MS = 650;
 // Values within this of each other are treated as equal (HP units).
 UIProgressBar.GHOST_EPS = 0.01;
+
+// ── "Gained health" heal-bar tunables ─────────────────────
+// Fill-up speed, expressed as the time (ms) to fill a FULL bar's worth; the
+// green front grows proportionally, so a small heal fills quickly and a big
+// one over ~this.
+UIProgressBar.HEAL_GROW_MS = 700;
+// How long (ms) the green slice holds after catching up to current HP before
+// fading into the normal fill.
+UIProgressBar.HEAL_HOLD_MS = 350;
+// Fade-out duration (ms) — the green's alpha ramps to 0, revealing the normal
+// fill (drawn to full HP during the fade) beneath.
+UIProgressBar.HEAL_FADE_MS = 450;
