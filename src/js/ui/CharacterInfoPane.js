@@ -17,12 +17,16 @@ const PANE_PADDING = { top: 24, right: 12, bottom: 12, left: 12 };
 // never pokes out the pane's side).
 // BOTTOM row = the full-width HP bar framed by the authored overlay art.
 const PORTRAIT_SLOT_WIDTH = 122;  // layout width reserved for the portrait
-// top: how far the portrait rect extends above the slot (top poke = top −
-// PANE_PADDING.top). bleedX: symmetric widening on BOTH sides of the slot —
-// makes the contain-fit rect taller-than-wide relative to typical portrait
-// aspect so the art is HEIGHT-limited (actually reaches the top edge), while
-// staying centered on the slot instead of hanging out the pane's side.
-const PORTRAIT_OVERHANG = { top: 46, bleedX: 22 };
+// top: how far the portrait rect extends above the slot (max top poke past the
+// pane's outer edge = top − PANE_PADDING.top). bleedIn: widening toward the
+// INFO COLUMN only — the art is anchored flush to the panel-side edge of the
+// slot (left on player, right on enemy; via imageAlignH), so it can NEVER hang
+// out the pane's side; any extra width bleeds inward over the slot gap.
+// Behavior vs art aspect (w:h), with rect = (slot.w+bleedIn) × (slot.h+top):
+//   narrower than the rect (~0.72) → full height, maximum top poke;
+//   up to ~0.80 → width-limited, progressively smaller poke;
+//   wider than ~0.80 → fits inside the pane, no poke.
+const PORTRAIT_OVERHANG = { top: 44, bleedIn: 28 };
 const HEADER_HEIGHT = 164;        // top-row height (sized to fit the info column)
 const HEADER_GAP = 6;
 const OUTER_GAP = 6; // column gap between the top row and the HP-bar row
@@ -280,11 +284,13 @@ export default class CharacterInfoPane extends UIPanel {
     } else {
       this._portrait = new UIImage(portraitKey, this._assetManager);
     }
-    // Bottom-anchored contain fit: the whole floating art shows, standing on
-    // the slot's bottom edge. The rect is assigned each render from the slot.
+    // Bottom-anchored contain fit, hugging the PANEL-SIDE edge of the slot
+    // (left on player, right on the mirrored enemy) so the art never pokes out
+    // the pane's side — extra width bleeds inward instead (see
+    // PORTRAIT_OVERHANG). The rect is assigned each render from the slot.
     this._portrait.setStyle({
       fitMode: 'contain',
-      imageAlignH: 'center',
+      imageAlignH: isEnemy ? 'right' : 'left',
       imageAlignV: 'bottom',
     });
     this._portrait.smoothing = true;
@@ -452,11 +458,11 @@ export default class CharacterInfoPane extends UIPanel {
   /**
    * Draw the floating portrait. Its rect = the layout slot extended UP by
    * PORTRAIT_OVERHANG.top (past the pane's top edge — the "floating" poke) and
-   * widened SYMMETRICALLY by bleedX on both sides (staying centered on the
-   * slot, so nothing hangs out the pane's side). The widening keeps the rect
-   * aspect above typical portrait aspects so the bottom-anchored contain fit
-   * is HEIGHT-limited — i.e. the art genuinely reaches the top of the rect.
-   * The rect is written back onto the portrait element so getPortraitRect()/
+   * widened by bleedIn toward the INFO COLUMN only. The art itself is aligned
+   * flush to the panel-side edge of the slot (imageAlignH left/right, set in
+   * buildHierarchy), so it can never hang out the pane's side — a portrait
+   * wider than the slot bleeds inward over the header gap instead. The rect is
+   * written back onto the portrait element so getPortraitRect()/
    * getPortraitCenter() and the status overlays keep working unchanged.
    */
   _renderPortrait(ctx) {
@@ -465,9 +471,10 @@ export default class CharacterInfoPane extends UIPanel {
     if (!slot || slot.w <= 0) return;
 
     const r = this._portrait.rect;
-    r.x = slot.x - PORTRAIT_OVERHANG.bleedX;
+    r.w = slot.w + PORTRAIT_OVERHANG.bleedIn;
+    // Anchor at the panel-side edge: player bleeds right, enemy bleeds left.
+    r.x = this._side === 'enemy' ? slot.x + slot.w - r.w : slot.x;
     r.y = slot.y - PORTRAIT_OVERHANG.top;
-    r.w = slot.w + PORTRAIT_OVERHANG.bleedX * 2;
     r.h = slot.h + PORTRAIT_OVERHANG.top;
     this._portrait.renderSelf(ctx);
   }
