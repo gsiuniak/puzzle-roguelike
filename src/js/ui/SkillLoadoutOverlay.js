@@ -439,11 +439,14 @@ export default class SkillLoadoutOverlay {
 
   // ── Render ────────────────────────────────────────────
 
-  render(ctx) {
+  // canvasW/H = the CURRENT design-viewport size (BattleScene passes them —
+  // the battle uses an adaptive wide viewport, so the width can exceed 1920;
+  // the DESIGN_* constants are only the no-arg fallback).
+  render(ctx, canvasW = DESIGN_W, canvasH = DESIGN_H) {
     if (!this._active) return;
 
-    const px = (DESIGN_W - PANEL_W) / 2;
-    const py = (DESIGN_H - PANEL_H) / 2;
+    const px = (canvasW - PANEL_W) / 2;
+    const py = (canvasH - PANEL_H) / 2;
 
     // ── Panel (carved dark stone + double gold border) ──
     ctx.save();

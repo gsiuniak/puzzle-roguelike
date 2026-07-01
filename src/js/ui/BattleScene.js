@@ -123,6 +123,18 @@ const ONLY_SHOW_ACTIVE_TURN_DAMAGE = true;
 // Vertical position of the accumulating damage counter as a fraction of the
 // board height (0 = top edge, 0.5 = center). Parked near the top of the grid.
 const DAMAGE_COUNTER_Y_FRAC = 0.2;
+// ── Wide battle viewport (see CanvasApp.setSceneDesignWidth) ──
+// The battle scene requests a FIXED design width slightly wider than the base
+// 1920; the extra (BATTLE_DESIGN_WIDTH − 1920) is split between the two side
+// (character) columns by layoutChildren() — +80px per panel at 2080. Design
+// height stays 1080. On screens at least as wide as BATTLE_DESIGN_WIDTH:1080
+// (~1.93:1) the width comes out of the pillarbox bars at full size; on
+// narrower screens (e.g. exact 16:9) the whole game scales down slightly
+// (letterboxed, vertically centered) so the width still fits — at 2080 that's
+// a ~8% smaller board on 16:9. THE knob for panel width: raise for wider
+// panels (costs more board shrink on 16:9), lower toward 1920 for less.
+const BASE_DESIGN_WIDTH = 1920;
+const BATTLE_DESIGN_WIDTH = 2080;
 const MAIN_ROW_MAX_WIDTH = 1820;
 // Horizontal gap between the side columns and the central board panel.
 // Negative = the column rects overlap, which pulls the visible side
@@ -263,6 +275,13 @@ export default class BattleScene extends UIPanel {
     this.alignItems = 'center';
     this.gap = 0;
     this.padding = 0;
+
+    // Request the WIDE battle viewport (SceneManager → CanvasApp
+    // setSceneDesignWidth): a fixed design width slightly beyond 1920. Wide
+    // screens absorb it from the pillarbox bars at full size; narrower screens
+    // scale the whole game down a touch (letterboxed) so the width still fits.
+    // The extra width is fed to the two side columns in layoutChildren().
+    this.preferredDesignWidth = BATTLE_DESIGN_WIDTH;
 
     this._playerData = playerData;
     this._enemyData = enemyData;
@@ -421,6 +440,7 @@ export default class BattleScene extends UIPanel {
     mainRow.flexGrow = 1;
     mainRow.maxWidth = MAIN_ROW_MAX_WIDTH;
     mainRow.padding = MAIN_ROW_PADDING;
+    this._mainRow = mainRow;
 
     // ── LEFT-MOST: passive relic column (floats next to player panel) ──
     // No background or border; icons just float over the battle background.
@@ -434,6 +454,7 @@ export default class BattleScene extends UIPanel {
 
     // ── LEFT: compact stacked player column ───────────
     const playerCol = this._buildSideColumn('player');
+    this._playerCol = playerCol;
     mainRow.addChild(playerCol);
 
     // ── CENTER: hidden turn label + board panel + combat log ──
@@ -485,6 +506,7 @@ export default class BattleScene extends UIPanel {
 
     // ── RIGHT: compact stacked enemy column ───────────
     const enemyCol = this._buildSideColumn('enemy');
+    this._enemyCol = enemyCol;
     mainRow.addChild(enemyCol);
 
     // ── RIGHT-MOST: passive enemy relic column (mirror of player bar) ──
@@ -497,6 +519,26 @@ export default class BattleScene extends UIPanel {
     mainRow.addChild(this._enemyRelicBar);
 
     this.addChild(mainRow);
+  }
+
+  /**
+   * Feed the wide-viewport EXTRA design width (scene width beyond the base
+   * 1920 — see preferredDesignWidth / CanvasApp.setSceneDesignWidth) to the
+   * two side character columns before the normal flex layout runs. The center
+   * (board) column is fixed-width and the design height never changes, so the
+   * board keeps its size in design units — the panels absorb all the gain.
+   */
+  layoutChildren() {
+    const extra = Math.max(0, (this.rect.w || 0) - BASE_DESIGN_WIDTH);
+    const sideW = SIDE_COL_WIDTH + Math.floor(extra / 2);
+    if (this._mainRow) this._mainRow.maxWidth = MAIN_ROW_MAX_WIDTH + extra;
+    for (const col of [this._playerCol, this._enemyCol]) {
+      if (!col) continue;
+      col.width = sideW;
+      col.minWidth = sideW;
+      col.maxWidth = sideW;
+    }
+    super.layoutChildren();
   }
 
   /**
@@ -2022,7 +2064,7 @@ export default class BattleScene extends UIPanel {
     // battle stays visible but inactive behind it.
     if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
       sm._app.fillFullCanvas(`rgba(0, 0, 0, ${this._loadoutOverlay.getBackdropAlpha()})`);
-      this._loadoutOverlay.render(ctx);
+      this._loadoutOverlay.render(ctx, w, h);
     }
   }
 

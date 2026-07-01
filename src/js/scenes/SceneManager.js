@@ -126,6 +126,10 @@ export default class SceneManager {
     this._currentScene = nextScene;
     this._currentSceneName = name;
 
+    // Apply the scene's viewport preference BEFORE onEnter so the scene sees
+    // the correct design width (adaptive wide viewport is a per-scene opt-in).
+    this._applySceneViewport(nextScene);
+
     // Enter new scene
     if (typeof nextScene.onEnter === 'function') {
       nextScene.onEnter();
@@ -135,6 +139,23 @@ export default class SceneManager {
     this._layoutCurrentScene();
 
     console.log(`SceneManager: switched to "${name}"`);
+  }
+
+  /**
+   * Set the CanvasApp's design width from the scene's optional
+   * `preferredDesignWidth` field (absent/null → the classic fixed 16:9
+   * viewport). An opted-in scene gets exactly that design width: wide screens
+   * absorb it from the pillarbox bars at full height; narrower screens scale
+   * the whole game down slightly (letterboxed, vertically centered) so the
+   * width still fits. Design height never changes.
+   * @param {object} scene
+   */
+  _applySceneViewport(scene) {
+    if (this._app && typeof this._app.setSceneDesignWidth === 'function') {
+      this._app.setSceneDesignWidth(
+        scene && scene.preferredDesignWidth ? scene.preferredDesignWidth : null
+      );
+    }
   }
 
   /**
@@ -331,6 +352,9 @@ export default class SceneManager {
     // Swap
     this._currentScene = nextScene;
     this._currentSceneName = name;
+
+    // Apply the scene's viewport preference BEFORE onEnter (see switchTo).
+    this._applySceneViewport(nextScene);
 
     // Enter new scene
     if (typeof nextScene.onEnter === 'function') {

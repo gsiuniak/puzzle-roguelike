@@ -38,9 +38,23 @@ export default class CanvasApp {
 
     this.autoResize = opts.autoResize !== false;
 
-    /** Fixed design-space dimensions — all scene code lays out into this rect */
+    /** Design-space dimensions — all scene code lays out into this rect */
     this.designWidth  = opts.designWidth  || 1920;
     this.designHeight = opts.designHeight || 1080;
+    /**
+     * Base (default) design width — the classic 16:9 layout width. A scene may
+     * request a FIXED wider design space via setSceneDesignWidth(w)
+     * (SceneManager applies it per scene from the scene's optional
+     * `preferredDesignWidth` field). designWidth becomes exactly w and the
+     * uniform contain-fit does the rest: on screens wider than w:designHeight
+     * the extra width consumes pillarbox-bar space at full height; on narrower
+     * screens (e.g. exact 16:9) the scale drops so the full width still fits —
+     * the whole game renders slightly smaller, vertically centered
+     * (letterboxed). designHeight never changes.
+     */
+    this.baseDesignWidth = this.designWidth;
+    /** Scene-requested design width; == baseDesignWidth → default viewport. */
+    this._sceneDesignWidth = this.baseDesignWidth;
 
     /** Physical CSS-pixel size of the canvas (== window.innerWidth/Height) */
     this._cssWidth = 0;
@@ -80,7 +94,8 @@ export default class CanvasApp {
     }
   }
 
-  /** Design-space width (constant — what scene layout code reads) */
+  /** Design-space width (what scene layout code reads; ≥ baseDesignWidth when
+   *  the active scene opted into a wider adaptive viewport) */
   get width()  { return this.designWidth; }
   /** Design-space height (constant — what scene layout code reads) */
   get height() { return this.designHeight; }
@@ -110,6 +125,36 @@ export default class CanvasApp {
     this.canvas.height = Math.max(1, Math.floor(winH * this.dpr));
     this.canvas.style.width  = winW + 'px';
     this.canvas.style.height = winH + 'px';
+
+    this._recomputeViewport();
+  }
+
+  /**
+   * Set the design width requested by the active scene (see baseDesignWidth
+   * docs). Pass null/undefined (or the base width) to restore the classic
+   * fixed 16:9 viewport. SceneManager calls this on every scene switch from
+   * the scene's optional `preferredDesignWidth` field, so the widening is a
+   * per-scene opt-in. Recomputes the viewport immediately.
+   * @param {number|null} w
+   */
+  setSceneDesignWidth(w) {
+    const v = Math.max(this.baseDesignWidth, w || this.baseDesignWidth);
+    if (v === this._sceneDesignWidth) return;
+    this._sceneDesignWidth = v;
+    this._recomputeViewport();
+  }
+
+  /**
+   * Recompute designWidth (the scene-requested width) plus the uniform
+   * scale/offsets, re-apply the design transform, and notify onResize. Uses
+   * the cached CSS size, so it can run outside a real resize.
+   */
+  _recomputeViewport() {
+    const winW = this._cssWidth;
+    const winH = this._cssHeight;
+    if (!winW || !winH) return;
+
+    this.designWidth = this._sceneDesignWidth;
 
     // Uniform scale that fits the entire design rect inside the window.
     this._scale = Math.min(winW / this.designWidth, winH / this.designHeight);
