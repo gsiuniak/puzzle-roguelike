@@ -23,7 +23,7 @@ const mage = {
       red: 0,
       blue: 0,
       green: 0,
-      yellow: 110,
+      yellow: 5,
       purple: 3,
     },
   },

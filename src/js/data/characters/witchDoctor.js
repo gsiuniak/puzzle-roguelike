@@ -24,12 +24,12 @@ const witchDoctor = {
       blue: 0,
       green: 5,
       yellow: 0,
-      purple: 112,
+      purple: 5,
     },
   },
 
   skills: ['summon_dead', 'oungan'],
-  relics: [],
+  relics: ['poison_vial'],
 
   /**
    * Per-victory growth (AUTO-applied; stat picking is disabled — decision #36).
