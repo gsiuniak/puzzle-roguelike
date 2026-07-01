@@ -134,15 +134,20 @@ const MAIN_ROW_GAP = -40;
 const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
 
 // ── Background readability scrim ──────────────────────────
-// A 3-segment full-canvas darkening drawn over the battle background (in
-// renderBackground, so it sits BEHIND the UI but covers the letterbox bars):
-//   left screen edge → player panel : gradient, transparent → SCRIM_ALPHA
-//   player panel → enemy panel       : flat SCRIM_ALPHA (the play area)
-//   enemy panel → right screen edge  : gradient, SCRIM_ALPHA → transparent
-// This darkens the central play area for contrast while letting the
-// decorative side art at the screen edges show through. Tunable alpha.
-const SCRIM_ALPHA = 0.6;
-const SCRIM_COLOR = '0, 0, 0';   // rgb triplet; alpha applied per stop
+// A full-canvas darkening drawn over the battle background (in
+// renderBackground, so it sits BEHIND the UI but covers the letterbox bars).
+// Two DARK PLATEAUS sit behind the floating relic bars (so relic icons stay
+// legible), a LIGHTER band covers the central play area, and both plateaus
+// fall off HARD to transparent toward the screen edges so the decorative side
+// art shows through. Left→right the alpha profile is:
+//   edge (clear) →[hard]→ relic band (RELIC_ALPHA) → play area (PLAY_ALPHA)
+//     → relic band (RELIC_ALPHA) →[hard]→ edge (clear)
+// Because the relics get their own darker, harder backdrop, PLAY_ALPHA can be
+// low (lighter overall) without losing relic visibility. All tunable.
+const SCRIM_PLAY_ALPHA = 0.32;    // central play area (board) — kept light
+const SCRIM_RELIC_ALPHA = 0.62;   // behind the relic bars — darker, "harder"
+const SCRIM_EDGE_SHOULDER = 55;   // design px: fade width from relic band → edge
+const SCRIM_COLOR = '0, 0, 0';    // rgb triplet; alpha applied per stop
 
 // Width of each side (player/enemy) column. Reduce to bring the
 // visible panel art closer to the board frame; the side panel
@@ -1934,32 +1939,42 @@ export default class BattleScene extends UIPanel {
   /**
    * Paint a full-canvas readability scrim over the battle background BEFORE
    * the UI is drawn (called by SceneManager after clear(), before the viewport
-   * clip). Three joined segments darken the central play area while fading to
+   * clip). Dark plateaus behind the relic bars keep the relics legible; a
+   * lighter band covers the central play area; both plateaus fall off hard to
    * transparent toward the screen edges so the decorative side art shows
-   * through. Boundaries track the player/enemy character panels. See
-   * SCRIM_ALPHA / SCRIM_COLOR.
+   * through. Boundaries track the relic bars + character panels. See
+   * SCRIM_PLAY_ALPHA / SCRIM_RELIC_ALPHA / SCRIM_EDGE_SHOULDER.
    */
   renderBackground(ctx) {
     const app = this._sceneManager && this._sceneManager._app;
     if (!app || typeof app.designXToCanvasFraction !== 'function') return;
-    if (!this._playerPane || !this._enemyPane) return;
 
-    const left = this._playerPane.rect;
-    const right = this._enemyPane.rect;
-    if (!left || !right || right.w <= 0) return;
+    const pL = this._playerPane && this._playerPane.rect;
+    const pR = this._enemyPane && this._enemyPane.rect;
+    const rL = this._relicBar && this._relicBar.rect;
+    const rR = this._enemyRelicBar && this._enemyRelicBar.rect;
+    if (!pL || !pR || !rL || !rR || pR.w <= 0 || rR.w <= 0) return;
 
-    // Panel edges → 0..1 fractions of the physical canvas width.
-    const f1 = app.designXToCanvasFraction(left.x);          // player panel start
-    const f2 = app.designXToCanvasFraction(right.x + right.w); // enemy panel end
-    if (!(f2 > f1)) return;
-
-    const dark = `rgba(${SCRIM_COLOR}, ${SCRIM_ALPHA})`;
+    const F = (x) => app.designXToCanvasFraction(x);
+    const dark = `rgba(${SCRIM_COLOR}, ${SCRIM_RELIC_ALPHA})`;
+    const play = `rgba(${SCRIM_COLOR}, ${SCRIM_PLAY_ALPHA})`;
     const clear = `rgba(${SCRIM_COLOR}, 0)`;
+
+    // Left→right, monotonically increasing fractions (fillFullCanvasHGradient
+    // clamps each `at` into 0..1). The dark relic plateaus ramp DOWN to the
+    // lighter play alpha across the panel width (hidden behind the panel art)
+    // and ramp UP hard from transparent at the relic bars' outer edges.
     app.fillFullCanvasHGradient([
-      { at: 0,  color: clear },   // left screen edge: transparent
-      { at: f1, color: dark },    // ramp to full over the empty left band
-      { at: f2, color: dark },    // flat across the play area
-      { at: 1,  color: clear },   // fade back out to the right screen edge
+      { at: 0,                          color: clear },  // left screen edge
+      { at: F(rL.x - SCRIM_EDGE_SHOULDER), color: clear },  // hold transparent
+      { at: F(rL.x),                    color: dark },   // hard rise: relic band
+      { at: F(rL.x + rL.w),             color: dark },   // relic plateau (left)
+      { at: F(pL.x + pL.w),             color: play },   // → play area (under panel)
+      { at: F(pR.x),                    color: play },   // flat over the board
+      { at: F(rR.x),                    color: dark },   // → relic band (under panel)
+      { at: F(rR.x + rR.w),             color: dark },   // relic plateau (right)
+      { at: F(rR.x + rR.w + SCRIM_EDGE_SHOULDER), color: clear }, // hard fall
+      { at: 1,                          color: clear },  // right screen edge
     ]);
   }
 
