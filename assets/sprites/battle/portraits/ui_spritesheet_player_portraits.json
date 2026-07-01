@@ -11,12 +11,12 @@
       "x": 584,
       "y": 4,
       "w": 576,
-      "h": 755,
+      "h": 753,
       "index": 0,
       "source_w": 576,
       "source_h": 768,
       "trim_x": 0,
-      "trim_y": 13
+      "trim_y": 15
     },
     "warrior_portrait_floating": {
       "x": 4,
