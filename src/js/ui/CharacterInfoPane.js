@@ -9,7 +9,9 @@ import { getStatusDef, STATUS_KIND } from '../data/statusEffects.js';
 
 // ── Tunable layout constants ─────────────────────────────
 // Tuned for the wide-viewport battle side column (~465px pane width).
-const PANE_PADDING = { top: 28, right: 14, bottom: 12, left: 14 };
+// bottom: keeps a visible breathing gap between the HP-bar frame art (which
+// overhangs the bar by ~13px) and the panel's bottom border.
+const PANE_PADDING = { top: 28, right: 12, bottom: 18, left: 12 };
 // TOP row = [floating portrait | info column]. The info column stacks
 // name (+flair band) / attack-magic stats / the 5-orb mana bar. The portrait
 // occupies a fixed-width SLOT in the layout but is DRAWN manually (in
@@ -17,7 +19,7 @@ const PANE_PADDING = { top: 28, right: 14, bottom: 12, left: 14 };
 // TOP edge (only — it is anchored flush to the panel-side edge, so it never
 // pokes out the pane's side).
 // BOTTOM row = the full-width HP bar framed by the authored overlay art.
-const PORTRAIT_SLOT_WIDTH = 146;  // layout width reserved for the portrait
+const PORTRAIT_SLOT_WIDTH = 142;  // layout width reserved for the portrait
 // top: how far the portrait rect extends above the slot (max top poke past the
 // pane's outer edge = top − PANE_PADDING.top). bleedIn: widening toward the
 // INFO COLUMN only — the art is anchored flush to the panel-side edge of the
@@ -27,9 +29,9 @@ const PORTRAIT_SLOT_WIDTH = 146;  // layout width reserved for the portrait
 //   narrower than the rect (~0.75) → full height, maximum top poke;
 //   slightly wider → width-limited, progressively smaller poke;
 //   much wider (square-ish) → fits inside the pane, no poke.
-const PORTRAIT_OVERHANG = { top: 44, bleedIn: 30 };
+const PORTRAIT_OVERHANG = { top: 44, bleedIn: 34 };
 const HEADER_HEIGHT = 192;        // top-row height (sized to fit the info column)
-const HEADER_GAP = 6;
+const HEADER_GAP = 4;
 const OUTER_GAP = 6; // column gap between the top row and the HP-bar row
 
 const NAME_FONT_SIZE = 36;
@@ -103,7 +105,7 @@ const HEALTH_LABEL_FONT_SIZE = 20;
 // so the fill sits inset within the frame's opening, height follows the art's
 // own aspect. The margins/side inset leave room for the frame's overhang.
 const HEALTH_ROW_MARGIN_TOP = 14;
-const HEALTH_ROW_MARGIN_BOTTOM = 10;
+const HEALTH_ROW_MARGIN_BOTTOM = 12;
 const HEALTH_BAR_SIDE_INSET = 26;
 const HEALTH_OVERLAY_KEY = 'character_pane_health_bar_overlay';
 const HEALTH_OVERLAY_INSET_X = 0.03; // bar inset within the overlay (fraction of overlay width)
@@ -124,18 +126,28 @@ const BARRIER_BADGE_ICON = 'icon_barrier'; // sprite in ui_spritesheet_character
 const STATS_HEIGHT = 22;
 const STAT_ICON_SIZE = 28;
 const STAT_VALUE_FONT_SIZE = 22;
+// Each stat group (icon + value) gets a FIXED width — without it the groups
+// flex-fill the whole row and drift far apart (the old "attack way left,
+// magic way right" look). Width fits a 3-digit value.
+const STAT_VALUE_WIDTH = 44;
+const STAT_GROUP_GAP = 4;   // icon ↔ value, inside a group
+const STAT_GROUP_WIDTH = STAT_ICON_SIZE + STAT_GROUP_GAP + STAT_VALUE_WIDTH;
+const STATS_ROW_GAP = 14;   // between the attack and magic groups
 
 // Mana bar — lives INSIDE the info column (beneath the stats row). UIOrb
 // scales its orb + amount plate to the rect, so sizing is purely these
-// constants. The orb CIRCLE diameter = min(width, height·0.65) — keep the two
-// roughly matched (w ≈ h·0.65) so neither dimension is wasted. The row uses
-// justifyContent 'space-evenly', so the orbs spread uniformly across whatever
-// width the info column has — spacing adapts to the pane width by itself.
-const MANA_ROW_HEIGHT = 84;
+// constants. The orb CIRCLE diameter = min(width, height·0.65). The rect
+// WIDTH deliberately exceeds the circle: the leftover is per-orb breathing
+// room, and MANA_PLATE_SCALE keeps the count plate NARROWER than the circle
+// (at the default 1.1 the plates are wider than the orbs and visibly touch —
+// the crowded look). Row uses 'space-evenly' so any remaining slack spreads
+// uniformly across the column width.
+const MANA_ROW_HEIGHT = 78;
 const MANA_ROW_PADDING_TOP = 2;
 const MANA_ORB_WIDTH = 52;
-const MANA_ORB_HEIGHT = 78;
-const MANA_FONT_SIZE = 17;
+const MANA_ORB_HEIGHT = 70;
+const MANA_PLATE_SCALE = 0.92;
+const MANA_FONT_SIZE = 15;
 
 /**
  * Natural height of the pane = paddings + top row (portrait/info) + the
@@ -296,23 +308,23 @@ export default class CharacterInfoPane extends UIPanel {
     });
     this._portrait.smoothing = true;
 
-    // Info column — symmetric on both panes (the mirrored enemy pane no
-    // longer needs per-side padding since all its content is centered).
+    // Info column — symmetric side padding on both panes (gives the mirrored
+    // enemy pane's left-aligned name a margin off the panel border).
     const info = new UIContainer();
     info.direction = 'column';
     info.gap = 2;
     info.flexGrow = 1;
-    info.padding = { top: 6 };
+    info.padding = { top: 6, left: 30, right: 6 };
     this._infoCol = info;
 
-    // Name — CENTERED in the info column on both panes; wraps onto a second
-    // line when wider than NAME_MAX_WIDTH.
+    // Name — LEFT-aligned in the info column on both panes; wraps onto a
+    // second line when wider than NAME_MAX_WIDTH.
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: NAME_FONT_SIZE,
       color: '#d0d0c4',
       bold: true,
-      alignH: 'center',
+      alignH: 'left',
       alignV: 'top',
       maxWidth: NAME_MAX_WIDTH,
       lineHeight: NAME_LINE_HEIGHT,
@@ -320,12 +332,13 @@ export default class CharacterInfoPane extends UIPanel {
     });
     info.addChild(this._nameText);
 
-    // Stats row (attack | magic) — centered under the name on both panes.
+    // Stats row (attack | magic) — left-aligned under the name, the two
+    // groups sitting close together (fixed group widths — see STAT_GROUP_*).
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
     statsRow.alignItems = 'center';
-    statsRow.justifyContent = 'center';
-    statsRow.gap = 4;
+    statsRow.justifyContent = 'start';
+    statsRow.gap = STATS_ROW_GAP;
     statsRow.height = STATS_HEIGHT;
 
     statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
@@ -360,6 +373,7 @@ export default class CharacterInfoPane extends UIPanel {
         borderColor: '#151515',
         borderWidth: 2,
         showAmountPlate: true,
+        plateScale: MANA_PLATE_SCALE,
       });
 
       const manaAssetKey = `mana_${color}`;
@@ -540,10 +554,13 @@ export default class CharacterInfoPane extends UIPanel {
   }
 
   _buildStatGroup(iconKey, getValueRef, setValueRef, initialValue) {
+    // Fixed group + value widths: without them the value text (no width) goes
+    // flex and the group swallows half the row, pushing the two stats apart.
     const group = new UIContainer();
     group.direction = 'row';
-    group.gap = 4;
+    group.gap = STAT_GROUP_GAP;
     group.alignItems = 'center';
+    group.width = STAT_GROUP_WIDTH;
 
     const icon = new UIImage(iconKey, this._assetManager);
     icon.setStyle({ width: STAT_ICON_SIZE, height: STAT_ICON_SIZE, fitMode: 'contain' });
@@ -556,8 +573,8 @@ export default class CharacterInfoPane extends UIPanel {
       bold: true,
       alignH: 'left',
       alignV: 'center',
+      width: STAT_VALUE_WIDTH,
       height: STAT_VALUE_FONT_SIZE + 4,
-      margin: { left: 5 }
     });
     setValueRef(valueText);
     group.addChild(valueText);

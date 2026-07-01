@@ -32,6 +32,12 @@ export default class UIOrb extends UIElement {
     this.showCount = true;
     /** If true, renders mana_amount plate below orb with count on plate */
     this.showAmountPlate = false;
+    /**
+     * Plate width as a factor of the orb circle diameter (default 1.1 = the
+     * classic slightly-wider-than-orb plate). Lower it when orbs sit in a
+     * tight row so adjacent plates don't touch/overlap.
+     */
+    this.plateScale = 1.1;
     /** Subtle dark shadow on count text by default */
     this.shadowColor = 'rgba(0,0,0,0.65)';
     this.shadowBlur = 2;
@@ -166,7 +172,7 @@ export default class UIOrb extends UIElement {
     const orbRadius = orbSize / 2 - this.borderWidth;
 
     // Plate: positioned to overlap orb bottom, extending below
-    const plateW = Math.ceil(orbSize * 1.1);
+    const plateW = Math.ceil(orbSize * this.plateScale);
     const plateH = Math.ceil(orbSize * 0.5);
     const plateX = Math.floor(r.x + (r.w - plateW) / 2);
     const plateY = Math.floor(orbCy + orbRadius * 0.55);
@@ -248,6 +254,7 @@ export default class UIOrb extends UIElement {
     if (props.borderWidth !== undefined) this.borderWidth = props.borderWidth;
     if (props.showCount !== undefined) this.showCount = props.showCount;
     if (props.showAmountPlate !== undefined) this.showAmountPlate = props.showAmountPlate;
+    if (props.plateScale !== undefined) this.plateScale = props.plateScale;
     if (props.shadowColor !== undefined) this.shadowColor = props.shadowColor;
     if (props.shadowBlur !== undefined) this.shadowBlur = props.shadowBlur;
     if (props.shadowOffsetX !== undefined) this.shadowOffsetX = props.shadowOffsetX;
