@@ -44,10 +44,15 @@ const INFO_PAD_OUTER = 6;
 
 const NAME_FONT_SIZE = 36;
 // The name is CENTERED in the info column (both panes — this also keeps the
-// mirrored enemy name off the panel border). It wraps onto a second line when
-// wider than NAME_MAX_WIDTH (the wrap limit, ≤ the info column's inner width).
-// NAME_BLOCK_HEIGHT reserves room for the line + the flair band below it.
+// mirrored enemy name off the panel border). A long name AUTO-SHRINKS its font
+// (down to NAME_MIN_FONT_SIZE) to stay on ONE line (_fitNameFont), so every
+// pane keeps the same name → flair → stats rhythm — a wrapped two-line name
+// used to swallow the flair band and jam the stats row against the text.
+// lineHeight stays NAME_LINE_HEIGHT regardless of the fitted size, so the
+// flair band and everything below it never shift. Wrapping remains only as a
+// last resort (a name still too wide at the minimum size; flair suppressed).
 const NAME_MAX_WIDTH = 260;
+const NAME_MIN_FONT_SIZE = 24;
 const NAME_LINE_HEIGHT = 36;
 const NAME_BLOCK_HEIGHT = 72;
 
@@ -225,6 +230,8 @@ export default class CharacterInfoPane extends UIPanel {
     this._portraitSlot = null;
     this._infoCol = null;
     this._nameText = null;
+    // Cache key for the one-line name font fit (see _fitNameFont).
+    this._nameFitFor = null;
     this._healthBar = null;
     this._attackValue = null;
     this._magicValue = null;
@@ -330,8 +337,9 @@ export default class CharacterInfoPane extends UIPanel {
       : { top: INFO_PAD_TOP, left: INFO_PAD_PORTRAIT_SIDE, right: INFO_PAD_OUTER };
     this._infoCol = info;
 
-    // Name — CENTERED in the info column on both panes; wraps onto a second
-    // line when wider than NAME_MAX_WIDTH.
+    // Name — CENTERED in the info column on both panes; a long name shrinks
+    // its font to stay on one line (_fitNameFont, run at render time).
+    this._nameFitFor = null; // fresh element starts at base size → refit
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: NAME_FONT_SIZE,
@@ -449,6 +457,9 @@ export default class CharacterInfoPane extends UIPanel {
    * line-count check uses the render-time ctx (correct loaded-font metrics).
    */
   render(ctx) {
+    // Fit the name onto one line BEFORE the children draw this frame.
+    this._fitNameFont(ctx);
+
     super.render(ctx);
     if (!this.visible) return;
 
@@ -489,6 +500,42 @@ export default class CharacterInfoPane extends UIPanel {
     this._flair.rect.w = Math.max(0, colR.w - FLAIR_SIDE_INSET * 2);
     this._flair.rect.h = FLAIR_HEIGHT;
     this._flair.renderSelf(ctx);
+  }
+
+  /**
+   * Shrink the name's font size (from NAME_FONT_SIZE down to
+   * NAME_MIN_FONT_SIZE) so the name fits NAME_MAX_WIDTH on a single line —
+   * keeping the name → flair → stats rhythm identical for long names like
+   * "Sanguine Phoenix" instead of wrapping into the flair band and jamming
+   * the stats row. lineHeight is untouched, so nothing below the name moves.
+   * Measured with the element's own font string; cached per text + font
+   * availability (a re-measure fires once when the custom font finishes
+   * loading, since fallback-serif metrics differ).
+   */
+  _fitNameFont(ctx) {
+    const el = this._nameText;
+    if (!el || !el.text) return;
+
+    const fontsReady = (typeof document !== 'undefined' && document.fonts)
+      ? (document.fonts.check('bold 12px "Marcellus SC"') ? 1 : 0)
+      : 1;
+    const key = `${el.text}|${fontsReady}`;
+    if (this._nameFitFor === key) return;
+
+    const prevSize = el.fontSize;
+    el.fontSize = NAME_FONT_SIZE;
+    ctx.save();
+    ctx.font = el.getFontString();
+    const w = ctx.measureText(el.text).width;
+    ctx.restore();
+
+    let size = NAME_FONT_SIZE;
+    if (w > NAME_MAX_WIDTH) {
+      size = Math.max(NAME_MIN_FONT_SIZE, Math.floor((NAME_FONT_SIZE * NAME_MAX_WIDTH) / w));
+    }
+    if (size !== prevSize) el.setStyle({ fontSize: size });
+    else el.fontSize = prevSize;
+    this._nameFitFor = key;
   }
 
   /**

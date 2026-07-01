@@ -34,7 +34,7 @@ import {
  */
 
 // ── Outer panel (UNCHANGED dimensions — keep the surrounding layout static) ──
-const PANE_PADDING = { top: 48, right: 5, bottom: 24, left: 16 };
+const PANE_PADDING = { top: 50, right: 5, bottom: 24, left: 16 };
 // The pane's height was defined by the old grid; preserve it exactly.
 const LEGACY_SLOT_HEIGHT = 105;
 const LEGACY_ROWS = 6;
