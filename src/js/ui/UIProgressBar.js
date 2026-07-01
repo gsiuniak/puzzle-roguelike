@@ -27,6 +27,18 @@ export default class UIProgressBar extends UIElement {
     this.fillColor = '#cc3333';
     this.backgroundColor = '#222222';
     /**
+     * "Lost health" ghost bar. When `value` drops, the red fill chunks down
+     * IMMEDIATELY, and the just-lost slice lingers as a lighter (white) bar that
+     * holds briefly — so multiple hits in a combo accumulate into one white
+     * slice — then drains down to the current health once the damage stops.
+     * Driven by update(dt); purely cosmetic (never affects `value`).
+     */
+    this.ghostColor = '#f2ede0';
+    this.ghostAlpha = 0.85;
+    this._ghostValue = null;   // trailing (higher) value, in HP units; null until first tick
+    this._prevValue = null;    // last-seen `value`, to detect fresh drops
+    this._ghostHold = 0;       // ms remaining to hold before the white bar drains
+    /**
      * Armor overlay (semi-transparent blue) drawn OVER the fill, hugging the
      * right edge of current health: it first fills the empty-health region
      * (forward), then — if armor exceeds the missing health — extends BACKWARD
@@ -60,6 +72,54 @@ export default class UIProgressBar extends UIElement {
     this.shadowOffsetY = 1;
   }
 
+  /**
+   * Drive the "lost health" ghost bar. `dt` is in milliseconds (matching the
+   * rest of the UI's update contract). On a fresh drop we (re)arm a short hold
+   * so combo hits pool into one white slice; after the hold the ghost drains
+   * toward current HP at a bar-relative rate (so the visual speed is the same
+   * regardless of maxHp). Healing (value rising) snaps the ghost up instantly.
+   */
+  update(dt) {
+    super.update(dt);
+    const v = this._clampToBar(this.value);
+
+    // First tick — start settled at the current value, no trailing bar.
+    if (this._ghostValue === null) {
+      this._ghostValue = v;
+      this._prevValue = v;
+      return;
+    }
+
+    // Fresh damage this frame → keep the white slice where it is and (re)arm
+    // the hold so successive combo hits keep accumulating into it.
+    if (v < this._prevValue - UIProgressBar.GHOST_EPS) {
+      this._ghostHold = UIProgressBar.GHOST_HOLD_MS;
+    }
+    this._prevValue = v;
+
+    if (v >= this._ghostValue - UIProgressBar.GHOST_EPS) {
+      // Caught up or healed — no trailing bar.
+      this._ghostValue = v;
+      this._ghostHold = 0;
+      return;
+    }
+
+    // Lost health is showing as white: hold, then drain down to current HP.
+    if (this._ghostHold > 0) {
+      this._ghostHold -= dt;
+      return;
+    }
+    const span = this.maxValue > 0 ? this.maxValue : 100;
+    const rate = span / UIProgressBar.GHOST_DRAIN_MS; // HP units per ms
+    this._ghostValue = Math.max(v, this._ghostValue - rate * dt);
+  }
+
+  /** Clamp a value to [0, maxValue]. */
+  _clampToBar(v) {
+    if (this.maxValue <= 0) return 0;
+    return Math.min(this.maxValue, Math.max(0, v));
+  }
+
   renderSelf(ctx) {
     const r = this.rect;
     const cr = this.cornerRadius;
@@ -82,6 +142,26 @@ export default class UIProgressBar extends UIElement {
       ctx.clip();
       ctx.fillRect(r.x, r.y, fillW, r.h);
       ctx.restore();
+    }
+
+    // "Lost health" ghost bar — the lighter slice between current HP (red fill's
+    // right edge) and the trailing ghost value, drawn over the empty-health
+    // region. Drained by update(dt). Clipped to the rounded bar; sits under the
+    // shield overlays + border + label.
+    if (this._ghostValue !== null && this.maxValue > 0) {
+      const pxPerUnit = r.w / this.maxValue;
+      const hp = this._clampToBar(this.value);
+      const ghost = this._clampToBar(this._ghostValue);
+      if (ghost > hp + UIProgressBar.GHOST_EPS) {
+        ctx.save();
+        ctx.beginPath();
+        this._roundRectPath(ctx, r.x, r.y, r.w, r.h, cr);
+        ctx.clip();
+        ctx.globalAlpha = this.ghostAlpha;
+        ctx.fillStyle = this.ghostColor;
+        ctx.fillRect(r.x + hp * pxPerUnit, r.y, (ghost - hp) * pxPerUnit, r.h);
+        ctx.restore();
+      }
     }
 
     // Shield overlays (armor = blue, barrier = purple), clipped to the rounded
@@ -187,6 +267,8 @@ export default class UIProgressBar extends UIElement {
     if (props.maxValue !== undefined) this.maxValue = props.maxValue;
     if (props.fillColor !== undefined) this.fillColor = props.fillColor;
     if (props.backgroundColor !== undefined) this.backgroundColor = props.backgroundColor;
+    if (props.ghostColor !== undefined) this.ghostColor = props.ghostColor;
+    if (props.ghostAlpha !== undefined) this.ghostAlpha = props.ghostAlpha;
     if (props.armorValue !== undefined) this.armorValue = props.armorValue;
     if (props.armorColor !== undefined) this.armorColor = props.armorColor;
     if (props.armorFillAlpha !== undefined) this.armorFillAlpha = props.armorFillAlpha;
@@ -207,3 +289,14 @@ export default class UIProgressBar extends UIElement {
     if (props.shadowOffsetY !== undefined) this.shadowOffsetY = props.shadowOffsetY;
   }
 }
+
+// ── "Lost health" ghost-bar tunables ──────────────────────
+// How long (ms) the white slice holds after the LAST hit before it starts
+// draining — long enough that a multi-hit combo pools into one slice.
+UIProgressBar.GHOST_HOLD_MS = 450;
+// Drain speed, expressed as the time (ms) to drain a FULL bar's worth; the
+// actual drain is proportional, so the on-screen speed is consistent across
+// different maxHp values. A small chunk drains quickly, a big one over ~this.
+UIProgressBar.GHOST_DRAIN_MS = 650;
+// Values within this of each other are treated as equal (HP units).
+UIProgressBar.GHOST_EPS = 0.01;
