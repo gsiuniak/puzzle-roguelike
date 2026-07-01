@@ -7,7 +7,7 @@ import goblinSapper from './goblinSapper.js';
 import acolyte from './acolyte.js';
 // import shadowWeaver from './shadowWeaver.js';
 import cyclops from './cyclops.js';
-import stoneGargoyle from './stoneGargoyle.js';
+// import stoneGargoyle from './stoneGargoyle.js'; // disabled — no portrait in the new sheet
 import orcTaskmaster from './orcTaskmaster.js';
 import chokeweed from './chokeweed.js';
 import goresnoutTrackers from './goresnoutTrackers.js';
@@ -25,7 +25,7 @@ const ACT1_ENEMIES = [
   acolyte,
   // shadowWeaver,
   cyclops,
-  stoneGargoyle,
+  // stoneGargoyle,
   orcTaskmaster,
   chokeweed,
   goresnoutTrackers,
@@ -43,7 +43,7 @@ export {
   acolyte,
   // shadowWeaver,
   cyclops,
-  stoneGargoyle,
+  // stoneGargoyle,
   orcTaskmaster,
   chokeweed,
   goresnoutTrackers,

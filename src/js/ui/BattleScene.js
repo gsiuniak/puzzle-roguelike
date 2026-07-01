@@ -52,7 +52,7 @@ import { ENABLE_PERSISTENT_BATTLE_MUSIC, DEFAULT_BATTLE_MUSIC_KEY } from '../aud
 const ATTACK_ANIM_DEBUG = false; // live tuner for the player's character; false = plain one-shot
 const ATTACK_ANIMATIONS = Object.freeze({
   warrior: {
-    enabled: true,
+    enabled: false, // disabled for now — awaiting new attack animations
     sheetKey: 'ui_spritesheet_warrior_attack_animation',
     jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.json',
     scale: 2.17,
@@ -62,7 +62,7 @@ const ATTACK_ANIMATIONS = Object.freeze({
     fadeOutFrames: 15, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
   },
   mage: {
-    enabled: true,
+    enabled: false, // disabled for now — awaiting new attack animations
     sheetKey: 'ui_spritesheet_mage_attack_animation',
     jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.json',
     scale: 2.25,
@@ -72,7 +72,7 @@ const ATTACK_ANIMATIONS = Object.freeze({
     fadeOutFrames: 15, // last N frames cross-fade opacity 1→0 into the portrait (0 = off)
   },
   witch_doctor: {
-    enabled: true,
+    enabled: false, // disabled for now — awaiting new attack animations
     sheetKey: 'ui_spritesheet_witch_doctor_attack_animation',
     jsonPath: 'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.json',
     scale: 4.03,

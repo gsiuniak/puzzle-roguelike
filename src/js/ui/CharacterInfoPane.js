@@ -9,10 +9,14 @@ import { getStatusDef, STATUS_KIND } from '../data/statusEffects.js';
 
 // ── Tunable layout constants ─────────────────────────────
 const PANE_PADDING = { top: 30, right: 12, bottom: 12, left: 12 };
-const HEADER_HEIGHT = 96;
-const PORTRAIT_WIDTH = 150;
-const PORTRAIT_HEIGHT = 150;
+// Header now holds ONLY [portrait | name + stats]; the HP bar moved to its own
+// full-width row below. The header is as tall as the portrait so that full-width
+// HP row sits cleanly beneath the portrait.
+const PORTRAIT_WIDTH = 130;
+const PORTRAIT_HEIGHT = 130;
+const HEADER_HEIGHT = 130;
 const HEADER_GAP = 12;
+const OUTER_GAP = 6; // column gap between header / HP-bar row / mana row
 
 const NAME_FONT_SIZE = 36;
 // Name wraps onto a second line when it's too wide (the class/level line was
@@ -80,6 +84,11 @@ const POISON_BADGE_OFFSET = { x: 0, y: 20 }; // from portrait top-center, downwa
 
 const HEALTH_BAR_HEIGHT = 36;
 const HEALTH_LABEL_FONT_SIZE = 20;
+// The HP bar sits in its OWN row beneath the header, spanning the full panel
+// width (with a small side inset off the panel art). These frame that row.
+const HEALTH_ROW_MARGIN_TOP = 6;
+const HEALTH_ROW_MARGIN_BOTTOM = 4;
+const HEALTH_BAR_SIDE_INSET = 12;
 
 // ── Armor badge (shield + "+N" beside the centered HP label) ──
 // The armor VALUE shows here (always exact, even when the blue bar overlay is
@@ -95,19 +104,24 @@ const STATS_HEIGHT = 22;
 const STAT_ICON_SIZE = 28;
 const STAT_VALUE_FONT_SIZE = 22;
 
-const MANA_ROW_HEIGHT = 150;
+const MANA_ROW_HEIGHT = 88;    // tightened — orbs are ~80 tall; was 150 (lots of dead space)
+const MANA_ROW_MARGIN_TOP = 2; // the HP-bar row now separates it from the header
+const MANA_ROW_PADDING_TOP = 4; // was 20
 const MANA_GAP = 0;
 const MANA_ORB_WIDTH = 70;
 const MANA_ORB_HEIGHT = 80;
 const MANA_FONT_SIZE = 21;
 
 /**
- * Natural height of the pane = top + bottom padding + header + mana row + gap.
- * Locks the pane height so it doesn't stretch inside its column.
+ * Natural height of the pane = paddings + header + full-width HP-bar row +
+ * mana row (+ the column gaps between the three rows). Locks the pane height so
+ * it doesn't stretch inside its column.
  */
 const NATURAL_HEIGHT =
   PANE_PADDING.top + PANE_PADDING.bottom +
-  HEADER_HEIGHT + MANA_ROW_HEIGHT + 6 /* outer column gap */ + 20 /* mana row top margin */;
+  HEADER_HEIGHT +
+  OUTER_GAP + HEALTH_ROW_MARGIN_TOP + HEALTH_BAR_HEIGHT + HEALTH_ROW_MARGIN_BOTTOM +
+  OUTER_GAP + MANA_ROW_MARGIN_TOP + MANA_ROW_HEIGHT;
 
 const MANA_COLORS = {
   red:    '#cc3333',
@@ -122,9 +136,11 @@ const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
  * CharacterInfoPane — compact horizontal character info panel.
  *
  * Structure:
- *   Row 1:
- *     [portrait] [name / class / hp bar / attack-magic-armor stats]
+ *   Row 1 (header):
+ *     [portrait] [name / attack-magic stats]
  *   Row 2:
+ *     [full-width HP bar]
+ *   Row 3:
  *     [mana orb x5]
  *
  * Data-driven via setCharacterData()/updateFromState(). No skills section —
@@ -154,7 +170,7 @@ export default class CharacterInfoPane extends UIPanel {
     this._flair.smoothing = true;
 
     this.direction = 'column';
-    this.gap = 6;
+    this.gap = OUTER_GAP;
     this.padding = PANE_PADDING;
     this.backgroundAssetKey = 'character_pane_panel';
     // Lock height so the pane sizes to content instead of stretching.
@@ -213,6 +229,11 @@ export default class CharacterInfoPane extends UIPanel {
     const cd = this._characterData;
     if (!cd) return;
 
+    // The enemy pane is MIRRORED: portrait on the RIGHT, name/stats on the LEFT
+    // (the player pane keeps portrait-left). Only the header is mirrored — the
+    // full-width HP bar + centered mana row read the same on both sides.
+    const isEnemy = this._side === 'enemy';
+
     // ── Header row: portrait + info ──
     const header = new UIContainer();
     header.direction = 'row';
@@ -235,18 +256,18 @@ export default class CharacterInfoPane extends UIPanel {
       height: PORTRAIT_HEIGHT,
       fitMode: 'cover',
       alignSelfV: 'center',
-      margin: { top: 20, left: 5}
+      margin: isEnemy ? { right: 5 } : { left: 5 },
     });
-    header.addChild(this._portrait);
 
     // Info column
     const info = new UIContainer();
     info.direction = 'column';
     info.gap = 2;
     info.flexGrow = 1;
-    info.padding = { top: 10, right: 4 };
+    info.padding = isEnemy ? { top: 10, left: 4 } : { top: 10, right: 4 };
 
     // Name — wraps onto a second line when too wide (class/level line removed).
+    // Left-aligned on BOTH panes (even the mirrored enemy pane).
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: NAME_FONT_SIZE,
@@ -260,7 +281,39 @@ export default class CharacterInfoPane extends UIPanel {
     });
     info.addChild(this._nameText);
 
-    // HP bar
+    // Stats row (attack | magic | armor) — right-justified on the enemy pane.
+    const statsRow = new UIContainer();
+    statsRow.direction = 'row';
+    statsRow.alignItems = 'center';
+    statsRow.justifyContent = isEnemy ? 'end' : 'start';
+    statsRow.gap = 10;
+    statsRow.padding = isEnemy ? { left: 10 } : { right: 10 };
+    statsRow.height = STATS_HEIGHT;
+
+    statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
+    statsRow.addChild(this._buildStatGroup('icon_magic',  () => this._magicValue,  (el) => { this._magicValue = el;  }, cd.magic  ?? 0));
+    // Armor moved to the HP bar (blue overlay + shield "+N" badge), so it's no
+    // longer shown in this row. (updateFromState guards on `this._armorValue`,
+    // so leaving it unbuilt is safe.) Uncomment to restore the inline armor stat.
+    // statsRow.addChild(this._buildStatGroup('icon_block',  () => this._armorValue,  (el) => { this._armorValue = el;  }, cd.armor  ?? 0));
+
+    info.addChild(statsRow);
+
+    // Portrait-left (player) vs portrait-right (enemy).
+    if (isEnemy) {
+      header.addChild(info);
+      header.addChild(this._portrait);
+    } else {
+      header.addChild(this._portrait);
+      header.addChild(info);
+    }
+
+    this.addChild(header);
+
+    // ── HP bar row ──
+    // Its own row beneath the header, spanning the full panel width (no
+    // widthPercent → the column stretches it to the pane's inner width, inset by
+    // the side margins). The armor/barrier overlays + shield badges follow it.
     this._healthBar = new UIProgressBar();
     this._healthBar.setStyle({
       value: cd.hp ?? 0,
@@ -274,30 +327,14 @@ export default class CharacterInfoPane extends UIPanel {
       borderWidth: 1,
       cornerRadius: 3,
       height: HEALTH_BAR_HEIGHT,
-      widthPercent: 0.95,
-      margin: { top: 4, bottom: 8 },
+      margin: {
+        top: HEALTH_ROW_MARGIN_TOP,
+        bottom: HEALTH_ROW_MARGIN_BOTTOM,
+        left: HEALTH_BAR_SIDE_INSET,
+        right: HEALTH_BAR_SIDE_INSET,
+      },
     });
-    info.addChild(this._healthBar);
-
-    // Stats row (attack | magic | armor)
-    const statsRow = new UIContainer();
-    statsRow.direction = 'row';
-    statsRow.alignItems = 'center';
-    statsRow.gap = 10;
-    statsRow.padding = { right: 10 };
-    statsRow.height = STATS_HEIGHT;
-
-    statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
-    statsRow.addChild(this._buildStatGroup('icon_magic',  () => this._magicValue,  (el) => { this._magicValue = el;  }, cd.magic  ?? 0));
-    // Armor moved to the HP bar (blue overlay + shield "+N" badge), so it's no
-    // longer shown in this row. (updateFromState guards on `this._armorValue`,
-    // so leaving it unbuilt is safe.) Uncomment to restore the inline armor stat.
-    // statsRow.addChild(this._buildStatGroup('icon_block',  () => this._armorValue,  (el) => { this._armorValue = el;  }, cd.armor  ?? 0));
-
-    info.addChild(statsRow);
-    header.addChild(info);
-
-    this.addChild(header);
+    this.addChild(this._healthBar);
 
     // ── Mana row ──
     const manaRow = new UIContainer();
@@ -306,8 +343,8 @@ export default class CharacterInfoPane extends UIPanel {
     manaRow.alignItems = 'center';
     manaRow.gap = MANA_GAP;
     manaRow.height = MANA_ROW_HEIGHT;
-    manaRow.padding = { top: 20, right: 2, bottom: 2, left: 2 };
-    manaRow.margin = { top: 40 };
+    manaRow.padding = { top: MANA_ROW_PADDING_TOP, right: 2, bottom: 2, left: 2 };
+    manaRow.margin = { top: MANA_ROW_MARGIN_TOP };
 
     const manaData = cd.mana || {};
     for (const color of MANA_ORDER) {

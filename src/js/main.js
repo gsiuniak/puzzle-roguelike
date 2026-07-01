@@ -91,12 +91,12 @@ const SPRITESHEET_MAP = {
   ui_spritesheet_player_portraits: {
     image: 'assets/sprites/battle/portraits/ui_spritesheet_player_portraits.png',
     json:  'assets/sprites/battle/portraits/ui_spritesheet_player_portraits.json',
-    trim:  false, // sprite names match the `portrait_<id>` keys directly (no aliases)
+    trim:  false, // sprites named `<id>_portrait_floating` → aliased to `portrait_<id>` (see ASSET_ALIASES)
   },
   ui_spritesheet_enemy_portraits: {
     image: 'assets/sprites/battle/portraits/ui_spritesheet_enemy_portraits.png',
     json:  'assets/sprites/battle/portraits/ui_spritesheet_enemy_portraits.json',
-    trim:  false, // sprite names match the `portrait_<id>` keys directly (no aliases)
+    trim:  false, // sprites named `<id>_portrait_floating` → aliased to `portrait_<id>` (see ASSET_ALIASES)
   },
   ui_spritesheet_player_skills: {
     image: 'assets/sprites/skills/player/ui_spritesheet_player_skills.png',
@@ -215,10 +215,29 @@ const ASSET_ALIASES = {
   // Sanguine Egg tiles (the Sanguine Phoenix's wild tile) — dedicated art lives
   // in the tiles sheet as `phoenix_egg_tile`; the board requests `tile_<type>`.
   tile_sanguine_egg: 'phoenix_egg_tile',
-  // (Sanguine Phoenix / Egg portraits resolve directly from the enemy-portraits
-  // sheet: the Phoenix def's `portrait: 'sanguine_phoenix'` → `portrait_sanguine_phoenix`,
-  // the Egg def's `portrait: 'sanguine_phoenix_egg'` → `portrait_sanguine_phoenix_egg`.
-  // No aliases needed.)
+  // ── Battle portraits ──
+  // The player/enemy portrait sheets now name their sprites `<id>_portrait_floating`
+  // (was `portrait_<id>`). The battle panes still request the stable `portrait_<id>`
+  // keys (derived from each def's `portrait` field), so remap them here. Most map
+  // 1:1; a couple of sprite names diverge from the def's `portrait` value and are
+  // mapped explicitly (sanguine egg, chokeweed).
+  portrait_warrior:      'warrior_portrait_floating',
+  portrait_mage:         'mage_portrait_floating',
+  portrait_witch_doctor: 'witch_doctor_portrait_floating',
+  portrait_orc_taskmaster:    'orc_taskmaster_portrait_floating',
+  portrait_sanguine_phoenix:  'sanguine_phoenix_portrait_floating',
+  portrait_sanguine_phoenix_egg: 'sanguine_egg_portrait_floating', // def portrait id differs from sprite name
+  portrait_chokeweed:         'chokeweed_sapper_portrait_floating', // def portrait id differs from sprite name
+  portrait_goblin_sapper:     'goblin_sapper_portrait_floating',
+  portrait_cyclops:           'cyclops_portrait_floating',
+  portrait_goblin:            'goblin_portrait_floating',
+  portrait_malakor:           'malakor_portrait_floating',
+  portrait_goresnout_trackers: 'goresnout_trackers_portrait_floating',
+  portrait_acolyte:           'acolyte_portrait_floating',
+  portrait_abomination:       'abomination_portrait_floating',
+  portrait_thrall:            'thrall_portrait_floating',
+  // NOTE: orc / shadow_weaver / stone_gargoyle have no portrait in the new sheets,
+  // so their panes fall back to the `placeholder` asset until art is added.
 };
 
 // ── Game viewport configuration ─────────────────────────
