@@ -47,7 +47,7 @@ const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
  * registers "something important happened". The player's beat is a touch longer
  * so their own big matches read as the bigger moment.
  */
-const MATCH4_FREEZE_MS = { player: 400, enemy: 400 };
+const MATCH4_FREEZE_MS = { player: 420, enemy: 400 };
 const ENEMY_BASE_DELAY = 400;
 const SWAP_BASE_DURATION = 120;
 /**

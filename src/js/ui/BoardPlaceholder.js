@@ -112,11 +112,11 @@ const MATCH4_FLOURISH = {
   darkenRampFrac: 0.3,     // fraction of the beat spent fading the punch IN
   rampOutFrac: 0.4,        // fraction of the beat spent fading the punch OUT
   // Matched tiles pop up by this fraction over cell size at peak (rides `env`,
-  // so they grow in → hold → settle back). Kept MODEST: the tile art's internal
-  // padding absorbs a small grow so adjacent matched tiles don't visibly
-  // collide. The big 0.26 was overlapping; ~0.15 pops without touching. Raise
-  // toward the bloom instead of this if you ever see neighbors clip.
-  growScale: 0.15,
+  // so they grow in → hold → settle back). The whole group scales about its
+  // centroid — tiles shift outward as they grow — so they NEVER overlap each
+  // other however big this is; they only bulge over the surrounding darkened
+  // non-matched tiles (which reads fine). Bump for a punchier pop.
+  growScale: 0.18,
   // Slight overshoot on the pop for punch (easeOutBack strength; 0 = linear).
   popOvershoot: 1.7,
   // Additive radial bloom around each matched tile (overlapping radials blend
@@ -452,10 +452,27 @@ export default class BoardPlaceholder extends UIElement {
       return {
         colorKey,
         rgb: MATCH4_GLOW_COLORS[colorKey] || '255,255,255',
-        cx: ox + pos.col * cs + cs / 2,
+        cx: ox + pos.col * cs + cs / 2,   // rest center
         cy: oy + pos.row * cs + cs / 2,
       };
     });
+
+    // Group centroid — the whole matched cluster POPS about this point: each
+    // tile both grows AND shifts outward from the centroid by the same factor,
+    // so the group scales as one rigid unit and tiles never overlap each other
+    // (only the surrounding darkened non-matched tiles, which is fine). The
+    // "pop" rides `env` through an easeOutBack overshoot (punch up → settle;
+    // returns to 1 at env=0, so nothing clips at rest).
+    let gx = 0, gy = 0;
+    for (const it of items) { gx += it.cx; gy += it.cy; }
+    gx /= items.length; gy /= items.length;
+    const c1 = cfg.popOvershoot;
+    const pop = 1 + (c1 + 1) * Math.pow(env - 1, 3) + c1 * Math.pow(env - 1, 2);
+    const scale = 1 + cfg.growScale * pop;
+    for (const it of items) {
+      it.dcx = gx + (it.cx - gx) * scale;   // grown/spread center
+      it.dcy = gy + (it.cy - gy) * scale;
+    }
 
     ctx.save();
 
@@ -469,39 +486,34 @@ export default class BoardPlaceholder extends UIElement {
     ctx.globalCompositeOperation = 'lighter';
     const bloomR = cs * cfg.bloomRadiusFrac * (cfg.bloomStartScale + (1 - cfg.bloomStartScale) * env);
     for (const it of items) {
-      const g = ctx.createRadialGradient(it.cx, it.cy, cs * 0.08, it.cx, it.cy, bloomR);
+      const g = ctx.createRadialGradient(it.dcx, it.dcy, cs * 0.08, it.dcx, it.dcy, bloomR);
       g.addColorStop(0, `rgba(${it.rgb},${cfg.bloomAlpha * env})`);
       g.addColorStop(cfg.bloomInnerFrac, `rgba(${it.rgb},${cfg.bloomAlpha * env * 0.45})`);
       g.addColorStop(1, `rgba(${it.rgb},0)`);
       ctx.fillStyle = g;
-      ctx.fillRect(it.cx - bloomR, it.cy - bloomR, bloomR * 2, bloomR * 2);
+      ctx.fillRect(it.dcx - bloomR, it.dcy - bloomR, bloomR * 2, bloomR * 2);
     }
     // Hot white-ish core for the "brightest frame" pop.
     const coreR = cs * cfg.coreRadiusFrac * env;
     if (coreR > 0) {
       for (const it of items) {
-        const g = ctx.createRadialGradient(it.cx, it.cy, 0, it.cx, it.cy, coreR);
+        const g = ctx.createRadialGradient(it.dcx, it.dcy, 0, it.dcx, it.dcy, coreR);
         g.addColorStop(0, `rgba(255,250,235,${cfg.coreAlpha * env})`);
         g.addColorStop(1, 'rgba(255,250,235,0)');
         ctx.fillStyle = g;
-        ctx.fillRect(it.cx - coreR, it.cy - coreR, coreR * 2, coreR * 2);
+        ctx.fillRect(it.dcx - coreR, it.dcy - coreR, coreR * 2, coreR * 2);
       }
     }
     ctx.restore();
 
     // 3. Redraw the matched tiles on top (restores them from the darken) and
     //    brighten the art itself with an additive sprite-over-sprite pass.
-    //    The tiles POP: scale rides `env` through an easeOutBack overshoot so
-    //    they punch up then settle (returns to 1 at env=0, so no clip at rest).
     const prevSmoothing = ctx.imageSmoothingEnabled;
-    const c1 = cfg.popOvershoot;
-    const pop = 1 + (c1 + 1) * Math.pow(env - 1, 3) + c1 * Math.pow(env - 1, 2);
-    const scale = 1 + cfg.growScale * pop;
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       const drawCs = cs * scale;
-      const dx = it.cx - drawCs / 2;
-      const dy = it.cy - drawCs / 2;
+      const dx = it.dcx - drawCs / 2;
+      const dy = it.dcy - drawCs / 2;
       const img = this._assetManager ? this._assetManager.get(`tile_${it.colorKey}`) : null;
       if (img) {
         if (scale !== 1) ctx.imageSmoothingEnabled = true;  // smooth when scaled
