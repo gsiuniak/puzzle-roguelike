@@ -654,6 +654,21 @@ export default class BattleController {
   _enemyDelay()    { return ENEMY_BASE_DELAY / this.speedMultiplier; }
   _swapDuration()  { return SWAP_BASE_DURATION / this.speedMultiplier; }
 
+  /**
+   * True while the match-4+ emphasis "hit-stop" freeze is active (decision #42):
+   * the board is held in SHOW_MATCH on the flourish and the scene should PAUSE
+   * ALL other animation (character/portrait animation, floating & animated text,
+   * damage counters, particles, screen shake) for this brief beat — only the
+   * board's own flourish keeps playing. The cascade phase timer still advances,
+   * so the freeze self-terminates after `_match4FreezeMs`.
+   * @returns {boolean}
+   */
+  isHitStopActive() {
+    return this._cascadePhase === CascadePhase.SHOW_MATCH
+      && !!this._match4Flourish
+      && this._phaseTimer < this._match4FreezeMs;
+  }
+
   // ── Public API ────────────────────────────────────────
 
   /**

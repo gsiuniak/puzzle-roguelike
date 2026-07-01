@@ -111,11 +111,14 @@ const MATCH4_FLOURISH = {
   darkenAlpha: 0.62,       // peak darkness of the full-board overlay
   darkenRampFrac: 0.3,     // fraction of the beat spent fading the punch IN
   rampOutFrac: 0.4,        // fraction of the beat spent fading the punch OUT
-  // Tiles are NOT scaled by default — a per-tile grow makes adjacent matched
-  // tiles overlap. The "pop" comes from the bloom growing in instead. Raise
-  // only if your tile art has enough internal padding to absorb it (>~0.1
-  // overlaps neighbors).
-  growScale: 0.0,
+  // Matched tiles pop up by this fraction over cell size at peak (rides `env`,
+  // so they grow in → hold → settle back). Kept MODEST: the tile art's internal
+  // padding absorbs a small grow so adjacent matched tiles don't visibly
+  // collide. The big 0.26 was overlapping; ~0.15 pops without touching. Raise
+  // toward the bloom instead of this if you ever see neighbors clip.
+  growScale: 0.15,
+  // Slight overshoot on the pop for punch (easeOutBack strength; 0 = linear).
+  popOvershoot: 1.7,
   // Additive radial bloom around each matched tile (overlapping radials blend
   // into one continuous warm glow across the whole matched group).
   bloomRadiusFrac: 1.25,   // outer bloom radius at peak, fraction of cell size
@@ -488,8 +491,12 @@ export default class BoardPlaceholder extends UIElement {
 
     // 3. Redraw the matched tiles on top (restores them from the darken) and
     //    brighten the art itself with an additive sprite-over-sprite pass.
+    //    The tiles POP: scale rides `env` through an easeOutBack overshoot so
+    //    they punch up then settle (returns to 1 at env=0, so no clip at rest).
     const prevSmoothing = ctx.imageSmoothingEnabled;
-    const scale = 1 + cfg.growScale * env;
+    const c1 = cfg.popOvershoot;
+    const pop = 1 + (c1 + 1) * Math.pow(env - 1, 3) + c1 * Math.pow(env - 1, 2);
+    const scale = 1 + cfg.growScale * pop;
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       const drawCs = cs * scale;

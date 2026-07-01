@@ -29,7 +29,7 @@ const mage = {
   },
 
   skills: ['fracture', 'arcane_inscription'],
-  relics: ['unstable_catalyst'],
+  relics: ['unstable_catalyst', 'copper_coil'],
 
   /**
    * Per-victory growth (AUTO-applied; stat picking is disabled — decision #36).

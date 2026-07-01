@@ -1852,6 +1852,17 @@ export default class BattleScene extends UIPanel {
     // Sync UI state from game state
     this.updateFromController();
 
+    // ── Match-4+ hit-stop (decision #42) ──
+    // During the brief emphasis freeze, EVERYTHING stops: no character/portrait
+    // animation, no floating/animated text, no damage counters, no particles, no
+    // screen shake. Only the board's own flourish (darken + glow) keeps playing.
+    // The controller's phase timer (advanced above) still counts down so the
+    // freeze self-terminates; we just skip advancing every scene animation here.
+    if (this._battleController && this._battleController.isHitStopActive()) {
+      if (this._board) this._board.update(dt);
+      return;
+    }
+
     // ── Detect game over ──
     if (this._battleController && this._battleController.state === BattleState.GAME_OVER) {
       this._gameOverTimer += dt;
