@@ -8,15 +8,24 @@ import UIOrb from './UIOrb.js';
 import { getStatusDef, STATUS_KIND } from '../data/statusEffects.js';
 
 // ── Tunable layout constants ─────────────────────────────
-const PANE_PADDING = { top: 30, right: 12, bottom: 12, left: 12 };
-// Header now holds ONLY [portrait | name + stats]; the HP bar moved to its own
-// full-width row below. The header is as tall as the portrait so that full-width
-// HP row sits cleanly beneath the portrait.
-const PORTRAIT_WIDTH = 130;
-const PORTRAIT_HEIGHT = 130;
-const HEADER_HEIGHT = 130;
-const HEADER_GAP = 12;
-const OUTER_GAP = 6; // column gap between header / HP-bar row / mana row
+const PANE_PADDING = { top: 24, right: 12, bottom: 12, left: 12 };
+// TOP row = [floating portrait | info column]. The info column stacks
+// name (+flair band) / attack-magic stats / the 5-orb mana bar. The portrait
+// occupies a fixed-width SLOT in the layout but is DRAWN manually (in
+// render()), oversized by PORTRAIT_OVERHANG, so it "floats" past the pane's
+// TOP edge (only — the horizontal bleed is symmetric about the slot, so it
+// never pokes out the pane's side).
+// BOTTOM row = the full-width HP bar framed by the authored overlay art.
+const PORTRAIT_SLOT_WIDTH = 122;  // layout width reserved for the portrait
+// top: how far the portrait rect extends above the slot (top poke = top −
+// PANE_PADDING.top). bleedX: symmetric widening on BOTH sides of the slot —
+// makes the contain-fit rect taller-than-wide relative to typical portrait
+// aspect so the art is HEIGHT-limited (actually reaches the top edge), while
+// staying centered on the slot instead of hanging out the pane's side.
+const PORTRAIT_OVERHANG = { top: 46, bleedX: 22 };
+const HEADER_HEIGHT = 164;        // top-row height (sized to fit the info column)
+const HEADER_GAP = 6;
+const OUTER_GAP = 6; // column gap between the top row and the HP-bar row
 
 const NAME_FONT_SIZE = 36;
 // Name wraps onto a second line when it's too wide (the class/level line was
@@ -82,13 +91,21 @@ const POISON_BADGE_COLOR  = '#7cc63f';
 const POISON_BADGE_STROKE = '#0a2208';
 const POISON_BADGE_OFFSET = { x: 0, y: 20 }; // from portrait top-center, downward
 
-const HEALTH_BAR_HEIGHT = 36;
+const HEALTH_BAR_HEIGHT = 40;
 const HEALTH_LABEL_FONT_SIZE = 20;
-// The HP bar sits in its OWN row beneath the header, spanning the full panel
-// width (with a small side inset off the panel art). These frame that row.
-const HEALTH_ROW_MARGIN_TOP = 6;
-const HEALTH_ROW_MARGIN_BOTTOM = 4;
-const HEALTH_BAR_SIDE_INSET = 12;
+// The HP bar is the pane's BOTTOM row, spanning the panel width. The authored
+// ornate frame (`character_pane_health_bar_overlay`, transparent center) is
+// drawn OVER the bar in render(): overlay width = bar width / (1 − 2·INSET_X)
+// so the fill sits inset within the frame's opening, height follows the art's
+// own aspect. The margins/side inset leave room for the frame's overhang.
+const HEALTH_ROW_MARGIN_TOP = 14;
+const HEALTH_ROW_MARGIN_BOTTOM = 10;
+const HEALTH_BAR_SIDE_INSET = 26;
+const HEALTH_OVERLAY_KEY = 'character_pane_health_bar_overlay';
+const HEALTH_OVERLAY_INSET_X = 0.03; // bar inset within the overlay (fraction of overlay width)
+// Authored fill art for the bar (UIProgressBar.fillAssetKey — stretched to the
+// full bar, revealed to the filled fraction; solid fillColor is the fallback).
+const HEALTH_FILL_KEY = 'character_pane_health_bar_fill';
 
 // ── Armor badge (shield + "+N" beside the centered HP label) ──
 // The armor VALUE shows here (always exact, even when the blue bar overlay is
@@ -104,24 +121,27 @@ const STATS_HEIGHT = 22;
 const STAT_ICON_SIZE = 28;
 const STAT_VALUE_FONT_SIZE = 22;
 
-const MANA_ROW_HEIGHT = 88;    // tightened — orbs are ~80 tall; was 150 (lots of dead space)
-const MANA_ROW_MARGIN_TOP = 2; // the HP-bar row now separates it from the header
-const MANA_ROW_PADDING_TOP = 4; // was 20
+// Mana bar — lives INSIDE the info column (beneath the stats row). UIOrb
+// scales its orb + amount plate to the rect, so sizing is purely these
+// constants. NOTE the orb CIRCLE diameter = min(width, height·0.65) — the orbs
+// are height-limited here, so ORB_HEIGHT is the "make them bigger" knob (the
+// portrait slot was narrowed + gaps tightened to fund the width).
+const MANA_ROW_HEIGHT = 66;
+const MANA_ROW_PADDING_TOP = 2;
 const MANA_GAP = 0;
-const MANA_ORB_WIDTH = 70;
-const MANA_ORB_HEIGHT = 80;
-const MANA_FONT_SIZE = 21;
+const MANA_ORB_WIDTH = 45;
+const MANA_ORB_HEIGHT = 62;
+const MANA_FONT_SIZE = 16;
 
 /**
- * Natural height of the pane = paddings + header + full-width HP-bar row +
- * mana row (+ the column gaps between the three rows). Locks the pane height so
- * it doesn't stretch inside its column.
+ * Natural height of the pane = paddings + top row (portrait/info) + the
+ * full-width HP-bar row (+ the column gap between them). Locks the pane height
+ * so it doesn't stretch inside its column.
  */
 const NATURAL_HEIGHT =
   PANE_PADDING.top + PANE_PADDING.bottom +
   HEADER_HEIGHT +
-  OUTER_GAP + HEALTH_ROW_MARGIN_TOP + HEALTH_BAR_HEIGHT + HEALTH_ROW_MARGIN_BOTTOM +
-  OUTER_GAP + MANA_ROW_MARGIN_TOP + MANA_ROW_HEIGHT;
+  OUTER_GAP + HEALTH_ROW_MARGIN_TOP + HEALTH_BAR_HEIGHT + HEALTH_ROW_MARGIN_BOTTOM;
 
 const MANA_COLORS = {
   red:    '#cc3333',
@@ -136,15 +156,15 @@ const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
  * CharacterInfoPane — compact horizontal character info panel.
  *
  * Structure:
- *   Row 1 (header):
- *     [portrait] [name / attack-magic stats]
+ *   Row 1 (header, two columns):
+ *     [floating portrait] [name (+flair) / attack-magic stats / mana orb x5]
  *   Row 2:
- *     [full-width HP bar]
- *   Row 3:
- *     [mana orb x5]
+ *     [full-width HP bar, framed by the authored overlay art]
  *
- * Data-driven via setCharacterData()/updateFromState(). No skills section —
- * skills live in the separate SkillsPane.
+ * The portrait is drawn manually (oversized past its layout slot) so it
+ * "floats" beyond the pane frame. Data-driven via setCharacterData()/
+ * updateFromState(). No skills section — skills live in the separate
+ * SkillsPane.
  */
 export default class CharacterInfoPane extends UIPanel {
   constructor(characterData = null, assetManager = null, side = 'player') {
@@ -178,6 +198,7 @@ export default class CharacterInfoPane extends UIPanel {
 
     // Refs for fast update
     this._portrait = null;
+    this._portraitSlot = null;
     this._nameText = null;
     this._healthBar = null;
     this._attackValue = null;
@@ -219,6 +240,7 @@ export default class CharacterInfoPane extends UIPanel {
     this._assetManager = am;
     this.assetManager = am;
     if (this._portrait) this._portrait.assetManager = am;
+    if (this._healthBar) this._healthBar.assetManager = am;
     if (this._flair) this._flair.assetManager = am;
     for (const orb of Object.values(this._manaOrbs)) {
       if (orb) orb.assetManager = am;
@@ -229,17 +251,24 @@ export default class CharacterInfoPane extends UIPanel {
     const cd = this._characterData;
     if (!cd) return;
 
-    // The enemy pane is MIRRORED: portrait on the RIGHT, name/stats on the LEFT
-    // (the player pane keeps portrait-left). Only the header is mirrored — the
-    // full-width HP bar + centered mana row read the same on both sides.
+    // The enemy pane is MIRRORED: portrait on the RIGHT (overhanging right),
+    // info column on the LEFT (the player pane keeps portrait-left). Only the
+    // top row is mirrored — the full-width HP bar reads the same on both sides.
     const isEnemy = this._side === 'enemy';
 
-    // ── Header row: portrait + info ──
+    // ── Header row: portrait slot + info ──
     const header = new UIContainer();
     header.direction = 'row';
     header.gap = HEADER_GAP;
     header.alignItems = 'stretch';
     header.height = HEADER_HEIGHT;
+
+    // Portrait SLOT — reserves layout space only. The portrait itself is drawn
+    // manually in render() (_renderPortrait), oversized by PORTRAIT_OVERHANG,
+    // so the art floats past the pane's top edge and outer side.
+    const portraitSlot = new UIContainer();
+    portraitSlot.width = PORTRAIT_SLOT_WIDTH;
+    this._portraitSlot = portraitSlot;
 
     // Portrait — a live, white-keyed video when the data carries `portraitVideo`
     // (data-driven, mirrors enemy `introVideo`), otherwise the static sprite.
@@ -251,20 +280,21 @@ export default class CharacterInfoPane extends UIPanel {
     } else {
       this._portrait = new UIImage(portraitKey, this._assetManager);
     }
+    // Bottom-anchored contain fit: the whole floating art shows, standing on
+    // the slot's bottom edge. The rect is assigned each render from the slot.
     this._portrait.setStyle({
-      width: PORTRAIT_WIDTH,
-      height: PORTRAIT_HEIGHT,
-      fitMode: 'cover',
-      alignSelfV: 'center',
-      margin: isEnemy ? { right: 5 } : { left: 5 },
+      fitMode: 'contain',
+      imageAlignH: 'center',
+      imageAlignV: 'bottom',
     });
+    this._portrait.smoothing = true;
 
     // Info column
     const info = new UIContainer();
     info.direction = 'column';
     info.gap = 2;
     info.flexGrow = 1;
-    info.padding = isEnemy ? { top: 10, left: 4 } : { top: 10, right: 4 };
+    info.padding = isEnemy ? { left: 4 } : { right: 4 };
 
     // Name — wraps onto a second line when too wide (class/level line removed).
     // Left-aligned on BOTH panes (even the mirrored enemy pane).
@@ -286,7 +316,7 @@ export default class CharacterInfoPane extends UIPanel {
     statsRow.direction = 'row';
     statsRow.alignItems = 'center';
     statsRow.justifyContent = isEnemy ? 'end' : 'start';
-    statsRow.gap = 10;
+    statsRow.gap = 4;
     statsRow.padding = isEnemy ? { left: 10 } : { right: 10 };
     statsRow.height = STATS_HEIGHT;
 
@@ -299,44 +329,7 @@ export default class CharacterInfoPane extends UIPanel {
 
     info.addChild(statsRow);
 
-    // Portrait-left (player) vs portrait-right (enemy).
-    if (isEnemy) {
-      header.addChild(info);
-      header.addChild(this._portrait);
-    } else {
-      header.addChild(this._portrait);
-      header.addChild(info);
-    }
-
-    this.addChild(header);
-
-    // ── HP bar row ──
-    // Its own row beneath the header, spanning the full panel width (no
-    // widthPercent → the column stretches it to the pane's inner width, inset by
-    // the side margins). The armor/barrier overlays + shield badges follow it.
-    this._healthBar = new UIProgressBar();
-    this._healthBar.setStyle({
-      value: cd.hp ?? 0,
-      maxValue: cd.maxHp ?? 100,
-      fillColor: '#cc3333',
-      backgroundColor: '#1a0e0e',
-      label: `${cd.hp ?? 0} / ${cd.maxHp ?? 0}`,
-      labelColor: '#ffffff',
-      labelFontSize: HEALTH_LABEL_FONT_SIZE,
-      borderColor: '#554433',
-      borderWidth: 1,
-      cornerRadius: 3,
-      height: HEALTH_BAR_HEIGHT,
-      margin: {
-        top: HEALTH_ROW_MARGIN_TOP,
-        bottom: HEALTH_ROW_MARGIN_BOTTOM,
-        left: HEALTH_BAR_SIDE_INSET,
-        right: HEALTH_BAR_SIDE_INSET,
-      },
-    });
-    this.addChild(this._healthBar);
-
-    // ── Mana row ──
+    // ── Mana row — inside the info column, beneath the stats row ──
     const manaRow = new UIContainer();
     manaRow.direction = 'row';
     manaRow.justifyContent = 'center';
@@ -344,7 +337,6 @@ export default class CharacterInfoPane extends UIPanel {
     manaRow.gap = MANA_GAP;
     manaRow.height = MANA_ROW_HEIGHT;
     manaRow.padding = { top: MANA_ROW_PADDING_TOP, right: 2, bottom: 2, left: 2 };
-    manaRow.margin = { top: MANA_ROW_MARGIN_TOP };
 
     const manaData = cd.mana || {};
     for (const color of MANA_ORDER) {
@@ -371,7 +363,45 @@ export default class CharacterInfoPane extends UIPanel {
       manaRow.addChild(orb);
     }
 
-    this.addChild(manaRow);
+    info.addChild(manaRow);
+
+    // Portrait-left (player) vs portrait-right (enemy).
+    if (isEnemy) {
+      header.addChild(info);
+      header.addChild(portraitSlot);
+    } else {
+      header.addChild(portraitSlot);
+      header.addChild(info);
+    }
+
+    this.addChild(header);
+
+    // ── HP bar row (bottom) ──
+    // Spans the panel width, inset so the ornate overlay frame (drawn on top
+    // in render() — _renderHealthOverlay) stays inside the pane. The frame art
+    // provides the border, so the bar's own border is off.
+    this._healthBar = new UIProgressBar();
+    this._healthBar.setStyle({
+      value: cd.hp ?? 0,
+      maxValue: cd.maxHp ?? 100,
+      fillColor: '#cc3333',
+      backgroundColor: '#1a0e0e',
+      label: `${cd.hp ?? 0} / ${cd.maxHp ?? 0}`,
+      labelColor: '#ffffff',
+      labelFontSize: HEALTH_LABEL_FONT_SIZE,
+      fillAssetKey: HEALTH_FILL_KEY,
+      assetManager: this._assetManager,
+      borderWidth: 0,
+      cornerRadius: 2,
+      height: HEALTH_BAR_HEIGHT,
+      margin: {
+        top: HEALTH_ROW_MARGIN_TOP,
+        bottom: HEALTH_ROW_MARGIN_BOTTOM,
+        left: HEALTH_BAR_SIDE_INSET,
+        right: HEALTH_BAR_SIDE_INSET,
+      },
+    });
+    this.addChild(this._healthBar);
   }
 
   /**
@@ -385,12 +415,18 @@ export default class CharacterInfoPane extends UIPanel {
     super.render(ctx);
     if (!this.visible) return;
 
+    // Floating portrait — drawn manually (oversized past its layout slot) so
+    // it can overhang the pane frame. Must come first: everything below
+    // anchors to (or draws over) its rect.
+    this._renderPortrait(ctx);
+
     // Status overlays sit ON TOP of the portrait — draw before the flair's
     // early-returns so they show regardless of name/flair state.
     this._renderStatusOverlays(ctx);
 
-    // Shield badges (armor, then barrier) beside the HP label (also before the
-    // flair early-returns).
+    // Ornate frame art over the HP bar, then the shield badges on top of it
+    // so they stay readable.
+    this._renderHealthOverlay(ctx);
     this._renderShieldBadges(ctx);
 
     // Poison stack count near the portrait top (placeholder).
@@ -411,6 +447,56 @@ export default class CharacterInfoPane extends UIPanel {
     this._flair.rect.w = Math.max(0, r.w - FLAIR_SIDE_INSET * 2);
     this._flair.rect.h = FLAIR_HEIGHT;
     this._flair.renderSelf(ctx);
+  }
+
+  /**
+   * Draw the floating portrait. Its rect = the layout slot extended UP by
+   * PORTRAIT_OVERHANG.top (past the pane's top edge — the "floating" poke) and
+   * widened SYMMETRICALLY by bleedX on both sides (staying centered on the
+   * slot, so nothing hangs out the pane's side). The widening keeps the rect
+   * aspect above typical portrait aspects so the bottom-anchored contain fit
+   * is HEIGHT-limited — i.e. the art genuinely reaches the top of the rect.
+   * The rect is written back onto the portrait element so getPortraitRect()/
+   * getPortraitCenter() and the status overlays keep working unchanged.
+   */
+  _renderPortrait(ctx) {
+    if (!this._portrait) return;
+    const slot = this._portraitSlot && this._portraitSlot.rect;
+    if (!slot || slot.w <= 0) return;
+
+    const r = this._portrait.rect;
+    r.x = slot.x - PORTRAIT_OVERHANG.bleedX;
+    r.y = slot.y - PORTRAIT_OVERHANG.top;
+    r.w = slot.w + PORTRAIT_OVERHANG.bleedX * 2;
+    r.h = slot.h + PORTRAIT_OVERHANG.top;
+    this._portrait.renderSelf(ctx);
+  }
+
+  /**
+   * Draw the authored ornate frame (`character_pane_health_bar_overlay`,
+   * transparent center) OVER the HP bar: width = bar width / (1 − 2·INSET_X)
+   * so the fill sits inset within the frame's opening, height follows the
+   * art's own aspect, centered on the bar.
+   */
+  _renderHealthOverlay(ctx) {
+    const bar = this._healthBar && this._healthBar.rect;
+    if (!bar || bar.w <= 0) return;
+    const img = this._assetManager ? this._assetManager.get(HEALTH_OVERLAY_KEY) : null;
+    // Sliced sheet sprites are canvases (complete === undefined); only a real,
+    // still-loading Image reports complete === false.
+    if (!img || img.complete === false || !img.width) return;
+
+    const aspect = img.width / (img.height || 1);
+    const w = bar.w / (1 - 2 * HEALTH_OVERLAY_INSET_X);
+    const h = w / aspect;
+    const x = bar.x + bar.w / 2 - w / 2;
+    const y = bar.y + bar.h / 2 - h / 2;
+
+    const prev = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, x, y, w, h);
+    ctx.imageSmoothingEnabled = prev;
   }
 
   /**

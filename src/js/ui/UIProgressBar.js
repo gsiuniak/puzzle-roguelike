@@ -7,6 +7,10 @@ import UIElement from './UIElement.js';
  *   value           - current value (number)
  *   maxValue        - max value (number)
  *   fillColor       - CSS color for filled portion
+ *   fillAssetKey    - optional authored fill art (with assetManager); drawn
+ *                     stretched to the full bar, clipped to the filled
+ *                     fraction (reveals, never squashes). Falls back to fillColor
+ *   assetManager    - AssetManager reference for fillAssetKey
  *   backgroundColor - CSS color for unfilled portion
  *   label           - string displayed centered in bar
  *   labelColor      - CSS color for label text
@@ -25,6 +29,14 @@ export default class UIProgressBar extends UIElement {
     this.value = 0;
     this.maxValue = 100;
     this.fillColor = '#cc3333';
+    /**
+     * Optional authored fill art (asset key + AssetManager). When set and
+     * loaded, the image is drawn stretched to the FULL bar rect and clipped to
+     * the filled fraction — the art "reveals" as HP changes instead of
+     * squashing. Falls back to the solid fillColor when absent/not loaded.
+     */
+    this.fillAssetKey = null;
+    this.assetManager = null;
     this.backgroundColor = '#222222';
     /**
      * "Lost health" ghost bar. When `value` drops, the red fill chunks down
@@ -131,16 +143,32 @@ export default class UIProgressBar extends UIElement {
     ctx.fillStyle = this.backgroundColor;
     this._fillRoundRect(ctx, r.x, r.y, r.w, r.h, cr);
 
-    // Fill
+    // Fill — authored art (revealed to the filled fraction) or solid color.
     if (ratio > 0) {
-      ctx.fillStyle = this.fillColor;
       const fillW = r.w * ratio;
+      const img = this.fillAssetKey && this.assetManager
+        ? this.assetManager.get(this.fillAssetKey) : null;
+      // Sliced sheet sprites are canvases (complete === undefined); only a
+      // real, still-loading Image reports complete === false.
+      const imgReady = img && img.complete !== false && img.width;
       // Clip fill to rounded rect
       ctx.save();
       ctx.beginPath();
       this._roundRectPath(ctx, r.x, r.y, r.w, r.h, cr);
       ctx.clip();
-      ctx.fillRect(r.x, r.y, fillW, r.h);
+      if (imgReady) {
+        ctx.beginPath();
+        ctx.rect(r.x, r.y, fillW, r.h);
+        ctx.clip();
+        const prevSmooth = ctx.imageSmoothingEnabled;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, r.x, r.y, r.w, r.h);
+        ctx.imageSmoothingEnabled = prevSmooth;
+      } else {
+        ctx.fillStyle = this.fillColor;
+        ctx.fillRect(r.x, r.y, fillW, r.h);
+      }
       ctx.restore();
     }
 
@@ -266,6 +294,8 @@ export default class UIProgressBar extends UIElement {
     if (props.value !== undefined) this.value = props.value;
     if (props.maxValue !== undefined) this.maxValue = props.maxValue;
     if (props.fillColor !== undefined) this.fillColor = props.fillColor;
+    if (props.fillAssetKey !== undefined) this.fillAssetKey = props.fillAssetKey;
+    if (props.assetManager !== undefined) this.assetManager = props.assetManager;
     if (props.backgroundColor !== undefined) this.backgroundColor = props.backgroundColor;
     if (props.ghostColor !== undefined) this.ghostColor = props.ghostColor;
     if (props.ghostAlpha !== undefined) this.ghostAlpha = props.ghostAlpha;
