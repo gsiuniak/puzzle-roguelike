@@ -38,6 +38,16 @@ const CascadePhase = {
 
 /** Base durations in ms (scaled by speedMultiplier) */
 const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
+/**
+ * Match-4+ emphasis "freeze" (see decision #42). When a 4+ match grants an extra
+ * turn, the board holds on the matched tiles for a brief configurable beat — the
+ * whole board darkens and the 4+ tiles grow + glow — before cascades continue.
+ * This is EXTRA SHOW_MATCH hold time per side (ms, presentation timing — NOT
+ * scaled by speedMultiplier). Not a full pause: just long enough that the brain
+ * registers "something important happened". The player's beat is a touch longer
+ * so their own big matches read as the bigger moment.
+ */
+const MATCH4_FREEZE_MS = { player: 400, enemy: 400 };
 const ENEMY_BASE_DELAY = 400;
 const SWAP_BASE_DURATION = 120;
 /**
@@ -205,6 +215,12 @@ export default class BattleController {
     this._analysis = null;
     this._allSteps = [];
     this._extraTurnEarned = false;
+
+    // ── Match-4+ emphasis flourish (see decision #42) ──
+    /** Extra SHOW_MATCH hold (ms) for the current 4+ emphasis beat; 0 when none. */
+    this._match4FreezeMs = 0;
+    /** @type {{cells:Array<{col:number,row:number}>, color:string, side:string, durationMs:number}|null} */
+    this._match4Flourish = null;
 
     /**
      * Positions that were empty (removed) in the previous cascade step.
@@ -755,6 +771,7 @@ export default class BattleController {
       highlightCells: this.highlightCells,
       emptyCells: this.emptyCells,
       fallCells: this.fallCells,
+      match4Flourish: this._match4Flourish,
       cascadePhase: this._cascadePhase,
       swapAnim: this.swapAnim,
       targetingActive: this.state === BattleState.TARGETING,
@@ -1381,6 +1398,8 @@ export default class BattleController {
     this.highlightCells = [];
     this.emptyCells = [];
     this.fallCells = [];
+    this._match4Flourish = null;
+    this._match4FreezeMs = 0;
     this._matchTextTriggers = [];
     this._previousEmptyCells = null;
 
@@ -1417,6 +1436,12 @@ export default class BattleController {
     // side's action — it must not grant or animate an extra turn even if the
     // conversion lines up a 4+ match. Suppress the extra-turn flag/visual when
     // resuming the turn after this resolution.
+    // Match-4+ emphasis flourish (decision #42) — cleared every step, rebuilt
+    // only when THIS step grants an extra turn (a real 4+ that isn't a turn-start
+    // setup cascade). See MATCH4_FREEZE_MS.
+    this._match4Flourish = null;
+    this._match4FreezeMs = 0;
+
     let causePos = null;
     if (analysis.extraTurnTrigger && !this._resumeTurnAfterResolve
         && this._canGainExtraTurn(this.activeSide)) {
@@ -1432,6 +1457,27 @@ export default class BattleController {
         causePos = { col: analysis.positions[0].col, row: analysis.positions[0].row };
       }
       this.extraTurnTriggerPos = causePos;
+
+      // Collect the 4+ connected group(s) for the emphasis flourish (only the
+      // 4+ matches glow — incidental 3-matches in the same step do not).
+      const flourishCells = [];
+      let flourishColor = null;
+      for (const m of analysis.matches) {
+        if (m.count >= 4) {
+          for (const p of m.positions) flourishCells.push({ col: p.col, row: p.row });
+          if (!flourishColor) flourishColor = m.typeId;
+        }
+      }
+      if (flourishCells.length > 0) {
+        const freeze = MATCH4_FREEZE_MS[this.activeSide] || 0;
+        this._match4FreezeMs = freeze;
+        this._match4Flourish = {
+          cells: flourishCells,
+          color: flourishColor,
+          side: this.activeSide,
+          durationMs: freeze,
+        };
+      }
     }
 
     // Dispatch match-related passive triggers AFTER causePos is known
@@ -1586,6 +1632,9 @@ export default class BattleController {
 
     this.board.removeTiles(a.positions);
     this.highlightCells = [];
+    // Emphasis beat is over — tiles are being removed now.
+    this._match4Flourish = null;
+    this._match4FreezeMs = 0;
     this.emptyCells = [...a.positions];
     this.fallCells = [];
     this._cascadePhase = CascadePhase.REMOVE;
@@ -2051,7 +2100,9 @@ export default class BattleController {
       this._phaseTimer += dt;
       const phaseMs = this._phaseMs(this._cascadePhase);
 
-      if (this._cascadePhase === CascadePhase.SHOW_MATCH && this._phaseTimer >= phaseMs) {
+      // SHOW_MATCH holds an extra beat for a 4+ emphasis flourish (decision #42).
+      if (this._cascadePhase === CascadePhase.SHOW_MATCH
+          && this._phaseTimer >= phaseMs + (this._match4FreezeMs || 0)) {
         this._doRemove();
       } else if (this._cascadePhase === CascadePhase.REMOVE && this._phaseTimer >= phaseMs) {
         this._doFall();

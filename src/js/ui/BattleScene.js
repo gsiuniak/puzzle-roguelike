@@ -1290,6 +1290,7 @@ export default class BattleScene extends UIPanel {
       this._board.highlightCells = state.highlightCells || [];
       this._board.emptyCells = state.emptyCells || [];
       this._board.fallCells = state.fallCells || [];
+      this._board.match4Flourish = state.match4Flourish || null;
       this._board.swapAnim = state.swapAnim || null;
       this._board.targetingOverlayCells = state.targetingOverlayCells || [];
       // Pass particle effects to board for correct layering (below tiles)

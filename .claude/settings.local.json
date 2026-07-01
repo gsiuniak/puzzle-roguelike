@@ -9,13 +9,27 @@
       "Read(//home/g/test/game/gems/src/js/audio/**)",
       "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/js/audio/**)",
       "Read(//home/g/test/game/gems/src/assets/audio/sfx/**)",
-      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/assets/audio/sfx/**)"
+      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/assets/audio/sfx/**)",
+      "Read(//home/g/test/game/gems/src/js/game/**)",
+      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/js/game/**)",
+      "Read(//home/g/test/game/gems/src/js/ui/**)",
+      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/src/js/ui/**)",
+      "Read(//home/g/test/game/gems/**)",
+      "Read(///wsl.localhost/Ubuntu/home/g/test/game/gems/**)",
+      "PowerShell(wsl -d Ubuntu -- bash -lc \"cd ~/test/game/gems && for f in src/js/game/BattleController.js src/js/ui/BattleScene.js src/js/ui/BoardPlaceholder.js; do node --check \\\\\"\\\\$f\\\\\" && echo \\\\\"OK \\\\$f\\\\\"; done\")",
+      "PowerShell(wsl -d Ubuntu -- bash -lc \"cd ~/test/game/gems; node --check src/js/ui/BoardPlaceholder.js; echo DONE\")"
     ],
     "additionalDirectories": [
       "\\home\\g\\test\\game\\gems\\src\\js\\audio",
       "\\\\wsl.localhost\\Ubuntu\\home\\g\\test\\game\\gems\\src\\js\\audio",
       "\\home\\g\\test\\game\\gems\\src\\js\\data\\enemies\\act1",
-      "\\\\wsl.localhost\\Ubuntu\\home\\g\\test\\game\\gems\\src\\js\\data\\enemies\\act1"
+      "\\\\wsl.localhost\\Ubuntu\\home\\g\\test\\game\\gems\\src\\js\\data\\enemies\\act1",
+      "\\home\\g\\test\\game\\gems\\src\\js\\ui",
+      "\\\\wsl.localhost\\Ubuntu\\home\\g\\test\\game\\gems\\src\\js\\ui",
+      "\\home\\g\\test\\game\\gems\\src\\js\\game",
+      "\\\\wsl.localhost\\Ubuntu\\home\\g\\test\\game\\gems\\src\\js\\game",
+      "\\home\\g\\test\\game\\gems",
+      "\\\\wsl.localhost\\Ubuntu\\home\\g\\test\\game\\gems"
     ]
   }
 }

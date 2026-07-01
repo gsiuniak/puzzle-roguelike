@@ -99,6 +99,44 @@ const IDLE_GLINT_CONFIG = {
 };
 
 /**
+ * Match-4+ emphasis "flourish" (decision #42). When a 4+ match grants an extra
+ * turn, the controller freezes the board for a brief beat (per-side duration) and
+ * publishes `match4Flourish`. During that beat the whole board darkens and the
+ * matched 4+ tiles are redrawn ON TOP, lit by a soft warm radial BLOOM (which
+ * blends across the group) + a hot core, and the tile art itself is brightened,
+ * before cascades continue. The beat length comes from the controller; the LOOK
+ * is tuned here.
+ */
+const MATCH4_FLOURISH = {
+  darkenAlpha: 0.62,       // peak darkness of the full-board overlay
+  darkenRampFrac: 0.3,     // fraction of the beat spent fading the punch IN
+  rampOutFrac: 0.4,        // fraction of the beat spent fading the punch OUT
+  // Tiles are NOT scaled by default — a per-tile grow makes adjacent matched
+  // tiles overlap. The "pop" comes from the bloom growing in instead. Raise
+  // only if your tile art has enough internal padding to absorb it (>~0.1
+  // overlaps neighbors).
+  growScale: 0.0,
+  // Additive radial bloom around each matched tile (overlapping radials blend
+  // into one continuous warm glow across the whole matched group).
+  bloomRadiusFrac: 1.25,   // outer bloom radius at peak, fraction of cell size
+  bloomInnerFrac: 0.45,    // radius held near full-color before the falloff
+  bloomAlpha: 0.9,         // peak bloom strength
+  bloomStartScale: 0.55,   // bloom radius scale at env=0 → grows to 1 at peak
+  // Hot white-ish core for the "brightest frame" pop.
+  coreRadiusFrac: 0.62,    // core radius at peak, fraction of cell size
+  coreAlpha: 0.4,          // peak core strength
+  // Brighten the tile art itself (additive sprite-over-sprite — glows on the
+  // tile SHAPE, not a boxy square).
+  tileBrightenAlpha: 0.5,
+};
+
+/** Vivid per-type glow colors for the match-4 flourish (kept in sync as RGB). */
+const MATCH4_GLOW_COLORS = {
+  red: '255,90,74', blue: '90,155,255', green: '90,214,90', yellow: '255,206,74',
+  purple: '197,107,255', skull: '220,220,220', thrall: '255,90,74', disease: '194,209,90',
+};
+
+/**
  * BoardRenderer — renders the 8×8 match-3 grid from a BoardModel.
  *
  * Visual cascade states (set externally from BattleController):
@@ -124,6 +162,12 @@ export default class BoardPlaceholder extends UIElement {
     this.highlightCells = [];
     this.emptyCells = [];
     this.fallCells = [];
+
+    // Match-4+ emphasis flourish (set by BattleScene each frame; self-timed).
+    /** @type {{cells:Array<{col:number,row:number}>, color:string, side:string, durationMs:number}|null} */
+    this.match4Flourish = null;
+    this._flourishRef = null;   // identity of the active flourish (reset detect)
+    this._flourishTime = 0;     // ms elapsed since the current flourish started
 
     // Particle effects (set by BattleScene each frame)
     /** @type {Array<import('./TileParticleEffect.js').default>} */
@@ -246,6 +290,19 @@ export default class BoardPlaceholder extends UIElement {
         this._shuffleAnim = null;
       }
     }
+    // Match-4+ emphasis flourish timer: reset when a new flourish appears
+    // (reference change), advance while it's active, clear when gone.
+    if (this.match4Flourish) {
+      if (this.match4Flourish !== this._flourishRef) {
+        this._flourishRef = this.match4Flourish;
+        this._flourishTime = 0;
+      } else {
+        this._flourishTime += dt;
+      }
+    } else {
+      this._flourishRef = null;
+      this._flourishTime = 0;
+    }
     this._updateIdleGlints(dt);
     super.update(dt);
   }
@@ -353,6 +410,112 @@ export default class BoardPlaceholder extends UIElement {
       ctx.fillRect(-diag, -diag, diag * 2, diag * 2);
       ctx.restore();
     }
+  }
+
+  /**
+   * Match-4+ emphasis flourish (decision #42): darken the whole board, lay down
+   * a soft warm radial BLOOM behind the matched 4+ tiles (overlapping radials
+   * blend into one continuous glow across the group), then redraw the tiles ON
+   * TOP (crisp, in their cells — no overlap) with their art additively
+   * brightened. Self-timed off `_flourishTime`; the controller holds SHOW_MATCH
+   * open for the same beat so cascades don't continue yet.
+   * @private
+   */
+  _renderMatch4Flourish(ctx, ox, oy, cs) {
+    const f = this.match4Flourish;
+    if (!f || !f.cells || f.cells.length === 0) return;
+
+    const cfg = MATCH4_FLOURISH;
+    const dur = f.durationMs > 0 ? f.durationMs : 100;
+    const p = Math.max(0, Math.min(1, this._flourishTime / dur));
+
+    // Envelope: a quick punch (fade in → brief hold → fade out) that lives
+    // ENTIRELY within the freeze beat, so the normal highlighted board resumes
+    // for the rest of SHOW_MATCH. Not a lingering dim — "just enough to register".
+    const rampIn = cfg.darkenRampFrac;
+    const rampOut = cfg.rampOutFrac;
+    let env;
+    if (p < rampIn) env = p / rampIn;
+    else if (p > 1 - rampOut) env = (1 - p) / rampOut;
+    else env = 1;
+    if (env <= 0) return;
+
+    const boardW = cs * this.cols;
+    const boardH = cs * this.rows;
+
+    // Precompute per-cell center + glow color once (reused across passes).
+    const items = f.cells.map((pos) => {
+      const colorKey = this.getTileAt(pos.row, pos.col) || f.color;
+      return {
+        colorKey,
+        rgb: MATCH4_GLOW_COLORS[colorKey] || '255,255,255',
+        cx: ox + pos.col * cs + cs / 2,
+        cy: oy + pos.row * cs + cs / 2,
+      };
+    });
+
+    ctx.save();
+
+    // 1. Darken the entire board.
+    ctx.fillStyle = `rgba(0,0,0,${env * cfg.darkenAlpha})`;
+    ctx.fillRect(ox, oy, boardW, boardH);
+
+    // 2. Additive warm BLOOM behind the tiles (grows in with env; overlapping
+    //    radials merge into one soft glow across the matched group).
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const bloomR = cs * cfg.bloomRadiusFrac * (cfg.bloomStartScale + (1 - cfg.bloomStartScale) * env);
+    for (const it of items) {
+      const g = ctx.createRadialGradient(it.cx, it.cy, cs * 0.08, it.cx, it.cy, bloomR);
+      g.addColorStop(0, `rgba(${it.rgb},${cfg.bloomAlpha * env})`);
+      g.addColorStop(cfg.bloomInnerFrac, `rgba(${it.rgb},${cfg.bloomAlpha * env * 0.45})`);
+      g.addColorStop(1, `rgba(${it.rgb},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(it.cx - bloomR, it.cy - bloomR, bloomR * 2, bloomR * 2);
+    }
+    // Hot white-ish core for the "brightest frame" pop.
+    const coreR = cs * cfg.coreRadiusFrac * env;
+    if (coreR > 0) {
+      for (const it of items) {
+        const g = ctx.createRadialGradient(it.cx, it.cy, 0, it.cx, it.cy, coreR);
+        g.addColorStop(0, `rgba(255,250,235,${cfg.coreAlpha * env})`);
+        g.addColorStop(1, 'rgba(255,250,235,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(it.cx - coreR, it.cy - coreR, coreR * 2, coreR * 2);
+      }
+    }
+    ctx.restore();
+
+    // 3. Redraw the matched tiles on top (restores them from the darken) and
+    //    brighten the art itself with an additive sprite-over-sprite pass.
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    const scale = 1 + cfg.growScale * env;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const drawCs = cs * scale;
+      const dx = it.cx - drawCs / 2;
+      const dy = it.cy - drawCs / 2;
+      const img = this._assetManager ? this._assetManager.get(`tile_${it.colorKey}`) : null;
+      if (img) {
+        if (scale !== 1) ctx.imageSmoothingEnabled = true;  // smooth when scaled
+        ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, drawCs, drawCs);
+        ctx.imageSmoothingEnabled = prevSmoothing;
+        // Additive brighten — glows on the tile SHAPE, not a boxy square.
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = cfg.tileBrightenAlpha * env;
+        ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, drawCs, drawCs);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = `rgb(${it.rgb})`;
+        ctx.fillRect(dx, dy, drawCs, drawCs);
+      }
+      // Any wild frame overlay follows the tile.
+      if (isWild(it.colorKey)) this._drawWildTileBorder(ctx, dx, dy, drawCs);
+    }
+    ctx.imageSmoothingEnabled = prevSmoothing;
+
+    ctx.restore();
   }
 
   // ── Render ───────────────────────────────────────────
@@ -557,6 +720,9 @@ export default class BoardPlaceholder extends UIElement {
       ctx.strokeRect(hx + 1, hy + 1, cs - 2, cs - 2);
       ctx.restore();
     }
+
+    // ── Match-4+ emphasis flourish (darken board + grow/glow matched tiles) ──
+    this._renderMatch4Flourish(ctx, ox, oy, cs);
 
     // ── Targeting overlay (skill targeting like Explode! 3x3) ──
     if (this.targetingOverlayCells && this.targetingOverlayCells.length > 0) {
