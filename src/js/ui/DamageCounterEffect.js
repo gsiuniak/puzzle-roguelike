@@ -1,16 +1,18 @@
 /**
- * DamageCounterEffect — center-screen accumulating combat-damage feedback.
+ * DamageCounterEffect — accumulating combat-damage feedback over the health bar.
  *
- * A single stylized counter appears in the CENTER of the board when a damage
- * sequence begins and ACCUMULATES every hit of that sequence instead of
- * spawning one popup per hit. It shows the running total + a chain count:
+ * A single stylized counter appears hovering over the RECEIVING side's health
+ * bar (player pane left, enemy pane right) when a damage sequence begins and
+ * ACCUMULATES every hit of that sequence instead of spawning one popup per
+ * hit. It shows the running total + a chain count:
  *
  *     34          ← big damage digits
  *     DAMAGE      ⎫ the "DAMAGE / CHAIN X" label sprite
  *     CHAIN X 3   ⎭ (the "3" is the chain count, drawn over the CHAIN X line)
  *
  * Lifecycle (a four-phase timeline):
- *   1. ACCUMULATE — compact, parked at board center. Each new hit bumps the
+ *   1. ACCUMULATE — compact, parked over the receiver's health bar. Each new
+ *      hit bumps the
  *      total + chain and replays a punchy "tick": scale pop, small positional
  *      shake, and a couple of slash accents. Stays small so it doesn't block the
  *      board while damage is still landing.
@@ -31,8 +33,8 @@
  * externally by BattleScene's _floatingEffects list (same contract as
  * FloatingTextEffect): construct, call update(dt) + render(ctx) each frame,
  * remove once `done` is true. The owning scene feeds it the center anchor
- * (board center), the target anchor (receiver portrait), and the `resolving`
- * hint each frame.
+ * (over the receiver's health bar), the target anchor (receiver portrait),
+ * and the `resolving` hint each frame.
  */
 
 // ── Combat-damage spritesheet (ui_spritesheet_combat_damage) ─────────────────
@@ -56,10 +58,10 @@ const DIGIT_NATIVE_H = 298;
 //     [ big damage number ]          ← digit sprites; height ramps with intensity
 //     [ DAMAGE / CHAIN X label ]     ← the label sprite (chain count overlaid)
 // The chain-count digits are drawn ON TOP of the label's baked "CHAIN X" line.
-const LABEL_DISPLAY_H = 120;          // label height @ scale 1 (label width follows its aspect) Initiak: 160
-const BLOCK_GAP = 5;                  // gap between the number row and the label
-const NUMBER_MIN_H = 128;             // big-number glyph height @ intensity 0
-const NUMBER_MAX_H = 170;             // big-number glyph height @ intensity 1
+const LABEL_DISPLAY_H = 80;           // label height @ scale 1 (label width follows its aspect) Initial: 160
+const BLOCK_GAP = 4;                  // gap between the number row and the label
+const NUMBER_MIN_H = 84;              // big-number glyph height @ intensity 0
+const NUMBER_MAX_H = 112;             // big-number glyph height @ intensity 1
 const NUMBER_DIGIT_GAP_FRAC = 0.04;   // gap between big-number digits ÷ glyph height
 
 // Chain-count placement — fractions of the DISPLAYED label rect. The count digit
@@ -94,7 +96,7 @@ const FINAL_BACK = 1.5;              // easeOutBack overshoot (lower = gentler p
 const PUNCH_MS = 260;
 const PUNCH_AMP = 0.55;               // peak extra scale
 const PUNCH_ROT = 0.12;               // peak wobble (radians)
-const SHAKE_AMP = 12;                 // peak positional shake (px), decays
+const SHAKE_AMP = 8;                  // peak positional shake (px), decays
 
 // Idle → finalize. No new damage for this long (while NOT resolving) ends the
 // sequence. Held off while the board is still resolving so a long cascade stays
@@ -106,15 +108,16 @@ const FINALIZE_IDLE_MS = 150;
 const FINAL_GROW_MS = 160;
 const FINAL_HOLD_MS = 150;
 
-// Fly-to-portrait.
+// Fly-to-portrait. The hop is short now (health bar → portrait within the
+// same pane), so the arc bow is modest.
 const FLY_MS = 200;
-const FLY_ARC_LIFT = 110;             // peak upward bow of the arc (px)
+const FLY_ARC_LIFT = 55;              // peak upward bow of the arc (px)
 
 // Impact burst at the portrait.
 const IMPACT_MS = 220;
-const IMPACT_RING_MAX = 90;           // burst ring radius (px)
+const IMPACT_RING_MAX = 65;           // burst ring radius (px)
 const SPARK_COUNT = 10;
-const SPARK_LEN = 34;
+const SPARK_LEN = 24;
 const SPARK_SPEED = 0.4;              // px/ms outward
 
 function clamp01(v) {
@@ -154,7 +157,7 @@ const PHASE = { ACCUMULATE: 0, FINALIZE: 1, FLY: 2, IMPACT: 3 };
 
 export default class DamageCounterEffect {
   /**
-   * @param {number} x - center anchor X (board center, design space)
+   * @param {number} x - center anchor X (over the receiver's health bar, design space)
    * @param {number} y - center anchor Y
    * @param {object} [assetManager] - AssetManager (for the sliced damage sprites)
    */
@@ -204,7 +207,7 @@ export default class DamageCounterEffect {
     return this._impactFired;
   }
 
-  /** Re-anchor the center (board center). Only meaningful while accumulating. */
+  /** Re-anchor the center (over the receiver's health bar). Only meaningful while accumulating. */
   setCenter(x, y) {
     if (this._phase === PHASE.ACCUMULATE) {
       this.x = x;

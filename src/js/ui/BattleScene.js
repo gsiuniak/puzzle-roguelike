@@ -120,9 +120,9 @@ const ATTACK_GROWTH_EVERY_N_VICTORIES = 2;
 const ONLY_SHOW_ACTIVE_TURN_DAMAGE = true;
 
 // ── Tunable layout constants ─────────────────────────────
-// Vertical position of the accumulating damage counter as a fraction of the
-// board height (0 = top edge, 0.5 = center). Parked near the top of the grid.
-const DAMAGE_COUNTER_Y_FRAC = 0.2;
+// Vertical lift of the accumulating damage counter above the receiver's health
+// bar (px above the bar's top edge — the block hovers over the bar).
+const DAMAGE_COUNTER_BAR_LIFT = 60;
 // ── Wide battle viewport (see CanvasApp.setSceneDesignWidth) ──
 // The battle scene requests a FIXED design width slightly wider than the base
 // 1920; the extra (BATTLE_DESIGN_WIDTH − 1920) is split between the two side
@@ -1277,17 +1277,17 @@ export default class BattleScene extends UIPanel {
       }
     }
 
-    // Keep live damage counters anchored: the accumulation parks at board
-    // center, and the number flies to the RECEIVER's portrait on finalize.
-    // Feed the "resolving" hint so a cascade stays as one accumulating counter
-    // and only finalizes once the board settles (the end of the sequence).
+    // Keep live damage counters anchored: the accumulation hovers over the
+    // RECEIVER's health bar, and the number flies to that side's portrait on
+    // finalize. Feed the "resolving" hint so a cascade stays as one
+    // accumulating counter and only finalizes once the board settles.
     {
       const resolving = state.state === BattleState.RESOLVING || state.state === BattleState.SWAPPING;
-      const boardCenter = this._getDamageCounterAnchor();
       for (const side of ['player', 'enemy']) {
         const counter = this._damageCounters[side];
         if (!counter || counter.done) continue;
-        if (boardCenter) counter.setCenter(boardCenter.x, boardCenter.y);
+        const anchor = this._getDamageCounterAnchor(side);
+        if (anchor) counter.setCenter(anchor.x, anchor.y);
         const pane = side === 'player' ? this._playerPane : this._enemyPane;
         const portrait = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
         if (portrait) counter.setTarget(portrait.x, portrait.y);
@@ -1370,14 +1370,17 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * Anchor for the accumulating damage counter — horizontally centered, parked
-   * near the TOP of the grid so it doesn't cover the play area mid-cascade.
+   * Anchor for the accumulating damage counter — hovering over the RECEIVING
+   * side's health bar (player pane on the left, enemy pane on the right), so
+   * damage reads next to the bar it's draining instead of covering the board.
+   * @param {'player'|'enemy'} side - the side taking damage
    * @returns {{x:number, y:number}|null}
    */
-  _getDamageCounterAnchor() {
-    if (!this._board) return null;
-    const r = this._board.rect;
-    return { x: r.x + r.w / 2, y: r.y + r.h * DAMAGE_COUNTER_Y_FRAC };
+  _getDamageCounterAnchor(side) {
+    const pane = side === 'player' ? this._playerPane : this._enemyPane;
+    const bar = pane && typeof pane.getHealthBarRect === 'function' ? pane.getHealthBarRect() : null;
+    if (!bar) return null;
+    return { x: bar.x + bar.w / 2, y: bar.y - DAMAGE_COUNTER_BAR_LIFT };
   }
 
   /**
@@ -1566,12 +1569,12 @@ export default class BattleScene extends UIPanel {
   _addDamageToCounter(side, amount, maxHp) {
     let counter = this._damageCounters[side];
     if (!counter || counter.done || counter.finalizing) {
-      // Accumulate near the top of the grid; the number flies to the receiver's
-      // portrait when the sequence finalizes (anchors fed each frame below).
-      const boardCenter = this._getDamageCounterAnchor();
+      // Accumulate hovering over the receiver's health bar; the number flies to
+      // that side's portrait when the sequence finalizes (anchors fed each frame).
+      const barAnchor = this._getDamageCounterAnchor(side);
       const pane = side === 'player' ? this._playerPane : this._enemyPane;
       const portrait = pane && typeof pane.getPortraitCenter === 'function' ? pane.getPortraitCenter() : null;
-      const start = boardCenter || portrait;
+      const start = barAnchor || portrait;
       if (!start) return;
       counter = new DamageCounterEffect(start.x, start.y, this._assetManager);
       if (portrait) counter.setTarget(portrait.x, portrait.y);

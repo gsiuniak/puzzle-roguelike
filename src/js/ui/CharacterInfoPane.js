@@ -34,6 +34,14 @@ const HEADER_HEIGHT = 192;        // top-row height (sized to fit the info colum
 const HEADER_GAP = 4;
 const OUTER_GAP = 6; // column gap between the top row and the HP-bar row
 
+// Info-column padding: generous on the side FACING the portrait (player left,
+// enemy right — mirrored in buildHierarchy), small on the outer side. The name,
+// stats, orbs, AND the flair all respect it (the flair uses the column's
+// content rect).
+const INFO_PAD_TOP = 6;
+const INFO_PAD_PORTRAIT_SIDE = 30;
+const INFO_PAD_OUTER = 6;
+
 const NAME_FONT_SIZE = 36;
 // The name is CENTERED in the info column (both panes — this also keeps the
 // mirrored enemy name off the panel border). It wraps onto a second line when
@@ -105,7 +113,7 @@ const HEALTH_LABEL_FONT_SIZE = 20;
 // so the fill sits inset within the frame's opening, height follows the art's
 // own aspect. The margins/side inset leave room for the frame's overhang.
 const HEALTH_ROW_MARGIN_TOP = 14;
-const HEALTH_ROW_MARGIN_BOTTOM = 12;
+const HEALTH_ROW_MARGIN_BOTTOM = 16;
 const HEALTH_BAR_SIDE_INSET = 26;
 const HEALTH_OVERLAY_KEY = 'character_pane_health_bar_overlay';
 const HEALTH_OVERLAY_INSET_X = 0.03; // bar inset within the overlay (fraction of overlay width)
@@ -132,7 +140,7 @@ const STAT_VALUE_FONT_SIZE = 22;
 const STAT_VALUE_WIDTH = 44;
 const STAT_GROUP_GAP = 4;   // icon ↔ value, inside a group
 const STAT_GROUP_WIDTH = STAT_ICON_SIZE + STAT_GROUP_GAP + STAT_VALUE_WIDTH;
-const STATS_ROW_GAP = 14;   // between the attack and magic groups
+const STATS_ROW_GAP = 16;   // between the attack and magic groups
 
 // Mana bar — lives INSIDE the info column (beneath the stats row). UIOrb
 // scales its orb + amount plate to the rect, so sizing is purely these
@@ -143,7 +151,7 @@ const STATS_ROW_GAP = 14;   // between the attack and magic groups
 // the crowded look). Row uses 'space-evenly' so any remaining slack spreads
 // uniformly across the column width.
 const MANA_ROW_HEIGHT = 78;
-const MANA_ROW_PADDING_TOP = 2;
+const MANA_ROW_PADDING_TOP = 30;
 const MANA_ORB_WIDTH = 52;
 const MANA_ORB_HEIGHT = 70;
 const MANA_PLATE_SCALE = 0.92;
@@ -314,7 +322,12 @@ export default class CharacterInfoPane extends UIPanel {
     info.direction = 'column';
     info.gap = 2;
     info.flexGrow = 1;
-    info.padding = { top: 6, left: 30, right: 6 };
+    // Generous padding on the PORTRAIT side (breathing room off the floating
+    // art), small padding on the outer side — mirrored on the enemy pane,
+    // whose portrait sits on the right.
+    info.padding = isEnemy
+      ? { top: INFO_PAD_TOP, left: INFO_PAD_OUTER, right: INFO_PAD_PORTRAIT_SIDE }
+      : { top: INFO_PAD_TOP, left: INFO_PAD_PORTRAIT_SIDE, right: INFO_PAD_OUTER };
     this._infoCol = info;
 
     // Name — LEFT-aligned in the info column on both panes; wraps onto a
@@ -340,6 +353,7 @@ export default class CharacterInfoPane extends UIPanel {
     statsRow.justifyContent = 'start';
     statsRow.gap = STATS_ROW_GAP;
     statsRow.height = STATS_HEIGHT;
+    statsRow.padding = { left: 10 };
 
     statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
     statsRow.addChild(this._buildStatGroup('icon_magic',  () => this._magicValue,  (el) => { this._magicValue = el;  }, cd.magic  ?? 0));
@@ -464,10 +478,11 @@ export default class CharacterInfoPane extends UIPanel {
 
     const nameR = this._nameText.rect;
     if (!nameR || nameR.w <= 0) return;
-    // The flair spans the FULL info column width (the name rect only sets the
-    // vertical band), so the flourish reads as a divider under the header.
+    // The flair spans the info column's CONTENT width (inside its padding —
+    // the name rect only sets the vertical band), so the flourish reads as a
+    // divider under the header while respecting the column's side padding.
     const colR = (this._infoCol && this._infoCol.rect && this._infoCol.rect.w > 0)
-      ? this._infoCol.rect : nameR;
+      ? this._infoCol.getContentRect() : nameR;
 
     this._flair.rect.x = colR.x + FLAIR_SIDE_INSET;
     this._flair.rect.y = nameR.y + FLAIR_TOP_OFFSET;
@@ -642,6 +657,18 @@ export default class CharacterInfoPane extends UIPanel {
    */
   getPortraitRect() {
     const r = this._portrait && this._portrait.rect;
+    if (!r || r.w <= 0) return null;
+    return { x: r.x, y: r.y, w: r.w, h: r.h };
+  }
+
+  /**
+   * The health bar's rect in design-space coordinates ({x,y,w,h}), or null
+   * until laid out. Used to anchor the accumulating damage counter over the
+   * receiving side's health bar.
+   * @returns {{x:number,y:number,w:number,h:number}|null}
+   */
+  getHealthBarRect() {
+    const r = this._healthBar && this._healthBar.rect;
     if (!r || r.w <= 0) return null;
     return { x: r.x, y: r.y, w: r.w, h: r.h };
   }
