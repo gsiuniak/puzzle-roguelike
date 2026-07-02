@@ -5,6 +5,17 @@
 > **Type:** Design review only — **no code was modified**. This document is a blueprint for
 > future refactoring, ordered by value, not a mandate to do everything.
 > **Reviewed:** 2026-07-01.
+>
+> **IMPLEMENTATION STATUS (2026-07-02):** the controller-side core has landed (see
+> CLAUDE.md decision #43): **R1** (single `_castSkill` pipeline + `_finishInstantAction`
+> epilogue + `_performEnemySwap`), **R10-lite** (action-scoped `_extraTurnEarned`; the
+> decision-#4 ordering trap is retired — the flag cluster itself remains), **R2**
+> (`battle/skillEffectHandlers.js` registry; armor/barrier/heal/gain_attack/gain_magic
+> converged onto `EffectResolver`), **R11** (`_transformInto` derives from `_cloneState`),
+> **R12** (`_setState`), **R14** (dead `screenToBoard`/`enterTargeting` deleted),
+> **R15** (+ `opponentOf`/`posKey` utils). Still open: R3 (event queue), R4–R6
+> (status/transform/targeting extraction), and all BattleScene-side items (R7–R9, R13,
+> scene half of R14).
 
 ---
 
