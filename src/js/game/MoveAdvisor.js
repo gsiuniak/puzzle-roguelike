@@ -11,9 +11,11 @@
  *   - a skill becoming castable this move
  *   - DENYING mana colors the opponent's skills still need
  *   - cascade depth (board momentum)
- *   - a 1-ply opponent-reply lookahead: what does the settled board hand the
- *     opponent next turn? (evaluated only for the top-K candidates — this is
- *     the expensive part)
+ *   - a 1-ply opponent-reply lookahead: what does the settled (post-cascade)
+ *     board hand the opponent next turn — their best guaranteed skull damage /
+ *     4+ extra-turn setup / mana, with a huge penalty if it would be lethal.
+ *     Lazily evaluated leader-first until the top move is covered, so the
+ *     returned best move ALWAYS accounts for the opponent's reply.
  *
  * It is deliberately NOT wired into any enemy or UI by default:
  *   - enemies opt in via the `smart_matcher` aiBehavior override
@@ -53,16 +55,28 @@ export const DEFAULT_WEIGHTS = {
   denyOpponent: 3,           // per point of a color the OPPONENT's skills still need
   // Board momentum
   cascade: 6,                // per expected cascade step beyond the first
-  // Lookahead (1-ply): penalty × the opponent's best guaranteed reply value
-  opponentReply: -0.6,
-  // How the opponent's reply is valued (same units as above, simplified)
+  // Lookahead (1-ply): penalty × the opponent's best guaranteed reply value.
+  // Full weight — what a move hands the opponent counts as much as what it
+  // gains us (the "don't set up their 4+" rule).
+  opponentReply: -1.0,
+  // How the opponent's reply is valued (same units as above)
   replySkullDamage: 10,
-  replyExtraTurn: 60,
+  replyExtraTurn: 90,        // mirrors extraTurnGuaranteed — their extra turn is as bad as ours is good
   replyMana: 1.5,
+  replyLethal: 100000,       // their guaranteed reply would KILL us — never suggest this
+  // Moves that keep the turn (guaranteed extra turn) still get the reply
+  // penalty, reduced: the player acts again first and can often defuse or
+  // spend the setup, but the danger usually survives the extra move.
+  replyAfterExtraTurnFactor: 0.5,
 };
 
-/** How many top candidates get the (expensive) opponent-reply lookahead. */
-const DEFAULT_LOOKAHEAD_TOP_K = 6;
+/**
+ * Max opponent-reply evaluations per rankMoves call (the expensive term).
+ * Evaluation is LAZY-converged (see rankMoves): the returned top move is
+ * always evaluated, so this is a cost ceiling, not a coverage guarantee for
+ * the tail of the ranking.
+ */
+const DEFAULT_LOOKAHEAD_TOP_K = 12;
 
 /**
  * Per-color mana a combatant's skills still need beyond its current pools:
@@ -116,15 +130,18 @@ function effectiveHpPool(state) {
  * @param {import('./BoardModel.js').default} board
  * @param {object} opponent — combatant battle state
  * @param {object} w — resolved weights
+ * @param {object|null} [defender] — the mover's state; when given, a reply
+ *   whose guaranteed skull damage is lethal to them adds w.replyLethal
  * @returns {number} best reply value (0 when the opponent has no move)
  */
-export function bestOpponentReplyValue(board, opponent, w = DEFAULT_WEIGHTS) {
+export function bestOpponentReplyValue(board, opponent, w = DEFAULT_WEIGHTS, defender = null) {
   let best = 0;
   for (const outcome of enumerateMoves(board, opponent, { samples: 0 })) {
     const g = outcome.guaranteed;
-    const value = g.skullDamage * w.replySkullDamage
+    let value = g.skullDamage * w.replySkullDamage
       + (g.extraTurn ? w.replyExtraTurn : 0)
       + g.manaTotal * w.replyMana;
+    if (defender && g.skullDamage >= effectiveHpPool(defender)) value += w.replyLethal;
     if (value > best) best = value;
   }
   return best;
@@ -205,7 +222,8 @@ export function scoreOutcome(outcome, self, opponent, w) {
  * @param {object} [ctx.weights] — partial DEFAULT_WEIGHTS override
  * @param {number} [ctx.samples] — Monte-Carlo samples per move (default BoardSimulator's)
  * @param {boolean} [ctx.lookahead=true] — apply the opponent-reply penalty
- * @param {number} [ctx.lookaheadTopK] — how many leaders get the lookahead
+ * @param {number} [ctx.lookaheadTopK] — max reply evaluations (cost ceiling;
+ *   evaluation is lazy-converged so the returned top move is always covered)
  * @returns {Array<{swap, score, breakdown, outcome}>} sorted best → worst
  */
 export function rankMoves({
@@ -230,21 +248,32 @@ export function rankMoves({
   }
   ranked.sort((a, b) => b.score - a.score);
 
-  // Pass 2 — opponent-reply lookahead for the leaders only (it's the
-  // expensive term: each evaluation enumerates the opponent's moves).
-  // Skipped for moves that keep the turn (guaranteed extra turn): the
-  // opponent doesn't get the settled board next.
+  // Pass 2 — opponent-reply lookahead, LAZY-CONVERGED (it's the expensive
+  // term: each evaluation enumerates the opponent's moves on the settled
+  // board). We repeatedly evaluate the CURRENT leader and re-sort, stopping
+  // only when the leader has already been evaluated — so the returned best
+  // move ALWAYS carries its reply penalty. (The old "penalize the pre-penalty
+  // top-K then re-sort" let an unevaluated move float to #1 with an
+  // optimistic score — exactly the "hint set up the enemy's 4+" bug.)
+  // Moves that keep the turn (guaranteed extra turn) are penalized at a
+  // reduced factor: the player moves again first, but the setup usually
+  // survives their extra move.
   if (lookahead && opponent && ranked.length > 0) {
-    const k = Math.min(lookaheadTopK, ranked.length);
-    for (let i = 0; i < k; i++) {
-      const entry = ranked[i];
-      if (entry.outcome.guaranteed.extraTurn) continue;
-      const replyValue = bestOpponentReplyValue(entry.outcome.settledBoard, opponent, w);
-      const penalty = replyValue * w.opponentReply;
-      entry.breakdown.opponentReply = penalty;
-      entry.score += penalty;
+    let evals = 0;
+    const maxEvals = Math.min(Math.max(1, lookaheadTopK), ranked.length);
+    while (evals < maxEvals && !ranked[0]._replyEvaluated) {
+      const entry = ranked[0];
+      entry._replyEvaluated = true;
+      evals++;
+      const factor = entry.outcome.guaranteed.extraTurn ? w.replyAfterExtraTurnFactor : 1;
+      if (factor > 0) {
+        const replyValue = bestOpponentReplyValue(entry.outcome.settledBoard, opponent, w, self);
+        const penalty = replyValue * w.opponentReply * factor;
+        entry.breakdown.opponentReply = penalty;
+        entry.score += penalty;
+      }
+      ranked.sort((a, b) => b.score - a.score);
     }
-    ranked.sort((a, b) => b.score - a.score);
   }
 
   return ranked;

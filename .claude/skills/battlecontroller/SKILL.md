@@ -24,7 +24,8 @@ change types. Read the relevant recipe BEFORE editing.
   (via delegating registry handlers) and the relic/passive path (PassiveSystem).
 - `src/js/game/BoardSimulator.js` / `MoveAdvisor.js` — pure headless board AI
   (cascade prediction + move ranking). Wired to `aiBehavior: 'smart_matcher'`
-  (no enemy uses it yet) and `controller.getSuggestedMove()` (no UI yet).
+  (no enemy uses it yet) and `controller.getSuggestedMove()` (UI: BattleScene's
+  "?" corner button → `_requestHint`/`_renderHintHighlight`).
 
 ## Invariants — violate these and you WILL reintroduce a shipped bug
 

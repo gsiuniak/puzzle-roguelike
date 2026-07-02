@@ -219,6 +219,13 @@ const CORNER_BUTTON_SIZE = 60;     // icon width/height
 const CORNER_BUTTON_GAP = 8;       // vertical gap between the two icons
 const CORNER_BUTTON_MARGIN = 12;   // inset from the physical top-right corner
 
+// ── Hint button + highlight (BattleController.getSuggestedMove) ──
+const HINT_BUTTON_SIZE = 44;       // the small "?" button under the map button
+const HINT_DURATION_MS = 3000;     // how long the suggested-swap highlight shows
+const HINT_FADE_MS = 400;          // fade-out tail at the end of the highlight
+const HINT_PULSE_HZ = 1.4;         // highlight pulse speed
+const HINT_COLOR = '255, 214, 110'; // gold RGB for the hint outline/arrow
+
 // Targeting Confirm/Cancel controls — shown only during TARGETING, anchored
 // below the board. The button art comes from the character-pane spritesheet
 // (`ui_skill_confirm` / `ui_skill_cancel`); width is derived from the art's
@@ -378,6 +385,19 @@ export default class BattleScene extends UIPanel {
     // ── Screen shake ──
     /** @type {ScreenShake} */
     this._screenShake = new ScreenShake();
+
+    /**
+     * Hint highlight state (the "?" corner button → BattleController.
+     * getSuggestedMove). `_hintCells` = the two cells of the suggested swap;
+     * the highlight pulses for HINT_DURATION_MS and clears early the moment
+     * the player acts (state leaves PLAYER_TURN).
+     * @type {Array<{col:number,row:number}>|null}
+     */
+    this._hintCells = null;
+    /** Remaining highlight time (ms); 0 = no hint showing. */
+    this._hintTimeLeft = 0;
+    /** Elapsed highlight time (ms) — drives the pulse. */
+    this._hintTime = 0;
 
     /** Delay after game over before showing reward overlay (ms) */
     this._gameOverDelay = 400;
@@ -1921,6 +1941,21 @@ export default class BattleScene extends UIPanel {
     // Sync UI state from game state
     this.updateFromController();
 
+    // ── Hint highlight lifecycle ──
+    // Ticks down over HINT_DURATION_MS and clears EARLY the moment the player
+    // acts (any state change away from PLAYER_TURN — swap, cast, targeting),
+    // so a stale hint never lingers over a resolving/changed board.
+    if (this._hintTimeLeft > 0) {
+      this._hintTime += dt;
+      this._hintTimeLeft -= dt;
+      const stillPlayerTurn = this._battleController
+        && this._battleController.state === BattleState.PLAYER_TURN;
+      if (this._hintTimeLeft <= 0 || !stillPlayerTurn) {
+        this._hintTimeLeft = 0;
+        this._hintCells = null;
+      }
+    }
+
     // ── Match-4+ hit-stop (decision #42) ──
     // During the brief emphasis freeze, EVERYTHING stops: no character/portrait
     // animation, no floating/animated text, no damage counters, no particles, no
@@ -2101,9 +2136,16 @@ export default class BattleScene extends UIPanel {
     const x = corner.x - CORNER_BUTTON_MARGIN - CORNER_BUTTON_SIZE;
     const yTop = corner.y + CORNER_BUTTON_MARGIN;
     const s = CORNER_BUTTON_SIZE;
+    // Hint "?" is smaller than the two icon buttons — center it in the column.
+    const hs = HINT_BUTTON_SIZE;
     return {
       skip: { x, y: yTop, w: s, h: s },
       map:  { x, y: yTop + s + CORNER_BUTTON_GAP, w: s, h: s },
+      hint: {
+        x: x + (s - hs) / 2,
+        y: yTop + (s + CORNER_BUTTON_GAP) * 2,
+        w: hs, h: hs,
+      },
     };
   }
 
@@ -2130,7 +2172,31 @@ export default class BattleScene extends UIPanel {
       }
       return true;
     }
+    if (BattleScene._pointInRect(x, y, rects.hint)) {
+      this._requestHint();
+      return true;
+    }
     return false;
+  }
+
+  /**
+   * The "?" hint button: ask the controller's MoveAdvisor for the best swap
+   * and pulse-highlight its two cells on the board for a few seconds. Only
+   * meaningful during PLAYER_TURN (the button renders dimmed otherwise and a
+   * click is a no-op). The advisor call is a synchronous batch of board
+   * simulations — fine on a click, never per frame.
+   */
+  _requestHint() {
+    const c = this._battleController;
+    if (!c || c.state !== BattleState.PLAYER_TURN) return;
+    const best = c.getSuggestedMove();
+    if (!best || !best.swap) return;
+    this._hintCells = [
+      { col: best.swap.col1, row: best.swap.row1 },
+      { col: best.swap.col2, row: best.swap.row2 },
+    ];
+    this._hintTimeLeft = HINT_DURATION_MS;
+    this._hintTime = 0;
   }
 
   /** Draw the two stacked corner buttons. Hidden while an overlay is active. */
@@ -2146,7 +2212,104 @@ export default class BattleScene extends UIPanel {
     ctx.imageSmoothingEnabled = true;
     if (skipImg) ctx.drawImage(skipImg, rects.skip.x, rects.skip.y, rects.skip.w, rects.skip.h);
     if (mapImg)  ctx.drawImage(mapImg, rects.map.x, rects.map.y, rects.map.w, rects.map.h);
+    this._renderHintButton(ctx, rects.hint);
     ctx.imageSmoothingEnabled = prevSmoothing;
+  }
+
+  /**
+   * Draw the small "?" hint button (canvas primitives — no dedicated asset):
+   * a dark disc with a gold ring and a gold "?" glyph, dimmed whenever a hint
+   * can't be requested (not the player's turn).
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{x:number,y:number,w:number,h:number}} r
+   */
+  _renderHintButton(ctx, r) {
+    if (!r) return;
+    const enabled = this._battleController
+      && this._battleController.state === BattleState.PLAYER_TURN;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    ctx.save();
+    ctx.globalAlpha = enabled ? 0.95 : 0.35;
+    // Disc
+    ctx.beginPath();
+    ctx.arc(cx, cy, r.w / 2 - 1, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(18, 14, 10, 0.85)';
+    ctx.fill();
+    // Gold ring
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = `rgba(${HINT_COLOR}, 0.9)`;
+    ctx.stroke();
+    // "?" glyph
+    ctx.fillStyle = `rgba(${HINT_COLOR}, 0.95)`;
+    ctx.font = `${Math.round(r.h * 0.58)}px "Marcellus SC", Georgia, serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', cx, cy + r.h * 0.03);
+    ctx.restore();
+  }
+
+  /**
+   * Pulsing gold highlight over the two cells of the suggested swap (the "?"
+   * hint), with a double-headed arrow between them showing the swap direction.
+   * Self-fades over the last HINT_FADE_MS. No-op when no hint is active.
+   * @param {CanvasRenderingContext2D} ctx
+   */
+  _renderHintHighlight(ctx) {
+    if (!this._hintCells || this._hintTimeLeft <= 0 || !this._board) return;
+    const metrics = this._board.getCellMetrics();
+    if (!metrics || !metrics.cellSize) return;
+
+    const pulse = 0.55 + 0.45 * Math.sin((this._hintTime / 1000) * Math.PI * 2 * HINT_PULSE_HZ);
+    const fade = Math.min(1, this._hintTimeLeft / HINT_FADE_MS);
+    const alpha = pulse * fade;
+    const inset = Math.max(2, metrics.cellSize * 0.06);
+
+    ctx.save();
+    for (const cell of this._hintCells) {
+      const x = metrics.offsetX + cell.col * metrics.cellSize + inset;
+      const y = metrics.offsetY + cell.row * metrics.cellSize + inset;
+      const s = metrics.cellSize - inset * 2;
+      // Soft outer glow (wide, faint) + crisp inner outline — no shadowBlur
+      // (the expensive canvas op; two strokes read the same).
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = `rgba(${HINT_COLOR}, ${(alpha * 0.35).toFixed(3)})`;
+      ctx.strokeRect(x, y, s, s);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = `rgba(${HINT_COLOR}, ${alpha.toFixed(3)})`;
+      ctx.strokeRect(x, y, s, s);
+    }
+
+    // Double-headed arrow between the two cell centers (the swap gesture).
+    const [a, b] = this._hintCells;
+    const ax = metrics.offsetX + a.col * metrics.cellSize + metrics.cellSize / 2;
+    const ay = metrics.offsetY + a.row * metrics.cellSize + metrics.cellSize / 2;
+    const bx = metrics.offsetX + b.col * metrics.cellSize + metrics.cellSize / 2;
+    const by = metrics.offsetY + b.row * metrics.cellSize + metrics.cellSize / 2;
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    // Pull the shaft in from both centers so the heads sit inside the cells.
+    const pad = metrics.cellSize * 0.26;
+    const sx = ax + ux * pad, sy = ay + uy * pad;
+    const ex = bx - ux * pad, ey = by - uy * pad;
+    const head = Math.max(6, metrics.cellSize * 0.14);
+    ctx.strokeStyle = `rgba(${HINT_COLOR}, ${alpha.toFixed(3)})`;
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    for (const [tipX, tipY, dirX, dirY] of [[ex, ey, ux, uy], [sx, sy, -ux, -uy]]) {
+      ctx.beginPath();
+      ctx.moveTo(tipX + dirX * head, tipY + dirY * head);
+      ctx.lineTo(tipX - dirY * head * 0.55, tipY + dirX * head * 0.55);
+      ctx.lineTo(tipX + dirY * head * 0.55, tipY - dirX * head * 0.55);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // ── Targeting Confirm/Cancel controls (touch-friendly) ──────
@@ -2326,6 +2489,10 @@ export default class BattleScene extends UIPanel {
 
     // Render standard UI (background, children, board with particles)
     super.render(ctx);
+
+    // Hint highlight — pulsing outline on the suggested swap's two cells.
+    // Drawn inside the shake transform so it tracks the board.
+    this._renderHintHighlight(ctx);
 
     // Render floating effects on top of everything
     for (const effect of this._floatingEffects) {

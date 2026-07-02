@@ -157,7 +157,7 @@ scores every legal swap by:
 | Skill readiness | a previously uncastable skill becomes castable (extra if it deals damage) |
 | Denial | expected mana of colors the OPPONENT's skills still need, capped at their need |
 | Cascade depth | expected cascades beyond the first |
-| Opponent reply | 1-ply lookahead: penalty × the opponent's best GUARANTEED reply on `settledBoard`. Applied only to the top-K candidates (the expensive term) and skipped when the move keeps the turn |
+| Opponent reply | 1-ply lookahead: penalty × the opponent's best GUARANTEED reply on `settledBoard` (skull dmg / 4+ setup / mana; `replyLethal` mega-penalty if it would kill the mover). Lazy-converged leader-first (2026-07-02 fix), so the returned top move ALWAYS carries its penalty; turn-keeping moves get it at `replyAfterExtraTurnFactor` |
 
 **`DEFAULT_WEIGHTS` is the whole personality** — every objective is a named relative
 weight, tunable in isolation or overridable per call. This is the "training surface":
@@ -172,7 +172,9 @@ a future offline harness can search the weight space with zero code changes.
 - **Player hints:** `BattleController.getSuggestedMove(options?)` /
   `getRankedMoves(options?)` — PLAYER_TURN only, returns `{ swap, score, breakdown,
   outcome }` (the per-objective `breakdown` supports "why this move" hint UI).
-  **No UI calls them yet.**
+  **UI (added 2026-07-02):** the "?" corner button in BattleScene (under the map
+  button) calls `getSuggestedMove()` and pulse-highlights the suggested swap's two
+  cells with a double-headed arrow for ~3s (clears early when the player acts).
 - **Cost:** a full ranking is hundreds of board simulations — on-demand only (an
   enemy decision, a hint request), never per frame.
 
