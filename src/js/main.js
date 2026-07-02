@@ -53,6 +53,7 @@ const ASSET_MAP = {
   character_select_splash_witch_doctor: 'assets/sprites/character_select/character_select_splash_witch_doctor.jpg',
   // ── Battle panels / buttons ──
   battle_board_panel:                   'assets/sprites/battle/board/battle_board_panel.png',
+  battle_board_panel_overlay:           'assets/sprites/battle/board/battle_board_panel_overlay.png',
   battle_button_skip:                   'assets/sprites/temp/skip_button.png',
   battle_button_map:                    'assets/sprites/temp/map_button.png',
   // ── Skill Weave (background + default tag icon; UI elements are in a sheet) ──

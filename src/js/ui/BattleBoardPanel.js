@@ -1,12 +1,27 @@
 import UIPanel from './UIPanel.js';
 
 // ── Tunable layout constants ─────────────────────────────
-// Inset inside the (already-square) panel art frame. Measured from the
-// 2026-07 `battle_board_panel.png` (1178×1181 — border rails: left/right
-// ~45px, top ~74px, bottom ~53px native), converted for the ~1064px render
-// square (×0.90) plus a little breathing room. The centered gem crests at
-// top/bottom deliberately overlap the inner margin (decoration over the gap).
-const FRAME_INSET = { top: 70, right: 44, bottom: 52, left: 44 };
+// The border-only overlay art (`battle_board_panel_overlay.png`) — same
+// 1178×1181 canvas as the base panel, transparent middle — drawn at the SAME
+// frame rect AFTER the board child, so the frame rails sit ON TOP of the
+// tiles and crop their edges cleanly.
+const FRAME_OVERLAY_KEY = 'battle_board_panel_overlay';
+
+// TRUE inner-edge insets of the frame rails, alpha-scanned from the overlay
+// art (rail inner edges at native L73 / T75 / R79 / B74 of 1178×1181) and
+// converted for the ~1064px render square (×0.90).
+const FRAME_INSET_TRUE = { top: 68, right: 71, bottom: 67, left: 66 };
+// How far the tiles extend UNDER the frame rails on each side (px). The
+// overlay border crops them, so gem edges tuck beneath the frame — THE knob
+// for the tuck depth. 0 = tiles flush with the rails' inner edge.
+const FRAME_TILE_TUCK = 6;
+// Effective board inset = true rail inset minus the tuck.
+const FRAME_INSET = {
+  top:    FRAME_INSET_TRUE.top    - FRAME_TILE_TUCK,
+  right:  FRAME_INSET_TRUE.right  - FRAME_TILE_TUCK,
+  bottom: FRAME_INSET_TRUE.bottom - FRAME_TILE_TUCK,
+  left:   FRAME_INSET_TRUE.left   - FRAME_TILE_TUCK,
+};
 
 /**
  * BattleBoardPanel — decorative square wrapper around the BoardPlaceholder.
@@ -19,7 +34,11 @@ const FRAME_INSET = { top: 70, right: 44, bottom: 52, left: 44 };
  *     stretching horizontally.
  *   - The single child (BoardPlaceholder) is laid out into the same
  *     centered square, minus FRAME_INSET, so the 8×8 tile grid sits
- *     squarely inside the frame.
+ *     squarely inside the frame — deliberately FRAME_TILE_TUCK px UNDER the
+ *     frame rails on each side.
+ *   - After the board child renders, the border-only overlay art is drawn at
+ *     the same square (render() override), so the rails + gem crests sit ON
+ *     TOP of the tile edges and crop them cleanly.
  */
 export default class BattleBoardPanel extends UIPanel {
   constructor(assetManager = null) {
@@ -58,6 +77,28 @@ export default class BattleBoardPanel extends UIPanel {
       w: f.w - FRAME_INSET.left - FRAME_INSET.right,
       h: f.h - FRAME_INSET.top - FRAME_INSET.bottom,
     };
+  }
+
+  /** After the board child renders, draw the border-only frame ON TOP so the
+   *  rails crop the tucked tile edges (see FRAME_TILE_TUCK). */
+  render(ctx) {
+    super.render(ctx);
+    if (!this.visible) return;
+    this._renderFrameOverlay(ctx);
+  }
+
+  _renderFrameOverlay(ctx) {
+    if (!this.assetManager) return;
+    const img = this.assetManager.get(FRAME_OVERLAY_KEY);
+    if (!img || img.complete === false || !img.width) return;
+    const f = this._getFrameRect();
+    this._applySmoothing(ctx);
+    ctx.drawImage(
+      img,
+      Math.floor(f.x), Math.floor(f.y),
+      Math.ceil(f.w), Math.ceil(f.h)
+    );
+    this._restoreSmoothing(ctx);
   }
 
   /** Override: draw the panel art as a centered square instead of stretching. */

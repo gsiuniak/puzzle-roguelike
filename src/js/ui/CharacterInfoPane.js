@@ -87,7 +87,7 @@ const TAG_COLOR = '#a678d8';
 // row (the old "fill the freed second name line" manual-draw hack is gone —
 // the new layout gives the flair its own band, always shown).
 const FLAIR_HEIGHT = 20;            // drawn height of the flourish
-const FLAIR_MARGIN = { top: 2, bottom: 4 };
+const FLAIR_MARGIN = { top: 0, bottom: 4 };
 const FLAIR_SIDE_INSET = 6;         // horizontal inset from the info column edges
 
 // ── Status-effect overlays ──────────────────────────────
@@ -179,7 +179,7 @@ const STATS_ROW_GAP = 16;   // between the attack and magic groups
 // MANA_PLATE_SCALE keeps the count plate NARROWER than the circle (at UIOrb's
 // default 1.1 adjacent plates touch and read as clutter).
 const MANA_ROW_HEIGHT = 84;
-const MANA_ROW_PADDING = { top: 2, bottom: 2 };
+const MANA_ROW_PADDING = { top: 10, bottom: 2 };
 // Gap between adjacent orb RECTS. Note each rect is already 6px wider than the
 // orb circle (58 vs ~52), so circle-to-circle spacing ≈ this + 6.
 const MANA_ROW_GAP = 6;
