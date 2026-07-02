@@ -19,13 +19,12 @@ const ICON_GAP = 13;
 const ICON_TOP_MARGIN = 30;
 /**
  * Icon-column CENTER distance from the panel-side edge of the bar. NOTE the bar
- * (RELIC_COL_WIDTH 90) overlaps the panel by ~|MAIN_ROW_GAP| (10px with the
- * 2026-07 tightly-cropped panel art), so icons sit at
- * (edge − inset ± ICON_SIZE/2): 48 parks the stack flush beside the panel
- * frame with a ~3px gap. Raise to push icons further into the open battle
- * area, lower to tuck them against (over) the panel.
+ * (RELIC_COL_WIDTH 90) overlaps the panel by ~|MAIN_ROW_GAP| (32px), so icons
+ * sit at (edge − inset ± ICON_SIZE/2): 68 parks the stack flush beside the
+ * tightly-cropped panel frame with a ~1px gap. Raise to push icons further
+ * into the open battle area, lower to tuck them against (over) the panel.
  */
-const ICON_INSET_FROM_PANEL = 48;
+const ICON_INSET_FROM_PANEL = 68;
 const BAR_PADDING = { top: ICON_TOP_MARGIN, right: 0, bottom: 0, left: 0 };
 
 // ── Pagination (page-flip arrows when relics overflow the column) ─────────

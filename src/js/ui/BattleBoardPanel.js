@@ -9,8 +9,8 @@ const FRAME_OVERLAY_KEY = 'battle_board_panel_overlay';
 
 // TRUE inner-edge insets of the frame rails, alpha-scanned from the overlay
 // art (rail inner edges at native L73 / T75 / R79 / B74 of 1178×1181) and
-// converted for the ~1064px render square (×0.90).
-const FRAME_INSET_TRUE = { top: 68, right: 71, bottom: 67, left: 66 };
+// converted for the 1080px render square (×0.917).
+const FRAME_INSET_TRUE = { top: 69, right: 72, bottom: 68, left: 67 };
 // How far the tiles extend UNDER the frame rails on each side (px). The
 // overlay border crops them, so gem edges tuck beneath the frame — THE knob
 // for the tuck depth. 0 = tiles flush with the rails' inner edge.

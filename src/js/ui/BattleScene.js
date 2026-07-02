@@ -137,18 +137,18 @@ const BASE_DESIGN_WIDTH = 1920;
 const BATTLE_DESIGN_WIDTH = 2080;
 const MAIN_ROW_MAX_WIDTH = 1920;
 // Horizontal gap between the side columns and the central board panel.
-// The 2026-07 panel/board art is TIGHTLY CROPPED (no transparent inner
-// margins), so the old big negative overlap (-40) made the panels visibly
-// collide with the board frame. A small negative gap remains: the board art
-// keeps ~13px of transparent padding inside its rect, so a -10 overlap still
-// leaves a sliver of daylight between the panel edge and the board rail.
-// Row budget at the 2080 viewport: 2×90 relic + 2×440 side + 1064 center
-// + 4×(-10) = 2084 ≈ full width (the relic bars poke ~2px into the clipped
-// margin, which is invisible).
-const MAIN_ROW_GAP = -10;
-// Vertical padding around the main row. Smaller top/bottom = the board
-// frame can stretch to a taller square.
-const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
+// The board art's visible rails sit ~38px INSIDE its square (transparent
+// margin that gives the gem crests headroom), so the side panels overlap the
+// board rect by 32px — landing in that transparent margin and leaving ~6px of
+// visible daylight between the panel edge and the board rail. The character
+// panel art itself is tightly cropped, so don't exceed the board margin.
+// Row budget at the 2080 viewport: 2×90 relic + 2×440 side + 1080 center
+// + 4×(-32) = 2012 → centered with ~34px slack each side.
+const MAIN_ROW_GAP = -32;
+// Vertical padding around the main row. Zero: the board frame square gets the
+// full 1080 design height (the frame's crest tips sit flush with the viewport
+// edges — they have transparent headroom baked into the art).
+const MAIN_ROW_PADDING = { top: 0, right: 0, bottom: 0, left: 0 };
 
 // ── Background readability scrim ──────────────────────────
 // A full-canvas darkening drawn over the battle background (in
@@ -175,8 +175,9 @@ const SIDE_COL_MIN_WIDTH = 360;
 const SIDE_COL_MAX_WIDTH = 360;
 const SIDE_COL_GAP = 3;
 // Pushes both character columns (info pane + skills pane) down from the top of
-// the battle row — THE knob for the panels' vertical start.
-const SIDE_COL_TOP_MARGIN = 32;
+// the battle row — THE knob for the panels' vertical start. (The row itself
+// starts at y=0 now — MAIN_ROW_PADDING is zero — so this is the full offset.)
+const SIDE_COL_TOP_MARGIN = 40;
 
 // Fixed width for the center (board + combat log) column. Should be
 // roughly equal to the available vertical space for the board frame
@@ -185,7 +186,7 @@ const SIDE_COL_TOP_MARGIN = 32;
 // either side. If this is larger than the available height, you get
 // empty space inside the center column between the board frame and
 // the side columns.
-const CENTER_COL_WIDTH = 1064; // = the board frame square (1080 viewport height − row padding), no slack
+const CENTER_COL_WIDTH = 1080; // = the board frame square (full 1080 viewport height), no slack
 const CENTER_COL_GAP = 8;
 // Height of the combat log strip below the board. Bump this to make
 // the log strip taller; reduce to give the board more vertical room.
