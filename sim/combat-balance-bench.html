@@ -556,15 +556,16 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
           <div>
             <div class="subhead"><span>Play model</span><span class="ln"></span></div>
             <div id="tuneModel"></div>
-            <div class="note">How a turn actually plays out: how many matches you steer, how many skulls you line up, how often cascades and 4+ extra-turns fire. The variance band and death risk fall out of <code>cascade λ</code> and <code>p(4+ extra turn)</code>.</div>
+            <div class="note">How a turn actually plays out: how many matches you steer, how many skulls you line up, how often cascades and 4+ extra-turns fire. The variance band and death risk fall out of <code>cascade λ</code> and <code>p(4+ extra turn)</code>. Defaults are calibrated to the <b>headless-sim measurements</b> in <code>docs/balance-findings.md §1</code> (skull matches ≈ 0.3/turn, 4+ ≈ 0.2/turn, mana ≈ 3.4/turn, DPT ≈ 1.0 @ atk 1 / ≈ 2.5 @ atk 3) — re-run the sim before trusting big deviations from them.</div>
           </div>
         </div>
         <div class="divider" style="margin:16px 0"></div>
         <div class="subhead"><span>Engine constants (from source — read-only)</span><span class="ln"></span></div>
         <div class="note" style="margin-top:8px">
-          Spawn weights <code>color 16 · skull 20 · total 96</code> → P(skull)=<code>0.2083</code>, P(color)=<code>0.1667</code>. Board <code>8×8=64</code> → E[skulls on board]=<code>13.3</code>.
-          Matched-skull damage <code>N + max(0, A−1)</code> (attack term is per-match, not per-skull). Destroyed-skull <code>N × (1 + ⌊A/3⌋)</code>.
-          Bonus mana <code>⌊M/3⌋</code> per color per match. Enemy HP mult <code>[1.15 … 4.75]</code>, enemy atk bonus <code>[0,0,0,1,1,1,2,2,2,3]</code>. Level-up <code>+1 atk / +1 mag / +8 HP</code>. HP refreshes full each fight.
+          Spawn weights <code>color 16×5 · skull 20 · total 100</code> → P(skull)=<code>0.20</code>, P(color)=<code>0.16</code>. Board <code>8×8=64</code> → E[skulls on board]=<code>12.8</code>.
+          Matched-skull damage <code>round(N × (1 + (A−1)/3))</code> — the attack term scales <b>per skull</b>. Destroyed-skull <code>N × (1 + ⌊A/3⌋)</code>.
+          Bonus mana <code>⌊M/9⌋</code> per matched color. Enemy HP mult <code>[1.15 … 4.75]</code>; enemy atk bonus <code>[0,0,1,1,2,2,3,3,4,4]</code> × per-enemy <code>attackScale</code>.
+          Growth is per <b>victory</b> (growthPlan: Warrior <code>+5 HP/+1 atk</code>, Mage &amp; WD <code>+4 HP/+1 mag</code>; fallback <code>+4 HP/+1 atk</code>) — the <code>winsPerFloor</code> tuner converts floors→wins. HP refreshes full each fight.
         </div>
       </div>
     </div>
@@ -587,15 +588,16 @@ footer code{font-family:var(--mono);color:var(--ink-2)}
 
 /* ---------------------------- engine constants [CODE] --------------------- */
 const C = {
-  SPAWN_COLOR: 16, SPAWN_SKULL: 20, SPAWN_TOTAL: 96,
+  SPAWN_COLOR: 16, SPAWN_SKULL: 20, SPAWN_TOTAL: 100,   // 5×16 color + 20 skull (TileTypes.js)
   BOARD: 64,
-  HP_MULT:  [1.15,1.35,1.7,1.9,2.35,2.65,3.2,3.55,4.25,4.75], // floor index 0..9
-  ATK_BONUS:[0,0,0,1,1,1,2,2,2,3],
-  LEVELUP: { attack:1, magic:1, maxHp:8 },
+  HP_MULT:  [1.15,1.35,1.7,1.9,2.35,2.65,3.2,3.55,4.25,4.75], // floor index 0..9 (MapScene ENEMY_HP_FLOOR_MULT)
+  ATK_BONUS:[0,0,1,1,2,2,3,3,4,4],            // MapScene ENEMY_ATTACK_FLOOR_BONUS (steepened 2026-06-23)
+  MAGIC_MANA_PER_POINT: 9,                    // BattleController: +1 mana per matched color per 9 Magic
+  GROWTH_FALLBACK: { maxHp:4, startingAttack:1 }, // BattleScene DEFAULT_GROWTH_PLAN (per VICTORY)
 };
-C.P_SKULL  = C.SPAWN_SKULL / C.SPAWN_TOTAL;   // 0.2083
-C.P_COLOR  = C.SPAWN_COLOR / C.SPAWN_TOTAL;   // 0.1667
-C.E_SKULLS = C.BOARD * C.P_SKULL;             // 13.33
+C.P_SKULL  = C.SPAWN_SKULL / C.SPAWN_TOTAL;   // 0.20
+C.P_COLOR  = C.SPAWN_COLOR / C.SPAWN_TOTAL;   // 0.16
+C.E_SKULLS = C.BOARD * C.P_SKULL;             // 12.8
 
 // scaling presets: coefficient = damage per stat point (mirrors scalingConfig.DAMAGE_SCALING_PRESETS)
 const SCALE = { none:0, "_20":0.2, "_25":0.25, "_33":1/3, "_50":0.5, "_66":2/3, "_75":0.75,
@@ -618,26 +620,32 @@ const COLOR_ORDER = ["red","yellow","green","blue","purple"];
 const TUNE_DEFAULT = {
   // value equivalences (DEV), doc §3.1
   DEV_damage: 1.0, DEV_armor: 0.9, DEV_barrier: 0.9, DEV_heal: 1.0,
-  V_turn: 4.0, DEV_tile: 0.5, DEV_attack_perm: 6.0, V_mana: 3.0,  // V_turn = extra-turn FLOOR (real value computed per combatant)
-  // play model — a turn is ONE swap: skull-building and skill-funding SHARE it.
-  matchesPerTurn: 1.1, // deliberate matches you actually land per turn (≈ one swap + a little)
-  skullFocus: 0.45,    // share of your matching aimed at skulls (the rest funds colors/skills)
+  V_turn: 4.0, DEV_tile: 0.5, DEV_attack_perm: 6.0, DEV_magic_perm: 5.0, V_mana: 3.0,  // V_turn = extra-turn FLOOR (real value computed per combatant)
+  DEV_skullTile: 0.5,  // value of putting one SKULL on the board (ammo for future matches; the enemy can also match it)
+  // play model — calibrated to the headless-sim measurements in docs/balance-findings.md §1:
+  // skull matches ≈ 0.3/turn, 4+/turn ≈ 0.2, cascade ≈ 1.2 steps/action, mana ≈ 3.4/turn,
+  // DPT anchors ≈ 1.0 @ atk1 (skull-only) and ≈ 2.4–2.7 @ atk3 (Strike+Bash).
+  // A turn is ONE swap: skull-building and skill-funding SHARE it. Values below are
+  // PER ACTION; extra turns multiply them via tempo() at the aggregation points.
+  matchesPerTurn: 0.85,// deliberate matches you actually land per action (sim: AI lands < 1)
+  skullFocus: 0.22,    // share of your matching aimed at skulls (sim: AI chases 4+/colors over lone skulls)
   focusFrac: 0.7,      // share of that color mana actually usable to fund your skills
   maxCastsPerSkill: 1.5, // cap on casts/turn of ONE skill (capped-greedy loadout model)
   Nskull: 3.3,         // avg skull match size
   Ncolor: 3.2,         // avg colored match size
-  cascadeLambda: 0.6,  // spontaneous matches per clear (§2.2: 0.3–1.0)
+  cascadeLambda: 0.25, // spontaneous matches per clear (sim: ~1.2 cascade steps/action → ~0.2 extra)
   skullShare: 0.28,    // share of spontaneous matches that are skulls (§2.2)
-  pExtra: 0.15,        // P(a turn contains a natural 4+ match → extra turn)
+  pExtra: 0.20,        // P(an action contains a 4+ match → extra turn) (sim: ~0.2)
   econEff: 0.30,       // efficiency converting leftover colored mana → DEV
   refA: 5, refM: 5,    // reference stats for skill-economics readout
   // relic / per-fight model — how often passive triggers fire per turn, and how
   // long a fight runs (used to price turn-start / per-fight relic accrual).
-  fightTurns: 6,         // assumed fight length (prices accruing relics: armor/heal/ramp)
-  match4PerTurn: 0.5,    // expected 4+ matches per turn (onMatch4Plus reactors)
+  fightTurns: 7,         // assumed fight length (prices accruing relics: armor/heal/ramp; target band 6–10)
+  match4PerTurn: 0.2,    // expected 4+ matches per turn (onMatch4Plus reactors; sim: ~0.2)
   colorGainPerTurn: 1.0, // single-color mana-gain events per turn (onGainMana reactors)
   takeHitsPerTurn: 1.0,  // times the owner is hit per turn (onTakeDamage reactors)
   dealEventsPerTurn: 2.0,// damage instances the owner deals per turn (onDealDamage reactors)
+  winsPerFloor: 0.7,     // growth is per VICTORY, not per floor — ≈ share of path nodes that are fights (map has chest/rest/training floors)
   // balance thresholds
   ttkMin: 4, ttkMax: 8,
   deathTrivial: 0.05,   // below this = "Safe" (little threat)
@@ -650,37 +658,44 @@ let TUNE = { ...TUNE_DEFAULT };
 const skl = (o) => Object.assign({
   color:"red", mana:5, base:null, perSkull:0, scaleA:"none", scaleM:"none",
   extra:false, destroy:false, destroyN:0, heal:0, gArmor:0, gBarrier:0,
-  poison:0, bleed:0, tiles:0, permAtk:0, name:"Skill"
+  poison:0, bleed:0, tiles:0, permAtk:0, name:"Skill",
+  // hidden (non-editor) payloads filled by translateSkill from real catalog data:
+  // per-payload scaling ({a,m} preset keys — the game scales each effect separately),
+  // mana drain/gain, permanent magic, skulls placed on the board, and a list of
+  // effect types the model can't price (surfaced in the skill-econ note).
+  healScale:null, armorScale:null, barrierScale:null, poisonScale:null,
+  drain:0, gainMana:0, permMag:0, skullsMade:0, unmodeled:null
 }, o);
 
 // Baked-in fallback skills (used only when source data can't be loaded — see
 // loadSourceData). When source loads, SKILLS is rebuilt from the real catalog.
 let SKILLS = {
   bash:        skl({name:"Bash",            color:"red",    mana:5, base:null, scaleA:"_100", extra:true }),
-  defend:      skl({name:"Defend",          color:"blue",   mana:5, base:0, gArmor:6, scaleA:"_33", tiles:3 }),
-  fracture:    skl({name:"Fracture",        color:"yellow", mana:5, base:5, scaleM:"_150", destroy:true, destroyN:8 }),
+  defend:      skl({name:"Defend",          color:"blue",   mana:5, base:0, gArmor:6, armorScale:{a:"_33",m:"none"}, tiles:3 }),
+  fracture:    skl({name:"Fracture",        color:"yellow", mana:6, base:5, scaleM:"_150", destroy:true, destroyN:8 }),
   arcane:      skl({name:"Arcane Inscript.",color:"purple", mana:3, base:0, tiles:1 }),
-  summon:      skl({name:"Summon Dead",     color:"purple", mana:5, base:0, tiles:6 }),
-  oungan:      skl({name:"Oungan",          color:"green",  mana:5, base:0, heal:5, scaleA:"_75", tiles:3, permAtk:1 }),
-  poisondart:  skl({name:"Poison Dart",     color:"purple", mana:4, base:0, poison:4, scaleM:"_25" }),
-  enemy_strike:skl({name:"Strike",          color:"red",    mana:5, base:10, scaleA:"_50" }),
-  enemy_skill: skl({name:"Caster bolt",     color:"purple", mana:5, base:10, scaleA:"_50" }),
+  summon:      skl({name:"Summon Dead",     color:"purple", mana:5, base:0, skullsMade:10.2 }),
+  oungan:      skl({name:"Oungan",          color:"green",  mana:5, base:0, heal:5, healScale:{a:"_50",m:"_50"}, tiles:3, permAtk:1 }),
+  poisondart:  skl({name:"Poison Dart",     color:"green",  mana:5, base:0, poison:2, poisonScale:{a:"none",m:"_25"}, tiles:3, gBarrier:4, barrierScale:{a:"none",m:"_66"} }),
+  enemy_strike:skl({name:"Claw (thrall-ish)",  color:"red",    mana:3, base:5, scaleA:"_50", permAtk:2 }),
+  enemy_skill: skl({name:"Bolt (acolyte-ish)", color:"purple", mana:5, base:6, scaleA:"_50" }),
   none:        skl({name:"— none —",        color:"red",    mana:0, base:0 }),
 };
 
-// Baked-in fallback presets (rebuilt from source characters/enemies on load).
+// Baked-in fallback presets (rebuilt from source characters/enemies on load) —
+// numbers mirror the real defs as of 2026-07 so file:// mode stays representative.
 let PRESETS = {
   player: {
-    warrior:     { label:"Warrior",      hp:30, attack:1, magic:1, manaPool:5, armor:0, barrier:0, skillIds:["bash","defend"] },
-    mage:        { label:"Mage",         hp:18, attack:1, magic:3, manaPool:3, armor:0, barrier:0, skillIds:["fracture"] },
-    witchdoctor: { label:"Witch Doctor", hp:25, attack:1, magic:1, manaPool:5, armor:0, barrier:0, skillIds:["oungan"] },
-    custom:      { label:"Custom",       hp:24, attack:3, magic:3, manaPool:4, armor:0, barrier:0, skillIds:["bash"] },
+    warrior:     { label:"Warrior",      hp:30, attack:1, magic:1, manaPool:10, armor:0, barrier:0, skillIds:["bash","defend"],       growthPlan:{maxHp:5, startingAttack:1} },
+    mage:        { label:"Mage",         hp:18, attack:1, magic:3, manaPool:8,  armor:0, barrier:0, skillIds:["fracture","arcane"],   growthPlan:{maxHp:4, startingMagic:1} },
+    witchdoctor: { label:"Witch Doctor", hp:30, attack:2, magic:1, manaPool:10, armor:0, barrier:0, skillIds:["summon","poisondart"], growthPlan:{maxHp:4, startingMagic:1} },
+    custom:      { label:"Custom",       hp:24, attack:3, magic:3, manaPool:4,  armor:0, barrier:0, skillIds:["bash"] },
   },
   enemy: {
-    minion:      { label:"Minion (reference)", hp:22, attack:3, magic:2, manaPool:4, armor:0, barrier:0, skillIds:["none"] },
-    brute:       { label:"Brute",              hp:34, attack:4, magic:1, manaPool:3, armor:4, barrier:0, skillIds:["enemy_strike"] },
-    caster:      { label:"Caster",             hp:18, attack:2, magic:4, manaPool:5, armor:0, barrier:0, skillIds:["enemy_skill"] },
-    boss:        { label:"Boss",               hp:50, attack:4, magic:3, manaPool:5, armor:0, barrier:6, skillIds:["enemy_skill"] },
+    minion:      { label:"Minion (goblin-ish)", hp:14, attack:1, magic:0, manaPool:0, armor:0,  barrier:0, skillIds:["none"],         floors:[1,2] },
+    brute:       { label:"Brute (armored)",     hp:30, attack:2, magic:0, manaPool:0, armor:10, barrier:0, skillIds:["enemy_strike"], floors:[3,4,5] },
+    caster:      { label:"Caster",              hp:26, attack:2, magic:2, manaPool:3, armor:0,  barrier:0, skillIds:["enemy_skill"],  floors:[4,5,6] },
+    boss:        { label:"Boss (Malakor-ish)",  hp:50, attack:1, magic:0, manaPool:0, armor:0,  barrier:0, skillIds:["enemy_skill"],  floors:[10] },
   }
 };
 let DATA_SOURCE = "fallback"; // "source" once real character/enemy/skill data loads
@@ -702,24 +717,41 @@ function translateSkill(cat){
   for(const [col,amt] of Object.entries(cost)){ total+=amt; if(amt>domAmt){ domAmt=amt; domColor=col; } }
   o.mana = total;
   o.color = (domColor && COLOR_ORDER.includes(domColor)) ? domColor : "red";
-  let scaleSet=false;
-  const grabScale=(s)=>{ if(!scaleSet && s){ o.scaleA=scaleKeyFromMult(s.attack); o.scaleM=scaleKeyFromMult(s.magic); scaleSet=true; } };
+  // per-payload scaling — the game scales each effect independently (scalingConfig),
+  // so keep a {a,m} preset pair per payload instead of one shared pair. The
+  // editor-visible scaleA/scaleM pair belongs to the DAMAGE payload.
+  const skey=(s)=> s? { a:scaleKeyFromMult(s.attack), m:scaleKeyFromMult(s.magic) } : null;
+  const unmod=(t)=> (o.unmodeled||(o.unmodeled=[])).push(t);
   for(const e of (cat.effects||[])){
     switch(e.effectType){
-      case 'damage':       { const d=e.damage||{};  o.base+=(d.amount||0); o.perSkull+=(d.perSkull||0); grabScale(d.scaling); break; }
-      case 'heal':         { const h=e.heal||{};    o.heal+=(h.amount||0); grabScale(h.scaling); break; }
-      case 'armor':        { const a=e.armor||{};   o.gArmor+=(a.amount||0); grabScale(a.scaling); break; }
-      case 'barrier':      { const b=e.barrier||{}; o.gBarrier+=(b.amount||0); grabScale(b.scaling); break; }
-      case 'apply_poison': { o.poison+=((e.poison&&e.poison.amount)||0); break; }
-      case 'create_tiles': { o.tiles+=((e.createTiles&&e.createTiles.amount)||0); break; }
+      case 'damage':       { const d=e.damage||{};  o.base+=(d.amount||0); o.perSkull+=(d.perSkull||0);
+                             const k=skey(d.scaling); if(k && o.scaleA==="none" && o.scaleM==="none"){ o.scaleA=k.a; o.scaleM=k.m; } break; }
+      case 'heal':         { const h=e.heal||{};    o.heal+=(h.amount||0);    o.healScale=o.healScale||skey(h.scaling); break; }
+      case 'armor':        { const a=e.armor||{};   o.gArmor+=(a.amount||0);  o.armorScale=o.armorScale||skey(a.scaling); break; }
+      case 'barrier':      { const b=e.barrier||{}; o.gBarrier+=(b.amount||0);o.barrierScale=o.barrierScale||skey(b.scaling); break; }
+      case 'apply_poison': { const p=e.poison||{};  o.poison+=(p.amount||0);  o.poisonScale=o.poisonScale||skey(p.scaling);
+                             if(p.perSkull) unmod('poison/skull rider'); break; }
+      case 'create_tiles': { const ct=e.createTiles||{};
+                             if(ct.type==='skull') o.skullsMade+=(ct.amount||0); else o.tiles+=(ct.amount||0); break; }
       case 'convert_tile': { o.tiles+=1; break; }
+      case 'convert_tiles_by_type': { const cb=e.convertByType||{};
+                             // board-wide type convert: expected count of the source tile on the board
+                             const n = cb.from==='skull' ? C.E_SKULLS
+                                     : cb.from==='disease' ? 3            // effect-placed only; rough mid-fight count
+                                     : C.BOARD*C.P_COLOR;                 // one of the 5 colors ≈ 10.2 tiles
+                             if(cb.to==='skull') o.skullsMade+=n; else o.tiles+=n; break; }
       case 'gain_attack':  { o.permAtk+=((e.gainAttack&&e.gainAttack.amount)||0); break; }
+      case 'gain_magic':   { o.permMag+=((e.gainMagic&&e.gainMagic.amount)||0); break; }
+      case 'gain_mana':    { o.gainMana+=((e.gainMana&&e.gainMana.amount)||0); break; }
+      case 'drain_mana':   { o.drain+=((e.drainMana&&e.drainMana.amount)||0); break; }
       case 'extra_turn':   { o.extra=true; break; }
       case 'destroy_tiles_row':
       case 'destroy_tiles_column': { o.destroy=true; o.destroyN+=8; break; }
       case 'destroy_tiles':        { o.destroy=true; o.destroyN+=9; break; }
       case 'destroy_tiles_by_type':{ o.destroy=true; o.destroyN+=((e.destroyByType&&e.destroyByType.amount)||6); break; }
-      // gain_max_hp / gain_mana / drain_mana / convert_tiles_by_type / apply_status → board-state, left unmodeled
+      // everything else (statuses, locks, marks, max-HP, shuffle, …) is real power
+      // the model can't price — record it so the readout can say so out loud.
+      default: unmod(e.effectType); break;
     }
   }
   return o;
@@ -744,7 +776,8 @@ function buildPresetsFromData(CHARS, ENEMY_LIST){
     enemy[def.id] = { label:`${def.name} · ${def.type||'?'}`, hp:(def.hp!=null?def.hp:def.maxHp)||1,
       attack:def.attack||0, magic:def.magic||0, manaPool:sumMana(def.mana),
       armor:def.armor||0, barrier:0, skillIds:(def.skills||[]).slice(), relicIds:(def.relics||[]).slice(),
-      floors:def.floors||null, type:def.type||null, rarity:def.rarity||null };
+      floors:def.floors||null, type:def.type||null, rarity:def.rarity||null,
+      attackScale:(typeof def.attackScale==='number'?def.attackScale:1) };
   }
   return { player, enemy };
 }
@@ -791,8 +824,12 @@ function scaledBonus(attack, magic, scaleA, scaleM){
 // [CODE] enemy floor scaling; floor is 1-indexed in UI
 function enemyHP(baseHp, floor){ return round(baseHp * C.HP_MULT[clamp(floor-1,0,9)]); }
 function enemyAtkBonus(floor){ return C.ATK_BONUS[clamp(floor-1,0,9)]; }
-function manaPerColorMatch(magic){ return TUNE.Ncolor + floorDiv(magic,3); }      // [CODE] ⌊M/3⌋ bonus
-function matchedSkullDmg(N, attack){ return N + Math.max(0, attack-1); }          // [CODE] per-match attack term
+// [CODE] BattleController._applyMatchBonuses: +⌊M/9⌋ bonus mana per matched color
+function manaPerColorMatch(magic){ return TUNE.Ncolor + floorDiv(magic, C.MAGIC_MANA_PER_POINT); }
+// [CODE] MatchResolver.calculateMatchedSkullDamage: round(N × (1 + (A−1)/3)) —
+// the attack term scales PER SKULL in the match, not per match. (N is a fractional
+// average here so we keep it continuous instead of rounding.)
+function matchedSkullDmg(N, attack){ return N * (1 + Math.max(0, attack-1)/3); }
 function destroyedSkullPerTile(attack){ return 1 + floorDiv(attack,3); }          // [CODE]
 
 // effective stats for a side at a floor
@@ -800,17 +837,17 @@ function effectiveStats(c, side, floor, applyGrowth){
   let hp=c.hp, attack=c.attack, magic=c.magic, armor=c.armor||0, barrier=c.barrier||0;
   if(side==="enemy"){
     hp = enemyHP(c.hp, floor);
-    attack = c.attack + enemyAtkBonus(floor);
+    // [CODE] additive floor bonus × the enemy's attackScale (default 1; Egg = 0)
+    const as = (typeof c.attackScale==="number") ? c.attackScale : 1;
+    attack = c.attack + Math.round(enemyAtkBonus(floor) * as);
   } else if(applyGrowth){
-    const v = floor-1; // floor 1 = 0 wins so far
-    // per-character growthPlan from source data (decision #36); fall back to flat LEVELUP
-    const g = c.growthPlan;
-    const gHp  = g ? (g.maxHp||0)          : C.LEVELUP.maxHp;
-    const gAtk = g ? (g.startingAttack||0) : C.LEVELUP.attack;
-    const gMag = g ? (g.startingMagic||0)  : C.LEVELUP.magic;
-    hp += gHp * v; attack += gAtk * v; magic += gMag * v;
+    // growth is applied per VICTORY (BattleScene._applyGrowthPlan), and not every
+    // map node is a fight — winsPerFloor converts floors reached → expected wins.
+    const v = (floor-1) * TUNE.winsPerFloor;
+    const g = c.growthPlan || C.GROWTH_FALLBACK;
+    hp += (g.maxHp||0) * v; attack += (g.startingAttack||0) * v; magic += (g.startingMagic||0) * v;
   }
-  return { hp, attack, magic, armor, barrier };
+  return { hp, attack, magic, armor, barrier, manaPool: c.manaPool||0 };
 }
 
 // full DEV of one skill cast (damage + every effect incl. extra-turn) [MODEL pricing]
@@ -819,24 +856,45 @@ function effectiveStats(c, side, floor, applyGrowth){
 function skillDEV(skill, st, etv){
   const T = TUNE; let dev=0; const bd={};
   const primaryScaled = scaledBonus(st.attack, st.magic, skill.scaleA, skill.scaleM);
+  const aux = (sc)=> sc ? scaledBonus(st.attack, st.magic, sc.a, sc.m) : 0;
   const baseGiven = (skill.base===null || skill.base===undefined || skill.base==="") ? st.attack : Number(skill.base);
   let dmg = baseGiven + Number(skill.perSkull||0)*C.E_SKULLS;
   let heal=Number(skill.heal||0), gA=Number(skill.gArmor||0), gB=Number(skill.gBarrier||0), poison=Number(skill.poison||0);
-  // route the scaled bonus onto the primary payload (damage > heal > armor > barrier > poison)
+  // per-payload scaling (translated catalog skills carry their own pair per effect)
+  heal += aux(skill.healScale); gA += aux(skill.armorScale); gB += aux(skill.barrierScale); poison += aux(skill.poisonScale);
+  const hasAux = !!(skill.healScale||skill.armorScale||skill.barrierScale||skill.poisonScale);
+  // the editor's single scaleA/scaleM pair belongs to damage; for hand-built skills
+  // with no damage (and no per-payload data) keep the legacy routing so "heal + a
+  // scaling preset" still scales the heal.
   if(dmg>0 || baseGiven>0) dmg += primaryScaled;
-  else if(heal>0) heal += primaryScaled;
-  else if(gA>0) gA += primaryScaled;
-  else if(gB>0) gB += primaryScaled;
-  else if(poison>0) poison += primaryScaled;
+  else if(!hasAux){
+    if(heal>0) heal += primaryScaled;
+    else if(gA>0) gA += primaryScaled;
+    else if(gB>0) gB += primaryScaled;
+    else if(poison>0) poison += primaryScaled;
+  }
 
   if(dmg>0){ bd.damage = dmg*T.DEV_damage; dev += bd.damage; }
   if(heal>0){ bd.heal = heal*T.DEV_heal; dev += bd.heal; }
   if(gA>0){ bd.armor = gA*T.DEV_armor; dev += bd.armor; }
   if(gB>0){ bd.barrier = gB*T.DEV_barrier; dev += bd.barrier; }
-  if(poison>0){ bd.poison = poison*2*T.DEV_damage; dev += bd.poison; } // lifetime ≈ 2×stacks
+  if(poison>0){ bd.poison = poison*2*T.DEV_damage; dev += bd.poison; } // stacks halve each tick → lifetime ≈ 2×stacks
   if(Number(skill.bleed)>0){ bd.bleed = Number(skill.bleed)*T.DEV_damage; dev += bd.bleed; }
   if(Number(skill.tiles)>0){ bd.tiles = Number(skill.tiles)*T.DEV_tile; dev += bd.tiles; }
+  if(Number(skill.skullsMade)>0){
+    // skulls placed on the board are ammo for future skull matches — worth more
+    // the higher YOUR attack is, discounted because the opponent can reap them too
+    bd.skullTiles = Number(skill.skullsMade)*T.DEV_skullTile*(1+Math.max(0,(st.attack||0)-1)/3);
+    dev += bd.skullTiles;
+  }
   if(Number(skill.permAtk)>0){ bd.permAtk = Number(skill.permAtk)*T.DEV_attack_perm; dev += bd.permAtk; }
+  if(Number(skill.permMag)>0){ bd.permMag = Number(skill.permMag)*T.DEV_magic_perm; dev += bd.permMag; }
+  if(Number(skill.gainMana)>0){ bd.gainMana = Number(skill.gainMana)*T.V_mana*T.econEff; dev += bd.gainMana; }
+  if(Number(skill.drain)>0){
+    // drain hits EVERY color of the opponent's stock; most of that stock is in
+    // colors they actually use, so price ≈ the amount at realized mana value
+    bd.drain = Number(skill.drain)*T.V_mana*T.econEff; dev += bd.drain;
+  }
   if(skill.destroy && Number(skill.destroyN)>0){
     const n = Number(skill.destroyN), nS = n*(C.E_SKULLS/C.BOARD);
     bd.destroy = nS*destroyedSkullPerTile(st.attack)*T.DEV_damage + (n-nS)*T.DEV_tile;
@@ -880,12 +938,24 @@ function extraTurnValue(st){
 // just casts their best affordable skill, so a worse skill in the kit is ignored
 // (fixes "removing Defend raised Warrior power"). A strong second skill still
 // earns credit from whatever budget the (capped) best skill leaves unspent.
-function skillPlan(skills, st){
-  const Mtot = totalColorMana(st), budget = TUNE.focusFrac * Mtot, etv = extraTurnValue(st);
+function skillPlan(skills, st, mode){
+  // mana INCOME scales with extra turns (an extra action matches more tiles), so
+  // the funding budget gets the same tempo multiplier skull damage gets — plus a
+  // head start from starting mana, amortized over the fight (funds the first cast).
+  const Mtot = totalColorMana(st) * tempo();
+  const budget = TUNE.focusFrac * Mtot + (st.manaPool||0)/Math.max(1,TUNE.fightTurns);
+  const etv = extraTurnValue(st);
   const cast = (skills||[]).filter(s=>s && Number(s.mana)>0).map(s=>{
     const d = skillDEV(s, st, etv), mana = Number(s.mana);
-    return { skill:s, mana, dev:Math.max(0,d.dev), hit:d.hitDamage||0, vpm:Math.max(0,d.dev)/mana };
-  }).sort((a,b)=> b.vpm - a.vpm);
+    // raw damage a cast inflicts (hit + destroyed skulls + dots) — the sort key
+    // when the caller wants a KILL plan rather than a value plan
+    const vs = (d.hitDamage||0)
+      + (s.destroy&&Number(s.destroyN)>0 ? Number(s.destroyN)*(C.E_SKULLS/C.BOARD)*destroyedSkullPerTile(st.attack) : 0)
+      + Number(s.poison||0)*2 + Number(s.bleed||0);
+    return { skill:s, mana, dev:Math.max(0,d.dev), hit:d.hitDamage||0, vs, vpm:Math.max(0,d.dev)/mana, dpm:vs/mana };
+  // 'damage' mode: fund the mana into whatever KILLS fastest (TTK / death risk);
+  // default 'dev' mode: fund by total value (power level / economy).
+  }).sort((a,b)=> mode==='damage' ? (b.dpm - a.dpm) : (b.vpm - a.vpm));
   let rem = budget, spent = 0;
   const parts = cast.map(k=>{
     const give = Math.max(0, Math.min(rem, k.mana*TUNE.maxCastsPerSkill)); // capped-greedy
@@ -927,7 +997,7 @@ function relicAdjust(relics, st){
   if(!relics || !relics.length) return adj;
   const ctx = {
     skullMatches: skullMatchesPerTurn()*tempo(),
-    allMatches:   T.matchesPerTurn + T.cascadeLambda,
+    allMatches:   (T.matchesPerTurn + T.cascadeLambda)*tempo(), // per TURN, extra turns included (same basis as skullMatches)
     match4:       T.match4PerTurn,
   };
   const STAT_MAP = { attack:'attack', magic:'magic', armor:'armor', barrier:'barrier', maxHp:'hp', hp:'hp' };
@@ -985,7 +1055,10 @@ function eDPS(st, skills, radj){
     tempo: tempo(), manaPerTurn: plan.Mtot, plan,
   };
 }
-function eHP(st){ return st.hp + TUNE.DEV_armor*(st.armor||0) + TUNE.DEV_barrier*(st.barrier||0); }
+// [CODE] MatchResolver.applyDamage absorbs barrier → armor → HP strictly 1:1, so
+// standing armor/barrier IS hit points (the DEV_armor/DEV_barrier knobs price
+// GRANTED shields inside skillDEV, where overkill/waste discounts apply — not here).
+function eHP(st){ return st.hp + (st.armor||0) + (st.barrier||0); }
 
 // per-hit status pipeline (mitigation chain §1.2). atk uses out_berserk; def uses in_*.
 function applyStatus(hit, atk, def){
@@ -996,13 +1069,29 @@ function applyStatus(hit, atk, def){
   return d;
 }
 
+// TOTAL damage one CAST inflicts on the target (status-adjusted): the direct hit
+// plus destroyed-skull damage from destroy effects, the poison's lifetime damage
+// (stacks halve → ≈ 2× stacks) and bleed — all of which route through the game's
+// _applyDamage/tick pipeline, so they belong in TTK, not just the hero number.
+function castDamageVsTarget(part, atkSt, atkStatus, tgtStatus){
+  const s = part.skill || {};
+  let d = applyStatus(part.hit, atkStatus, tgtStatus);
+  if(s.destroy && Number(s.destroyN)>0){
+    const nS = Number(s.destroyN)*(C.E_SKULLS/C.BOARD);
+    d += applyStatus(nS*destroyedSkullPerTile(atkSt.attack), atkStatus, tgtStatus);
+  }
+  const dot = Number(s.poison||0)*2 + Number(s.bleed||0);
+  if(dot>0) d += applyStatus(dot, atkStatus, tgtStatus);
+  return d;
+}
+
 // damage/turn ATTACKER lands on TARGET (status + relic aware) — for TTK & risk
 function dmgPerTurnVsTarget(atkSt, skills, atkStatus, tgtStatus, radj){
   const perSkullHit = matchedSkullDmg(TUNE.Nskull, atkSt.attack);
   const skullMatches = skullMatchesPerTurn() * tempo();
   const skullDmg = skullMatches * applyStatus(perSkullHit, atkStatus, tgtStatus) * TUNE.DEV_damage;
-  const plan = skillPlan(skills, atkSt);
-  const skillDmg = plan.parts.reduce((a,p)=> a + p.castsPerTurn*applyStatus(p.hit, atkStatus, tgtStatus)*TUNE.DEV_damage, 0);
+  const plan = skillPlan(skills, atkSt, 'damage'); // kill plan: fund damage-per-mana first
+  const skillDmg = plan.parts.reduce((a,p)=> a + p.castsPerTurn*castDamageVsTarget(p, atkSt, atkStatus, tgtStatus)*TUNE.DEV_damage, 0);
   const relicDmg = ((radj&&radj.dmgPerTurn)||0)*TUNE.DEV_damage;
   const mult = (radj&&radj.outMult)||1;
   return Math.max(0.01, (skullDmg + skillDmg + relicDmg)*mult);
@@ -1015,8 +1104,8 @@ function turnVariance(atkSt, skills, atkStatus, tgtStatus, radj){
   const vCascade = TUNE.cascadeLambda*TUNE.skullShare * perSkullHit*perSkullHit; // Poisson count × per-hit²
   const vExtra = TUNE.pExtra*(1-TUNE.pExtra) * (mean*mean);                       // bonus-turn swing
   let vCast = 0;
-  for(const p of skillPlan(skills, atkSt).parts){
-    const hit = applyStatus(p.hit, atkStatus, tgtStatus), cph = p.castsPerTurn;
+  for(const p of skillPlan(skills, atkSt, 'damage').parts){
+    const hit = castDamageVsTarget(p, atkSt, atkStatus, tgtStatus), cph = p.castsPerTurn;
     if(cph>0 && cph<1) vCast += cph*(1-cph)*hit*hit;
   }
   const sigma = Math.sqrt(Math.max(0, vCascade+vExtra+vCast));
@@ -1033,7 +1122,8 @@ function buildSide(slot, side, floor, applyGrowth){
   const radj = relicAdjust(slot.relics, st0);
   // relic stat deltas land on top of the floor-scaled / grown base stats
   const st = { hp:st0.hp+radj.hp, attack:st0.attack+radj.attack, magic:st0.magic+radj.magic,
-               armor:st0.armor+radj.armor, barrier:st0.barrier+radj.barrier };
+               armor:st0.armor+radj.armor, barrier:st0.barrier+radj.barrier,
+               manaPool: st0.manaPool||0 };
   const skills = slot.skills || [];
   const off = eDPS(st, skills, radj);
   const def = eHP(st) + radj.ehpFlat;
@@ -1082,6 +1172,7 @@ function deepCopyCombatant(p){
     armor:p.armor||0, barrier:p.barrier||0,
     skills, activeSkill:0, relics,
     growthPlan:p.growthPlan||null, floors:p.floors||null, type:p.type||null, rarity:p.rarity||null,
+    attackScale:(typeof p.attackScale==='number'?p.attackScale:1),
     status:{ out_berserk:false, in_brittle:false, in_intangible:false, in_berserk:false },
   };
 }
@@ -1170,10 +1261,12 @@ function renderSkillEcon(s){
   $("se_vpm").textContent=vpm.toFixed(2);
   let flag,cls,note;
   if(vpm<2){ flag="Trap"; cls="trap"; note="Below the V/mana floor of 2 — under-rewards its color. Buff it, or it stays a dead pick."; }
-  else if(vpm>4){ flag="Must-pick"; cls="must"; note="Above 4 — warps its color's value. Consider taxing the payload or scaling."; }
-  else { flag="Fair"; cls="fair"; note="Inside the target V/mana band of 2.5–3.5 — a healthy, choosable skill."; }
+  else if(vpm>4){ flag="Must-pick"; cls="must"; note="Above the ceiling of 4 — warps its color's value. Consider taxing the payload or scaling."; }
+  else { flag="Fair"; cls="fair"; note="Inside the 2–4 fair band (design sweet spot ≈ 2.5–3.5) — a healthy, choosable skill."; }
   $("se_flag").textContent=flag; $("se_flag").className="flag "+cls;
-  $("se_note").innerHTML = `Evaluated at reference <code>A=${TUNE.refA}, M=${TUNE.refM}</code>. ${note}`;
+  // effects the model can't price make the number an UNDERCOUNT — say so out loud
+  const un = (sk.unmodeled&&sk.unmodeled.length) ? ` <b style="color:var(--warn)">Unpriced effects: ${sk.unmodeled.join(', ')} — true value is higher than shown.</b>` : "";
+  $("se_note").innerHTML = `Evaluated at reference <code>A=${TUNE.refA}, M=${TUNE.refM}</code>. ${note}${un}`;
 }
 
 function renderBeam(P,E,floor){
@@ -1253,7 +1346,9 @@ function evalMatchupWith(statKey, value, floor){
   const pC=cloneSlot(STATE.player), eC=cloneSlot(STATE.enemy);
   const target = cfg.side==="player"?pC:eC;
   if(cfg.skill){ skillOf(target)[cfg.skill]=value; } else { target[cfg.key]=value; }
-  return matchup(buildSide(pC,"player",floor,false), buildSide(eC,"enemy",floor,false));
+  // same growth setting as the displayed matchup — otherwise the fair band the
+  // solver reports disagrees with the beam/verdict right above it
+  return matchup(buildSide(pC,"player",floor,STATE.applyGrowth), buildSide(eC,"enemy",floor,false));
 }
 function cloneSlot(s){ return { ...s, skills:(s.skills||[]).map(k=>({...k})), status:{...s.status} }; }
 
@@ -1295,10 +1390,9 @@ function sweepData(){
 function renderSweep(){
   const gd=$("growthDesc");
   if(gd){
-    const g=STATE.player.growthPlan;
-    if(g){ const p=[]; if(g.maxHp)p.push(`+${g.maxHp} HP`); if(g.startingAttack)p.push(`+${g.startingAttack} atk`); if(g.startingMagic)p.push(`+${g.startingMagic} mag`);
-      gd.textContent=`(${p.join(' / ')||'—'} per floor · ${STATE.player.label})`; }
-    else gd.textContent=`(+${C.LEVELUP.maxHp} HP / +${C.LEVELUP.attack} atk / +${C.LEVELUP.magic} mag per floor)`;
+    const g=STATE.player.growthPlan || C.GROWTH_FALLBACK;
+    const p=[]; if(g.maxHp)p.push(`+${g.maxHp} HP`); if(g.startingAttack)p.push(`+${g.startingAttack} atk`); if(g.startingMagic)p.push(`+${g.startingMagic} mag`);
+    gd.textContent=`(${p.join(' / ')||'—'} per win · ×${TUNE.winsPerFloor} wins/floor · ${STATE.player.label})`;
   }
   const d=sweepData(); drawChart(d,STATE.sweepMetric); drawLegend(STATE.sweepMetric); drawTable(d);
 }
@@ -1392,18 +1486,20 @@ function tuneRow(key,label,sub){
     <input type="number" data-tune="${key}" value="${TUNE[key]}" step="${step}"></div>`;
 }
 function buildTuners(){
-  const DEVf=[["DEV_damage","1 damage","numéraire"],["DEV_armor","1 armor","expires / per-fight"],["DEV_barrier","1 barrier","1-round, 2× magic"],
-    ["DEV_heal","1 HP healed","full only below max"],["V_turn","1 extra turn","a whole turn of output"],["DEV_tile","1 tile made","sets up a match"],
-    ["DEV_attack_perm","+1 perm attack","value over the fight"],["V_mana","1 mana","value of the mana itself"]];
+  const DEVf=[["DEV_damage","1 damage","numéraire"],["DEV_armor","1 armor","granted; waste discount"],["DEV_barrier","1 barrier","1-round, 2× magic"],
+    ["DEV_heal","1 HP healed","full only below max"],["V_turn","1 extra turn","FLOOR — real value computed"],["DEV_tile","1 tile made","sets up a match"],
+    ["DEV_skullTile","1 skull placed","ammo; foe can reap it"],
+    ["DEV_attack_perm","+1 perm attack","value over the fight"],["DEV_magic_perm","+1 perm magic","value over the fight"],["V_mana","1 mana","value of the mana itself"]];
   $("tuneDEV").innerHTML=DEVf.map(([k,l,s])=>tuneRow(k,l,s)).join("");
-  const Mf=[["matchesPerTurn","Matches landed /turn","≈ one swap"],["skullFocus","Share aimed at skulls","0–1"],["focusFrac","Color mana usable for skills","0–1"],
+  const Mf=[["matchesPerTurn","Matches landed /action","sim ≈ 0.85"],["skullFocus","Share aimed at skulls","sim ≈ 0.2"],["focusFrac","Color mana usable for skills","0–1"],
     ["maxCastsPerSkill","Max casts /turn per skill","capped-greedy"],
-    ["Nskull","Avg skull match size",""],["Ncolor","Avg color match size",""],["cascadeLambda","Cascade matches /clear","λ"],
-    ["skullShare","Skull share of cascades","0–1"],["pExtra","P(turn has 4+ extra turn)","0–0.8"],["econEff","Leftover-mana efficiency","0–1"],
+    ["Nskull","Avg skull match size",""],["Ncolor","Avg color match size",""],["cascadeLambda","Cascade matches /clear","sim ≈ 0.2–0.3"],
+    ["skullShare","Skull share of cascades","0–1"],["pExtra","P(action has 4+ extra turn)","sim ≈ 0.2"],["econEff","Leftover-mana efficiency","0–1"],
     ["refA","Reference attack","econ readout"],["refM","Reference magic","econ readout"],
-    ["fightTurns","Assumed fight length","turns (relic accrual)"],["match4PerTurn","4+ matches /turn","relic reactors"],
+    ["fightTurns","Assumed fight length","turns (relic accrual)"],["match4PerTurn","4+ matches /turn","relic reactors; sim ≈ 0.2"],
     ["colorGainPerTurn","Color mana-gains /turn","relic reactors"],["takeHitsPerTurn","Hits taken /turn","relic reactors"],
     ["dealEventsPerTurn","Damage events /turn","relic reactors"],
+    ["winsPerFloor","Wins per floor reached","growth pacing; map ≈ 0.6–0.8"],
     ["ttkMin","TTK band — min","turns"],["ttkMax","TTK band — max","turns"],
     ["deathTrivial","Death — trivial below","0–1"],["deathFairMax","Death — fair ceiling","0–1"],["deathLossMax","Death — lost above","0–1"]];
   $("tuneModel").innerHTML=Mf.map(([k,l,s])=>tuneRow(k,l,s)).join("");
@@ -1468,7 +1564,10 @@ function readForm(){
   c.armor=+$("armor").value; c.barrier=+$("barrier").value;
   const baseV=$("base").value.trim();
   const cur=skillOf(c);
-  c.skills[c.activeSkill]={ name:cur.name, id:cur.id, color:getColor(), mana:+$("mana").value, base: baseV===""?null:Number(baseV), perSkull:+$("perSkull").value,
+  // spread `cur` first: translated catalog skills carry hidden payloads the form
+  // doesn't edit (per-payload scaling, drain/gainMana/permMag/skullsMade/unmodeled)
+  // — rebuilding from only the form fields would silently strip them.
+  c.skills[c.activeSkill]={ ...cur, color:getColor(), mana:+$("mana").value, base: baseV===""?null:Number(baseV), perSkull:+$("perSkull").value,
     scaleA:$("scaleAttack").value, scaleM:$("scaleMagic").value, extra:$("fx_extra").checked, destroy:$("fx_destroy").checked, destroyN:+$("destroyN").value,
     heal:+$("heal").value, gArmor:+$("gArmor").value, gBarrier:+$("gBarrier").value, poison:+$("poison").value, bleed:+$("bleed").value, tiles:+$("tiles").value, permAtk:+$("permAtk").value };
   c.status={ out_berserk:$("st_berserk").checked, in_brittle:$("st_brittle").checked, in_intangible:$("st_intang").checked, in_berserk:$("st_tberserk").checked };
