@@ -84,7 +84,17 @@ const WILD_TILE_BORDER_FLEX = {
  *
  * Flip `enabled` to false to disable the whole effect (the update + render both
  * early-out, so a disabled glint costs nothing). All timings/look are tunable
- * here. Mana tiles only (skull/disease/wild are excluded via isMana).
+ * here.
+ *
+ * TWO MODES (see _spawnIdleGlints):
+ *   - Default (no provider): 1–2 RANDOM mana tiles glint per burst
+ *     (skull/disease/wild excluded via isMana).
+ *   - HINT mode: when a host wires `setIdleGlintProvider(fn)` (BattleScene does,
+ *     backed by the MoveAdvisor suggestion), each burst glints exactly ONE tile
+ *     of the suggested swap — a gentle nudge after a pause on the player's
+ *     turn. The provider returning null (not the player's turn, no move)
+ *     suppresses the burst entirely; there is NO random fallback. Provider
+ *     glints may sit on any tile type (a suggested swap can move a skull).
  */
 const IDLE_GLINT_CONFIG = {
   enabled: true,            // master flag — set false to disable idle glints
@@ -354,9 +364,37 @@ export default class BoardPlaceholder extends UIElement {
     }
   }
 
-  /** Pick 1–2 random resting mana tiles to glint. @private */
+  /**
+   * Supply a hint provider for the idle glint: a function returning the ONE
+   * board cell to glint ({col,row}) or null to suppress the burst (e.g. not
+   * the player's turn). While set, random-tile glinting is replaced entirely.
+   * Called lazily — only when a burst is due on an idle board — so an
+   * expensive provider (the MoveAdvisor) runs at most once per interval.
+   * @param {(() => ({col:number,row:number}|null))|null} fn
+   */
+  setIdleGlintProvider(fn) {
+    this._idleGlintProvider = typeof fn === 'function' ? fn : null;
+  }
+
+  /**
+   * Spawn a glint burst: the provider's single hint tile when a provider is
+   * wired (see setIdleGlintProvider), else 1–2 random resting mana tiles.
+   * @private
+   */
   _spawnIdleGlints() {
     const c = IDLE_GLINT_CONFIG;
+
+    // HINT mode — glint exactly one tile of the suggested move; no burst at
+    // all when the provider has nothing (not the player's turn, no move).
+    if (this._idleGlintProvider) {
+      const cell = this._idleGlintProvider();
+      if (!cell) return;
+      if (!this.getTileAt(cell.row, cell.col)) return; // cell empty/out of range
+      // `any: true` — a suggested swap may move a skull; render it anyway.
+      this._idleGlints.push({ col: cell.col, row: cell.row, t: 0, any: true });
+      return;
+    }
+
     const cells = [];
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
@@ -386,7 +424,9 @@ export default class BoardPlaceholder extends UIElement {
     if (!c.enabled || this._idleGlints.length === 0) return;
     for (const g of this._idleGlints) {
       const colorKey = this.getTileAt(g.row, g.col);
-      if (!colorKey || !isMana(colorKey)) continue; // tile changed/cleared
+      // Tile changed/cleared → skip. Provider (hint) glints may sit on any
+      // tile type; random glints stay mana-only.
+      if (!colorKey || (!g.any && !isMana(colorKey))) continue;
       const p = g.t / c.durationMs;
       if (p < 0 || p >= 1) continue;
       const alpha = Math.sin(p * Math.PI) * c.maxAlpha; // fade in → out

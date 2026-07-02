@@ -398,6 +398,16 @@ export default class BattleScene extends UIPanel {
     this._hintTimeLeft = 0;
     /** Elapsed highlight time (ms) — drives the pulse. */
     this._hintTime = 0;
+    /**
+     * The advisor's best move for the CURRENT player turn, computed at most
+     * once per turn and shared by the "?" button and the idle hint glint.
+     * `undefined` = not yet computed; `null` = computed, no move available.
+     * Invalidated whenever the state leaves PLAYER_TURN, on skill casts, and
+     * on loadout changes (see _invalidateSuggestedMove call sites).
+     */
+    this._suggestedMove = undefined;
+    /** Alternates which of the suggested swap's two cells the idle glint shows. */
+    this._hintGlintFlip = false;
 
     /** Delay after game over before showing reward overlay (ms) */
     this._gameOverDelay = 400;
@@ -520,6 +530,20 @@ export default class BattleScene extends UIPanel {
       flexGrow: 1,
       minWidth: 280,
       minHeight: 280,
+    });
+    // Idle "sleeping glint" → HINT nudge: after a pause on the player's turn,
+    // the board glints ONE tile of the advisor's suggested swap instead of
+    // random tiles (alternating between the swap's two cells across bursts —
+    // a nudge, not a full giveaway). Returns null outside PLAYER_TURN, which
+    // suppresses glinting entirely on other turns/states. The advisor result
+    // is cached per turn (_getSuggestedMoveCached), so the cost is paid once.
+    this._board.setIdleGlintProvider(() => {
+      const best = this._getSuggestedMoveCached();
+      if (!best || !best.swap) return null;
+      this._hintGlintFlip = !this._hintGlintFlip;
+      return this._hintGlintFlip
+        ? { col: best.swap.col1, row: best.swap.row1 }
+        : { col: best.swap.col2, row: best.swap.row2 };
     });
     this._boardPanel.addChild(this._board);
     centerCol.addChild(this._boardPanel);
@@ -717,6 +741,8 @@ export default class BattleScene extends UIPanel {
     // Wire skill click callbacks on the new SkillsPane
     if (this._playerSkillsPane && this._battleController) {
       this._playerSkillsPane.onSkillClick = (skill) => {
+        // A cast changes mana/board/HP — the cached hint suggestion is stale.
+        this._invalidateSuggestedMove();
         this._battleController.tryPlayerSkill(skill);
       };
     }
@@ -757,6 +783,9 @@ export default class BattleScene extends UIPanel {
    */
   _applyLoadout(ids) {
     if (!this._battleController) return;
+    // Equipped skills feed the advisor's mana-need/denial scoring — the
+    // cached hint suggestion is stale.
+    this._invalidateSuggestedMove();
     const ps = this._battleController.playerState;
     const pool = ps.allSkills && ps.allSkills.length ? ps.allSkills : (ps.skills || []);
     const byId = new Map(pool.map((s) => [s.id, s]));
@@ -1941,6 +1970,15 @@ export default class BattleScene extends UIPanel {
     // Sync UI state from game state
     this.updateFromController();
 
+    // ── Cached advisor suggestion lifecycle ──
+    // Any state away from PLAYER_TURN (swap, cascade, targeting, turn pass)
+    // invalidates the per-turn suggestion cache; skill casts and loadout
+    // changes invalidate explicitly at their call sites.
+    if (this._battleController
+        && this._battleController.state !== BattleState.PLAYER_TURN) {
+      this._suggestedMove = undefined;
+    }
+
     // ── Hint highlight lifecycle ──
     // Ticks down over HINT_DURATION_MS and clears EARLY the moment the player
     // acts (any state change away from PLAYER_TURN — swap, cast, targeting),
@@ -2189,7 +2227,7 @@ export default class BattleScene extends UIPanel {
   _requestHint() {
     const c = this._battleController;
     if (!c || c.state !== BattleState.PLAYER_TURN) return;
-    const best = c.getSuggestedMove();
+    const best = this._getSuggestedMoveCached();
     if (!best || !best.swap) return;
     this._hintCells = [
       { col: best.swap.col1, row: best.swap.row1 },
@@ -2197,6 +2235,32 @@ export default class BattleScene extends UIPanel {
     ];
     this._hintTimeLeft = HINT_DURATION_MS;
     this._hintTime = 0;
+  }
+
+  /**
+   * The advisor's best move for the current player turn — computed AT MOST
+   * once per turn (the "?" button and the idle hint glint share the cache).
+   * Returns null outside PLAYER_TURN or when no legal move exists.
+   * @returns {{swap, score, breakdown, outcome}|null}
+   */
+  _getSuggestedMoveCached() {
+    const c = this._battleController;
+    if (!c || c.state !== BattleState.PLAYER_TURN) return null;
+    if (this._suggestedMove === undefined) {
+      this._suggestedMove = c.getSuggestedMove() || null;
+    }
+    return this._suggestedMove;
+  }
+
+  /**
+   * Drop the cached advisor suggestion. Called whenever something changes
+   * what the advisor would say while PLAYER_TURN persists: a skill cast
+   * (mana spent, board mutated by shuffle/lock, enemy HP changed) or a
+   * loadout change. State changes away from PLAYER_TURN invalidate in
+   * update() (covers swaps, cascades, targeting, turn passes).
+   */
+  _invalidateSuggestedMove() {
+    this._suggestedMove = undefined;
   }
 
   /** Draw the two stacked corner buttons. Hidden while an overlay is active. */
@@ -2532,6 +2596,7 @@ export default class BattleScene extends UIPanel {
     // Re-wire skill click after rebuild
     if (this._playerSkillsPane && this._battleController) {
       this._playerSkillsPane.onSkillClick = (skill) => {
+        this._invalidateSuggestedMove();
         this._battleController.tryPlayerSkill(skill);
       };
     }
