@@ -35,11 +35,12 @@ import {
 
 // ── Outer panel — sized to the 2026-07 `skill_pane_panel` art ──
 // The new art is 535×715 (aspect ≈0.75, shorter than the old 488×956 frame).
-// NATURAL_HEIGHT ≈ column width / 0.75 keeps the frame art unstretched at the
-// ~465px wide-viewport side column. Padding hugs the new frame: the top band
-// is the centered nameplate tab + top rail; sides/bottom are the metal border.
-const PANE_PADDING = { top: 60, right: 10, bottom: 24, left: 20 };
-const NATURAL_HEIGHT = 622;
+// NATURAL_HEIGHT ≈ column width / 0.75 keeps the frame art near-unstretched at
+// the ~440px wide-viewport side column. Padding hugs the new frame: the top
+// band (~60px native) is the centered nameplate tab + top rail; sides/bottom
+// are the metal border.
+const PANE_PADDING = { top: 54, right: 10, bottom: 22, left: 18 };
+const NATURAL_HEIGHT = 600;
 
 // ── List ──
 /** Minimum card slots shown (empty ones render as GHOST placeholder cards). */
@@ -72,9 +73,12 @@ const SCROLL_DRAG_THRESHOLD = 12;
 const FADE_HEIGHT = 26;            // top/bottom "more content" fade shadows
 
 // ── Header (Manage button + equipped count, drawn in the panel art's top band) ──
-const MANAGE_BTN_W = 86;
+// The button's vertical CENTER is derived from TITLE_CENTER_Y_FRAC (same band
+// as the nameplate tab), so the two always line up; only the right inset is a
+// margin. Keep the inset clear of the frame's top-right corner crest.
+const MANAGE_BTN_W = 82;
 const MANAGE_BTN_H = 26;
-const MANAGE_BTN_MARGIN = { top: 16, right: 20 };
+const MANAGE_BTN_MARGIN = { right: 34 };
 const MANAGE_BTN_BG = 'rgba(38, 30, 16, 0.92)';
 const MANAGE_BTN_BG_HOVER = 'rgba(70, 56, 26, 0.95)';
 const MANAGE_BTN_BORDER = 'rgba(214, 188, 120, 0.8)';
@@ -88,9 +92,10 @@ const COUNT_COLOR = '#9d927c';
 // centered in the nameplate banner. Y is a FRACTION of panel height (the art is
 // stretched to the rect), so it tracks the banner if the panel resizes.
 const TITLE_TEXT = 'Skills';
-const TITLE_FONT_SIZE = 28;
+const TITLE_FONT_SIZE = 26;
 const TITLE_COLOR = '#e8d8a8';
-const TITLE_CENTER_Y_FRAC = 0.042; // nameplate tab vertical center (new art)
+// The new art's nameplate tab spans y ≈ 0..50 of 715 native → center ≈ 0.036.
+const TITLE_CENTER_Y_FRAC = 0.036;
 const TITLE_LETTER_SPACING = 1.5;
 
 // ── Whether to show Equipped Info 
@@ -455,7 +460,8 @@ export default class SkillsPane extends UIPanel {
     this._manageRect = null;
     if (this.onManageClick) {
       const bx = this.rect.x + this.rect.w - MANAGE_BTN_MARGIN.right - MANAGE_BTN_W;
-      const by = this.rect.y + MANAGE_BTN_MARGIN.top;
+      // Vertically centered on the same band as the nameplate tab title.
+      const by = Math.round(this.rect.y + this.rect.h * TITLE_CENTER_Y_FRAC - MANAGE_BTN_H / 2);
       ctx.save();
       ctx.fillStyle = this._hoverManage ? MANAGE_BTN_BG_HOVER : MANAGE_BTN_BG;
       ctx.fillRect(bx, by, MANAGE_BTN_W, MANAGE_BTN_H);

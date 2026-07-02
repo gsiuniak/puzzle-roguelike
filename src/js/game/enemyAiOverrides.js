@@ -56,6 +56,7 @@
  */
 
 import { isSkull } from './TileTypes.js';
+import { getBestMove } from './MoveAdvisor.js';
 
 /**
  * Whether the enemy can pay a skill's full mana cost from its current mana.
@@ -279,6 +280,24 @@ const enemyAiOverrides = {
     }
 
     return bestSwap ? { action: 'swap', swap: bestSwap } : null;
+  },
+
+  // ── Smart matcher (GENERAL — not enemy-specific) ────────
+  // Simulation-based board matching via MoveAdvisor/BoardSimulator: ranks
+  // every legal swap by cascade-aware expected value (mana toward own skills,
+  // skull damage, extra-turn odds incl. refill RNG, denial of the opponent's
+  // needed colors, and a 1-ply opponent-reply lookahead).
+  //
+  // DELIBERATELY UNUSED today: no enemy definition references it. To give any
+  // enemy the smarter matching, set `aiBehavior: 'smart_matcher'` on its def —
+  // skill usage is untouched (skill-first delegates to the standard AI; this
+  // handler only upgrades the SWAP decision, per design).
+  smart_matcher: ({ enemy, player, board, standardAI }) => {
+    // Skill decisions stay with the standard AI: if it would cast, fall back
+    // entirely (the standard flow casts skill-first).
+    if (standardAI.findBestSkill()) return null;
+    const best = getBestMove({ board, self: enemy, opponent: player });
+    return best ? { action: 'swap', swap: best.swap } : null;
   },
 };
 

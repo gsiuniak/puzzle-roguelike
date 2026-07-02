@@ -135,12 +135,17 @@ const DAMAGE_COUNTER_BAR_LIFT = 60;
 // panels (costs more board shrink on 16:9), lower toward 1920 for less.
 const BASE_DESIGN_WIDTH = 1920;
 const BATTLE_DESIGN_WIDTH = 2080;
-const MAIN_ROW_MAX_WIDTH = 1820;
+const MAIN_ROW_MAX_WIDTH = 1920;
 // Horizontal gap between the side columns and the central board panel.
-// Negative = the column rects overlap, which pulls the visible side
-// panels tighter against the board frame (since each side panel image
-// has its own transparent inner margin).
-const MAIN_ROW_GAP = -40;
+// The 2026-07 panel/board art is TIGHTLY CROPPED (no transparent inner
+// margins), so the old big negative overlap (-40) made the panels visibly
+// collide with the board frame. A small negative gap remains: the board art
+// keeps ~13px of transparent padding inside its rect, so a -10 overlap still
+// leaves a sliver of daylight between the panel edge and the board rail.
+// Row budget at the 2080 viewport: 2×90 relic + 2×440 side + 1064 center
+// + 4×(-10) = 2084 ≈ full width (the relic bars poke ~2px into the clipped
+// margin, which is invisible).
+const MAIN_ROW_GAP = -10;
 // Vertical padding around the main row. Smaller top/bottom = the board
 // frame can stretch to a taller square.
 const MAIN_ROW_PADDING = { top: 8, right: 0, bottom: 8, left: 0 };
@@ -165,9 +170,9 @@ const SCRIM_COLOR = '0, 0, 0';    // rgb triplet; alpha applied per stop
 // visible panel art closer to the board frame; the side panel
 // images include some transparent inner margin so the column rect
 // is typically larger than the visible art.
-const SIDE_COL_WIDTH = 385;
-const SIDE_COL_MIN_WIDTH = 385;
-const SIDE_COL_MAX_WIDTH = 385;
+const SIDE_COL_WIDTH = 360; // +80 from the wide viewport → 440 effective
+const SIDE_COL_MIN_WIDTH = 360;
+const SIDE_COL_MAX_WIDTH = 360;
 const SIDE_COL_GAP = 3;
 
 // Fixed width for the center (board + combat log) column. Should be
@@ -177,7 +182,7 @@ const SIDE_COL_GAP = 3;
 // either side. If this is larger than the available height, you get
 // empty space inside the center column between the board frame and
 // the side columns.
-const CENTER_COL_WIDTH = 1080;
+const CENTER_COL_WIDTH = 1064; // = the board frame square (1080 viewport height − row padding), no slack
 const CENTER_COL_GAP = 8;
 // Height of the combat log strip below the board. Bump this to make
 // the log strip taller; reduce to give the board more vertical room.

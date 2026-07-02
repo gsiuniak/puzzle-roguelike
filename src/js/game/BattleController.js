@@ -15,9 +15,10 @@ import EnemyAI from './EnemyAI.js';
 import { chooseEnemyAction } from './customEnemyAi.js';
 import { TILE_TYPES, isSkull, MANA_COLORS } from './TileTypes.js';
 import { getStatusDef } from '../data/statusEffects.js';
-import { scaledBonus } from '../data/scalingConfig.js';
 import PassiveSystem from '../systems/PassiveSystem.js';
 import TRIGGER_TYPES from '../systems/TriggerTypes.js';
+import SKILL_EFFECT_HANDLERS, { LOCK_MIN_TURNS } from './battle/skillEffectHandlers.js';
+import { getBestMove, rankMoves } from './MoveAdvisor.js';
 
 /** @enum {string} */
 export const BattleState = {
@@ -68,6 +69,30 @@ const TURN_GATE_MAX_HOLD = 2000;
  * HarvestTendrilEffect's total duration (form + hold + fade).
  */
 const HARVEST_ANIM_DELAY = 900;
+
+/**
+ * Status-effect damage modifiers applied in _applyDamage (see decision #32).
+ * Named here so balance tuning doesn't require code archaeology.
+ */
+const STATUS_DAMAGE_MODS = {
+  brittleMult: 1.5,   // Brittle target takes ×1.5
+  intangibleCap: 1,   // Intangible clamps any hit to 1 (wins over Brittle)
+  berserkMult: 2,     // Berserk attacker deals ×2; Berserk target takes ×2
+};
+/** Poison stacks divide by this after each tick (decision #39). */
+const POISON_DECAY_DIVISOR = 2;
+/** Screen shake reaches full intensity at this fraction of the target's max HP. */
+const SHAKE_FULL_AT_HP_FRACTION = 0.20;
+
+/** The opposite side. */
+export function opponentOf(side) {
+  return side === 'player' ? 'enemy' : 'player';
+}
+
+/** Canonical Set/Map key for a board position. */
+function posKey(p) {
+  return `${p.col},${p.row}`;
+}
 
 export default class BattleController {
   constructor(playerData, enemyData) {
@@ -648,6 +673,20 @@ export default class BattleController {
     };
   }
 
+  // ── State transitions ─────────────────────────────────
+
+  /**
+   * Single transition point for the battle state machine (review R12).
+   * Assigns the new state and fires onStateChange consistently, giving one
+   * place to trace "why did we enter X". No-op when the state is unchanged.
+   * @param {BattleState} next
+   */
+  _setState(next) {
+    if (this.state === next) return;
+    this.state = next;
+    if (this.onStateChange) this.onStateChange();
+  }
+
   // ── Timing Helpers ────────────────────────────────────
 
   _phaseMs(phase) { return BASE_PHASE_MS[phase] / this.speedMultiplier; }
@@ -679,6 +718,46 @@ export default class BattleController {
    */
   setTurnGate(fn) {
     this._turnGate = typeof fn === 'function' ? fn : null;
+  }
+
+  /**
+   * Suggest the best swap for the PLAYER on the current board (the "hint"
+   * API), computed by the simulation-based MoveAdvisor: cascade-aware expected
+   * value across mana-toward-skills, skull damage, extra-turn odds (incl.
+   * refill RNG), opponent-mana denial, and a 1-ply opponent-reply lookahead.
+   *
+   * On-demand only (a few hundred board simulations) — call it when the user
+   * asks for a hint, never per frame. Returns null outside PLAYER_TURN or when
+   * no legal move exists. Not wired to any UI by default.
+   *
+   * @param {object} [options] — MoveAdvisor overrides ({ weights, samples, … })
+   * @returns {{swap:{col1,row1,col2,row2}, score:number, breakdown:object,
+   *   outcome:object}|null}
+   */
+  getSuggestedMove(options = {}) {
+    if (this.state !== BattleState.PLAYER_TURN) return null;
+    return getBestMove({
+      board: this.board,
+      self: this.playerState,
+      opponent: this.enemyState,
+      ...options,
+    });
+  }
+
+  /**
+   * Rank ALL of the player's legal moves (best first) — same engine as
+   * getSuggestedMove, for a richer hint UI or debugging. On-demand only.
+   * @param {object} [options] — MoveAdvisor overrides
+   * @returns {Array<{swap, score, breakdown, outcome}>}
+   */
+  getRankedMoves(options = {}) {
+    if (this.state !== BattleState.PLAYER_TURN) return [];
+    return rankMoves({
+      board: this.board,
+      self: this.playerState,
+      opponent: this.enemyState,
+      ...options,
+    });
   }
 
   getState() {
@@ -850,7 +929,7 @@ export default class BattleController {
     this.board.swap(col1, row1, col2, row2); // revert
 
     // Start swap animation
-    this.state = BattleState.SWAPPING;
+    this._setState(BattleState.SWAPPING);
     this.swapAnim = {
       from: { col: col1, row: row1 },
       to: { col: col2, row: row2 },
@@ -878,7 +957,7 @@ export default class BattleController {
 
     // Skills that require board targeting enter TARGETING state first
     if (skill.targeting === 'board_tile') {
-      this.state = BattleState.TARGETING;
+      this._setState(BattleState.TARGETING);
       this._targetingSkill = { ...skill };
       // Seed a default target (board center) so the area preview is visible and
       // Confirm works immediately; the player taps/drags to reposition.
@@ -888,52 +967,141 @@ export default class BattleController {
       return true;
     }
 
-    // Instant-effect skills: spend cost, play sound once, then resolve all effects
-    this._spendCost(this.playerState, skill);
-    this._setSkillSound(skill);
-    this.log.add(`${this.playerState.name} uses ${skill.name}.`);
-
-    let enteredCascade = false;
-    for (const effect of (skill.effects || [])) {
-      if (this._resolveEffect(effect, skill, 'player')) {
-        enteredCascade = true;
-      }
-    }
-
-    // If any effect entered a cascade (e.g. CREATE_TILES), let it resolve
-    if (enteredCascade) return true;
-
-    // Check for game over before proceeding to next turn
-    if (this._checkGameOver()) return true;
-
-    // Deathbringer: skill damage may have queued skull destructions.
-    if (this._pendingSkullDestroy > 0 && this._maybeStartPendingSkullDestroy()) return true;
-
-    // If an EXTRA_TURN effect was resolved (or the egg phase forced a retained
-    // turn), stay on the same side.
-    if (this._extraTurnEarned) {
-      this._extraTurnEarned = false;
-      this.pendingExtraTurn = true;
-      if (!this._eggForcedExtraTurn) this.log.add('--- Extra Turn (Player) ---');
-      this._eggForcedExtraTurn = false;
-      if (this.onStateChange) this.onStateChange();
-      return true;
-    }
-
-    this._endTurn('player');
+    // Instant-effect skills route through THE single cast pipeline (review R1).
+    this._castSkill('player', skill);
     return true;
   }
 
   /**
-   * Enter targeting mode for board-targeted skills.
-   * Called when player clicks a skill with targeting: 'board_tile'.
+   * THE single skill-execution pipeline (review R1). Every skill cast — player
+   * instant, player targeted, enemy standard-AI, enemy custom-AI — runs through
+   * here, so the historically bug-prone post-cast sequence (game-over check →
+   * pending skull-destroy drain → extra-turn routing → end turn) exists in
+   * exactly one place (_finishInstantAction).
+   *
+   * Cost/sound/log happen once at the top; each effect then resolves through
+   * the effect-handler registry. Targeted casts pass the affected area — the
+   * targeting-aware board effects (destroy / convert / lock) consume it, all
+   * other effects resolve exactly like an instant cast.
+   *
+   * If any effect enters a cascade, the cascade phase machine owns the rest of
+   * the action (its epilogue is _finishResolving); otherwise the instant
+   * epilogue runs inline.
+   *
+   * @param {'player'|'enemy'} side
    * @param {object} skill
+   * @param {{targetCol?:number, targetRow?:number, targetArea?:Array<{col:number,row:number}>}} [opts]
    */
-  enterTargeting(skill) {
-    this.state = BattleState.TARGETING;
-    this._targetingSkill = { ...skill };
-    this._setDefaultTarget();
-    if (this.onStateChange) this.onStateChange();
+  _castSkill(side, skill, opts = {}) {
+    const caster = this._getStateBySide(side);
+    this._spendCost(caster, skill);
+    this._setSkillSound(skill);
+    this.log.add(`${caster.name} uses ${skill.name}.`);
+
+    const targeted = Array.isArray(opts.targetArea);
+    let enteredCascade = false;
+    for (const effect of (skill.effects || [])) {
+      if (targeted && this._dispatchTargetedEffect(effect, skill, opts)) {
+        // A targeting-aware board effect consumed the area. Destroy/convert
+        // enter RESOLVING; lock does not.
+        if (this.state === BattleState.RESOLVING) enteredCascade = true;
+        continue;
+      }
+      if (this._resolveEffect(effect, skill, side)) {
+        enteredCascade = true;
+      }
+    }
+
+    // If any effect entered a cascade (e.g. CREATE_TILES), the cascade machine
+    // finishes the action via _finishResolving.
+    if (enteredCascade) return;
+
+    this._finishInstantAction(side);
+  }
+
+  /**
+   * Route a targeting-aware effect (destroy / convert / lock) to its executor
+   * with the targeted area. Returns true if the effect was one of the
+   * targeting-aware types (and was therefore handled here); false lets the
+   * caller fall through to the standard effect registry.
+   * @param {object} effect
+   * @param {object} skill
+   * @param {{targetCol:number, targetRow:number, targetArea:Array}} opts
+   * @returns {boolean}
+   */
+  _dispatchTargetedEffect(effect, skill, opts) {
+    switch (effect.effectType) {
+      case SKILL_EFFECT_TYPES.DESTROY_TILES:
+      case SKILL_EFFECT_TYPES.DESTROY_TILES_ROW:
+      case SKILL_EFFECT_TYPES.DESTROY_TILES_COLUMN:
+        this._executeDestroyTiles(opts.targetArea, opts.targetCol, opts.targetRow, skill.name);
+        return true;
+      case SKILL_EFFECT_TYPES.CONVERT_TILE:
+        this._executeConvertTile(opts.targetArea, effect, skill.name);
+        return true;
+      case SKILL_EFFECT_TYPES.LOCK_COLOR:
+        // Targeted lock: lock the CLICKED tile's color (and every tile of it).
+        this._executeLockColor(opts.targetCol, opts.targetRow, effect, skill.name);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Shared epilogue for a cast that did NOT enter a cascade (review R1). Owns
+   * the exact post-cast sequence — game over → pending skull-destroy drain →
+   * extra-turn routing → end turn — for BOTH sides, encoding the side-specific
+   * rules that previously lived in four divergent copies:
+   *   - Player extra turn: return to PLAYER_TURN (structurally fixes the "kept
+   *     targeting" bug — we may have arrived from TARGETING), suppress the
+   *     announcement for the hidden egg-phase retained turn, then auto-pass if
+   *     the retained turn has no possible move (e.g. a fully locked board).
+   *   - Enemy extra turn: the enemy turn is TIMER-driven, so the fire gate
+   *     (_enemyFired/_enemyTimer) must be re-armed and the state stay
+   *     ENEMY_TURN — otherwise the update loop never lets the enemy act again
+   *     and the battle freezes (the historical enemy-freeze bug).
+   *   - Both: an extra turn is a NEW action, so the once-per-action guard for
+   *     damage-triggered destroyers (Deathbringer) re-arms.
+   * @param {'player'|'enemy'} side
+   */
+  _finishInstantAction(side) {
+    // An effect may already have ended the battle mid-cast (e.g. a targeted
+    // destroy whose skull damage was lethal calls _checkGameOver itself) —
+    // don't re-run the game-over routine (it would double-log the result).
+    if (this.state === BattleState.GAME_OVER) return;
+    if (this._checkGameOver()) return;
+
+    // Damage dealt by the cast may have queued deferred skull destructions
+    // (Deathbringer) — drain them as a follow-up resolution before routing.
+    if (this._pendingSkullDestroy > 0 && this._maybeStartPendingSkullDestroy()) return;
+
+    if (this._extraTurnEarned) {
+      this._extraTurnEarned = false;
+      this.pendingExtraTurn = true;
+      // Extra turn = new action: re-arm the once-per-action destroy guard.
+      this._deathbringerFiredThisAction = false;
+      if (side === 'enemy') {
+        this._setState(BattleState.ENEMY_TURN);
+        this.activeSide = 'enemy';
+        this._enemyFired = false;
+        this._enemyTimer = 0;
+        this.log.add('--- Extra Turn (Enemy) ---');
+      } else {
+        this._setState(BattleState.PLAYER_TURN);
+        this.activeSide = 'player';
+        // Hidden egg-phase retained turn: skip the announcement, then consume the flag.
+        if (!this._eggForcedExtraTurn) this.log.add('--- Extra Turn (Player) ---');
+        this._eggForcedExtraTurn = false;
+        // The retained turn may begin with no possible move (e.g. board now
+        // heavily locked) — auto-pass if truly stuck.
+        this._maybeAutoPassPlayer();
+      }
+      if (this.onStateChange) this.onStateChange();
+      return;
+    }
+
+    this._endTurn(side);
   }
 
   /**
@@ -986,72 +1154,16 @@ export default class BattleController {
 
     const skill = this._targetingSkill;
 
-    // Spend the cost
-    this._spendCost(this.playerState, skill);
-    this._setSkillSound(skill);
-    this.log.add(`${this.playerState.name} uses ${skill.name}.`);
-
-    // Compute affected tiles
+    // Compute affected tiles, then clear targeting state BEFORE casting.
     const area = this._computeTargetingArea(col, row);
-
-    // Clear targeting state
     this._targetingSkill = null;
     this._targetHoverCell = null;
     this._targetingOverlayCells = [];
 
-    // Dispatch each effect by type. Targeting-aware effects (destroy / convert)
-    // get the area; everything else routes through the standard _resolveEffect.
-    // Track whether any effect entered RESOLVING — if so, the cascade machine
-    // ends the turn; otherwise we end it inline here, mirroring tryPlayerSkill.
-    let enteredCascade = false;
-    for (const effect of (skill.effects || [])) {
-      switch (effect.effectType) {
-        case SKILL_EFFECT_TYPES.DESTROY_TILES:
-        case SKILL_EFFECT_TYPES.DESTROY_TILES_ROW:
-        case SKILL_EFFECT_TYPES.DESTROY_TILES_COLUMN:
-          this._executeDestroyTiles(area, col, row, skill.name);
-          enteredCascade = true;
-          break;
-        case SKILL_EFFECT_TYPES.CONVERT_TILE:
-          if (this._executeConvertTile(area, effect, skill.name)) {
-            enteredCascade = true;
-          }
-          break;
-        case SKILL_EFFECT_TYPES.LOCK_COLOR:
-          // Targeted lock: lock the CLICKED tile's color (and every tile of it).
-          this._executeLockColor(col, row, effect, skill.name);
-          break;
-        default:
-          if (this._resolveEffect(effect, skill, 'player')) {
-            enteredCascade = true;
-          }
-          break;
-      }
-    }
-
-    if (enteredCascade) return true;
-    if (this._checkGameOver()) return true;
-    // Deathbringer: skill damage may have queued skull destructions.
-    if (this._pendingSkullDestroy > 0 && this._maybeStartPendingSkullDestroy()) return true;
-    if (this._extraTurnEarned) {
-      this._extraTurnEarned = false;
-      this.pendingExtraTurn = true;
-      // CRITICAL: return to PLAYER_TURN. We entered via TARGETING; a targeted
-      // skill that grants an extra turn WITHOUT a cascade (e.g. lock + extra_turn)
-      // would otherwise leave the state stuck in TARGETING (the "kept targeting"
-      // bug). Cascade-entering targeted skills route through _finishResolving
-      // which sets PLAYER_TURN, so they were unaffected.
-      this.state = BattleState.PLAYER_TURN;
-      this.activeSide = 'player';
-      if (!this._eggForcedExtraTurn) this.log.add('--- Extra Turn (Player) ---');
-      this._eggForcedExtraTurn = false;
-      if (this.onStateChange) this.onStateChange();
-      // The extra turn may begin with no possible move (e.g. board now heavily
-      // locked) — auto-pass if truly stuck.
-      this._maybeAutoPassPlayer();
-      return true;
-    }
-    this._endTurn('player');
+    // Targeted casts route through THE single cast pipeline (review R1); the
+    // pipeline's epilogue handles the "extra turn without a cascade must leave
+    // TARGETING" case (the historical "kept targeting" bug) structurally.
+    this._castSkill('player', skill, { targetCol: col, targetRow: row, targetArea: area });
     return true;
   }
 
@@ -1064,7 +1176,7 @@ export default class BattleController {
     this._targetingSkill = null;
     this._targetHoverCell = null;
     this._targetingOverlayCells = [];
-    this.state = BattleState.PLAYER_TURN;
+    this._setState(BattleState.PLAYER_TURN);
     this.log.add('Targeting cancelled.');
     if (this.onStateChange) this.onStateChange();
     return true;
@@ -1192,12 +1304,7 @@ export default class BattleController {
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
       this._markDirectDamage(this.activeSide, r.actualDamage);
-      this._dispatchDamageEvent(
-        this.activeSide,
-        this.activeSide === 'player' ? 'enemy' : 'player',
-        r,
-        { isSkull: true }
-      );
+      this._dispatchDamageEvent(this.activeSide, opponentOf(this.activeSide), r, { isSkull: true });
       // Check for immediate game over — don't enter cascade if target died
       if (this._checkGameOver()) return;
     }
@@ -1215,14 +1322,13 @@ export default class BattleController {
     const removedCount = this.board.removeTiles(positions);
     this.log.add(`${removedCount} tiles destroyed by ${skillName}!`);
 
-    // 6. Enter RESOLVING directly at REMOVE phase (skip SHOW_MATCH — no match to highlight)
-    // Preserve any skill-granted extra turn before resetting cascade state,
-    // so that e.g. a DESTROY_TILES+EXTRA_TURN multi-effect skill works correctly.
-    const skillExtraTurn = this._extraTurnEarned;
-    this.state = BattleState.RESOLVING;
-    this.activeSide = 'player';
+    // 6. Enter RESOLVING directly at REMOVE phase (skip SHOW_MATCH — no match
+    // to highlight). activeSide is already the caster's side (set at turn
+    // start), so enemy destroy skills credit the enemy correctly. A skill-
+    // granted extra turn (_extraTurnEarned) survives — action-scoped flags are
+    // only consumed at the action epilogue, never reset mid-action (review R10).
+    this._setState(BattleState.RESOLVING);
     this._allSteps = [];
-    this._extraTurnEarned = skillExtraTurn;
     this.pendingExtraTurn = false;
     this._matchTextTriggers = [];
     this._previousEmptyCells = null;
@@ -1405,10 +1511,16 @@ export default class BattleController {
   // ── Resolution ────────────────────────────────────────
 
   _beginResolving(side, firstAnalysis) {
-    this.state = BattleState.RESOLVING;
+    this._setState(BattleState.RESOLVING);
     this.activeSide = side;
     this._allSteps = [];
-    this._extraTurnEarned = false;
+    // NOTE: _extraTurnEarned is deliberately NOT reset here (review R10). The
+    // flag is action-scoped: set during the action (a skill's extra_turn effect
+    // or a 4+ match), consumed exactly once at the action epilogue
+    // (_finishResolving / _finishInstantAction), and scrubbed at every fresh
+    // turn intro (_completeTurnIntro). Resetting it mid-action was the source
+    // of the old "extra_turn must be authored AFTER create_tiles" data-ordering
+    // trap (decision #4).
     this.pendingExtraTurn = false;
     this.highlightCells = [];
     this.emptyCells = [];
@@ -1551,13 +1663,13 @@ export default class BattleController {
     if (analysis.extraTurnTrigger) {
       for (const match of analysis.matches) {
         if (match.count >= 4 || (match.isShape && match.count >= 4)) {
-          const matchSet = new Set(match.positions.map(p => `${p.col},${p.row}`));
+          const matchSet = new Set(match.positions.map(posKey));
           // Check 'from' first — the tile originally at 'to' lands here
-          if (matchSet.has(`${from.col},${from.row}`)) {
+          if (matchSet.has(posKey(from))) {
             return { col: from.col, row: from.row };
           }
           // Check 'to' — the tile originally at 'from' lands here
-          if (matchSet.has(`${to.col},${to.row}`)) {
+          if (matchSet.has(posKey(to))) {
             return { col: to.col, row: to.row };
           }
         }
@@ -1566,11 +1678,11 @@ export default class BattleController {
 
     // Fallback for non-extra-turn matches: use the first position in the
     // analysis that overlaps with either swapped cell.
-    const analysisSet = new Set(analysis.positions.map(p => `${p.col},${p.row}`));
-    if (analysisSet.has(`${from.col},${from.row}`)) {
+    const analysisSet = new Set(analysis.positions.map(posKey));
+    if (analysisSet.has(posKey(from))) {
       return { col: from.col, row: from.row };
     }
-    if (analysisSet.has(`${to.col},${to.row}`)) {
+    if (analysisSet.has(posKey(to))) {
       return { col: to.col, row: to.row };
     }
 
@@ -1590,9 +1702,9 @@ export default class BattleController {
    * @returns {{col:number, row:number}|null}
    */
   _findCascadeCausePos(analysis, previousEmpty) {
-    const prevSet = new Set(previousEmpty.map(p => `${p.col},${p.row}`));
+    const prevSet = new Set(previousEmpty.map(posKey));
     for (const pos of analysis.positions) {
-      if (prevSet.has(`${pos.col},${pos.row}`)) {
+      if (prevSet.has(posKey(pos))) {
         return { col: pos.col, row: pos.row };
       }
     }
@@ -1611,12 +1723,7 @@ export default class BattleController {
       this._setShakeFromDamage(r.actualDamage, targetState.maxHp);
       this._skullDamageCount++;
       this._markDirectDamage(this.activeSide, r.actualDamage);
-      this._dispatchDamageEvent(
-        this.activeSide,
-        this.activeSide === 'player' ? 'enemy' : 'player',
-        r,
-        { isSkull: true }
-      );
+      this._dispatchDamageEvent(this.activeSide, opponentOf(this.activeSide), r, { isSkull: true });
       // Check for immediate game over — stop cascade if target died
       if (this._checkGameOver()) return;
     }
@@ -1740,9 +1847,9 @@ export default class BattleController {
       this._phaseTimer = 0;
       this._deathbringerFiredThisAction = false;
       if (this.activeSide === 'player') {
-        this.state = BattleState.PLAYER_TURN;
+        this._setState(BattleState.PLAYER_TURN);
       } else {
-        this.state = BattleState.ENEMY_TURN;
+        this._setState(BattleState.ENEMY_TURN);
         this._enemyTimer = 0;
         this._enemyFired = false;
       }
@@ -1753,12 +1860,12 @@ export default class BattleController {
       // (extra turns bypass _completeTurnIntro).
       this._deathbringerFiredThisAction = false;
       if (this.activeSide === 'player') {
-        this.state = BattleState.PLAYER_TURN;
+        this._setState(BattleState.PLAYER_TURN);
         // Hidden egg-phase retained turn: skip the announcement, then consume the flag.
         if (!this._eggForcedExtraTurn) this.log.add('--- Extra Turn (Player) ---');
         this._eggForcedExtraTurn = false;
       } else {
-        this.state = BattleState.ENEMY_TURN;
+        this._setState(BattleState.ENEMY_TURN);
         this._enemyTimer = 0;
         this.log.add('--- Extra Turn (Enemy) ---');
       }
@@ -1790,7 +1897,7 @@ export default class BattleController {
     // applied poison to its opponent, so deal the opponent's poison now (then
     // halve the stacks). Poison damage can be lethal — re-check game over and
     // stop before the turn transition if so. See decision #39.
-    this._tickPoison(side === 'player' ? 'enemy' : 'player');
+    this._tickPoison(opponentOf(side));
     if (this._checkGameOver()) {
       if (this.onStateChange) this.onStateChange();
       return;
@@ -1801,8 +1908,8 @@ export default class BattleController {
     // Enter turn-intro animation before the actual turn begins.
     // The scene reads _turnAnnouncement to spawn the appropriate
     // floating image effect (Player Turn / Enemy Turn).
-    const nextSide = side === 'player' ? 'enemy' : 'player';
-    this.state = BattleState.TURN_INTRO;
+    const nextSide = opponentOf(side);
+    this._setState(BattleState.TURN_INTRO);
     // Announcement is DEFERRED to phase B (after damage delivery) — see update().
     this._turnAnnouncement = null;
     this._nextTurnSide = nextSide;
@@ -1837,7 +1944,7 @@ export default class BattleController {
     // New turn = new action: re-arm Deathbringer's once-per-action guard.
     this._deathbringerFiredThisAction = false;
     // A fresh (non-extra) turn must NEVER inherit a pending extra-turn grant.
-    // Legitimate extra turns continue via _finishResolving / _beginEnemyExtraTurn,
+    // Legitimate extra turns continue via _finishResolving / _finishInstantAction,
     // which set PLAYER_TURN / ENEMY_TURN directly and BYPASS this intro — so any
     // _extraTurnEarned still set when a normal TURN_INTRO completes is STALE.
     // Clearing it here enforces the invariant and stops a leaked flag from
@@ -1852,7 +1959,7 @@ export default class BattleController {
 
     this.log.nextTurn();
     if (side === 'enemy') {
-      this.state = BattleState.ENEMY_TURN;
+      this._setState(BattleState.ENEMY_TURN);
       this.activeSide = 'enemy';
       this._enemyTimer = 0;
       this._enemyFired = false;
@@ -1860,7 +1967,7 @@ export default class BattleController {
     } else {
       this.enemyState.block = 0;
       this.playerState.block = 0;
-      this.state = BattleState.PLAYER_TURN;
+      this._setState(BattleState.PLAYER_TURN);
       this.activeSide = 'player';
       this.log.add('--- Your Turn ---');
     }
@@ -2062,7 +2169,7 @@ export default class BattleController {
   _applyStatusTurnStartEffect(st, side, state) {
     if (st.id !== 'bleeding') return;
     const dmg = Math.max(1, st.tickDamage || 1);
-    const attackerSide = st.sourceSide || (side === 'player' ? 'enemy' : 'player');
+    const attackerSide = st.sourceSide || opponentOf(side);
     const r = this._applyDamage(state, dmg, { attackerSide });
     if (r.actualDamage > 0) {
       this.log.add(`${state.name} takes ${r.actualDamage} bleed damage.`);
@@ -2104,7 +2211,7 @@ export default class BattleController {
           // Revert after animation
           this.board.swap(from.col, from.row, to.col, to.row);
           this._swapTriggerPos = null;
-          this.state = BattleState.PLAYER_TURN;
+          this._setState(BattleState.PLAYER_TURN);
         }
       }
       return; // Don't process other states during swap animation
@@ -2204,30 +2311,9 @@ export default class BattleController {
 
     const skill = this.enemyAI.findBestSkill();
     if (skill) {
-      this._spendCost(this.enemyState, skill);
-      this._setSkillSound(skill);
-      this.log.add(`${this.enemyState.name} uses ${skill.name}.`);
-
-      let enteredCascade = false;
-      for (const effect of (skill.effects || [])) {
-        if (this._resolveEffect(effect, skill, 'enemy')) {
-          enteredCascade = true;
-        }
-      }
-
-      // If any effect entered a cascade (e.g. CREATE_TILES), let it resolve
-      if (enteredCascade) return;
-
-      // Check for game over before proceeding to next turn
-      if (this._checkGameOver()) return;
-
-      // If an EXTRA_TURN effect was resolved, stay on the same side
-      if (this._extraTurnEarned) {
-        this._beginEnemyExtraTurn();
-        return;
-      }
-
-      this._endTurn('enemy');
+      // Enemy skills route through THE single cast pipeline (review R1); its
+      // epilogue re-arms the timer-driven enemy gate on extra turns.
+      this._castSkill('enemy', skill);
       return;
     }
 
@@ -2242,28 +2328,40 @@ export default class BattleController {
   _doEnemySwap() {
     const swap = this.enemyAI.findBestSwap(this.board);
     if (swap) {
-      this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
-      this.log.add(`${this.enemyState.name} swaps tiles.`);
-      const analysis = this.resolver.analyzeMatches(this.board, this.enemyState);
-      if (analysis) {
-        // Determine which swapped position caused the 4+ match
-        const from = { col: swap.col1, row: swap.row1 };
-        const to = { col: swap.col2, row: swap.row2 };
-        this._swapTriggerPos = this._computeSwapCausePos(from, to, analysis);
-        this._beginResolving('enemy', analysis);
-      } else {
-        this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
-        this._swapTriggerPos = null;
-        this.log.add('No valid match. Board reshuffled.');
-        this.board.reshuffle();
-        this._endTurn('enemy');
-      }
+      this._performEnemySwap(swap);
       return;
     }
 
     this.log.add('No valid moves. Board reshuffled.');
     this.board.reshuffle();
     this._endTurn('enemy');
+  }
+
+  /**
+   * Execute an enemy swap: apply it, resolve the resulting cascade, or revert
+   * + reshuffle when it produced no match. Shared by the standard-AI swap and
+   * the custom-AI 'swap' action (review R1 — previously two near-identical
+   * copies).
+   * @param {{col1:number,row1:number,col2:number,row2:number}} swap
+   * @private
+   */
+  _performEnemySwap(swap) {
+    this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
+    this.log.add(`${this.enemyState.name} swaps tiles.`);
+    const analysis = this.resolver.analyzeMatches(this.board, this.enemyState);
+    if (analysis) {
+      // Determine which swapped position caused the 4+ match
+      const from = { col: swap.col1, row: swap.row1 };
+      const to = { col: swap.col2, row: swap.row2 };
+      this._swapTriggerPos = this._computeSwapCausePos(from, to, analysis);
+      this._beginResolving('enemy', analysis);
+    } else {
+      this.board.swap(swap.col1, swap.row1, swap.col2, swap.row2);
+      this._swapTriggerPos = null;
+      this.log.add('No valid match. Board reshuffled.');
+      this.board.reshuffle();
+      this._endTurn('enemy');
+    }
   }
 
   /**
@@ -2287,30 +2385,6 @@ export default class BattleController {
   }
 
   /**
-   * Grant the enemy an extra turn after an INSTANT skill (no cascade) whose
-   * effects included extra_turn (e.g. Cyclops' Smash).
-   *
-   * The enemy turn is TIMER-driven, so — unlike the player's input-driven
-   * extra-turn path — we must re-arm the enemy fire gate (`_enemyFired` /
-   * `_enemyTimer`) and stay in ENEMY_TURN. Otherwise the update loop's
-   * `state === ENEMY_TURN && !_enemyFired` guard never lets the enemy act
-   * again and the battle freezes. Mirrors the enemy branch of
-   * `_finishResolving`'s extra-turn handling.
-   * @private
-   */
-  _beginEnemyExtraTurn() {
-    this._extraTurnEarned = false;
-    this.pendingExtraTurn = true;
-    this.state = BattleState.ENEMY_TURN;
-    this._enemyFired = false;
-    this._enemyTimer = 0;
-    // Extra turn = new action: re-arm Deathbringer's once-per-action guard.
-    this._deathbringerFiredThisAction = false;
-    this.log.add('--- Extra Turn (Enemy) ---');
-    if (this.onStateChange) this.onStateChange();
-  }
-
-  /**
    * Dispatch a custom AI action returned by an enemyAiOverrides handler.
    * Supports three action types: 'skill', 'swap', and 'pass'.
    * @param {object} action — { action: 'skill'|'swap'|'pass', skill?, swap? }
@@ -2318,46 +2392,13 @@ export default class BattleController {
    */
   _dispatchCustomEnemyAction(action) {
     if (action.action === 'skill' && action.skill) {
-      this._spendCost(this.enemyState, action.skill);
-      this._setSkillSound(action.skill);
-      this.log.add(`${this.enemyState.name} uses ${action.skill.name}.`);
-
-      let enteredCascade = false;
-      for (const effect of (action.skill.effects || [])) {
-        if (this._resolveEffect(effect, action.skill, 'enemy')) {
-          enteredCascade = true;
-        }
-      }
-
-      if (enteredCascade) return;
-      if (this._checkGameOver()) return;
-
-      if (this._extraTurnEarned) {
-        this._beginEnemyExtraTurn();
-        return;
-      }
-
-      this._endTurn('enemy');
+      // Same single cast pipeline as every other path (review R1).
+      this._castSkill('enemy', action.skill);
       return;
     }
 
     if (action.action === 'swap' && action.swap) {
-      const sw = action.swap;
-      this.board.swap(sw.col1, sw.row1, sw.col2, sw.row2);
-      this.log.add(`${this.enemyState.name} swaps tiles.`);
-      const analysis = this.resolver.analyzeMatches(this.board, this.enemyState);
-      if (analysis) {
-        const from = { col: sw.col1, row: sw.row1 };
-        const to = { col: sw.col2, row: sw.row2 };
-        this._swapTriggerPos = this._computeSwapCausePos(from, to, analysis);
-        this._beginResolving('enemy', analysis);
-      } else {
-        this.board.swap(sw.col1, sw.row1, sw.col2, sw.row2);
-        this._swapTriggerPos = null;
-        this.log.add('No valid match. Board reshuffled.');
-        this.board.reshuffle();
-        this._endTurn('enemy');
-      }
+      this._performEnemySwap(action.swap);
       return;
     }
 
@@ -2404,9 +2445,10 @@ export default class BattleController {
     this._recomputeDynamicAttack(state);
   }
   /**
-   * Resolve a single effect from a skill's effects[] array.
-   * Spends mana and plays sound are handled ONCE at the skill level before
-   * this is called for each effect.
+   * Resolve a single effect from a skill's effects[] array by dispatching to
+   * the effect-handler registry (battle/skillEffectHandlers.js — review R2).
+   * Cost spending and the resolve sound are handled ONCE at the skill level
+   * (_castSkill) before this is called for each effect.
    *
    * @param {object} effect - { effectType, damage?, armor?, heal?, createTiles? }
    * @param {object} skill - the parent skill (for log context)
@@ -2414,363 +2456,20 @@ export default class BattleController {
    * @returns {boolean} true if a cascade was entered (e.g. CREATE_TILES)
    */
   _resolveEffect(effect, skill, side) {
-    const src = side === 'player' ? this.playerState : this.enemyState;
-    const tgt = side === 'player' ? this.enemyState : this.playerState;
-
-    switch (effect.effectType) {
-      case SKILL_EFFECT_TYPES.DAMAGE: {
-        const base = (effect.damage && typeof effect.damage.amount === 'number')
-          ? effect.damage.amount
-          : (src.attack || 1);
-        // `perSkull` (woven `skull + damage`): + N damage for every Skull tile
-        // currently on the board, read at cast time.
-        const perSkull = (effect.damage && typeof effect.damage.perSkull === 'number')
-          ? effect.damage.perSkull : 0;
-        const skullCount = perSkull > 0 ? this.board.getTilesOfType('skull').length : 0;
-        // Opt-in stat scaling (effect.damage.scaling): + floored Attack/Magic
-        // bonus from the caster. No `scaling` field → flat (unchanged). Both
-        // character AND enemy skills carry it (bonus uses the caster's stats).
-        const scaleBonus = scaledBonus(effect.damage && effect.damage.scaling, src);
-        const amount = base + perSkull * skullCount + scaleBonus;
-        const r = this._applyDamage(tgt, amount);
-        this.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
-        this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
-        this._markDirectDamage(side, r.actualDamage);
-        this._dispatchDamageEvent(side, side === 'player' ? 'enemy' : 'player', r);
-        // LEECH (woven modifier): heal the caster for a fraction of the damage
-        // dealt. `leech` is a 0..1 fraction attached to the damage payload by the
-        // synthesizer. See decision #40.
-        this._applyLeech(src, side, r.actualDamage, effect.damage && effect.damage.leech);
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.ARMOR: {
-        const base = (effect.armor && typeof effect.armor.amount === 'number')
-          ? effect.armor.amount
-          : (src.attack || 1);
-        // Opt-in stat scaling (effect.armor.scaling): + floored Attack bonus.
-        const amount = base + scaledBonus(effect.armor && effect.armor.scaling, src);
-        src.armor += amount;
-        this._emitFloatingStat(side, 'armor', amount);
-        this.log.add(`${src.name} gains ${amount} armor.`);
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.BARRIER: {
-        // One-round magic shield. Default scaling is Magic (twice as effective as
-        // armor's Attack scaling — see scalingConfig _66). Absorbs damage like
-        // armor (MatchResolver.applyDamage) and expires at the caster's next turn
-        // start (_completeTurnIntro). See decision #38.
-        const base = (effect.barrier && typeof effect.barrier.amount === 'number')
-          ? effect.barrier.amount
-          : 0;
-        const amount = base + scaledBonus(effect.barrier && effect.barrier.scaling, src);
-        if (amount > 0) {
-          src.barrier = (src.barrier || 0) + amount;
-          this._emitFloatingStat(side, 'barrier', amount);
-          this.log.add(`${src.name} gains ${amount} barrier.`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.HEAL: {
-        const base = (effect.heal && typeof effect.heal.amount === 'number')
-          ? effect.heal.amount
-          : 0;
-        if (base <= 0) {
-          this.log.add(`${skill.name} has no heal amount configured.`);
-          return false;
-        }
-        // Opt-in stat scaling (effect.heal.scaling): + floored Magic bonus.
-        const amount = base + scaledBonus(effect.heal && effect.heal.scaling, src);
-        const beforeHp = src.hp;
-        src.hp = Math.min(src.maxHp, src.hp + amount);
-        const actualHeal = src.hp - beforeHp;
-        this._emitFloatingStat(side, 'heal', actualHeal);
-        this.log.add(`${src.name} heals for ${actualHeal} HP.`);
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.GAIN_MAX_HP: {
-        // Permanently raise the caster's MAX HP. Does NOT heal — a paired HEAL
-        // effect fills the new space (e.g. Blood Gorge: +10 max HP, then heal 10).
-        const amount = (effect.gainMaxHp && typeof effect.gainMaxHp.amount === 'number')
-          ? effect.gainMaxHp.amount : 0;
-        if (amount !== 0) {
-          src.maxHp = Math.max(1, (src.maxHp || 0) + amount);
-          this.log.add(`${src.name} gains ${amount} max HP.`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.CREATE_TILES: {
-        this._executeCreateTiles(effect, side, skill.name);
-        return this.state === BattleState.RESOLVING;
-      }
-
-      case SKILL_EFFECT_TYPES.CONVERT_TILES_BY_TYPE: {
-        this._executeConvertTilesByType(effect, side, skill.name);
-        return this.state === BattleState.RESOLVING;
-      }
-
-      case SKILL_EFFECT_TYPES.DESTROY_TILES_BY_TYPE: {
-        // Destroy tiles of a given type board-wide (non-targeted). `amount`
-        // omitted = ALL of that type; set = up to N random ones. Routes through
-        // the shared destroy path (mana + skull damage + cascade).
-        const cfg = effect.destroyByType || {};
-        const type = cfg.type;
-        if (!type || !TILE_TYPES[String(type).toUpperCase()]) {
-          console.warn(`[DESTROY_TILES_BY_TYPE] Unknown type "${type}". Skipping.`);
-          return false;
-        }
-        let positions = this.board.getTilesOfType(type);
-        if (typeof cfg.amount === 'number') {
-          positions = BoardModel.pickRandomTiles(positions, cfg.amount);
-        }
-        if (!positions.length) {
-          this.log.add(`${skill.name}: no ${type} tiles to destroy.`);
-          return false;
-        }
-        this._executeDestroyTiles(positions, positions[0].col, positions[0].row, skill.name);
-        return this.state === BattleState.RESOLVING;
-      }
-
-      case SKILL_EFFECT_TYPES.EXTRA_TURN: {
-        if (this._canGainExtraTurn(side)) {
-          this._extraTurnEarned = true;
-          this.log.add(`${src.name} gains an extra turn!`);
-        } else {
-          this.log.add(`${src.name} is Frozen and cannot gain an extra turn.`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.GAIN_ATTACK: {
-        // Permanent attack gain (Chokeweed's Encroach). Delta-based dynamic
-        // attack (Group A relics) composes with this without clobbering it.
-        const amount = (effect.gainAttack && typeof effect.gainAttack.amount === 'number')
-          ? effect.gainAttack.amount
-          : 0;
-        if (amount !== 0) {
-          src.attack = (src.attack || 0) + amount;
-          this.log.add(`${src.name} gains ${amount} attack.`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.GAIN_MAGIC: {
-        // Permanent magic gain (the woven `magic` tag). Magic isn't dynamically
-        // recomputed, so a flat add persists cleanly for the rest of the battle.
-        const amount = (effect.gainMagic && typeof effect.gainMagic.amount === 'number')
-          ? effect.gainMagic.amount
-          : 0;
-        if (amount !== 0) {
-          src.magic = (src.magic || 0) + amount;
-          this.log.add(`${src.name} gains ${amount} magic.`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.SELF_DESTRUCT: {
-        // Caster dies. The post-effect _checkGameOver detects hp <= 0 and ends
-        // the battle (if the same skill also killed the opponent, the player's
-        // death is checked first, so a mutual-kill still resolves as a loss).
-        src.hp = 0;
-        this.log.add(`${src.name} self-destructs!`);
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.DRAIN_MANA: {
-        // Remove mana from the OPPONENT (tgt). `color` optional — omit to drain
-        // `amount` of every color (Soul Burn). The caster does NOT gain it.
-        const dm = effect.drainMana || {};
-        const amount = typeof dm.amount === 'number' ? dm.amount : 1;
-        if (amount > 0) {
-          if (!tgt.mana) tgt.mana = {};
-          const colors = dm.color ? [dm.color] : MANA_COLORS;
-          let drained = 0;
-          for (const color of colors) {
-            const before = tgt.mana[color] || 0;
-            tgt.mana[color] = Math.max(0, before - amount);
-            drained += before - tgt.mana[color];
-          }
-          // Draining unspent mana can lower the opponent's dynamic attack.
-          this._recomputeDynamicAttack(tgt);
-          if (drained > 0) this.log.add(`${tgt.name} is drained of ${drained} mana.`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.GAIN_MANA: {
-        // Grant the CASTER mana (synthesized "gain" skills). Gated by Enfeebled
-        // like every other in-battle mana credit; fires onGainMana so reactor
-        // relics (Flaming Arrow, …) see it — same as cascade/skill-destroy gains.
-        const gm = effect.gainMana || {};
-        const amount = typeof gm.amount === 'number' ? gm.amount : 0;
-        const color = gm.color;
-        if (amount > 0 && color) {
-          if (this._canGainMana(side)) {
-            if (!src.mana) src.mana = {};
-            src.mana[color] = (src.mana[color] || 0) + amount;
-            this._recomputeDynamicAttack(src);
-            this.log.add(`${src.name} gains ${amount} ${color} mana.`);
-            this._dispatchManaGain(side, color, amount);
-          } else {
-            this.log.add(`${src.name} is Enfeebled and gains no mana.`);
-          }
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.SILENCE: {
-        // Legacy alias → unified Silence status on the OPPONENT.
-        const turns = (effect.silence && typeof effect.silence.turns === 'number')
-          ? effect.silence.turns : 1;
-        this._applyStatus(tgt, 'silenced', { turns }, side);
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.SET_ATTACK: {
-        // Legacy alias → Cripple status (attack pinned to `value`) on the OPPONENT.
-        const cfg = effect.setAttack || {};
-        const value = typeof cfg.value === 'number' ? cfg.value : 1;
-        const turns = typeof cfg.turns === 'number' ? cfg.turns : 1;
-        this._applyStatus(tgt, 'crippled', { turns, attackValue: value }, side);
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.APPLY_STATUS: {
-        // General, data-driven status application. Payload applyStatus:
-        // { id, target:'self'|'opponent', turns, attackValue? }.
-        const cfg = effect.applyStatus || {};
-        if (!cfg.id || !getStatusDef(cfg.id)) {
-          console.warn(`[BattleController] apply_status: unknown status id "${cfg.id}". Skipping.`);
-          return false;
-        }
-        const turns = typeof cfg.turns === 'number' ? cfg.turns : 1;
-        const targetState = cfg.target === 'self' ? src : tgt;
-        this._applyStatus(targetState, cfg.id, { turns, attackValue: cfg.attackValue }, side);
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.SHUFFLE: {
-        this._executeShuffle(side, skill && skill.name);
-        // Never enters RESOLVING — shuffle yields a no-match board (the paired
-        // extra_turn effect resolves inline afterward).
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.APPLY_POISON: {
-        // Apply POISON stacks (default to the OPPONENT). The number of stacks
-        // applied scales with the caster's stats (Poison Dart: base 3 + Magic
-        // _50). The stacks themselves deal flat damage = stack count at the
-        // applier's turn end (_tickPoison). See decision #39.
-        const cfg = effect.poison || {};
-        const base = (typeof cfg.amount === 'number') ? cfg.amount : 0;
-        // `perSkull` (woven `skull + poison`): +N stacks per Skull on the board.
-        const perSkull = (typeof cfg.perSkull === 'number') ? cfg.perSkull : 0;
-        const skullCount = perSkull > 0 ? this.board.getTilesOfType('skull').length : 0;
-        const stacks = base + perSkull * skullCount + scaledBonus(cfg.scaling, src);
-        const targetState = cfg.target === 'self' ? src : tgt;
-        this._applyPoison(targetState, stacks);
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.TRANSMUTE_MANA: {
-        // Convert the caster's OTHER mana into a destination color — a battery
-        // for next turn. Pulls from the most-abundant other colors first; finite,
-        // so it can't loop. Fires onGainMana so reactor relics see the gain.
-        // See decision #40.
-        const cfg = effect.transmuteMana || {};
-        const dest = cfg.color;
-        let budget = (typeof cfg.amount === 'number') ? cfg.amount : 0;
-        if (!dest || budget <= 0) return false;
-        if (!this._canGainMana(side)) {
-          this.log.add(`${src.name} is Enfeebled and cannot transmute mana.`);
-          return false;
-        }
-        if (!src.mana) src.mana = {};
-        const others = MANA_COLORS.filter((c) => c !== dest)
-          .sort((a, b) => (src.mana[b] || 0) - (src.mana[a] || 0));
-        let moved = 0;
-        for (const c of others) {
-          if (budget <= 0) break;
-          const take = Math.min(src.mana[c] || 0, budget);
-          if (take > 0) { src.mana[c] -= take; budget -= take; moved += take; }
-        }
-        if (moved > 0) {
-          src.mana[dest] = (src.mana[dest] || 0) + moved;
-          this._recomputeDynamicAttack(src);
-          this.log.add(`${src.name} transmutes ${moved} mana into ${dest}.`);
-          this._dispatchManaGain(side, dest, moved);
-        } else {
-          this.log.add(`${src.name} has no other mana to transmute.`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.CONSUME: {
-        // Spend a built-up pool for damage = floor(poolSize / divisor) — 1 damage
-        // per `divisor` units. 'mana' (with a color = that color's leftover, no
-        // color = ALL leftover mana); 'armor'/'barrier' = that shield pool (a
-        // Shield Bash). No stat scaling. See decision #40.
-        const cfg = effect.consume || {};
-        const divisor = Math.max(1, cfg.divisor || 2);
-        let units = 0;
-        if (cfg.resource === 'armor') { units = src.armor || 0; src.armor = 0; }
-        else if (cfg.resource === 'barrier') { units = src.barrier || 0; src.barrier = 0; }
-        else {
-          if (!src.mana) src.mana = {};
-          const cols = cfg.color ? [cfg.color] : MANA_COLORS;
-          for (const c of cols) { units += src.mana[c] || 0; src.mana[c] = 0; }
-          this._recomputeDynamicAttack(src);
-        }
-        const amount = Math.floor(units / divisor);
-        if (amount > 0) {
-          const r = this._applyDamage(tgt, amount);
-          this.log.add(`${src.name} consumes ${units} ${cfg.resource || 'mana'}, dealing ${r.actualDamage} damage.`);
-          this._setShakeFromDamage(r.actualDamage, tgt.maxHp);
-          this._markDirectDamage(side, r.actualDamage);
-          this._dispatchDamageEvent(side, side === 'player' ? 'enemy' : 'player', r);
-        } else {
-          this.log.add(`${src.name} has nothing to consume.`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.MARK: {
-        // Arm a one-time damage MULTIPLIER on the caster's NEXT damage instance
-        // (consumed in _applyDamage). Persists until consumed (no timer). The
-        // larger multiplier wins if re-applied. See decision #40.
-        const mult = (effect.mark && typeof effect.mark.multiplier === 'number')
-          ? effect.mark.multiplier : 2;
-        if (mult > 1) {
-          src.mark = Math.max(src.mark || 0, mult);
-          this.log.add(`${src.name} marks the next strike (x${mult}).`);
-        }
-        return false;
-      }
-
-      case SKILL_EFFECT_TYPES.LOCK_COLOR: {
-        // NON-targeted lock fallback (the `random`-bonus variant, which carries a
-        // preset color). The woven `lock` action is TARGETED and resolves via
-        // _executeLockColor (clicked tile's color); this path only fires for an
-        // instant skill with a preset `cfg.color`, else most-abundant. Decision #40.
-        const cfg = effect.lockColor || {};
-        const turns = (typeof cfg.turns === 'number' && cfg.turns >= 2) ? cfg.turns : 2;
-        let color = cfg.color;
-        if (!color) color = this._mostAbundantBoardColor();
-        if (color) {
-          this.board.lockColor(color, turns);
-          this.log.add(`${src.name} locks ${color} tiles for ${turns} turns.`);
-        }
-        return false;
-      }
-
-      default:
-        console.warn(`[BattleController] Unknown effect type: "${effect.effectType}". Skipping.`);
-        return false;
+    const handler = effect && SKILL_EFFECT_HANDLERS[effect.effectType];
+    if (!handler) {
+      console.warn(`[BattleController] Unknown effect type: "${effect && effect.effectType}". Skipping.`);
+      return false;
     }
+    return !!handler(effect, {
+      c: this,
+      skill,
+      side,
+      oppSide: opponentOf(side),
+      src: this._getStateBySide(side),
+      tgt: this._getStateBySide(opponentOf(side)),
+      enteredResolving: () => this.state === BattleState.RESOLVING,
+    });
   }
 
   /**
@@ -2823,7 +2522,8 @@ export default class BattleController {
    */
   _executeLockColor(col, row, effect, skillName) {
     const cfg = effect.lockColor || {};
-    const turns = (typeof cfg.turns === 'number' && cfg.turns >= 2) ? cfg.turns : 2;
+    const turns = (typeof cfg.turns === 'number' && cfg.turns >= LOCK_MIN_TURNS)
+      ? cfg.turns : LOCK_MIN_TURNS;
     const LOCKABLE = [...MANA_COLORS, 'skull'];
     let color = this.board.get(col, row);
     if (!color || !LOCKABLE.includes(color)) {
@@ -2864,9 +2564,8 @@ export default class BattleController {
     // Player first + sticky `_defeated` so a 0-HP moment is a loss even if a
     // heal revived HP before this check ran.
     if (this.playerState.hp <= 0 || this.playerState._defeated) {
-      this.state = BattleState.GAME_OVER;
+      this._setState(BattleState.GAME_OVER);
       this.log.add(`${this.playerState.name} has been defeated...`);
-      if (this.onStateChange) this.onStateChange();
       return true;
     }
     if (this.enemyState.hp <= 0 || this.enemyState._defeated) {
@@ -2876,9 +2575,8 @@ export default class BattleController {
       // A real death — if the Egg itself was just slain, clear any lingering
       // egg-phase state so the turn-end deadline can't fire after victory.
       this._endEggPhase();
-      this.state = BattleState.GAME_OVER;
+      this._setState(BattleState.GAME_OVER);
       this.log.add(`Victory! ${this.enemyState.name} has been slain!`);
-      if (this.onStateChange) this.onStateChange();
       return true;
     }
     return false;
@@ -2955,7 +2653,7 @@ export default class BattleController {
    */
   _applyDamage(target, amount, opts = {}) {
     const side = target === this.playerState ? 'player' : 'enemy';
-    const attackerSide = opts.attackerSide || (side === 'player' ? 'enemy' : 'player');
+    const attackerSide = opts.attackerSide || opponentOf(side);
     const attacker = this._getStateBySide(attackerSide);
     const payload = { side, amount };
     // Set _currentRelicTarget so any onDamage-style hooks fired during
@@ -2983,12 +2681,12 @@ export default class BattleController {
     }
     const attackerBerserk = !!attacker && this._hasStatus(attacker, 'berserk');
     if (attackerBerserk) {
-      dmg *= 2;
+      dmg *= STATUS_DAMAGE_MODS.berserkMult;
     } else {
-      if (this._hasStatus(target, 'brittle'))    dmg = Math.round(dmg * 1.5);
-      if (this._hasStatus(target, 'intangible')) dmg = Math.min(dmg, 1);
+      if (this._hasStatus(target, 'brittle'))    dmg = Math.round(dmg * STATUS_DAMAGE_MODS.brittleMult);
+      if (this._hasStatus(target, 'intangible')) dmg = Math.min(dmg, STATUS_DAMAGE_MODS.intangibleCap);
     }
-    if (this._hasStatus(target, 'berserk')) dmg *= 2;
+    if (this._hasStatus(target, 'berserk')) dmg *= STATUS_DAMAGE_MODS.berserkMult;
 
     const finalAmount = Math.max(0, dmg | 0);
     const result = this.resolver.applyDamage(target, finalAmount);
@@ -3070,7 +2768,7 @@ export default class BattleController {
    */
   _dispatchManaGain(side, color, amount) {
     if (!color || amount <= 0) return;
-    const targetSide = side === 'player' ? 'enemy' : 'player';
+    const targetSide = opponentOf(side);
     const prev = this._currentRelicTarget;
     this._currentRelicTarget = this._getStateBySide(targetSide);
     this.passives.dispatch(TRIGGER_TYPES.ON_GAIN_MANA, { side, color, amount });
@@ -3433,35 +3131,30 @@ export default class BattleController {
       console.warn(`[transform] No pre-resolved form "${intoEnemyId}". Skipping.`);
       return false;
     }
-    const cloned = this._cloneState(form); // fresh resolved state at full HP
+    // Build a fresh clone of the target form and copy EVERY battle-state field
+    // it defines onto the SAME enemyState object (review R11): _cloneState is
+    // the single source of truth for the battle-state shape, so a new field
+    // added there automatically transfers here too — no second hand-maintained
+    // field list to forget. The runtime pools (barrier/poison/mark/statuses/
+    // block) come out of the clone at their fresh-battle defaults, which is
+    // exactly the "fresh body" semantic a transform wants.
+    const cloned = this._cloneState(form);
     const e = this.enemyState;
     const keptMana = e.mana ? { ...e.mana } : {};
 
-    e.name = cloned.name;
-    e.className = cloned.className;
-    e.level = cloned.level;
-    e.maxHp = cloned.maxHp;
-    e.hp = cloned.maxHp;            // the new form arrives at full life
-    e.attack = cloned.attack;
-    e.magic = cloned.magic || 0;
-    e.armor = cloned.armor || 0;
-    e.block = 0;
-    e.barrier = 0;                 // a fresh body — clear any magic shield
-    e.mark = 0;                    // clear any banked damage mark
-    e.portrait = cloned.portrait;
-    e.skills = cloned.skills;
-    e.allSkills = cloned.allSkills;
-    e.relics = cloned.relics;
-    e.aiBehavior = cloned.aiBehavior;
-    e.statuses = [];               // a fresh body — clear any debuffs
+    for (const key of Object.keys(cloned)) {
+      e[key] = cloned[key];
+    }
+    e.hp = cloned.maxHp;           // the new form arrives at full life
+    e.mana = keptMana;             // mana carries across the transform
     e._defeated = false;
     e._isDormantEgg = false;       // cleared here; the Egg form re-sets it (below)
-    e.mana = keptMana;             // mana carries across the transform
 
-    // Reset per-side static-modifier bookkeeping for the new relic set. The
-    // transform forms carry no onBattleStart static relics, so a clean slate is
-    // correct; re-aggregating (over BOTH sides) would double-apply the player's
-    // static modifiers, so we deliberately don't.
+    // Reset per-side static-modifier bookkeeping for the new relic set (these
+    // are attached by _initStaticModifiers, not _cloneState). The transform
+    // forms carry no onBattleStart static relics, so a clean slate is correct;
+    // re-aggregating (over BOTH sides) would double-apply the player's static
+    // modifiers, so we deliberately don't.
     e._manaGainBonus = {};
     e._skullDamageBonus = 0;
     e._attackPerManaRules = [];
@@ -3585,7 +3278,7 @@ export default class BattleController {
     if (echoAmount <= 0) return true;
 
     const attackerSide = payload.side;
-    const targetSide = attackerSide === 'player' ? 'enemy' : 'player';
+    const targetSide = opponentOf(attackerSide);
     const target = this._getStateBySide(targetSide);
     if (!target) return true;
 
@@ -3643,7 +3336,7 @@ export default class BattleController {
     const stacks = Math.floor(dealt * fraction);
     if (stacks <= 0) return true;
     const targetSide = (payload && payload.target)
-      || (payload && payload.side === 'player' ? 'enemy' : 'player');
+      || opponentOf(payload && payload.side);
     this._applyPoison(this._getStateBySide(targetSide), stacks);
     return true;
   }
@@ -3670,8 +3363,8 @@ export default class BattleController {
       // Green floating "-N" over the portrait (kind 'poison' → green in BattleScene).
       this._emitFloatingStat(targetSide, 'poison', r.actualDamage);
     }
-    // Stacks halve (rounded down) after ticking — even if armor absorbed the hit.
-    t.poison = Math.floor(t.poison / 2);
+    // Stacks decay (rounded down) after ticking — even if armor absorbed the hit.
+    t.poison = Math.floor(t.poison / POISON_DECAY_DIVISOR);
   }
 
   /**
@@ -3683,11 +3376,11 @@ export default class BattleController {
    */
   _addCellsToAnalysis(cells) {
     if (!this._analysis || !cells || cells.length === 0) return;
-    const existing = new Set(this._analysis.positions.map(p => `${p.col},${p.row}`));
+    const existing = new Set(this._analysis.positions.map(posKey));
     const extras = [];
     for (const c of cells) {
       if (c.col < 0 || c.col >= this.board.cols || c.row < 0 || c.row >= this.board.rows) continue;
-      const key = `${c.col},${c.row}`;
+      const key = posKey(c);
       if (existing.has(key)) continue;
       if (!this.board.get(c.col, c.row)) continue;
       extras.push({ col: c.col, row: c.row });
@@ -3747,7 +3440,7 @@ export default class BattleController {
       extraTurnTrigger: false,
       tilesDestroyed: chosen.length,
     };
-    this.state = BattleState.RESOLVING;
+    this._setState(BattleState.RESOLVING);
     this._doRemove();
     if (this.onStateChange) this.onStateChange();
     return true;
@@ -3758,29 +3451,18 @@ export default class BattleController {
   /**
    * Compute screen-shake intensity from damage dealt and set the
    * pending shake value. Scales linearly from 0 at 0% to 1.0 at
-   * 20%+ of the target's max HP.
+   * SHAKE_FULL_AT_HP_FRACTION of the target's max HP.
    * @param {number} actualDamage
    * @param {number} targetMaxHp
    */
   _setShakeFromDamage(actualDamage, targetMaxHp) {
     if (!targetMaxHp || actualDamage <= 0) return;
     const percent = actualDamage / targetMaxHp;
-    const intensity = Math.min(1.0, percent / 0.20);
+    const intensity = Math.min(1.0, percent / SHAKE_FULL_AT_HP_FRACTION);
     // Keep the highest intensity if multiple damage events occur
     // before the scene reads it.
     if (intensity > this._pendingShakeIntensity) {
       this._pendingShakeIntensity = intensity;
     }
-  }
-
-  // ── Board Position ────────────────────────────────────
-
-  screenToBoard(px, py, boardW, boardH) {
-    const cw = boardW / this.board.cols;
-    const ch = boardH / this.board.rows;
-    const col = Math.floor(px / cw);
-    const row = Math.floor(py / ch);
-    if (col < 0 || col >= this.board.cols || row < 0 || row >= this.board.rows) return null;
-    return { col, row };
   }
 }

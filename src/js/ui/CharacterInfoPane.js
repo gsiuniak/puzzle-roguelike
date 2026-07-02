@@ -12,7 +12,7 @@ import { getStatusDef, STATUS_KIND } from '../data/statusEffects.js';
 // 2026-07 `character_pane_panel` art (852×623, aspect ≈1.37 — taller than the
 // old frame; NATURAL_HEIGHT ≈ column width / 1.37 keeps the frame art
 // unstretched at the current column width).
-const PANE_PADDING = { top: 24, right: 16, bottom: 12, left: 16 };
+const PANE_PADDING = { top: 24, right: 16, bottom: 16, left: 16 };
 // THREE major rows (mock layout):
 //   Row 1 (header) = [floating portrait | info column (name / tag / flair / stats)]
 //   Row 2          = full-width centered mana-orb row (bigger orbs)
@@ -33,10 +33,14 @@ const PORTRAIT_SLOT_WIDTH = 160;  // layout width reserved for the portrait
 //   narrower than the rect → full height, maximum top poke;
 //   slightly wider → width-limited, progressively smaller poke;
 //   much wider (square-ish) → fits inside the header, no poke.
-const PORTRAIT_OVERHANG = { top: 56, bleedIn: 30, bottom: 64 };
-const HEADER_HEIGHT = 150;        // top-row height (sized to fit the info column)
+// Keep `bottom` SMALL — the portrait draws ON TOP of the pane's children, so a
+// deep bottom bleed covers the mana orbs beneath it (the left orbs vanish).
+// ~20px reaches just past the header edge so the art's faded hem dissolves
+// into the mana row without hiding the orbs.
+const PORTRAIT_OVERHANG = { top: 56, bleedIn: 30, bottom: 20 };
+const HEADER_HEIGHT = 158;        // top-row height (sized to fit the info column)
 const HEADER_GAP = 4;
-const OUTER_GAP = 4; // column gap between the three major rows
+const OUTER_GAP = 6; // column gap between the three major rows
 
 // Info-column padding: generous on the side FACING the portrait (player left,
 // enemy right — mirrored in buildHierarchy), small on the outer side. TOP
@@ -55,7 +59,11 @@ const NAME_FONT_SIZE = 34;
 // NAME_LINE_HEIGHT regardless of the fitted size, so the rows below never
 // shift. Wrapping remains only as a last resort (a name still too wide at the
 // minimum size — it will overlap the tag line, so keep NAME_MIN_FONT_SIZE low).
-const NAME_MAX_WIDTH = 230;
+// NOTE: UIText.maxWidth doubles as the flex MAX-WIDTH clamp in UIContainer's
+// layout (UIText defaults it to 0 = "no wrap", which the container reads as
+// "max width 0" → a ZERO-WIDTH rect, so centered text draws piled on the
+// column's left edge). EVERY centered UIText in this pane must set maxWidth.
+const NAME_MAX_WIDTH = 205;
 const NAME_MIN_FONT_SIZE = 20;
 const NAME_LINE_HEIGHT = 36;
 const NAME_BLOCK_HEIGHT = 38;     // ONE line — tag/flair/stats rows follow
@@ -127,8 +135,8 @@ const HEALTH_LABEL_FONT_SIZE = 20;
 // drawn OVER the bar in render(): overlay width = bar width / (1 − 2·INSET_X)
 // so the fill sits inset within the frame's opening, height follows the art's
 // own aspect. The margins/side inset leave room for the frame's overhang.
-const HEALTH_ROW_MARGIN_TOP = 8;
-const HEALTH_ROW_MARGIN_BOTTOM = 14;
+const HEALTH_ROW_MARGIN_TOP = 10;
+const HEALTH_ROW_MARGIN_BOTTOM = 20;
 const HEALTH_BAR_SIDE_INSET = 26;
 const HEALTH_OVERLAY_KEY = 'character_pane_health_bar_overlay';
 const HEALTH_OVERLAY_INSET_X = 0.03; // bar inset within the overlay (fraction of overlay width)
@@ -157,14 +165,15 @@ const STAT_GROUP_GAP = 4;   // icon ↔ value, inside a group
 const STAT_GROUP_WIDTH = STAT_ICON_SIZE + STAT_GROUP_GAP + STAT_VALUE_WIDTH;
 const STATS_ROW_GAP = 16;   // between the attack and magic groups
 
-// Mana bar — its OWN full-width row between the header and the HP bar (row 2
-// of the mock, moved OUT of the info column). UIOrb scales its orb + amount
-// plate to the rect, so sizing is purely these constants. The orb CIRCLE
-// diameter = min(width, height·0.65). The orbs cluster CENTERED
+// Mana bar — its OWN full-width padded row between the header and the HP bar
+// (row 2 of the mock, moved OUT of the info column). UIOrb scales its orb +
+// amount plate to the rect, so sizing is purely these constants. The orb
+// CIRCLE diameter = min(width, height·0.65). The orbs cluster CENTERED
 // (justifyContent 'center' + MANA_ROW_GAP) instead of spreading edge-to-edge;
 // MANA_PLATE_SCALE keeps the count plate NARROWER than the circle (at UIOrb's
 // default 1.1 adjacent plates touch and read as clutter).
-const MANA_ROW_HEIGHT = 84;
+const MANA_ROW_HEIGHT = 92;
+const MANA_ROW_PADDING = { top: 8, bottom: 4 };
 const MANA_ROW_GAP = 14;
 const MANA_ORB_WIDTH = 58;
 const MANA_ORB_HEIGHT = 80;
@@ -174,8 +183,10 @@ const MANA_FONT_SIZE = 17;
 /**
  * Natural height of the pane = paddings + the three major rows (header,
  * mana row, HP-bar row) + the column gaps between them. Locks the pane height
- * so it doesn't stretch inside its column. ≈340 at the current constants —
- * matching the new panel art's aspect at the ~465px wide-viewport column.
+ * so it doesn't stretch inside its column. ≈372 at the current constants —
+ * deliberately TALLER than the panel art's native aspect at the ~440px
+ * wide-viewport column (≈322), so the content breathes; the frame art
+ * stretches ~15% vertically, which the mostly-dark texture tolerates.
  */
 const NATURAL_HEIGHT =
   PANE_PADDING.top + PANE_PADDING.bottom +
@@ -358,6 +369,7 @@ export default class CharacterInfoPane extends UIPanel {
       color: '#d0d0c4',
       bold: true,
       alignH: 'center',
+      alignSelfH: 'center',
       alignV: 'top',
       maxWidth: NAME_MAX_WIDTH,
       lineHeight: NAME_LINE_HEIGHT,
@@ -367,12 +379,17 @@ export default class CharacterInfoPane extends UIPanel {
 
     // Class tag — centered under the name ("Arcane Mage", "Minion", …).
     // Data-driven; renders empty when the data carries no className.
+    // maxWidth is REQUIRED: UIText defaults it to 0, which the container's
+    // flex clamp reads as "max width 0" → a zero-width rect that piles the
+    // centered text on the column's left edge (see the NAME_MAX_WIDTH note).
     this._tagText = new UIText(cd.className || '');
     this._tagText.setStyle({
       fontSize: TAG_FONT_SIZE,
       color: cd.classColor || TAG_COLOR,
       alignH: 'center',
+      alignSelfH: 'center',
       alignV: 'top',
+      maxWidth: NAME_MAX_WIDTH,
       height: TAG_HEIGHT,
     });
     info.addChild(this._tagText);
@@ -428,6 +445,7 @@ export default class CharacterInfoPane extends UIPanel {
     manaRow.alignItems = 'center';
     manaRow.gap = MANA_ROW_GAP;
     manaRow.height = MANA_ROW_HEIGHT;
+    manaRow.padding = MANA_ROW_PADDING;
 
     const manaData = cd.mana || {};
     for (const color of MANA_ORDER) {
