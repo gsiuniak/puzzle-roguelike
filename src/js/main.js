@@ -178,32 +178,19 @@ const SPRITESHEET_MAP = {
   },
   // PROOF OF CONCEPT — per-character attack flash played over the portrait on a
   // skull match (see SpriteSheetAnimation.js + BattleScene ATTACK_ANIMATIONS).
-  // These entries only load the PNG so the full sheet is retrievable under the
-  // sheet key; the animation reads the JSON itself (it needs the per-frame trim
-  // offsets the slicer drops), so `slice: false` skips creating dozens of
-  // per-frame canvases nothing would ever read. Every registered sheet is
-  // downloaded, decoded AND pinned resident by the boot warm below — if a
-  // character's animation is ever disabled long-term, comment its entry out
-  // here too to save the download + pinned memory.
-  // Easy to remove: delete these entries + their uses.
-  ui_spritesheet_warrior_attack_animation: {
-    image: 'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.png',
-    json:  'assets/sprites/battle/character_pane/ui_spritesheet_warrior_attack_animation.json',
-    trim:  false,
-    slice: false,
-  },
-  ui_spritesheet_mage_attack_animation: {
-    image: 'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.png',
-    json:  'assets/sprites/battle/character_pane/ui_spritesheet_mage_attack_animation.json',
-    trim:  false,
-    slice: false,
-  },
-  ui_spritesheet_witch_doctor_attack_animation: {
-    image: 'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.png',
-    json:  'assets/sprites/battle/character_pane/ui_spritesheet_witch_doctor_attack_animation.json',
-    trim:  false,
-    slice: false,
-  },
+  // DISABLED: the animations are turned off (ATTACK_ANIMATIONS `enabled: false`),
+  // so their sheets are UNREGISTERED here — no download, decode, or boot-warm
+  // pinning happens (the `*_attack_animation` preload loop below iterates
+  // SPRITESHEET_MAP, so with no entries it warms nothing). To re-enable a
+  // character: flip its `enabled` in BattleScene ATTACK_ANIMATIONS AND restore
+  // its entry here (with `slice: false` — the animation blits the full sheet,
+  // so per-frame slicing would allocate dozens of large unused canvases):
+  //   ui_spritesheet_<char>_attack_animation: {
+  //     image: 'assets/sprites/battle/character_pane/ui_spritesheet_<char>_attack_animation.png',
+  //     json:  'assets/sprites/battle/character_pane/ui_spritesheet_<char>_attack_animation.json',
+  //     trim:  false,
+  //     slice: false,
+  //   },
 };
 
 // ── Asset aliases (existing key → spritesheet sprite name) ──
