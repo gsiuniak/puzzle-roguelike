@@ -8,64 +8,74 @@ import UIOrb from './UIOrb.js';
 import { getStatusDef, STATUS_KIND } from '../data/statusEffects.js';
 
 // ── Tunable layout constants ─────────────────────────────
-// Tuned for the wide-viewport battle side column (~465px pane width).
-// bottom: keeps a visible breathing gap between the HP-bar frame art (which
-// overhangs the bar by ~13px) and the panel's bottom border.
-const PANE_PADDING = { top: 28, right: 12, bottom: 18, left: 12 };
-// TOP row = [floating portrait | info column]. The info column stacks
-// name (+flair band) / attack-magic stats / the 5-orb mana bar. The portrait
-// occupies a fixed-width SLOT in the layout but is DRAWN manually (in
-// render()), oversized by PORTRAIT_OVERHANG, so it "floats" past the pane's
-// TOP edge (only — it is anchored flush to the panel-side edge, so it never
-// pokes out the pane's side).
-// BOTTOM row = the full-width HP bar framed by the authored overlay art.
-const PORTRAIT_SLOT_WIDTH = 142;  // layout width reserved for the portrait
+// Tuned for the wide-viewport battle side column (~465px pane width) and the
+// 2026-07 `character_pane_panel` art (852×623, aspect ≈1.37 — taller than the
+// old frame; NATURAL_HEIGHT ≈ column width / 1.37 keeps the frame art
+// unstretched at the current column width).
+const PANE_PADDING = { top: 24, right: 16, bottom: 12, left: 16 };
+// THREE major rows (mock layout):
+//   Row 1 (header) = [floating portrait | info column (name / tag / flair / stats)]
+//   Row 2          = full-width centered mana-orb row (bigger orbs)
+//   Row 3          = full-width HP bar framed by the authored overlay art
+// The portrait occupies a fixed-width SLOT in the header but is DRAWN manually
+// (in render()), oversized by PORTRAIT_OVERHANG, so it "floats" past the
+// pane's TOP edge and bleeds DOWN into the mana row.
+const PORTRAIT_SLOT_WIDTH = 160;  // layout width reserved for the portrait
 // top: how far the portrait rect extends above the slot (max top poke past the
-// pane's outer edge = top − PANE_PADDING.top). bleedIn: widening toward the
-// INFO COLUMN only — the art is anchored flush to the panel-side edge of the
-// slot (left on player, right on enemy; via imageAlignH), so it can NEVER hang
-// out the pane's side; any extra width bleeds inward over the slot gap.
-// Behavior vs art aspect (w:h), with rect = (slot.w+bleedIn) × (slot.h+top):
-//   narrower than the rect (~0.75) → full height, maximum top poke;
+// pane's outer edge = top − PANE_PADDING.top). bottom: how far it extends
+// BELOW the header row — i.e. how deep the art bleeds into the mana row
+// (portraits are authored with fading lower edges so the bleed dissipates into
+// the panel instead of hard-clipping). bleedIn: widening toward the INFO
+// COLUMN only — the art is anchored flush to the panel-side edge of the slot
+// (left on player, right on enemy; via imageAlignH), so it can NEVER hang out
+// the pane's side; any extra width bleeds inward over the slot gap.
+// Behavior vs art aspect (w:h), with rect = (slot.w+bleedIn) × (slot.h+top+bottom):
+//   narrower than the rect → full height, maximum top poke;
 //   slightly wider → width-limited, progressively smaller poke;
-//   much wider (square-ish) → fits inside the pane, no poke.
-const PORTRAIT_OVERHANG = { top: 44, bleedIn: 34 };
-const HEADER_HEIGHT = 192;        // top-row height (sized to fit the info column)
+//   much wider (square-ish) → fits inside the header, no poke.
+const PORTRAIT_OVERHANG = { top: 56, bleedIn: 30, bottom: 64 };
+const HEADER_HEIGHT = 150;        // top-row height (sized to fit the info column)
 const HEADER_GAP = 4;
-const OUTER_GAP = 6; // column gap between the top row and the HP-bar row
+const OUTER_GAP = 4; // column gap between the three major rows
 
 // Info-column padding: generous on the side FACING the portrait (player left,
-// enemy right — mirrored in buildHierarchy), small on the outer side. The name,
-// stats, orbs, AND the flair all respect it (the flair uses the column's
-// content rect).
-const INFO_PAD_TOP = 6;
-const INFO_PAD_PORTRAIT_SIDE = 30;
-const INFO_PAD_OUTER = 6;
+// enemy right — mirrored in buildHierarchy), small on the outer side. TOP
+// padding pushes the whole name/tag/flair/stats stack down into the header
+// band (mock rhythm).
+const INFO_PAD_TOP = 26;
+const INFO_PAD_PORTRAIT_SIDE = 24;
+const INFO_PAD_OUTER = 10;
+const INFO_ROW_GAP = 2;
 
-const NAME_FONT_SIZE = 36;
+const NAME_FONT_SIZE = 34;
 // The name is CENTERED in the info column (both panes — this also keeps the
 // mirrored enemy name off the panel border). A long name AUTO-SHRINKS its font
 // (down to NAME_MIN_FONT_SIZE) to stay on ONE line (_fitNameFont), so every
-// pane keeps the same name → flair → stats rhythm — a wrapped two-line name
-// used to swallow the flair band and jam the stats row against the text.
-// lineHeight stays NAME_LINE_HEIGHT regardless of the fitted size, so the
-// flair band and everything below it never shift. Wrapping remains only as a
-// last resort (a name still too wide at the minimum size; flair suppressed).
-const NAME_MAX_WIDTH = 260;
-const NAME_MIN_FONT_SIZE = 24;
+// pane keeps the same name → tag → flair → stats rhythm. lineHeight stays
+// NAME_LINE_HEIGHT regardless of the fitted size, so the rows below never
+// shift. Wrapping remains only as a last resort (a name still too wide at the
+// minimum size — it will overlap the tag line, so keep NAME_MIN_FONT_SIZE low).
+const NAME_MAX_WIDTH = 230;
+const NAME_MIN_FONT_SIZE = 20;
 const NAME_LINE_HEIGHT = 36;
-const NAME_BLOCK_HEIGHT = 72;
+const NAME_BLOCK_HEIGHT = 38;     // ONE line — tag/flair/stats rows follow
+
+// ── Class tag line (e.g. "Arcane Mage" / "Minion") ──────
+// Centered directly under the name. Data-driven from `className` (present on
+// both player battle state and enemy defs); an optional `classColor` on the
+// data overrides TAG_COLOR.
+const TAG_FONT_SIZE = 19;
+const TAG_HEIGHT = 24;
+const TAG_COLOR = '#a678d8';
 
 // ── Name flair ──────────────────────────────────────────
-// When the name fits on ONE line, the second-line space below it is filled
-// with a decorative flourish (`character_pane_flair`, sliced from the
-// ui_spritesheet_character_pane sheet — a horizontally-symmetric flourish, so
-// the same sprite is used for both the player and enemy panes), stretched
-// across the FULL info-column width. When the name wraps to two lines there's
-// no room, so the flair is suppressed. The flair is drawn manually in render()
-// (not a layout child) so it occupies the freed band without affecting layout.
-const FLAIR_HEIGHT = 26;            // drawn height of the flourish
-const FLAIR_TOP_OFFSET = NAME_LINE_HEIGHT + 4; // band start, below the 1st name line
+// The decorative flourish (`character_pane_flair`, a horizontally-symmetric
+// divider from the character-pane sheet — same sprite both panes) is a REAL
+// layout child of the info column, sitting between the tag line and the stats
+// row (the old "fill the freed second name line" manual-draw hack is gone —
+// the new layout gives the flair its own band, always shown).
+const FLAIR_HEIGHT = 20;            // drawn height of the flourish
+const FLAIR_MARGIN = { top: 2, bottom: 4 };
 const FLAIR_SIDE_INSET = 6;         // horizontal inset from the info column edges
 
 // ── Status-effect overlays ──────────────────────────────
@@ -117,8 +127,8 @@ const HEALTH_LABEL_FONT_SIZE = 20;
 // drawn OVER the bar in render(): overlay width = bar width / (1 − 2·INSET_X)
 // so the fill sits inset within the frame's opening, height follows the art's
 // own aspect. The margins/side inset leave room for the frame's overhang.
-const HEALTH_ROW_MARGIN_TOP = 14;
-const HEALTH_ROW_MARGIN_BOTTOM = 16;
+const HEALTH_ROW_MARGIN_TOP = 8;
+const HEALTH_ROW_MARGIN_BOTTOM = 14;
 const HEALTH_BAR_SIDE_INSET = 26;
 const HEALTH_OVERLAY_KEY = 'character_pane_health_bar_overlay';
 const HEALTH_OVERLAY_INSET_X = 0.03; // bar inset within the overlay (fraction of overlay width)
@@ -147,29 +157,30 @@ const STAT_GROUP_GAP = 4;   // icon ↔ value, inside a group
 const STAT_GROUP_WIDTH = STAT_ICON_SIZE + STAT_GROUP_GAP + STAT_VALUE_WIDTH;
 const STATS_ROW_GAP = 16;   // between the attack and magic groups
 
-// Mana bar — lives INSIDE the info column (beneath the stats row). UIOrb
-// scales its orb + amount plate to the rect, so sizing is purely these
-// constants. The orb CIRCLE diameter = min(width, height·0.65). The rect
-// WIDTH deliberately exceeds the circle: the leftover is per-orb breathing
-// room, and MANA_PLATE_SCALE keeps the count plate NARROWER than the circle
-// (at the default 1.1 the plates are wider than the orbs and visibly touch —
-// the crowded look). Row uses 'space-evenly' so any remaining slack spreads
-// uniformly across the column width.
-const MANA_ROW_HEIGHT = 78;
-const MANA_ROW_PADDING_TOP = 30;
-const MANA_ORB_WIDTH = 52;
-const MANA_ORB_HEIGHT = 70;
-const MANA_PLATE_SCALE = 0.92;
-const MANA_FONT_SIZE = 15;
+// Mana bar — its OWN full-width row between the header and the HP bar (row 2
+// of the mock, moved OUT of the info column). UIOrb scales its orb + amount
+// plate to the rect, so sizing is purely these constants. The orb CIRCLE
+// diameter = min(width, height·0.65). The orbs cluster CENTERED
+// (justifyContent 'center' + MANA_ROW_GAP) instead of spreading edge-to-edge;
+// MANA_PLATE_SCALE keeps the count plate NARROWER than the circle (at UIOrb's
+// default 1.1 adjacent plates touch and read as clutter).
+const MANA_ROW_HEIGHT = 84;
+const MANA_ROW_GAP = 14;
+const MANA_ORB_WIDTH = 58;
+const MANA_ORB_HEIGHT = 80;
+const MANA_PLATE_SCALE = 0.95;
+const MANA_FONT_SIZE = 17;
 
 /**
- * Natural height of the pane = paddings + top row (portrait/info) + the
- * full-width HP-bar row (+ the column gap between them). Locks the pane height
- * so it doesn't stretch inside its column.
+ * Natural height of the pane = paddings + the three major rows (header,
+ * mana row, HP-bar row) + the column gaps between them. Locks the pane height
+ * so it doesn't stretch inside its column. ≈340 at the current constants —
+ * matching the new panel art's aspect at the ~465px wide-viewport column.
  */
 const NATURAL_HEIGHT =
   PANE_PADDING.top + PANE_PADDING.bottom +
   HEADER_HEIGHT +
+  OUTER_GAP + MANA_ROW_HEIGHT +
   OUTER_GAP + HEALTH_ROW_MARGIN_TOP + HEALTH_BAR_HEIGHT + HEALTH_ROW_MARGIN_BOTTOM;
 
 const MANA_COLORS = {
@@ -182,18 +193,20 @@ const MANA_COLORS = {
 const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
 
 /**
- * CharacterInfoPane — compact horizontal character info panel.
+ * CharacterInfoPane — compact character info panel (three major rows).
  *
  * Structure:
  *   Row 1 (header, two columns):
- *     [floating portrait] [name (+flair) / attack-magic stats / mana orb x5]
+ *     [floating portrait] [name / class tag / flair / attack-magic stats]
  *   Row 2:
+ *     [full-width centered mana orb x5]
+ *   Row 3:
  *     [full-width HP bar, framed by the authored overlay art]
  *
  * The portrait is drawn manually (oversized past its layout slot) so it
- * "floats" beyond the pane frame. Data-driven via setCharacterData()/
- * updateFromState(). No skills section — skills live in the separate
- * SkillsPane.
+ * "floats" above the pane frame and bleeds down into the mana row.
+ * Data-driven via setCharacterData()/updateFromState(). No skills section —
+ * skills live in the separate SkillsPane.
  */
 export default class CharacterInfoPane extends UIPanel {
   constructor(characterData = null, assetManager = null, side = 'player') {
@@ -206,12 +219,11 @@ export default class CharacterInfoPane extends UIPanel {
 
     /** 'player' | 'enemy' — retained for API compatibility / future use. */
     this._side = side;
-    // Decorative flourish shown in the freed band under a single-line name.
-    // Symmetric sprite from the character-pane sheet (same for both sides).
-    // Drawn manually in render(), not added as a layout child.
+    // Decorative flourish between the class tag and the stats row — a REAL
+    // layout child of the info column (added in buildHierarchy). Symmetric
+    // sprite from the character-pane sheet (same for both sides). Stretched to
+    // fill the band width rather than scaling to native aspect.
     this._flair = new UIImage('character_pane_flair', assetManager);
-    // Stretch to fill the full band width (FLAIR_HEIGHT tall) rather than
-    // scaling to native aspect and parking against one edge.
     this._flair.setStyle({
       fitMode: 'stretch',
       imageAlignV: 'center',
@@ -230,6 +242,7 @@ export default class CharacterInfoPane extends UIPanel {
     this._portraitSlot = null;
     this._infoCol = null;
     this._nameText = null;
+    this._tagText = null;
     // Cache key for the one-line name font fit (see _fitNameFont).
     this._nameFitFor = null;
     this._healthBar = null;
@@ -323,11 +336,10 @@ export default class CharacterInfoPane extends UIPanel {
     });
     this._portrait.smoothing = true;
 
-    // Info column — symmetric side padding on both panes (gives the mirrored
-    // enemy pane's left-aligned name a margin off the panel border).
+    // Info column — stacks name / class tag / flair / stats (mock row 1 col 2).
     const info = new UIContainer();
     info.direction = 'column';
-    info.gap = 2;
+    info.gap = INFO_ROW_GAP;
     info.flexGrow = 1;
     // Generous padding on the PORTRAIT side (breathing room off the floating
     // art), small padding on the outer side — mirrored on the enemy pane,
@@ -353,7 +365,31 @@ export default class CharacterInfoPane extends UIPanel {
     });
     info.addChild(this._nameText);
 
-    // Stats row (attack | magic) — CENTERED under the name, the two groups
+    // Class tag — centered under the name ("Arcane Mage", "Minion", …).
+    // Data-driven; renders empty when the data carries no className.
+    this._tagText = new UIText(cd.className || '');
+    this._tagText.setStyle({
+      fontSize: TAG_FONT_SIZE,
+      color: cd.classColor || TAG_COLOR,
+      alignH: 'center',
+      alignV: 'top',
+      height: TAG_HEIGHT,
+    });
+    info.addChild(this._tagText);
+
+    // Flair — the ornate divider between the tag line and the stats row.
+    this._flair.setStyle({
+      height: FLAIR_HEIGHT,
+      margin: {
+        top: FLAIR_MARGIN.top,
+        bottom: FLAIR_MARGIN.bottom,
+        left: FLAIR_SIDE_INSET,
+        right: FLAIR_SIDE_INSET,
+      },
+    });
+    info.addChild(this._flair);
+
+    // Stats row (attack | magic) — CENTERED under the flair, the two groups
     // sitting close together (fixed group widths — see STAT_GROUP_*).
     const statsRow = new UIContainer();
     statsRow.direction = 'row';
@@ -361,7 +397,6 @@ export default class CharacterInfoPane extends UIPanel {
     statsRow.justifyContent = 'center';
     statsRow.gap = STATS_ROW_GAP;
     statsRow.height = STATS_HEIGHT;
-    statsRow.padding = { left: 10 };
 
     statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
     statsRow.addChild(this._buildStatGroup('icon_magic',  () => this._magicValue,  (el) => { this._magicValue = el;  }, cd.magic  ?? 0));
@@ -372,15 +407,27 @@ export default class CharacterInfoPane extends UIPanel {
 
     info.addChild(statsRow);
 
-    // ── Mana row — inside the info column, beneath the stats row ──
-    // space-evenly spreads the 5 orbs uniformly across the column width, so
-    // the spacing adapts to the pane width by itself.
+    // Portrait-left (player) vs portrait-right (enemy).
+    if (isEnemy) {
+      header.addChild(info);
+      header.addChild(portraitSlot);
+    } else {
+      header.addChild(portraitSlot);
+      header.addChild(info);
+    }
+
+    this.addChild(header);
+
+    // ── Mana row (middle) — full-width, the 5 orbs clustered centered ──
+    // Its own major row (mock row 2), so the orbs can be bigger than the old
+    // info-column bar. The portrait's bottom overhang bleeds over its
+    // portrait-side end (the art fades out, so the orbs stay readable).
     const manaRow = new UIContainer();
     manaRow.direction = 'row';
-    manaRow.justifyContent = 'space-evenly';
+    manaRow.justifyContent = 'center';
     manaRow.alignItems = 'center';
+    manaRow.gap = MANA_ROW_GAP;
     manaRow.height = MANA_ROW_HEIGHT;
-    manaRow.padding = { top: MANA_ROW_PADDING_TOP, bottom: 2 };
 
     const manaData = cd.mana || {};
     for (const color of MANA_ORDER) {
@@ -408,18 +455,7 @@ export default class CharacterInfoPane extends UIPanel {
       manaRow.addChild(orb);
     }
 
-    info.addChild(manaRow);
-
-    // Portrait-left (player) vs portrait-right (enemy).
-    if (isEnemy) {
-      header.addChild(info);
-      header.addChild(portraitSlot);
-    } else {
-      header.addChild(portraitSlot);
-      header.addChild(info);
-    }
-
-    this.addChild(header);
+    this.addChild(manaRow);
 
     // ── HP bar row (bottom) ──
     // Spans the panel width, inset so the ornate overlay frame (drawn on top
@@ -450,11 +486,9 @@ export default class CharacterInfoPane extends UIPanel {
   }
 
   /**
-   * Draw the name flair after the normal children. The flourish fills the
-   * freed second-line band ONLY when the name fits on a single line; when the
-   * name wraps to two lines the band is occupied, so the flair is suppressed.
-   * Drawn manually (not a layout child) so it never affects layout, and the
-   * line-count check uses the render-time ctx (correct loaded-font metrics).
+   * Render the pane, then the manually-drawn layers: the floating portrait,
+   * status overlays, the HP-bar frame art + shield badges, and the poison
+   * badge. (The flair is a normal layout child now — no manual draw.)
    */
   render(ctx) {
     // Fit the name onto one line BEFORE the children draw this frame.
@@ -468,8 +502,7 @@ export default class CharacterInfoPane extends UIPanel {
     // anchors to (or draws over) its rect.
     this._renderPortrait(ctx);
 
-    // Status overlays sit ON TOP of the portrait — draw before the flair's
-    // early-returns so they show regardless of name/flair state.
+    // Status overlays sit ON TOP of the portrait.
     this._renderStatusOverlays(ctx);
 
     // Ornate frame art over the HP bar, then the shield badges on top of it
@@ -479,27 +512,6 @@ export default class CharacterInfoPane extends UIPanel {
 
     // Poison stack count near the portrait top (placeholder).
     this._renderPoisonBadge(ctx);
-
-    if (!this._nameText || !this._flair) return;
-    if (!this._nameText.text) return;
-
-    // super.render already measured + cached the name's wrap this frame.
-    const lines = this._nameText._getWrappedLines(ctx);
-    if (lines.length !== 1) return; // two-line name → no flair
-
-    const nameR = this._nameText.rect;
-    if (!nameR || nameR.w <= 0) return;
-    // The flair spans the info column's CONTENT width (inside its padding —
-    // the name rect only sets the vertical band), so the flourish reads as a
-    // divider under the header while respecting the column's side padding.
-    const colR = (this._infoCol && this._infoCol.rect && this._infoCol.rect.w > 0)
-      ? this._infoCol.getContentRect() : nameR;
-
-    this._flair.rect.x = colR.x + FLAIR_SIDE_INSET;
-    this._flair.rect.y = nameR.y + FLAIR_TOP_OFFSET;
-    this._flair.rect.w = Math.max(0, colR.w - FLAIR_SIDE_INSET * 2);
-    this._flair.rect.h = FLAIR_HEIGHT;
-    this._flair.renderSelf(ctx);
   }
 
   /**
@@ -540,7 +552,9 @@ export default class CharacterInfoPane extends UIPanel {
 
   /**
    * Draw the floating portrait. Its rect = the layout slot extended UP by
-   * PORTRAIT_OVERHANG.top (past the pane's top edge — the "floating" poke) and
+   * PORTRAIT_OVERHANG.top (past the pane's top edge — the "floating" poke),
+   * DOWN by PORTRAIT_OVERHANG.bottom (bleeding into the mana row — portraits
+   * are authored with fading lower edges so the bleed dissipates), and
    * widened by bleedIn toward the INFO COLUMN only. The art itself is aligned
    * flush to the panel-side edge of the slot (imageAlignH left/right, set in
    * buildHierarchy), so it can never hang out the pane's side — a portrait
@@ -558,7 +572,7 @@ export default class CharacterInfoPane extends UIPanel {
     // Anchor at the panel-side edge: player bleeds right, enemy bleeds left.
     r.x = this._side === 'enemy' ? slot.x + slot.w - r.w : slot.x;
     r.y = slot.y - PORTRAIT_OVERHANG.top;
-    r.h = slot.h + PORTRAIT_OVERHANG.top;
+    r.h = slot.h + PORTRAIT_OVERHANG.top + PORTRAIT_OVERHANG.bottom;
 
     // External opacity override (attack-animation hand-off: the portrait hides
     // while the flash plays and fades back in with its tail). Rect is still
@@ -685,6 +699,10 @@ export default class CharacterInfoPane extends UIPanel {
       this._healthBar.barrierValue = state.barrier ?? 0;
       this._healthBar.label = `${state.hp ?? 0} / ${state.maxHp ?? 0}`;
     }
+
+    // Class tag tracks the state (e.g. a mid-battle enemy transform rebuilds
+    // the pane via setCharacterData, but this keeps it fresh regardless).
+    if (this._tagText && state.className != null) this._tagText.text = state.className;
 
     if (this._attackValue) this._attackValue.text = String(state.attack ?? 0);
     if (this._magicValue)  this._magicValue.text  = String(state.magic ?? 0);

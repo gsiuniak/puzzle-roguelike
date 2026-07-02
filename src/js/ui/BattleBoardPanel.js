@@ -1,10 +1,12 @@
 import UIPanel from './UIPanel.js';
 
 // ── Tunable layout constants ─────────────────────────────
-// Inset inside the (already-square) panel art frame. These values
-// represent the visible decorative border of `battle_board_panel.png`
-// so the inner playable square sits within the frame.
-const FRAME_INSET = { top: 60, right: 28, bottom: 45, left: 28 };
+// Inset inside the (already-square) panel art frame. Measured from the
+// 2026-07 `battle_board_panel.png` (1178×1181 — border rails: left/right
+// ~45px, top ~74px, bottom ~53px native), converted for the ~1064px render
+// square (×0.90) plus a little breathing room. The centered gem crests at
+// top/bottom deliberately overlap the inner margin (decoration over the gap).
+const FRAME_INSET = { top: 70, right: 44, bottom: 52, left: 44 };
 
 /**
  * BattleBoardPanel — decorative square wrapper around the BoardPlaceholder.

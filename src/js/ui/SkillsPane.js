@@ -33,15 +33,13 @@ import {
  * never trigger tooltips.
  */
 
-// ── Outer panel (UNCHANGED dimensions — keep the surrounding layout static) ──
-const PANE_PADDING = { top: 50, right: 5, bottom: 24, left: 16 };
-// The pane's height was defined by the old grid; preserve it exactly.
-const LEGACY_SLOT_HEIGHT = 105;
-const LEGACY_ROWS = 6;
-const LEGACY_GRID_GAP = 6;
-const NATURAL_HEIGHT =
-  PANE_PADDING.top + PANE_PADDING.bottom +
-  LEGACY_ROWS * LEGACY_SLOT_HEIGHT + (LEGACY_ROWS - 1) * LEGACY_GRID_GAP;
+// ── Outer panel — sized to the 2026-07 `skill_pane_panel` art ──
+// The new art is 535×715 (aspect ≈0.75, shorter than the old 488×956 frame).
+// NATURAL_HEIGHT ≈ column width / 0.75 keeps the frame art unstretched at the
+// ~465px wide-viewport side column. Padding hugs the new frame: the top band
+// is the centered nameplate tab + top rail; sides/bottom are the metal border.
+const PANE_PADDING = { top: 60, right: 10, bottom: 24, left: 20 };
+const NATURAL_HEIGHT = 622;
 
 // ── List ──
 /** Minimum card slots shown (empty ones render as GHOST placeholder cards). */
@@ -76,7 +74,7 @@ const FADE_HEIGHT = 26;            // top/bottom "more content" fade shadows
 // ── Header (Manage button + equipped count, drawn in the panel art's top band) ──
 const MANAGE_BTN_W = 86;
 const MANAGE_BTN_H = 26;
-const MANAGE_BTN_MARGIN = { top: 12, right: 16 };
+const MANAGE_BTN_MARGIN = { top: 16, right: 20 };
 const MANAGE_BTN_BG = 'rgba(38, 30, 16, 0.92)';
 const MANAGE_BTN_BG_HOVER = 'rgba(70, 56, 26, 0.95)';
 const MANAGE_BTN_BORDER = 'rgba(214, 188, 120, 0.8)';
@@ -90,9 +88,9 @@ const COUNT_COLOR = '#9d927c';
 // centered in the nameplate banner. Y is a FRACTION of panel height (the art is
 // stretched to the rect), so it tracks the banner if the panel resizes.
 const TITLE_TEXT = 'Skills';
-const TITLE_FONT_SIZE = 32;
+const TITLE_FONT_SIZE = 28;
 const TITLE_COLOR = '#e8d8a8';
-const TITLE_CENTER_Y_FRAC = 0.035; // nameplate banner vertical center
+const TITLE_CENTER_Y_FRAC = 0.042; // nameplate tab vertical center (new art)
 const TITLE_LETTER_SPACING = 1.5;
 
 // ── Whether to show Equipped Info 
