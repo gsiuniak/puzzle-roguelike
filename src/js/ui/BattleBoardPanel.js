@@ -80,11 +80,18 @@ export default class BattleBoardPanel extends UIPanel {
   }
 
   /** After the board child renders, draw the border-only frame ON TOP so the
-   *  rails crop the tucked tile edges (see FRAME_TILE_TUCK). */
+   *  rails crop the tucked tile edges (see FRAME_TILE_TUCK). The match-4+
+   *  flourish's grown/emerging tiles then draw ABOVE the frame (the board
+   *  darken stays beneath it — see BoardPlaceholder.renderFlourishOverlay). */
   render(ctx) {
     super.render(ctx);
     if (!this.visible) return;
     this._renderFrameOverlay(ctx);
+    for (const child of this.children) {
+      if (child.visible && typeof child.renderFlourishOverlay === 'function') {
+        child.renderFlourishOverlay(ctx);
+      }
+    }
   }
 
   _renderFrameOverlay(ctx) {

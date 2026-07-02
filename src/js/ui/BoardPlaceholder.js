@@ -462,9 +462,15 @@ export default class BoardPlaceholder extends UIElement {
    * TOP (crisp, in their cells — no overlap) with their art additively
    * brightened. Self-timed off `_flourishTime`; the controller holds SHOW_MATCH
    * open for the same beat so cascades don't continue yet.
+   *
+   * Two-phase split (for the board-frame overlay): `phase` = 'darken' draws
+   * only the board darken (belongs UNDER the frame overlay so the rails don't
+   * dim), 'tiles' draws only the bloom + grown/brightened tiles (drawn ABOVE
+   * the frame overlay via renderFlourishOverlay so emerging tiles pop over the
+   * rails), 'all' (default) draws both for standalone use.
    * @private
    */
-  _renderMatch4Flourish(ctx, ox, oy, cs) {
+  _renderMatch4Flourish(ctx, ox, oy, cs, phase = 'all') {
     const f = this.match4Flourish;
     if (!f || !f.cells || f.cells.length === 0) return;
 
@@ -516,9 +522,15 @@ export default class BoardPlaceholder extends UIElement {
 
     ctx.save();
 
-    // 1. Darken the entire board.
-    ctx.fillStyle = `rgba(0,0,0,${env * cfg.darkenAlpha})`;
-    ctx.fillRect(ox, oy, boardW, boardH);
+    // 1. Darken the entire board (the UNDER-frame phase).
+    if (phase !== 'tiles') {
+      ctx.fillStyle = `rgba(0,0,0,${env * cfg.darkenAlpha})`;
+      ctx.fillRect(ox, oy, boardW, boardH);
+    }
+    if (phase === 'darken') {
+      ctx.restore();
+      return;
+    }
 
     // 2. Additive warm BLOOM behind the tiles (grows in with env; overlapping
     //    radials merge into one soft glow across the matched group).
@@ -575,6 +587,20 @@ export default class BoardPlaceholder extends UIElement {
     ctx.imageSmoothingEnabled = prevSmoothing;
 
     ctx.restore();
+  }
+
+  /**
+   * Deferred match-4+ flourish pass — the bloom + grown/brightened matched
+   * tiles, drawn by BattleBoardPanel AFTER its border-only frame overlay so
+   * the emerging tiles render ABOVE the frame rails/crests. (The board darken
+   * happens in renderSelf, beneath the frame.) No-op unless a flourish is
+   * active this frame.
+   */
+  renderFlourishOverlay(ctx) {
+    if (!this.match4Flourish) return;
+    const { cellSize, offsetX, offsetY } = this.getCellMetrics();
+    this._renderMatch4Flourish(
+      ctx, Math.floor(offsetX), Math.floor(offsetY), Math.floor(cellSize), 'tiles');
   }
 
   // ── Render ───────────────────────────────────────────
@@ -780,8 +806,11 @@ export default class BoardPlaceholder extends UIElement {
       ctx.restore();
     }
 
-    // ── Match-4+ emphasis flourish (darken board + grow/glow matched tiles) ──
-    this._renderMatch4Flourish(ctx, ox, oy, cs);
+    // ── Match-4+ emphasis flourish — DARKEN phase only. The bloom + grown
+    // tiles are deferred to renderFlourishOverlay(), which BattleBoardPanel
+    // calls AFTER its frame overlay so the emerging tiles pop ABOVE the frame
+    // rails (the darken stays here, beneath the frame, so the rails don't dim).
+    this._renderMatch4Flourish(ctx, ox, oy, cs, 'darken');
 
     // ── Targeting overlay (skill targeting like Explode! 3x3) ──
     if (this.targetingOverlayCells && this.targetingOverlayCells.length > 0) {

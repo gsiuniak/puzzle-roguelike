@@ -40,7 +40,7 @@ import {
 // BAND (nameplate plate + rail) runs down to y≈82 native of 715 ≈ 68px at 600
 // tall — the list must start below it; sides/bottom are the metal border.
 const PANE_PADDING = { top: 68, right: 10, bottom: 22, left: 20 };
-const NATURAL_HEIGHT = 600;
+const NATURAL_HEIGHT = 645;
 
 // ── List ──
 /** Minimum card slots shown (empty ones render as GHOST placeholder cards). */
@@ -78,7 +78,7 @@ const FADE_HEIGHT = 26;            // top/bottom "more content" fade shadows
 // margin. Keep the inset clear of the frame's top-right corner crest.
 const MANAGE_BTN_W = 82;
 const MANAGE_BTN_H = 26;
-const MANAGE_BTN_MARGIN = { right: 34 };
+const MANAGE_BTN_MARGIN = { right: 26 };
 const MANAGE_BTN_BG = 'rgba(38, 30, 16, 0.92)';
 const MANAGE_BTN_BG_HOVER = 'rgba(70, 56, 26, 0.95)';
 const MANAGE_BTN_BORDER = 'rgba(214, 188, 120, 0.8)';
@@ -92,11 +92,11 @@ const COUNT_COLOR = '#9d927c';
 // centered in the nameplate banner. Y is a FRACTION of panel height (the art is
 // stretched to the rect), so it tracks the banner if the panel resizes.
 const TITLE_TEXT = 'Skills';
-const TITLE_FONT_SIZE = 26;
+const TITLE_FONT_SIZE = 32;
 const TITLE_COLOR = '#e8d8a8';
 // The art's nameplate plate spans y ≈ 4..80 of 715 native → center ≈ 0.057.
 // The Manage button derives its vertical center from this same fraction.
-const TITLE_CENTER_Y_FRAC = 0.057;
+const TITLE_CENTER_Y_FRAC = 0.055;
 const TITLE_LETTER_SPACING = 1.5;
 
 // ── Whether to show Equipped Info 
