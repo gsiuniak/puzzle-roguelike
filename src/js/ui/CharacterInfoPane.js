@@ -12,7 +12,11 @@ import { getStatusDef, STATUS_KIND } from '../data/statusEffects.js';
 // 2026-07 `character_pane_panel` art (852×623, aspect ≈1.37 — taller than the
 // old frame; NATURAL_HEIGHT ≈ column width / 1.37 keeps the frame art
 // unstretched at the current column width).
-const PANE_PADDING = { top: 24, right: 16, bottom: 16, left: 16 };
+// Side/top padding aligns the content (incl. the portrait slot's panel-side
+// edge) with the frame art's INNER face: the border is ~45px native of the
+// 852-wide art ≈ 23px at the ~440px column. Less than that and the portrait
+// visibly overlaps the gold frame trim.
+const PANE_PADDING = { top: 26, right: 24, bottom: 18, left: 24 };
 // THREE major rows (mock layout):
 //   Row 1 (header) = [floating portrait | info column (name / tag / flair / stats)]
 //   Row 2          = full-width centered mana-orb row (bigger orbs)
@@ -38,9 +42,9 @@ const PORTRAIT_SLOT_WIDTH = 160;  // layout width reserved for the portrait
 // ~20px reaches just past the header edge so the art's faded hem dissolves
 // into the mana row without hiding the orbs.
 const PORTRAIT_OVERHANG = { top: 56, bleedIn: 30, bottom: 20 };
-const HEADER_HEIGHT = 158;        // top-row height (sized to fit the info column)
+const HEADER_HEIGHT = 150;        // top-row height (sized to fit the info column)
 const HEADER_GAP = 4;
-const OUTER_GAP = 6; // column gap between the three major rows
+const OUTER_GAP = 4; // column gap between the three major rows
 
 // Info-column padding: generous on the side FACING the portrait (player left,
 // enemy right — mirrored in buildHierarchy), small on the outer side. TOP
@@ -63,7 +67,7 @@ const NAME_FONT_SIZE = 34;
 // layout (UIText defaults it to 0 = "no wrap", which the container reads as
 // "max width 0" → a ZERO-WIDTH rect, so centered text draws piled on the
 // column's left edge). EVERY centered UIText in this pane must set maxWidth.
-const NAME_MAX_WIDTH = 205;
+const NAME_MAX_WIDTH = 190;
 const NAME_MIN_FONT_SIZE = 20;
 const NAME_LINE_HEIGHT = 36;
 const NAME_BLOCK_HEIGHT = 38;     // ONE line — tag/flair/stats rows follow
@@ -135,8 +139,10 @@ const HEALTH_LABEL_FONT_SIZE = 20;
 // drawn OVER the bar in render(): overlay width = bar width / (1 − 2·INSET_X)
 // so the fill sits inset within the frame's opening, height follows the art's
 // own aspect. The margins/side inset leave room for the frame's overhang.
-const HEALTH_ROW_MARGIN_TOP = 10;
-const HEALTH_ROW_MARGIN_BOTTOM = 20;
+const HEALTH_ROW_MARGIN_TOP = 6;
+// Big enough that the bar's ornate overlay frame (~13px overhang) clears the
+// pane frame's ~29px bottom border instead of drawing over it.
+const HEALTH_ROW_MARGIN_BOTTOM = 24;
 const HEALTH_BAR_SIDE_INSET = 26;
 const HEALTH_OVERLAY_KEY = 'character_pane_health_bar_overlay';
 const HEALTH_OVERLAY_INSET_X = 0.03; // bar inset within the overlay (fraction of overlay width)
@@ -172,9 +178,11 @@ const STATS_ROW_GAP = 16;   // between the attack and magic groups
 // (justifyContent 'center' + MANA_ROW_GAP) instead of spreading edge-to-edge;
 // MANA_PLATE_SCALE keeps the count plate NARROWER than the circle (at UIOrb's
 // default 1.1 adjacent plates touch and read as clutter).
-const MANA_ROW_HEIGHT = 92;
-const MANA_ROW_PADDING = { top: 8, bottom: 4 };
-const MANA_ROW_GAP = 14;
+const MANA_ROW_HEIGHT = 84;
+const MANA_ROW_PADDING = { top: 2, bottom: 2 };
+// Gap between adjacent orb RECTS. Note each rect is already 6px wider than the
+// orb circle (58 vs ~52), so circle-to-circle spacing ≈ this + 6.
+const MANA_ROW_GAP = 6;
 const MANA_ORB_WIDTH = 58;
 const MANA_ORB_HEIGHT = 80;
 const MANA_PLATE_SCALE = 0.95;
@@ -183,10 +191,10 @@ const MANA_FONT_SIZE = 17;
 /**
  * Natural height of the pane = paddings + the three major rows (header,
  * mana row, HP-bar row) + the column gaps between them. Locks the pane height
- * so it doesn't stretch inside its column. ≈372 at the current constants —
- * deliberately TALLER than the panel art's native aspect at the ~440px
- * wide-viewport column (≈322), so the content breathes; the frame art
- * stretches ~15% vertically, which the mostly-dark texture tolerates.
+ * so it doesn't stretch inside its column. ≈356 at the current constants —
+ * a bit TALLER than the panel art's native aspect at the ~440px wide-viewport
+ * column (≈322), so the content breathes; the frame art stretches ~10%
+ * vertically, which the mostly-dark texture tolerates.
  */
 const NATURAL_HEIGHT =
   PANE_PADDING.top + PANE_PADDING.bottom +

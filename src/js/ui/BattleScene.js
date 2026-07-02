@@ -174,6 +174,9 @@ const SIDE_COL_WIDTH = 360; // +80 from the wide viewport → 440 effective
 const SIDE_COL_MIN_WIDTH = 360;
 const SIDE_COL_MAX_WIDTH = 360;
 const SIDE_COL_GAP = 3;
+// Pushes both character columns (info pane + skills pane) down from the top of
+// the battle row — THE knob for the panels' vertical start.
+const SIDE_COL_TOP_MARGIN = 32;
 
 // Fixed width for the center (board + combat log) column. Should be
 // roughly equal to the available vertical space for the board frame
@@ -560,7 +563,7 @@ export default class BattleScene extends UIPanel {
     col.width = SIDE_COL_WIDTH;
     col.minWidth = SIDE_COL_MIN_WIDTH;
     col.maxWidth = SIDE_COL_MAX_WIDTH;
-    col.margin = { top: 15 };
+    col.margin = { top: SIDE_COL_TOP_MARGIN };
 
     const isPlayer = side === 'player';
     const data    = isPlayer ? this._playerData : this._enemyData;

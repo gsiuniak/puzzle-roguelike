@@ -36,10 +36,10 @@ import {
 // ── Outer panel — sized to the 2026-07 `skill_pane_panel` art ──
 // The new art is 535×715 (aspect ≈0.75, shorter than the old 488×956 frame).
 // NATURAL_HEIGHT ≈ column width / 0.75 keeps the frame art near-unstretched at
-// the ~440px wide-viewport side column. Padding hugs the new frame: the top
-// band (~60px native) is the centered nameplate tab + top rail; sides/bottom
-// are the metal border.
-const PANE_PADDING = { top: 54, right: 10, bottom: 22, left: 18 };
+// the ~440px wide-viewport side column. Padding hugs the frame: the art's TOP
+// BAND (nameplate plate + rail) runs down to y≈82 native of 715 ≈ 68px at 600
+// tall — the list must start below it; sides/bottom are the metal border.
+const PANE_PADDING = { top: 68, right: 10, bottom: 22, left: 20 };
 const NATURAL_HEIGHT = 600;
 
 // ── List ──
@@ -94,8 +94,9 @@ const COUNT_COLOR = '#9d927c';
 const TITLE_TEXT = 'Skills';
 const TITLE_FONT_SIZE = 26;
 const TITLE_COLOR = '#e8d8a8';
-// The new art's nameplate tab spans y ≈ 0..50 of 715 native → center ≈ 0.036.
-const TITLE_CENTER_Y_FRAC = 0.036;
+// The art's nameplate plate spans y ≈ 4..80 of 715 native → center ≈ 0.057.
+// The Manage button derives its vertical center from this same fraction.
+const TITLE_CENTER_Y_FRAC = 0.057;
 const TITLE_LETTER_SPACING = 1.5;
 
 // ── Whether to show Equipped Info 
