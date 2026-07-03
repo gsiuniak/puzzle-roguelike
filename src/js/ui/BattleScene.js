@@ -1663,11 +1663,6 @@ export default class BattleScene extends UIPanel {
       if (!start) return;
       counter = new DamageCounterEffect(start.x, start.y, this._assetManager);
       if (portrait) counter.setTarget(portrait.x, portrait.y);
-      // On impact at the portrait: a quick punch of screen shake (the actual
-      // damage already applied earlier — this is the ceremonial delivery).
-      counter.onImpact = (intensity) => {
-        if (this._screenShake) this._screenShake.trigger(7 + 13 * (intensity || 0));
-      };
       this._damageCounters[side] = counter;
       this._floatingEffects.push(counter);
     }
