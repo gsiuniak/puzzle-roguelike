@@ -375,6 +375,7 @@ export default class CharacterInfoPane extends UIPanel {
       imageAlignV: 'bottom',
     });
     this._portrait.smoothing = true;
+    //Nothing
 
     // Info column — stacks name / class tag / flair / stats (mock row 1 col 2).
     const info = new UIContainer();
