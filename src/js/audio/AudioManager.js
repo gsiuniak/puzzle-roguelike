@@ -401,7 +401,11 @@ class _AudioManager {
       // to avoid potential freeze/hang bugs with MP3 gapless looping in
       // certain browser/Howler combinations.
       const self = this;
-      howl.on('end', function restartLoop() {
+      // once() (not on()) — Howler auto-removes an id-scoped once-listener when
+      // it fires, so each loop iteration REPLACES its listener. With on(), every
+      // loop added a fresh listener that was never removed, growing the Howl's
+      // internal listener array unboundedly over a long session.
+      howl.once('end', function restartLoop() {
         // Only re-loop if this is still the current music
         if (self._currentMusicKey === key && self._currentMusicHowl === howl) {
           // Recompute from the CURRENT base volume so a track faded to
@@ -413,7 +417,7 @@ class _AudioManager {
           if (newId !== null && newId !== undefined) {
             self._currentMusicId = newId;
             howl.volume(currentEffVolume, newId);
-            howl.on('end', restartLoop, newId);
+            howl.once('end', restartLoop, newId);
           }
         }
       }, id);
@@ -440,6 +444,10 @@ class _AudioManager {
    */
   stopMusic(fadeOut = 0) {
     if (!this._currentMusicHowl || this._currentMusicId === null) return;
+
+    // Drop the manual loop-restart listener so it can't linger on the Howl
+    // (stop() never fires 'end', so an attached listener would be orphaned).
+    this._currentMusicHowl.off('end');
 
     if (fadeOut > 0) {
       const howl = this._currentMusicHowl;

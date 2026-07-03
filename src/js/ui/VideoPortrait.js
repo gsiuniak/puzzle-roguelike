@@ -56,6 +56,12 @@ export default class VideoPortrait extends UIImage {
     this._offscreen = null;
     /** @type {CanvasRenderingContext2D|null} */
     this._offCtx = null;
+    /** true once the offscreen holds a keyed frame (enables same-frame reuse) */
+    this._frameReady = false;
+    /** video.currentTime of the last processed frame */
+    this._lastFrameTime = -1;
+    /** @type {(() => void)|null} removable loadedmetadata handler */
+    this._onLoadedMeta = null;
 
     this._createVideo();
   }
@@ -70,7 +76,7 @@ export default class VideoPortrait extends UIImage {
     video.loop = true;         // portrait idles forever
     video.preload = 'auto';
 
-    video.addEventListener('loadedmetadata', () => {
+    this._onLoadedMeta = () => {
       // Size the offscreen canvas to fit the native frame inside PROCESS_MAX_DIM
       // (aspect preserved). Smaller canvas = cheaper per-frame getImageData loop.
       const vw = video.videoWidth || PROCESS_MAX_DIM;
@@ -82,7 +88,8 @@ export default class VideoPortrait extends UIImage {
       this._offscreen = cv;
       // willReadFrequently keeps getImageData on the CPU-side fast path.
       this._offCtx = cv.getContext('2d', { willReadFrequently: true });
-    });
+    };
+    video.addEventListener('loadedmetadata', this._onLoadedMeta);
 
     this._video = video;
 
@@ -112,6 +119,11 @@ export default class VideoPortrait extends UIImage {
     // readyState 2 = HAVE_CURRENT_DATA (a frame is decodable).
     if (!v || v.readyState < 2 || !this._offCtx || !this._offscreen) return false;
 
+    // The video decodes at ~24-30fps while the game renders at 60 — when the
+    // video hasn't advanced, the already-keyed offscreen frame is still valid,
+    // so skip the expensive getImageData/putImageData pass.
+    if (this._frameReady && v.currentTime === this._lastFrameTime) return true;
+
     const w = this._offscreen.width;
     const h = this._offscreen.height;
     const ctx = this._offCtx;
@@ -139,6 +151,8 @@ export default class VideoPortrait extends UIImage {
       }
     }
     ctx.putImageData(frame, 0, 0);
+    this._lastFrameTime = v.currentTime;
+    this._frameReady = true;
     return true;
   }
 
@@ -146,11 +160,16 @@ export default class VideoPortrait extends UIImage {
   destroy() {
     if (this._video) {
       try { this._video.pause(); } catch (e) { /* ignore */ }
+      if (this._onLoadedMeta) {
+        this._video.removeEventListener('loadedmetadata', this._onLoadedMeta);
+        this._onLoadedMeta = null;
+      }
       this._video.removeAttribute('src');
       try { this._video.load(); } catch (e) { /* ignore */ }
       this._video = null;
     }
     this._offscreen = null;
     this._offCtx = null;
+    this._frameReady = false;
   }
 }
