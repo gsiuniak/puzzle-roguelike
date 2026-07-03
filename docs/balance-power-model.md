@@ -445,8 +445,12 @@ model; re-measure in the toolbench after any primitive change):
 ## 9. The Balance Toolbench (`sim/balance-toolbench.html`)
 
 The operational companion. Everything above that says [MEASURE] is a button there. Serve the repo
-(`npx serve`, `python3 -m http.server`, or `node sim/serve.mjs`) and open
-`http://localhost:PORT/sim/balance-toolbench.html`.
+from its root — easiest: `node sim/toolbench/serve.mjs` (a dependency-free static server with correct
+ES-module MIME) — and open `http://localhost:8123/sim/balance-toolbench.html`. Any other static
+server works too (`npx serve`, `python3 -m http.server` if your Python maps `.mjs` to JS).
+Deep links: `?tab=audit|run|sweep|designer|reference`, `?autorun=1` (auto-clicks the tab's primary action).
+The battle engine (`sim/toolbench/engine.mjs`) also runs headless under node — smoke checks:
+`node sim/toolbench/smoke.mjs` and `node sim/toolbench/smoke-analytic.mjs`.
 
 | Tab | What it answers | Method |
 |---|---|---|

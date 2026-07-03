@@ -1,7 +1,8 @@
 # SPECIAL NOTE
 
 - This is in WSL. Assume linux commands, the base of the project at ~/test/game/gems. never use powershell commands, or include wsl.localhost in grep/ls etc commands
-- **Do NOT run or update the `sim/` scripts or tests** (e.g. `node sim/test-*.mjs`). Ignore any "Tests: `node sim/...`" / "After You Edit" instructions below that say to run or maintain them — they are stale and should not be acted on.
+- **Do NOT run or update the LEGACY `sim/` scripts or tests** (e.g. `node sim/test-*.mjs`, `sim/run.mjs`, `sim/engine.mjs`, `sim/combat-balance-bench.html`). Ignore any "Tests: `node sim/...`" / "After You Edit" instructions below that say to run or maintain them — they are stale and should not be acted on.
+- **EXCEPTION — `sim/toolbench/` + `sim/balance-toolbench.html` are CURRENT tooling** (2026-07): the Balance Toolbench. It imports the LIVE game modules/catalogs (`BoardModel`, `MatchResolver`, skill/relic/character/enemy catalogs) and runs headless Monte-Carlo battles in the browser (tabs: Matchup Lab / Run Simulator / Sweep Lab / Designer / Catalog Audit / Reference). Serve the repo root (`node sim/toolbench/serve.mjs` → `http://localhost:8123/sim/balance-toolbench.html`); node smoke checks: `node sim/toolbench/smoke.mjs` / `smoke-analytic.mjs`. The master balance reference is [`docs/balance-power-model.md`](docs/balance-power-model.md). ⚠ MAINTENANCE CONTRACT: `sim/toolbench/engine.mjs` MIRRORS a few non-exported constants — `ENEMY_HP_FLOOR_MULT` / `ENEMY_ATTACK_FLOOR_BONUS` (MapScene), `MAGIC_MANA_PER_POINT`, `STATUS_DAMAGE_MODS`, `POISON_DECAY_DIVISOR` (BattleController), `DEFAULT_GROWTH_PLAN` (BattleScene) — if you change those in src, update engine.mjs (and the doc's tables) to match.
 
 # AGENT ENTRYPOINT — Project Implementation Map
 

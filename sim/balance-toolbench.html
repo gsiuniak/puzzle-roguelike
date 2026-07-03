@@ -1,0 +1,1201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gems Balance Toolbench</title>
+<style>
+/* ── tokens: an ember-and-iron workbench (the game's dark-fantasy material) ── */
+:root{
+  --bg:#12100E; --bg2:#0C0B09; --panel:#1B1815; --panel2:#232019; --line:#332D24; --line2:#4A4234;
+  --ink:#EDE6D8; --ink2:#A99F8C; --ink3:#6F6757;
+  --gold:#D9A93F; --gold-dim:#8A6E2F; --ember:#E06A3A;
+  --good:#5CB870; --warn:#D9A93F; --bad:#D95656; --info:#7FA3D9;
+  --t-red:#E15A5E; --t-blue:#4E97E0; --t-green:#46B877; --t-yellow:#E0B24A; --t-purple:#9F77D9; --t-skull:#98A0B0;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --r:8px;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{background:radial-gradient(1000px 500px at 90% -10%, rgba(224,106,58,.05), transparent 60%),var(--bg);
+  color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+a{color:var(--gold)}
+.app{display:grid;grid-template-columns:200px 1fr;min-height:100vh}
+/* nav rail */
+nav{background:var(--bg2);border-right:1px solid var(--line);padding:14px 10px;position:sticky;top:0;height:100vh}
+nav .brand{font-weight:700;font-size:15px;letter-spacing:.02em;margin:2px 6px 4px;color:var(--gold)}
+nav .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink3);margin:0 6px 16px}
+nav button{display:flex;width:100%;appearance:none;border:0;background:transparent;color:var(--ink2);
+  font:600 12.5px var(--sans);padding:9px 10px;border-radius:6px;cursor:pointer;text-align:left;gap:8px;align-items:center;margin-bottom:2px}
+nav button:hover{background:var(--panel);color:var(--ink)}
+nav button.active{background:var(--panel2);color:var(--gold);box-shadow:inset 2px 0 0 var(--gold)}
+nav .foot{position:absolute;bottom:12px;left:12px;right:12px;font-size:10px;color:var(--ink3);font-family:var(--mono)}
+main{padding:18px 22px 60px;max-width:1340px}
+h2{font-size:16px;margin:2px 0 4px} h3{font-size:13px;margin:0 0 8px;color:var(--gold)}
+.desc{color:var(--ink2);font-size:12px;margin:0 0 14px;max-width:900px}
+.grid{display:grid;gap:14px} .g2{grid-template-columns:1fr 1fr} .g32{grid-template-columns:340px 1fr}
+@media(max-width:1000px){.g2,.g32{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin:0 0 10px;font-weight:600}
+label.f{display:block;font-size:11px;color:var(--ink2);margin:8px 0 3px}
+input[type=number],input[type=text],select,textarea{width:100%;background:var(--bg2);border:1px solid var(--line);
+  color:var(--ink);font:500 12.5px var(--mono);padding:6px 8px;border-radius:6px}
+textarea{min-height:120px;resize:vertical;line-height:1.5}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold-dim)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .row>*{flex:1}
+.row .fix{flex:0 0 auto}
+.btn{appearance:none;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);
+  font:600 12px var(--sans);padding:8px 14px;border-radius:6px;cursor:pointer}
+.btn:hover{border-color:var(--gold-dim);color:var(--gold)}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#1a1408}
+.btn.primary:hover{filter:brightness(1.08);color:#1a1408}
+.btn.small{padding:4px 9px;font-size:11px}
+.btn:disabled{opacity:.5;cursor:default}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;max-height:180px;overflow:auto;
+  border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--bg2)}
+.checks label{display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.checks input{accent-color:var(--gold)}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);
+  text-align:left;padding:5px 8px;border-bottom:1px solid var(--line2);position:sticky;top:0;background:var(--panel)}
+td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+tr:hover td{background:rgba(217,169,63,.04)}
+.tag{display:inline-block;font:600 10px var(--mono);letter-spacing:.05em;padding:2px 7px;border-radius:5px;border:1px solid var(--line2);color:var(--ink2)}
+.tag.good{color:var(--good);border-color:rgba(92,184,112,.5)} .tag.warn{color:var(--warn);border-color:rgba(217,169,63,.5)}
+.tag.bad{color:var(--bad);border-color:rgba(217,86,86,.5)} .tag.info{color:var(--info);border-color:rgba(127,163,217,.5)}
+.kv{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px dotted var(--line)}
+.kv .k{color:var(--ink2)} .kv .v{font-family:var(--mono);font-weight:600}
+.stat{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.stat .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+.stat .v{font:700 20px var(--mono);margin-top:2px} .stat .v small{font-size:11px;color:var(--ink3);font-weight:400}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.bar{height:8px;background:var(--bg2);border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%}
+.note{font-size:11px;color:var(--ink3);line-height:1.55}
+.note code, .desc code{font-family:var(--mono);color:var(--ink2);background:var(--bg2);padding:0 4px;border-radius:4px}
+.progress{height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin:8px 0}
+.progress i{display:block;height:100%;background:var(--gold);width:0%;transition:width .15s}
+.verdict{display:flex;gap:10px;align-items:center;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-top:10px}
+.subtabs{display:flex;gap:4px;margin-bottom:12px}
+.subtabs button{appearance:none;border:1px solid var(--line);background:var(--bg2);color:var(--ink2);font:600 11.5px var(--sans);padding:6px 12px;border-radius:6px;cursor:pointer}
+.subtabs button.active{color:var(--gold);border-color:var(--gold-dim);background:var(--panel2)}
+svg text{font-family:var(--mono);font-size:9px;fill:var(--ink3)}
+pre.code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:10px;font:11.5px var(--mono);
+  overflow:auto;white-space:pre;color:var(--ink2);max-height:300px}
+.err{background:#2a1414;border:1px solid #5c2626;border-radius:8px;padding:16px;margin:40px auto;max-width:640px}
+.hint{font-size:10.5px;color:var(--ink3);font-family:var(--mono)}
+.scroll{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:6px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+const root = document.getElementById('root');
+let E, A, TILE_TYPES, SCALING_PRESETS_KEYS;
+
+try {
+  const [eng, ana, tiles, scal] = await Promise.all([
+    import('./toolbench/engine.mjs'),
+    import('./toolbench/analytic.mjs'),
+    import('../src/js/game/TileTypes.js'),
+    import('../src/js/data/scalingConfig.js'),
+  ]);
+  E = eng; A = ana; TILE_TYPES = tiles.TILE_TYPES;
+  SCALING_PRESETS_KEYS = Object.keys(scal.DAMAGE_SCALING_PRESETS);
+} catch (err) {
+  root.innerHTML = `<div class="err"><h2>Could not load the game source</h2>
+  <p>This toolbench imports the LIVE game modules and data catalogs, so it must be served over http
+  from the repo root (file:// blocks ES-module imports).</p>
+  <pre class="code">cd ~/test/game/gems
+python3 -m http.server 8080        # or: npx serve, or: node sim/serve.mjs
+# then open  http://localhost:8080/sim/balance-toolbench.html</pre>
+  <p class="hint">${String(err)}</p></div>`;
+  throw err;
+}
+
+/* ═════════════════════════ helpers ═════════════════════════ */
+const $ = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; };
+const pct = (x) => (x * 100).toFixed(0) + '%';
+const pct1 = (x) => (x * 100).toFixed(1) + '%';
+const f1 = (x) => (x == null || !isFinite(x)) ? '—' : (Math.abs(x) >= 100 ? x.toFixed(0) : x.toFixed(1));
+const f2 = (x) => (x == null || !isFinite(x)) ? '—' : x.toFixed(2);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const MANA_COLORS = ['red','blue','green','yellow','purple'];
+const COLOR_CSS = { red:'var(--t-red)', blue:'var(--t-blue)', green:'var(--t-green)', yellow:'var(--t-yellow)', purple:'var(--t-purple)', skull:'var(--t-skull)' };
+
+function tagFor(kind){ // kind: good|warn|bad|info + label
+  return `<span class="tag ${kind.cls}">${esc(kind.label)}</span>`;
+}
+function bandTag(value, [lo, hi], { lowIsBad = true } = {}) {
+  if (value < lo) return { cls: lowIsBad ? 'bad' : 'info', label: 'under' };
+  if (value > hi) return { cls: lowIsBad ? 'info' : 'bad', label: 'over' };
+  return { cls: 'good', label: 'in band' };
+}
+
+/* tiny SVG charts */
+function lineChart(seriesList, { w = 560, h = 200, xLabel = '', fmt = f1 } = {}) {
+  const pad = { l: 40, r: 46, t: 12, b: 24 };
+  const xs = seriesList[0].points.map((p) => p.x);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const X = (x) => pad.l + (xmax === xmin ? 0.5 : (x - xmin) / (xmax - xmin)) * (w - pad.l - pad.r);
+  let svg = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:${w}px">`;
+  seriesList.forEach((s, si) => {
+    const ys = s.points.map((p) => p.y);
+    let ymin = s.min != null ? s.min : Math.min(...ys), ymax = s.max != null ? s.max : Math.max(...ys);
+    if (ymax === ymin) { ymax += 1; ymin -= 1; }
+    const Y = (y) => h - pad.b - (y - ymin) / (ymax - ymin) * (h - pad.t - pad.b);
+    const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
+    svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
+    for (const p of s.points) svg += `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="2.6" fill="${s.color}"/>`;
+    // axis labels (left for first series, right for second)
+    const ax = si === 0 ? pad.l - 6 : w - pad.r + 6;
+    const anchor = si === 0 ? 'end' : 'start';
+    for (const t of [ymin, (ymin + ymax) / 2, ymax]) {
+      svg += `<text x="${ax}" y="${(h - pad.b - (t - ymin) / (ymax - ymin) * (h - pad.t - pad.b)) + 3}" text-anchor="${anchor}" fill="${s.color}">${s.fmt ? s.fmt(t) : fmt(t)}</text>`;
+    }
+    svg += `<text x="${si === 0 ? pad.l : w - pad.r}" y="${pad.t - 2}" text-anchor="${anchor}" fill="${s.color}">${esc(s.name)}</text>`;
+  });
+  for (const x of xs) svg += `<text x="${X(x)}" y="${h - 8}" text-anchor="middle">${x}</text>`;
+  svg += `<text x="${w / 2}" y="${h - 8}" text-anchor="middle" opacity="0"> </text></svg>`;
+  return svg + (xLabel ? `<div class="hint" style="text-align:center">${esc(xLabel)}</div>` : '');
+}
+function histogram(values, { w = 320, h = 110, color = 'var(--gold)', label = '' } = {}) {
+  if (!values.length) return '';
+  const min = Math.min(...values), max = Math.max(...values);
+  const bins = Math.min(16, Math.max(5, max - min + 1));
+  const counts = new Array(bins).fill(0);
+  for (const v of values) counts[Math.min(bins - 1, Math.floor((v - min) / ((max - min + 1) / bins)))]++;
+  const peak = Math.max(...counts);
+  const bw = (w - 30) / bins;
+  let svg = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:${w}px">`;
+  counts.forEach((c, i) => {
+    const bh = c / peak * (h - 30);
+    svg += `<rect x="${15 + i * bw + 1}" y="${h - 18 - bh}" width="${bw - 2}" height="${bh}" fill="${color}" opacity=".8" rx="1"/>`;
+  });
+  svg += `<text x="15" y="${h - 5}">${f1(min)}</text><text x="${w - 15}" y="${h - 5}" text-anchor="end">${f1(max)}</text></svg>`;
+  return svg + (label ? `<div class="hint" style="text-align:center">${esc(label)}</div>` : '');
+}
+function shareBars(shares, palette = {}) {
+  const total = Object.values(shares).reduce((a, b) => a + b, 0) || 1;
+  const names = { skull:'skull matches', skill:'skills', skullDestroy:'destroyed skulls', passive:'passives/relics', echo:'echo', poisonTick:'poison', bleed:'bleed', reflect:'reflect', hit:'other' };
+  return Object.entries(shares).sort((a, b) => b[1] - a[1]).map(([k, v]) => `
+    <div class="kv"><span class="k">${esc(names[k] || k)}</span>
+    <span style="flex:1;margin:5px 12px 0" class="bar"><i style="width:${(v / total * 100).toFixed(1)}%;background:${palette[k] || 'var(--ember)'}"></i></span>
+    <span class="v">${pct(v / total)}</span></div>`).join('');
+}
+
+/* async batch runner */
+function makeToken() { return { cancelled: false }; }
+async function runBatchAsync(makeP, makeE, n, onProg, token) {
+  const results = [];
+  const chunk = Math.max(1, Math.min(20, Math.round(n / 50) || 5));
+  for (let i = 0; i < n; i += chunk) {
+    if (token.cancelled) break;
+    const k = Math.min(chunk, n - i);
+    for (let jj = 0; jj < k; jj++) results.push(new E.Battle(makeP(), makeE()).run());
+    onProg && onProg(results.length / n);
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  return E.aggregate(results);
+}
+
+/* ═════════════════════════ custom content store ═════════════════════════ */
+const LS_KEY = 'gems-toolbench-customs-v1';
+const customs = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; } })();
+customs.enemies = customs.enemies || []; customs.skills = customs.skills || []; customs.relics = customs.relics || [];
+function saveCustoms() { localStorage.setItem(LS_KEY, JSON.stringify(customs)); }
+const allEnemyDefs = () => [...E.ALL_ENEMIES, ...customs.enemies];
+const findEnemyDef = (id) => allEnemyDefs().find((d) => d.id === id);
+const customSkillById = (id) => customs.skills.find((s) => s.id === id);
+const customRelicById = (id) => customs.relics.find((r) => r.id === id);
+
+/* ═════════════════════════ shared matchup config ═════════════════════════ */
+const cfg = {
+  player: { characterId: 'warrior', victories: 2, relicIds: [], customSkillIds: [], customRelicIds: [],
+    statDelta: { maxHp: 0, attack: 0, magic: 0, armor: 0 } },
+  enemy: { id: 'goblin', floor: 3, hpOverride: null, attackOverride: null },
+  runs: 200,
+};
+function makePlayerFactory(over = {}) {
+  const p = { ...cfg.player, ...over };
+  return () => E.makePlayerCombatant({
+    characterId: p.characterId, victories: p.victories, relicIds: p.relicIds,
+    customSkills: (p.customSkillIds || []).map(customSkillById).filter(Boolean),
+    customRelics: (p.customRelicIds || []).map(customRelicById).filter(Boolean),
+    statDelta: p.statDelta,
+  });
+}
+function makeEnemyFactory(over = {}) {
+  const e = { ...cfg.enemy, ...over };
+  const def = e.def || findEnemyDef(e.id) || E.ALL_ENEMIES[0];
+  const overrides = {};
+  if (e.hpOverride != null) overrides.hp = e.hpOverride;
+  if (e.attackOverride != null) overrides.attack = e.attackOverride;
+  return () => E.makeEnemyCombatant(def, e.floor, overrides);
+}
+function enemyBandKey(def) { return (def && (def.type === 'boss' || def.type === 'elite')) ? def.type : 'minion'; }
+
+/* ═════════════════════════ app shell ═════════════════════════ */
+const TABS = [
+  ['matchup', 'Matchup Lab'], ['run', 'Run Simulator'], ['sweep', 'Sweep Lab'],
+  ['designer', 'Designer'], ['audit', 'Catalog Audit'], ['reference', 'Reference'],
+];
+root.appendChild(h(`<div class="app">
+  <nav>
+    <div class="brand">⚖ Balance Toolbench</div>
+    <div class="sub">gems · live source</div>
+    ${TABS.map(([id, label]) => `<button data-tab="${id}">${label}</button>`).join('')}
+    <div class="foot">real BoardModel + MatchResolver<br>catalogs imported live<br><a href="../docs/balance-power-model.md">power-model doc</a></div>
+  </nav>
+  <main id="main"></main>
+</div>`));
+const main = $('#main');
+const views = {};
+let activeTab = null;
+function switchTab(id) {
+  activeTab = id;
+  $$('nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === id));
+  main.innerHTML = '';
+  main.appendChild(views[id].el);
+  views[id].onShow && views[id].onShow();
+}
+$$('nav button').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+/* ═════════════════ shared config panel builders ═════════════════ */
+function playerPanel(onChange) {
+  const chars = Object.values(E.CHARACTERS_BY_ID);
+  const el = h(`<div class="panel"><div class="eyebrow">Player</div>
+    <div class="row">
+      <div><label class="f">Character</label><select data-k="characterId">
+        ${chars.map((c) => `<option value="${c.id}">${esc(c.name)} (${esc(c.className)})</option>`).join('')}</select></div>
+      <div><label class="f">Victories (growth applied)</label><input type="number" data-k="victories" min="0" max="12" step="1"></div>
+    </div>
+    <div class="row">
+      <div><label class="f">Δ Max HP</label><input type="number" data-d="maxHp" step="1"></div>
+      <div><label class="f">Δ Attack</label><input type="number" data-d="attack" step="1"></div>
+      <div><label class="f">Δ Magic</label><input type="number" data-d="magic" step="1"></div>
+      <div><label class="f">Δ Armor</label><input type="number" data-d="armor" step="1"></div>
+    </div>
+    <label class="f">Relics (player pool${customs.relics.length ? ' + custom' : ''})</label>
+    <div class="checks" data-relics></div>
+    ${customs.skills.length ? `<label class="f">Custom skills (Designer)</label><div class="checks" data-cskills></div>` : ''}
+    <div class="note" data-preview style="margin-top:8px"></div>
+  </div>`);
+  const relicBox = $('[data-relics]', el);
+  const relics = [...Object.values(E.RELIC_CATALOG).filter((r) => r.rarity !== 'starter'), ...customs.relics];
+  for (const r of relics) {
+    const isCustom = !!customRelicById(r.id);
+    const lab = h(`<label><input type="checkbox" value="${r.id}" data-custom="${isCustom}"> ${esc(r.name)} <span class="hint">${r.rarity}${isCustom ? '·custom' : ''}</span></label>`);
+    relicBox.appendChild(lab);
+  }
+  const cskillBox = $('[data-cskills]', el);
+  if (cskillBox) for (const s of customs.skills) cskillBox.appendChild(h(`<label><input type="checkbox" value="${s.id}"> ${esc(s.name)}</label>`));
+
+  function read() {
+    cfg.player.characterId = $('[data-k=characterId]', el).value;
+    cfg.player.victories = Number($('[data-k=victories]', el).value) || 0;
+    for (const d of ['maxHp', 'attack', 'magic', 'armor']) cfg.player.statDelta[d] = Number($(`[data-d=${d}]`, el).value) || 0;
+    cfg.player.relicIds = $$('[data-relics] input:checked', el).filter((i) => i.dataset.custom !== 'true').map((i) => i.value);
+    cfg.player.customRelicIds = $$('[data-relics] input:checked', el).filter((i) => i.dataset.custom === 'true').map((i) => i.value);
+    cfg.player.customSkillIds = cskillBox ? $$('input:checked', cskillBox).map((i) => i.value) : [];
+    preview();
+    onChange && onChange();
+  }
+  function preview() {
+    const p = makePlayerFactory()();
+    $('[data-preview]', el).innerHTML =
+      `→ <b>${esc(p.name)}</b> · HP <b>${p.hp}</b> · Atk <b>${p.attack}</b> · Mag <b>${p.magic}</b> · Armor <b>${p.armor}</b>`
+      + ` · skills: ${p.skills.map((s) => esc(s.name)).join(', ') || '—'} · relics: ${p.relics.length}`;
+  }
+  function write() {
+    $('[data-k=characterId]', el).value = cfg.player.characterId;
+    $('[data-k=victories]', el).value = cfg.player.victories;
+    for (const d of ['maxHp', 'attack', 'magic', 'armor']) $(`[data-d=${d}]`, el).value = cfg.player.statDelta[d];
+    preview();
+  }
+  el.addEventListener('change', read);
+  write();
+  return el;
+}
+
+function enemyPanel(onChange) {
+  const defs = allEnemyDefs();
+  const el = h(`<div class="panel"><div class="eyebrow">Enemy</div>
+    <div class="row">
+      <div style="flex:2"><label class="f">Enemy</label><select data-k="id">
+        ${defs.map((d) => `<option value="${d.id}">${esc(d.name)} · ${d.type}${customs.enemies.includes(d) ? ' · custom' : ''}</option>`).join('')}</select></div>
+      <div><label class="f">Floor (1–10)</label><input type="number" data-k="floor" min="1" max="10" step="1"></div>
+    </div>
+    <div class="row">
+      <div><label class="f">HP override (baseline)</label><input type="number" data-k="hpOverride" placeholder="def"></div>
+      <div><label class="f">Attack override (baseline)</label><input type="number" data-k="attackOverride" placeholder="def"></div>
+    </div>
+    <div class="note" data-preview style="margin-top:8px"></div>
+  </div>`);
+  function read() {
+    cfg.enemy.id = $('[data-k=id]', el).value;
+    cfg.enemy.floor = Math.max(1, Math.min(10, Number($('[data-k=floor]', el).value) || 1));
+    const hp = $('[data-k=hpOverride]', el).value, atk = $('[data-k=attackOverride]', el).value;
+    cfg.enemy.hpOverride = hp === '' ? null : Number(hp);
+    cfg.enemy.attackOverride = atk === '' ? null : Number(atk);
+    preview();
+    onChange && onChange();
+  }
+  function preview() {
+    const en = makeEnemyFactory()();
+    const def = findEnemyDef(cfg.enemy.id) || {};
+    $('[data-preview]', el).innerHTML =
+      `→ <b>${esc(en.name)}</b> @ floor ${cfg.enemy.floor}: HP <b>${en.maxHp}</b> · Atk <b>${en.attack}</b> · Armor <b>${en.armor}</b>`
+      + ` · legal floors: ${def.floors && def.floors.length ? def.floors.join(',') : '—'}`
+      + ` · skills: ${en.skills.map((s) => esc(s.name)).join(', ') || '—'} · relics: ${en.relics.map((r) => esc(r.name)).join(', ') || '—'}`;
+  }
+  function write() {
+    $('[data-k=id]', el).value = cfg.enemy.id;
+    $('[data-k=floor]', el).value = cfg.enemy.floor;
+    preview();
+  }
+  el.addEventListener('change', read);
+  write();
+  return el;
+}
+
+/* ═════════════════════════ MATCHUP LAB ═════════════════════════ */
+views.matchup = (() => {
+  const el = h(`<div>
+    <h2>Matchup Lab</h2>
+    <p class="desc">Monte-Carlo battles on the <b>real board</b>. Who wins, how fast, and where the damage
+    comes from — the ground truth every other number calibrates against. Bands: minion 85–95% win / 6–10 turns,
+    elite 65–80% / 12–18, boss 45–65% / 20–30; burst share ≤45/60/60%.</p>
+    <div class="grid g2" data-config></div>
+    <div class="row" style="margin:12px 0">
+      <div class="fix"><label class="f">Battles</label><input type="number" data-runs value="200" min="20" step="50" style="width:90px"></div>
+      <div class="fix" style="align-self:flex-end"><button class="btn primary" data-run>Run batch</button></div>
+      <div class="fix" style="align-self:flex-end"><button class="btn" data-cancel disabled>Cancel</button></div>
+      <div style="align-self:flex-end"><div class="progress"><i data-prog></i></div></div>
+    </div>
+    <div data-results></div>
+  </div>`);
+  $('[data-config]', el).append(playerPanel(), enemyPanel());
+  let token = null;
+  $('[data-run]', el).addEventListener('click', async () => {
+    token && (token.cancelled = true);
+    token = makeToken();
+    $('[data-cancel]', el).disabled = false;
+    const n = Number($('[data-runs]', el).value) || 200;
+    const agg = await runBatchAsync(makePlayerFactory(), makeEnemyFactory(), n,
+      (f) => { $('[data-prog]', el).style.width = pct(f); }, token);
+    $('[data-cancel]', el).disabled = true;
+    render(agg);
+  });
+  $('[data-cancel]', el).addEventListener('click', () => { token && (token.cancelled = true); });
+
+  function render(agg) {
+    const def = findEnemyDef(cfg.enemy.id);
+    const bk = enemyBandKey(def);
+    const winBand = A.CAL.winBands[bk], turnBand = A.CAL.fightBands[bk], burstMax = A.CAL.burstShareMax[bk];
+    const winTag = bandTag(agg.winRate, winBand, { lowIsBad: true });
+    const turnTag = bandTag(agg.turns.mean, turnBand);
+    const burstTag = agg.burstShare > burstMax ? { cls: 'bad', label: 'spiky' } : (agg.burstShare < 0.12 ? { cls: 'info', label: 'toothless' } : { cls: 'good', label: 'ok' });
+    let verdict = 'Balanced for its slot.';
+    if (agg.winRate < winBand[0]) verdict = `Too hard for a ${bk} (win ${pct(agg.winRate)} < ${pct(winBand[0])}). Lower baseline HP/attack or move it to later floors.`;
+    else if (agg.winRate > winBand[1]) verdict = `Too easy for a ${bk} (win ${pct(agg.winRate)} > ${pct(winBand[1])}). Raise attack (lethality) before HP (pacing).`;
+    else if (agg.turns.mean > turnBand[1]) verdict = `Right lethality, but the fight drags (${f1(agg.turns.mean)} turns > ${turnBand[1]}). Cut HP, keep attack.`;
+    else if (agg.turns.mean < turnBand[0]) verdict = `Over too fast (${f1(agg.turns.mean)} turns < ${turnBand[0]}). Add HP for pacing.`;
+    $('[data-results]', el).innerHTML = `
+      <div class="grid g2">
+        <div class="panel">
+          <div class="eyebrow">Outcome · n=${agg.n}</div>
+          <div class="stats">
+            <div class="stat"><div class="k">Player win</div><div class="v" style="color:${agg.winRate >= winBand[0] && agg.winRate <= winBand[1] ? 'var(--good)' : 'var(--warn)'}">${pct1(agg.winRate)}</div></div>
+            <div class="stat"><div class="k">Turns (mean)</div><div class="v">${f1(agg.turns.mean)} <small>p10 ${agg.turns.p10} · p90 ${agg.turns.p90}</small></div></div>
+            <div class="stat"><div class="k">HP left on win</div><div class="v">${pct(agg.hpLeftOnWin)}</div></div>
+            <div class="stat"><div class="k">Burst share</div><div class="v">${pct(agg.burstShare)}</div></div>
+            <div class="stat"><div class="k">Player DPT</div><div class="v">${f2(agg.playerDPT)}</div></div>
+            <div class="stat"><div class="k">Enemy DPT</div><div class="v">${f2(agg.enemyDPT)}</div></div>
+            <div class="stat"><div class="k">Mana / turn</div><div class="v">${f2(agg.manaPerTurn)}</div></div>
+            <div class="stat"><div class="k">Extra turns / turn</div><div class="v">${f2(agg.extraTurnRate)}</div></div>
+            <div class="stat"><div class="k">Casts / fight</div><div class="v">${f2(agg.castsPerFight)}</div></div>
+            <div class="stat"><div class="k">Draws</div><div class="v">${pct(agg.drawRate)}</div></div>
+          </div>
+          <div class="verdict">${tagFor(winTag)} ${tagFor(turnTag)} ${tagFor(burstTag)} <span>${esc(verdict)}</span></div>
+        </div>
+        <div class="panel">
+          <div class="eyebrow">Fight length distribution</div>
+          ${histogram(agg.results.map((r) => r.turns), { label: 'player turns to resolve', w: 420, h: 130 })}
+          <div class="eyebrow" style="margin-top:12px">Player damage by source</div>
+          ${shareBars(agg.damageShares, { skull: 'var(--t-skull)', skill: 'var(--gold)', skullDestroy: 'var(--ember)', passive: 'var(--t-green)', poisonTick: 'var(--t-green)' })}
+          <div class="eyebrow" style="margin-top:12px">Enemy damage by source</div>
+          ${shareBars(agg.enemyDamageShares, { skull: 'var(--t-skull)', skill: 'var(--t-red)' })}
+        </div>
+      </div>
+      <p class="note" style="margin-top:10px">Reference anchors for the doc/calibration: mana/turn ≈ ${f2(agg.manaPerTurn)},
+      extra-turn rate ≈ ${f2(agg.extraTurnRate)}, player DPT ≈ ${f2(agg.playerDPT)} — feed these into Reference → Calibration if they drift.</p>`;
+  }
+  return { el };
+})();
+
+/* ═════════════════════════ RUN SIMULATOR ═════════════════════════ */
+views.run = (() => {
+  const el = h(`<div>
+    <h2>Run Simulator</h2>
+    <p class="desc">Full 10-floor runs with the <b>real spawn table</b> (floors + type + rarity weights + per-act dedup),
+    growth per victory, and relic drops at the live rarity weights. The top-level health metric: individual balance
+    changes should end with this still landing in band.</p>
+    <div class="panel"><div class="row">
+      <div><label class="f">Character</label><select data-char>
+        ${Object.values(E.CHARACTERS_BY_ID).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
+      <div><label class="f">Runs</label><input type="number" data-n value="100" min="10" step="25"></div>
+      <div><label class="f">Fight chance / floor</label><input type="number" data-fc value="0.75" min="0" max="1" step="0.05"></div>
+      <div><label class="f">Relic pick</label><select data-policy><option value="random">random of 3</option><option value="first">first offered</option><option value="none">no relics</option></select></div>
+      <div class="fix" style="align-self:flex-end"><button class="btn primary" data-go>Simulate runs</button></div>
+    </div><div class="progress"><i data-prog></i></div></div>
+    <div data-out></div>
+  </div>`);
+  $('[data-go]', el).addEventListener('click', async () => {
+    const n = Number($('[data-n]', el).value) || 100;
+    const runCfg = {
+      characterId: $('[data-char]', el).value,
+      fightChance: Number($('[data-fc]', el).value),
+      relicPickPolicy: $('[data-policy]', el).value,
+    };
+    const runs = [];
+    for (let i = 0; i < n; i++) {
+      runs.push(E.simulateRun(runCfg));
+      if (i % 5 === 4) { $('[data-prog]', el).style.width = pct((i + 1) / n); await new Promise((r) => setTimeout(r, 0)); }
+    }
+    $('[data-prog]', el).style.width = '100%';
+    render(runs);
+  });
+  function render(runs) {
+    const n = runs.length;
+    const survived = runs.filter((r) => r.survived).length;
+    const deaths = runs.filter((r) => !r.survived);
+    // per-floor stats
+    const perFloor = {};
+    for (const r of runs) for (const f of r.floors) {
+      if (f.type === 'skip') continue;
+      const rec = perFloor[f.floor] || (perFloor[f.floor] = { fights: 0, wins: 0, turns: 0, byEnemy: {} });
+      rec.fights++; if (f.won) rec.wins++;
+      rec.turns += f.turns;
+      const be = rec.byEnemy[f.enemyName] || (rec.byEnemy[f.enemyName] = { fights: 0, deaths: 0 });
+      be.fights++; if (!f.won) be.deaths++;
+    }
+    const killers = {};
+    for (const r of deaths) { const last = r.floors[r.floors.length - 1]; killers[last.enemyName] = (killers[last.enemyName] || 0) + 1; }
+    const floors = Object.keys(perFloor).map(Number).sort((a, b) => a - b);
+    const winPts = floors.map((f) => ({ x: f, y: perFloor[f].wins / perFloor[f].fights }));
+    const turnPts = floors.map((f) => ({ x: f, y: perFloor[f].turns / perFloor[f].fights }));
+    $('[data-out]', el).innerHTML = `
+    <div class="grid g2" style="margin-top:12px">
+      <div class="panel">
+        <div class="eyebrow">Run outcome · n=${n}</div>
+        <div class="stats">
+          <div class="stat"><div class="k">Full-run survival</div><div class="v">${pct1(survived / n)}</div></div>
+          <div class="stat"><div class="k">Mean victories</div><div class="v">${f1(runs.reduce((a, r) => a + r.victories, 0) / n)}</div></div>
+          <div class="stat"><div class="k">Mean relics</div><div class="v">${f1(runs.reduce((a, r) => a + r.relics.length, 0) / n)}</div></div>
+        </div>
+        <div class="eyebrow" style="margin-top:12px">Death floors</div>
+        ${histogram(deaths.map((r) => r.deathFloor), { label: 'floor died on', color: 'var(--bad)' })}
+        <div class="eyebrow" style="margin-top:12px">Deadliest enemies</div>
+        ${Object.entries(killers).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) =>
+          `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${v} kills (${pct(v / Math.max(1, deaths.length))})</span></div>`).join('') || '<div class="note">no deaths</div>'}
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Per-floor curves</div>
+        ${lineChart([
+          { name: 'win %', color: 'var(--good)', points: winPts, min: 0, max: 1, fmt: pct },
+          { name: 'turns', color: 'var(--info)', points: turnPts, min: 0 },
+        ], { xLabel: 'floor' })}
+        <table style="margin-top:10px"><tr><th>Floor</th><th class="num">Fights</th><th class="num">Win %</th><th class="num">Turns</th></tr>
+        ${floors.map((f) => `<tr><td>${f}</td><td class="num">${perFloor[f].fights}</td>
+          <td class="num">${pct(perFloor[f].wins / perFloor[f].fights)}</td>
+          <td class="num">${f1(perFloor[f].turns / perFloor[f].fights)}</td></tr>`).join('')}</table>
+      </div>
+    </div>`;
+  }
+  return { el };
+})();
+
+/* ═════════════════════════ SWEEP LAB ═════════════════════════ */
+views.sweep = (() => {
+  const KNOBS = {
+    'player.victories': { label: 'Player victories (growth)', min: 0, max: 10, step: 1, apply: (v) => ({ p: { victories: v } }) },
+    'delta.attack': { label: 'Player Δ Attack', min: 0, max: 10, step: 1, apply: (v) => ({ p: { statDelta: { ...cfg.player.statDelta, attack: v } } }) },
+    'delta.magic': { label: 'Player Δ Magic', min: 0, max: 10, step: 1, apply: (v) => ({ p: { statDelta: { ...cfg.player.statDelta, magic: v } } }) },
+    'delta.maxHp': { label: 'Player Δ Max HP', min: 0, max: 60, step: 10, apply: (v) => ({ p: { statDelta: { ...cfg.player.statDelta, maxHp: v } } }) },
+    'enemy.floor': { label: 'Enemy floor', min: 1, max: 10, step: 1, apply: (v) => ({ e: { floor: v } }) },
+    'enemy.hp': { label: 'Enemy baseline HP', min: 8, max: 60, step: 4, apply: (v) => ({ e: { hpOverride: v } }) },
+    'enemy.attack': { label: 'Enemy baseline Attack', min: 1, max: 10, step: 1, apply: (v) => ({ e: { attackOverride: v } }) },
+  };
+  const el = h(`<div>
+    <h2>Sweep Lab</h2>
+    <p class="desc">Hold the current Matchup Lab configuration fixed and sweep ONE knob. The marginal column
+    is the true "value of +1" — expect diminishing returns on Attack and near-zero HP value unless the enemy
+    is actually lethal. (Configure the base matchup in the Matchup Lab tab first.)</p>
+    <div class="panel"><div class="row">
+      <div style="flex:2"><label class="f">Knob</label><select data-knob>
+        ${Object.entries(KNOBS).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('')}</select></div>
+      <div><label class="f">Min</label><input type="number" data-min></div>
+      <div><label class="f">Max</label><input type="number" data-max></div>
+      <div><label class="f">Step</label><input type="number" data-step></div>
+      <div><label class="f">Battles / point</label><input type="number" data-n value="150" step="50"></div>
+      <div class="fix" style="align-self:flex-end"><button class="btn primary" data-go>Sweep</button></div>
+    </div><div class="progress"><i data-prog></i></div>
+    <div class="note" data-base></div></div>
+    <div data-out></div>
+  </div>`);
+  function syncKnob() {
+    const k = KNOBS[$('[data-knob]', el).value];
+    $('[data-min]', el).value = k.min; $('[data-max]', el).value = k.max; $('[data-step]', el).value = k.step;
+  }
+  $('[data-knob]', el).addEventListener('change', syncKnob);
+  syncKnob();
+  $('[data-go]', el).addEventListener('click', async () => {
+    const knobKey = $('[data-knob]', el).value;
+    const knob = KNOBS[knobKey];
+    const min = Number($('[data-min]', el).value), max = Number($('[data-max]', el).value), step = Number($('[data-step]', el).value) || 1;
+    const n = Number($('[data-n]', el).value) || 150;
+    $('[data-base]', el).textContent = `base: ${cfg.player.characterId} v${cfg.player.victories} vs ${cfg.enemy.id} @ f${cfg.enemy.floor}`;
+    const values = [];
+    for (let v = min; v <= max + 1e-9; v += step) values.push(v);
+    const points = [];
+    const token = makeToken();
+    for (let i = 0; i < values.length; i++) {
+      const v = values[i];
+      const o = knob.apply(v);
+      const agg = await runBatchAsync(makePlayerFactory(o.p || {}), makeEnemyFactory(o.e || {}), n,
+        (f) => { $('[data-prog]', el).style.width = pct((i + f) / values.length); }, token);
+      points.push({ v, agg });
+    }
+    render(knob, points);
+  });
+  function render(knob, points) {
+    const rows = points.map((p, i) => {
+      const dWin = i ? (p.agg.winRate - points[i - 1].agg.winRate) / (p.v - points[i - 1].v) : null;
+      return `<tr><td class="num">${p.v}</td><td class="num">${pct1(p.agg.winRate)}</td>
+        <td class="num">${dWin == null ? '—' : (dWin >= 0 ? '+' : '') + (dWin * 100).toFixed(1) + 'pp'}</td>
+        <td class="num">${f1(p.agg.turns.mean)}</td><td class="num">${f2(p.agg.playerDPT)}</td>
+        <td class="num">${pct(p.agg.burstShare)}</td></tr>`;
+    }).join('');
+    $('[data-out]', el).innerHTML = `<div class="grid g2" style="margin-top:12px">
+      <div class="panel"><div class="eyebrow">${esc(knob.label)} — win % and turns</div>
+      ${lineChart([
+        { name: 'win %', color: 'var(--good)', points: points.map((p) => ({ x: p.v, y: p.agg.winRate })), min: 0, max: 1, fmt: pct },
+        { name: 'turns', color: 'var(--info)', points: points.map((p) => ({ x: p.v, y: p.agg.turns.mean })), min: 0 },
+      ], { xLabel: knob.label })}</div>
+      <div class="panel"><div class="eyebrow">Marginal value table</div>
+      <table><tr><th class="num">Value</th><th class="num">Win %</th><th class="num">Δwin / unit</th><th class="num">Turns</th><th class="num">DPT</th><th class="num">Burst</th></tr>${rows}</table>
+      </div></div>`;
+  }
+  return { el };
+})();
+
+/* ═════════════════════════ DESIGNER ═════════════════════════ */
+views.designer = (() => {
+  const el = h(`<div>
+    <h2>Designer</h2>
+    <p class="desc">Create or tune an enemy, skill, or relic against the budget model — analytic score first,
+    one-click sim to verify, paste-ready code when it lands. Custom content is saved locally and becomes
+    selectable in the Matchup/Sweep labs.</p>
+    <div class="subtabs">
+      <button data-st="enemy" class="active">Enemy</button><button data-st="skill">Skill</button><button data-st="relic">Relic</button>
+    </div>
+    <div data-body></div>
+  </div>`);
+  const body = $('[data-body]', el);
+  let sub = null; // built after all editor definitions (see bottom of this IIFE)
+  function show(k) {
+    $$('.subtabs button', el).forEach((b) => b.classList.toggle('active', b.dataset.st === k));
+    body.innerHTML = ''; body.appendChild(sub[k].el); sub[k].refresh();
+  }
+  $$('.subtabs button', el).forEach((b) => b.addEventListener('click', () => show(b.dataset.st)));
+
+  /* ---------- shared: effects JSON editor ---------- */
+  function effectsEditor(templates) {
+    const box = h(`<div>
+      <div class="row"><div style="flex:2"><label class="f">Insert effect template</label>
+      <select data-tpl>${templates.map((t, i) => `<option value="${i}">${esc(t.label)}</option>`).join('')}</select></div>
+      <div class="fix" style="align-self:flex-end"><button class="btn small" data-ins>Insert</button></div></div>
+      <label class="f">effects[] (JSON)</label><textarea data-json>[]</textarea>
+      <div class="hint" data-err></div>
+    </div>`);
+    $('[data-ins]', box).addEventListener('click', () => {
+      const t = templates[Number($('[data-tpl]', box).value)];
+      let arr = [];
+      try { arr = JSON.parse($('[data-json]', box).value || '[]'); } catch { arr = []; }
+      arr.push(t.effect);
+      $('[data-json]', box).value = JSON.stringify(arr, null, 2);
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    return {
+      el: box,
+      get() {
+        try {
+          const arr = JSON.parse($('[data-json]', box).value || '[]');
+          $('[data-err]', box).textContent = '';
+          return Array.isArray(arr) ? arr : [];
+        } catch (e) { $('[data-err]', box).textContent = 'JSON error: ' + e.message; return null; }
+      },
+      set(arr) { $('[data-json]', box).value = JSON.stringify(arr || [], null, 2); },
+    };
+  }
+  const SKILL_TEMPLATES = [
+    { label: 'damage (flat)', effect: { effectType: 'damage', damage: { amount: 5 } } },
+    { label: 'damage + attack scaling ×1', effect: { effectType: 'damage', damage: { amount: 5, scaling: { attack: 1 } } } },
+    { label: 'damage + magic scaling ×1.5', effect: { effectType: 'damage', damage: { amount: 5, scaling: { magic: 1.5 } } } },
+    { label: 'damage + per-skull rider', effect: { effectType: 'damage', damage: { amount: 8, perSkull: 1 } } },
+    { label: 'heal', effect: { effectType: 'heal', heal: { amount: 5, scaling: { attack: 0.5, magic: 0.5 } } } },
+    { label: 'armor', effect: { effectType: 'armor', armor: { amount: 6, scaling: { attack: 1 / 3 } } } },
+    { label: 'barrier (magic ×2/3)', effect: { effectType: 'barrier', barrier: { amount: 4, scaling: { magic: 2 / 3 } } } },
+    { label: 'extra turn', effect: { effectType: 'extra_turn' } },
+    { label: 'gain attack (permanent)', effect: { effectType: 'gain_attack', gainAttack: { amount: 1 } } },
+    { label: 'create tiles', effect: { effectType: 'create_tiles', createTiles: { amount: 3, type: 'blue' } } },
+    { label: 'create skulls', effect: { effectType: 'create_tiles', createTiles: { amount: 6, type: 'skull' } } },
+    { label: 'mass convert (green→skull)', effect: { effectType: 'convert_tiles_by_type', convertByType: { from: 'green', to: 'skull' } } },
+    { label: 'destroy row', effect: { effectType: 'destroy_tiles_row' } },
+    { label: 'destroy 3×3 area', effect: { effectType: 'destroy_tiles' } },
+    { label: 'poison (magic ×1/4)', effect: { effectType: 'apply_poison', poison: { amount: 2, target: 'opponent', scaling: { magic: 0.25 } } } },
+    { label: 'apply status (silence 1t)', effect: { effectType: 'apply_status', applyStatus: { id: 'silenced', target: 'opponent', turns: 1 } } },
+    { label: 'drain 5 of every mana', effect: { effectType: 'drain_mana', drainMana: { amount: 5 } } },
+    { label: 'gain mana', effect: { effectType: 'gain_mana', gainMana: { color: 'purple', amount: 4 } } },
+  ];
+  const RELIC_TEMPLATES = [
+    { label: 'flat +attack (battle start)', effect: { trigger: 'onBattleStart', effectType: 'modify_stat', modifyStat: { stat: 'attack', amount: 2 } } },
+    { label: 'spawn rate +10pp', effect: { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'red', amount: 10 } } },
+    { label: '+1 mana per match of color', effect: { trigger: 'onBattleStart', effectType: 'modify_mana_gain', manaGain: { color: 'red', amount: 1 } } },
+    { label: '+skull match damage', effect: { trigger: 'onBattleStart', effectType: 'modify_skull_damage', skullDamage: { amount: 3 } } },
+    { label: 'starting mana', effect: { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'red', amount: 5 } } },
+    { label: 'attack per unspent mana', effect: { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'red', per: 3, amount: 1 } } },
+    { label: 'turn-start armor', effect: { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 2 } } },
+    { label: 'turn-start heal', effect: { trigger: 'onTurnStart', effectType: 'heal', heal: { amount: 2 } } },
+    { label: 'turn-start damage', effect: { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 3 } } },
+    { label: 'turn-start +attack (ramp!)', effect: { trigger: 'onTurnStart', effectType: 'gain_attack', gainAttack: { amount: 1 } } },
+    { label: 'on 4+ match: damage', effect: { trigger: 'onMatch4Plus', effectType: 'damage', damage: { amount: 2 } } },
+    { label: 'on 4+ match: explode r1', effect: { trigger: 'onMatch4Plus', effectType: 'destroy_tiles_radius', area: { radius: 1 } } },
+    { label: 'on skull match: +attack (Scythe)', effect: { trigger: 'onTileMatchType', condition: { typeId: 'skull', minCount: 3 }, effectType: 'gain_attack', gainAttack: { amount: 1 } } },
+    { label: 'on take damage: gain mana', effect: { trigger: 'onTakeDamage', effectType: 'gain_mana', gainMana: { color: 'red', amount: 2 } } },
+    { label: 'on deal damage: heal', effect: { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 1 } } },
+    { label: 'on gain color mana: damage', effect: { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1 } } },
+    { label: 'reduce all incoming damage', effect: { trigger: 'onIncomingDamage', effectType: 'reduce_damage', reduceDamage: { amount: 1 } } },
+  ];
+
+  /* ---------- enemy designer ---------- */
+  function enemyDesigner() {
+    const skillOpts = [...Object.keys(E.SKILL_CATALOG), ...customs.skills.map((s) => s.id + ' (custom)')];
+    const box = h(`<div class="grid g32">
+      <div class="panel"><div class="eyebrow">Enemy definition</div>
+        <div class="row"><div><label class="f">id</label><input data-k="id" value="new_enemy"></div>
+        <div><label class="f">name</label><input data-k="name" value="New Enemy"></div></div>
+        <div class="row">
+          <div><label class="f">type</label><select data-k="type"><option>minion</option><option>elite</option><option>boss</option></select></div>
+          <div><label class="f">rarity</label><select data-k="rarity"><option>common</option><option>uncommon</option><option>rare</option></select></div>
+          <div><label class="f">floors (csv)</label><input data-k="floors" value="3,4,5"></div>
+        </div>
+        <div class="row">
+          <div><label class="f">HP (floor-1 baseline)</label><input type="number" data-k="hp" value="16"></div>
+          <div><label class="f">Attack (baseline)</label><input type="number" data-k="attack" value="2"></div>
+          <div><label class="f">Armor</label><input type="number" data-k="armor" value="0"></div>
+          <div><label class="f">attackScale</label><input type="number" data-k="attackScale" value="1" step="0.5"></div>
+        </div>
+        <label class="f">Starting mana (r,b,g,y,p)</label>
+        <div class="row">${MANA_COLORS.map((c) => `<input type="number" data-mana="${c}" value="0" title="${c}" style="border-bottom:2px solid ${COLOR_CSS[c]}">`).join('')}</div>
+        <label class="f">Skills (catalog)</label><div class="checks" data-skills>
+          ${Object.values(E.SKILL_CATALOG).map((s) => `<label><input type="checkbox" value="${s.id}"> ${esc(s.name)}</label>`).join('')}
+          ${customs.skills.map((s) => `<label><input type="checkbox" value="${s.id}" data-custom="1"> ${esc(s.name)} <span class="hint">custom</span></label>`).join('')}
+        </div>
+        <label class="f">Relics (enemy pool)</label><div class="checks" data-relics>
+          ${Object.values(E.ENEMY_RELIC_CATALOG).map((r) => `<label><input type="checkbox" value="${r.id}"> ${esc(r.name)}</label>`).join('')}
+          ${customs.relics.map((r) => `<label><input type="checkbox" value="${r.id}" data-custom="1"> ${esc(r.name)} <span class="hint">custom</span></label>`).join('')}
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary fix" data-save>Save custom</button>
+          <button class="btn fix" data-load>Load existing…</button>
+          <select data-loadsel class="fix" style="width:170px">${allEnemyDefs().map((d) => `<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div>
+        <div class="panel"><div class="eyebrow">Budget check</div>
+          <div class="row">
+            <div><label class="f">Assumed player DPT at floor (measure in Matchup Lab)</label><input type="number" data-dpt value="3.0" step="0.2"></div>
+            <div><label class="f">Player max HP at floor</label><input type="number" data-php value="45"></div>
+            <div><label class="f">Target turns</label><input type="number" data-tt value="8"></div>
+          </div>
+          <div data-budget style="margin-top:10px"></div>
+        </div>
+        <div class="panel" style="margin-top:12px"><div class="eyebrow">Simulation check</div>
+          <div class="row">
+            <div><label class="f">Test floor</label><input type="number" data-floor value="3" min="1" max="10"></div>
+            <div><label class="f">Character</label><select data-char>${Object.values(E.CHARACTERS_BY_ID).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
+            <div><label class="f">Battles</label><input type="number" data-n value="150"></div>
+            <div class="fix" style="align-self:flex-end"><button class="btn primary" data-test>Test vs reference player</button></div>
+          </div>
+          <div class="progress"><i data-prog></i></div>
+          <div data-sim></div>
+        </div>
+        <div class="panel" style="margin-top:12px"><div class="eyebrow">Export</div><pre class="code" data-code></pre></div>
+      </div>
+    </div>`);
+    function read() {
+      const def = {
+        id: $('[data-k=id]', box).value.trim() || 'new_enemy',
+        name: $('[data-k=name]', box).value.trim() || 'New Enemy',
+        type: $('[data-k=type]', box).value, rarity: $('[data-k=rarity]', box).value,
+        floors: $('[data-k=floors]', box).value.split(',').map((s) => Number(s.trim())).filter((n) => n >= 1 && n <= 10),
+        hp: Number($('[data-k=hp]', box).value) || 1, maxHp: Number($('[data-k=hp]', box).value) || 1,
+        attack: Number($('[data-k=attack]', box).value) || 0,
+        armor: Number($('[data-k=armor]', box).value) || 0,
+        attackScale: Number($('[data-k=attackScale]', box).value),
+        mana: Object.fromEntries(MANA_COLORS.map((c) => [c, Number($(`[data-mana=${c}]`, box).value) || 0])),
+        skills: $$('[data-skills] input:checked', box).filter((i) => !i.dataset.custom).map((i) => i.value),
+        relics: $$('[data-relics] input:checked', box).filter((i) => !i.dataset.custom).map((i) => i.value),
+        customSkills: $$('[data-skills] input:checked', box).filter((i) => i.dataset.custom).map((i) => customSkillById(i.value)).filter(Boolean),
+        customRelics: $$('[data-relics] input:checked', box).filter((i) => i.dataset.custom).map((i) => customRelicById(i.value)).filter(Boolean),
+        act: 1, aiBehavior: null, className: 'Minion',
+        _custom: true,
+      };
+      def._resolvedSkills = [...def.skills.map((id) => E.SKILL_CATALOG[id]).filter(Boolean), ...def.customSkills];
+      return def;
+    }
+    function refresh() {
+      const def = read();
+      const dpt = Number($('[data-dpt]', box).value) || 3;
+      const php = Number($('[data-php]', box).value) || 40;
+      const tt = Number($('[data-tt]', box).value) || 8;
+      const rows = (def.floors.length ? def.floors : [1]).map((f) => {
+        const t = A.enemyThreat(def, f, { dpt, maxHp: php });
+        const hpBudget = A.budgetEnemyBaseHp(dpt, tt, f);
+        const burstTag = t.burstShare > A.CAL.burstShareMax[enemyBandKey(def)] ? { cls: 'bad', label: 'spiky' } : (t.burstShare < 0.12 ? { cls: 'info', label: 'toothless' } : { cls: 'good', label: 'ok' });
+        return `<tr><td class="num">${f}</td><td class="num">${t.hp}</td><td class="num">${t.attack}</td>
+          <td class="num">${f1(t.ttk)}</td><td class="num">${f1(t.burst)} (${t.burstShare != null ? pct(t.burstShare) : '—'}) ${tagFor(burstTag)}</td>
+          <td class="num">${hpBudget} ${Math.abs(hpBudget - def.hp) <= Math.max(3, hpBudget * 0.25) ? tagFor({ cls: 'good', label: 'ok' }) : tagFor({ cls: 'warn', label: def.hp > hpBudget ? 'over' : 'under' })}</td></tr>`;
+      }).join('');
+      $('[data-budget]', box).innerHTML = `<table><tr><th class="num">Floor</th><th class="num">HP</th><th class="num">Atk</th>
+        <th class="num">TTK est</th><th class="num">Burst est (share)</th><th class="num">HP budget @${tt}t</th></tr>${rows}</table>
+        <p class="note" style="margin-top:6px">Budget: baseline HP ≈ playerDPT × targetTurns ÷ floor-mult. Burst est = 2 skull matches + best damage skill.
+        Ramping kits (gain_attack / echo / disease) under-show here — sim them at their TOP floor.</p>`;
+      $('[data-code]', box).textContent = A.enemySnippet(read());
+    }
+    box.addEventListener('change', refresh);
+    $('[data-save]', box).addEventListener('click', () => {
+      const def = read();
+      const i = customs.enemies.findIndex((d) => d.id === def.id);
+      if (i >= 0) customs.enemies[i] = def; else customs.enemies.push(def);
+      saveCustoms();
+      alert(`Saved "${def.id}" — selectable in Matchup Lab after reload.`);
+    });
+    $('[data-load]', box).addEventListener('click', () => {
+      const def = findEnemyDef($('[data-loadsel]', box).value);
+      if (!def) return;
+      $('[data-k=id]', box).value = def.id; $('[data-k=name]', box).value = def.name;
+      $('[data-k=type]', box).value = def.type || 'minion'; $('[data-k=rarity]', box).value = def.rarity || 'common';
+      $('[data-k=floors]', box).value = (def.floors || []).join(',');
+      $('[data-k=hp]', box).value = def.hp != null ? def.hp : def.maxHp;
+      $('[data-k=attack]', box).value = def.attack || 0; $('[data-k=armor]', box).value = def.armor || 0;
+      $('[data-k=attackScale]', box).value = typeof def.attackScale === 'number' ? def.attackScale : 1;
+      for (const c of MANA_COLORS) $(`[data-mana=${c}]`, box).value = (def.mana && def.mana[c]) || 0;
+      $$('[data-skills] input', box).forEach((i) => { i.checked = (def.skills || []).includes(i.value); });
+      $$('[data-relics] input', box).forEach((i) => { i.checked = (def.relics || []).includes(i.value); });
+      refresh();
+    });
+    $('[data-test]', box).addEventListener('click', async () => {
+      const def = read();
+      const floor = Math.max(1, Math.min(10, Number($('[data-floor]', box).value) || 1));
+      const n = Number($('[data-n]', box).value) || 150;
+      const victories = Math.round((floor - 1) * A.CAL.winsPerFloor);
+      const agg = await runBatchAsync(
+        () => E.makePlayerCombatant({ characterId: $('[data-char]', box).value, victories }),
+        () => E.makeEnemyCombatant(def, floor),
+        n, (f) => { $('[data-prog]', box).style.width = pct(f); }, makeToken());
+      const bk = enemyBandKey(def);
+      const wt = bandTag(agg.winRate, A.CAL.winBands[bk]);
+      const tt2 = bandTag(agg.turns.mean, A.CAL.fightBands[bk]);
+      $('[data-sim]', box).innerHTML = `<div class="verdict">${tagFor(wt)} win ${pct1(agg.winRate)} · ${tagFor(tt2)} ${f1(agg.turns.mean)} turns
+        · burst ${pct(agg.burstShare)} · vs ${esc($('[data-char]', box).value)} v${victories} (n=${agg.n})</div>`;
+    });
+    return { el: box, refresh };
+  }
+
+  /* ---------- skill designer ---------- */
+  function skillDesigner() {
+    const fx = effectsEditor(SKILL_TEMPLATES);
+    const box = h(`<div class="grid g32">
+      <div class="panel"><div class="eyebrow">Skill definition</div>
+        <div class="row"><div><label class="f">id</label><input data-k="id" value="new_skill"></div>
+        <div><label class="f">name</label><input data-k="name" value="New Skill"></div></div>
+        <label class="f">Cost (r,b,g,y,p)</label>
+        <div class="row">${MANA_COLORS.map((c) => `<input type="number" data-cost="${c}" value="0" title="${c}" style="border-bottom:2px solid ${COLOR_CSS[c]}">`).join('')}</div>
+        <div data-fx></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary fix" data-save>Save custom</button>
+          <button class="btn fix" data-load>Load…</button>
+          <select data-loadsel class="fix" style="width:170px">${[...Object.values(E.SKILL_CATALOG), ...customs.skills].map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div>
+        <div class="panel"><div class="eyebrow">Analytic score</div>
+          <div class="row"><div><label class="f">Reference Attack</label><input type="number" data-ra value="5"></div>
+          <div><label class="f">Reference Magic</label><input type="number" data-rm value="5"></div></div>
+          <div data-an style="margin-top:10px"></div>
+        </div>
+        <div class="panel" style="margin-top:12px"><div class="eyebrow">Simulation check (added to the kit)</div>
+          <div class="row">
+            <div><label class="f">Character</label><select data-char>${Object.values(E.CHARACTERS_BY_ID).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
+            <div><label class="f">Enemy</label><select data-en>${allEnemyDefs().map((d) => `<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select></div>
+            <div><label class="f">Floor</label><input type="number" data-floor value="5" min="1" max="10"></div>
+            <div><label class="f">Battles</label><input type="number" data-n value="150"></div>
+            <div class="fix" style="align-self:flex-end"><button class="btn primary" data-test>A/B test</button></div>
+          </div>
+          <div class="progress"><i data-prog></i></div><div data-sim></div>
+        </div>
+        <div class="panel" style="margin-top:12px"><div class="eyebrow">Export</div><pre class="code" data-code></pre></div>
+      </div>
+    </div>`);
+    $('[data-fx]', box).appendChild(fx.el);
+    function read() {
+      const effects = fx.get() || [];
+      return {
+        id: $('[data-k=id]', box).value.trim() || 'new_skill',
+        name: $('[data-k=name]', box).value.trim() || 'New Skill',
+        description: '', icon: 'skill_bash', sound: 'skill_bash',
+        cost: Object.fromEntries(MANA_COLORS.map((c) => [c, Number($(`[data-cost=${c}]`, box).value) || 0]).filter(([, v]) => v > 0)),
+        effects, _custom: true,
+      };
+    }
+    function refresh() {
+      const skill = read();
+      const stats = { attack: Number($('[data-ra]', box).value) || 5, magic: Number($('[data-rm]', box).value) || 5 };
+      const s = A.skillSummary(skill, stats);
+      const synth = A.synthCostEstimate(skill, stats);
+      const bandCls = s.band === 'in band' ? 'good' : (s.band === 'weak' || s.band === 'must-pick' ? 'bad' : 'warn');
+      $('[data-an]', box).innerHTML = `
+        <div class="stats">
+          <div class="stat"><div class="k">Total cost</div><div class="v">${s.cost}</div></div>
+          <div class="stat"><div class="k">DEV / cast</div><div class="v">${f1(s.dev)}</div></div>
+          <div class="stat"><div class="k">Value / mana</div><div class="v">${f2(s.vpm)}</div></div>
+          <div class="stat"><div class="k">Dmg / mana</div><div class="v">${f2(s.dpm)}</div></div>
+          <div class="stat"><div class="k">Synth price</div><div class="v">${synth.suggestedCost} <small>pow ${f1(synth.power)}</small></div></div>
+        </div>
+        <div class="verdict">${tagFor({ cls: bandCls, label: s.band })}
+          <span>Target V/mana ∈ [${A.CAL.vpmBand.join(', ')}]. Pure damage needs ≥ ${A.CAL.dmgPerManaMin}/mana to beat skull-matching,
+          ≥ ${A.CAL.dmgPerManaStrong} to be build-defining. Synth price = what the Skill Weave would charge for these effects.
+          ${s.notes.length ? 'Notes: ' + esc(s.notes.join('; ')) : ''}</span></div>`;
+      $('[data-code]', box).textContent = A.skillSnippet(skill);
+    }
+    box.addEventListener('change', refresh);
+    $('[data-save]', box).addEventListener('click', () => {
+      const skill = read();
+      if (!fx.get()) return alert('Fix the effects JSON first.');
+      const i = customs.skills.findIndex((s) => s.id === skill.id);
+      if (i >= 0) customs.skills[i] = skill; else customs.skills.push(skill);
+      saveCustoms();
+      alert(`Saved "${skill.id}" — equip it via Matchup Lab (custom skills) after reload.`);
+    });
+    $('[data-load]', box).addEventListener('click', () => {
+      const id = $('[data-loadsel]', box).value;
+      const skill = E.SKILL_CATALOG[id] || customSkillById(id);
+      if (!skill) return;
+      $('[data-k=id]', box).value = skill.id; $('[data-k=name]', box).value = skill.name;
+      for (const c of MANA_COLORS) $(`[data-cost=${c}]`, box).value = (skill.cost && skill.cost[c]) || 0;
+      fx.set(skill.effects);
+      refresh();
+    });
+    $('[data-test]', box).addEventListener('click', async () => {
+      const skill = read();
+      if (!fx.get()) return alert('Fix the effects JSON first.');
+      const characterId = $('[data-char]', box).value;
+      const enemyId = $('[data-en]', box).value;
+      const floor = Math.max(1, Math.min(10, Number($('[data-floor]', box).value) || 5));
+      const n = Number($('[data-n]', box).value) || 150;
+      const victories = Math.round((floor - 1) * A.CAL.winsPerFloor);
+      const def = findEnemyDef(enemyId);
+      const base = await runBatchAsync(
+        () => E.makePlayerCombatant({ characterId, victories }),
+        () => E.makeEnemyCombatant(def, floor), n,
+        (f) => { $('[data-prog]', box).style.width = pct(f / 2); }, makeToken());
+      const withS = await runBatchAsync(
+        () => E.makePlayerCombatant({ characterId, victories, customSkills: [skill] }),
+        () => E.makeEnemyCombatant(def, floor), n,
+        (f) => { $('[data-prog]', box).style.width = pct(0.5 + f / 2); }, makeToken());
+      const dWin = withS.winRate - base.winRate;
+      const dTurns = withS.turns.mean - base.turns.mean;
+      const cls = dWin > 0.12 ? 'bad' : (dWin < 0.005 ? 'info' : 'good');
+      $('[data-sim]', box).innerHTML = `<div class="verdict">${tagFor({ cls, label: dWin > 0.12 ? 'too strong?' : (dWin < 0.005 ? 'no impact' : 'healthy') })}
+        <span>Δwin <b>${(dWin * 100).toFixed(1)}pp</b> (${pct1(base.winRate)} → ${pct1(withS.winRate)}) ·
+        Δturns <b>${dTurns >= 0 ? '+' : ''}${f1(dTurns)}</b> (${f1(base.turns.mean)} → ${f1(withS.turns.mean)}) ·
+        casts/fight ${f2(withS.castsPerFight)} · vs ${esc(def.name)} @ f${floor}, n=${n}×2</span></div>`;
+    });
+    return { el: box, refresh };
+  }
+
+  /* ---------- relic designer ---------- */
+  function relicDesigner() {
+    const fx = effectsEditor(RELIC_TEMPLATES);
+    const box = h(`<div class="grid g32">
+      <div class="panel"><div class="eyebrow">Relic definition</div>
+        <div class="row"><div><label class="f">id</label><input data-k="id" value="new_relic"></div>
+        <div><label class="f">name</label><input data-k="name" value="New Relic"></div></div>
+        <div class="row">
+          <div><label class="f">rarity</label><select data-k="rarity"><option>common</option><option>uncommon</option><option>rare</option><option>legendary</option><option>starter</option></select></div>
+          <div><label class="f">pool</label><select data-k="pool"><option value="player">player</option><option value="enemy">enemy</option></select></div>
+        </div>
+        <div data-fx></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary fix" data-save>Save custom</button>
+          <button class="btn fix" data-load>Load…</button>
+          <select data-loadsel class="fix" style="width:170px">${[...Object.values(E.RELIC_CATALOG), ...Object.values(E.ENEMY_RELIC_CATALOG), ...customs.relics].map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div>
+        <div class="panel"><div class="eyebrow">Analytic score</div>
+          <div class="row"><div><label class="f">Owner Attack</label><input type="number" data-ra value="5"></div>
+          <div><label class="f">Owner Magic</label><input type="number" data-rm value="5"></div></div>
+          <div data-an style="margin-top:10px"></div>
+        </div>
+        <div class="panel" style="margin-top:12px"><div class="eyebrow">Simulation check (granted to player)</div>
+          <div class="row">
+            <div><label class="f">Character</label><select data-char>${Object.values(E.CHARACTERS_BY_ID).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
+            <div><label class="f">Enemy</label><select data-en>${allEnemyDefs().map((d) => `<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select></div>
+            <div><label class="f">Floor</label><input type="number" data-floor value="5" min="1" max="10"></div>
+            <div><label class="f">Battles</label><input type="number" data-n value="150"></div>
+            <div class="fix" style="align-self:flex-end"><button class="btn primary" data-test>A/B test</button></div>
+          </div>
+          <div class="progress"><i data-prog></i></div><div data-sim></div>
+        </div>
+        <div class="panel" style="margin-top:12px"><div class="eyebrow">Export</div><pre class="code" data-code></pre></div>
+      </div>
+    </div>`);
+    $('[data-fx]', box).appendChild(fx.el);
+    function read() {
+      return {
+        id: $('[data-k=id]', box).value.trim() || 'new_relic',
+        name: $('[data-k=name]', box).value.trim() || 'New Relic',
+        description: '', icon: 'relic_claymore',
+        rarity: $('[data-k=rarity]', box).value,
+        effects: fx.get() || [], _custom: true,
+      };
+    }
+    function refresh() {
+      const relic = read();
+      const stats = { attack: Number($('[data-ra]', box).value) || 5, magic: Number($('[data-rm]', box).value) || 5 };
+      const r = A.relicDEVPerFight(relic, stats);
+      const band = A.RARITY_DEV_BAND[relic.rarity] || [0, 999];
+      const t = bandTag(r.dev, band);
+      $('[data-an]', box).innerHTML = `
+        <div class="stats">
+          <div class="stat"><div class="k">DEV / fight</div><div class="v">${f1(r.dev)}</div></div>
+          <div class="stat"><div class="k">Rarity band</div><div class="v">${band[0]}–${band[1]}</div></div>
+        </div>
+        <div class="verdict">${tagFor(t)} <span>DEV/fight at fight length ${A.CAL.fightTurns}. Anything with a
+        per-turn permanent attack ramp is unbounded — check it at elite/boss fight lengths in the sim.
+        ${r.notes.length ? 'Notes: ' + esc(r.notes.join('; ')) : ''}</span></div>`;
+      $('[data-code]', box).textContent = A.relicSnippet(relic, $('[data-k=pool]', box).value);
+    }
+    box.addEventListener('change', refresh);
+    $('[data-save]', box).addEventListener('click', () => {
+      const relic = read();
+      if (!fx.get()) return alert('Fix the effects JSON first.');
+      const i = customs.relics.findIndex((r) => r.id === relic.id);
+      if (i >= 0) customs.relics[i] = relic; else customs.relics.push(relic);
+      saveCustoms();
+      alert(`Saved "${relic.id}" — grantable via Matchup Lab relic list after reload.`);
+    });
+    $('[data-load]', box).addEventListener('click', () => {
+      const id = $('[data-loadsel]', box).value;
+      const relic = E.RELIC_CATALOG[id] || E.ENEMY_RELIC_CATALOG[id] || customRelicById(id);
+      if (!relic) return;
+      $('[data-k=id]', box).value = relic.id; $('[data-k=name]', box).value = relic.name;
+      $('[data-k=rarity]', box).value = relic.rarity || 'common';
+      fx.set(relic.effects);
+      refresh();
+    });
+    $('[data-test]', box).addEventListener('click', async () => {
+      const relic = read();
+      if (!fx.get()) return alert('Fix the effects JSON first.');
+      const characterId = $('[data-char]', box).value;
+      const def = findEnemyDef($('[data-en]', box).value);
+      const floor = Math.max(1, Math.min(10, Number($('[data-floor]', box).value) || 5));
+      const n = Number($('[data-n]', box).value) || 150;
+      const victories = Math.round((floor - 1) * A.CAL.winsPerFloor);
+      const base = await runBatchAsync(
+        () => E.makePlayerCombatant({ characterId, victories }),
+        () => E.makeEnemyCombatant(def, floor), n,
+        (f) => { $('[data-prog]', box).style.width = pct(f / 2); }, makeToken());
+      const withR = await runBatchAsync(
+        () => E.makePlayerCombatant({ characterId, victories, customRelics: [relic] }),
+        () => E.makeEnemyCombatant(def, floor), n,
+        (f) => { $('[data-prog]', box).style.width = pct(0.5 + f / 2); }, makeToken());
+      const dWin = withR.winRate - base.winRate;
+      const bands = { common: 0.03, uncommon: 0.06, rare: 0.12, legendary: 0.25, starter: 0.05 };
+      const cap = bands[relic.rarity] || 0.06;
+      const cls = dWin > cap * 1.8 ? 'bad' : (dWin < 0.002 ? 'info' : 'good');
+      $('[data-sim]', box).innerHTML = `<div class="verdict">${tagFor({ cls, label: dWin > cap * 1.8 ? 'over rarity budget' : (dWin < 0.002 ? 'no impact' : 'in budget') })}
+        <span>Δwin <b>${(dWin * 100).toFixed(1)}pp</b> (${pct1(base.winRate)} → ${pct1(withR.winRate)}) vs a ~${(cap * 100).toFixed(0)}pp ${relic.rarity} budget ·
+        Δturns ${f1(withR.turns.mean - base.turns.mean)} · vs ${esc(def.name)} @ f${floor}, n=${n}×2</span></div>`;
+    });
+    return { el: box, refresh };
+  }
+
+  sub = { enemy: enemyDesigner(), skill: skillDesigner(), relic: relicDesigner() };
+  show('enemy');
+  return { el, onShow: () => {} };
+})();
+
+/* ═════════════════════════ CATALOG AUDIT ═════════════════════════ */
+views.audit = (() => {
+  const el = h(`<div>
+    <h2>Catalog Audit</h2>
+    <p class="desc">Every skill, relic and enemy scored on one scale. Analytic columns compute instantly;
+    the <b>Sim</b> buttons run the ground truth for that row. Sort by clicking headers is intentionally absent —
+    the flags are the point: anything not green deserves a look.</p>
+    <div class="row" style="margin-bottom:10px">
+      <div class="fix"><label class="f">Ref Attack</label><input type="number" data-ra value="5" style="width:70px"></div>
+      <div class="fix"><label class="f">Ref Magic</label><input type="number" data-rm value="5" style="width:70px"></div>
+      <div class="fix"><label class="f">Audit character (sim)</label><select data-char>${Object.values(E.CHARACTERS_BY_ID).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
+      <div class="fix" style="align-self:flex-end"><button class="btn" data-refresh>Recompute</button></div>
+    </div>
+    <div class="grid">
+      <div class="panel"><h3>Skills — value per mana (target ${A.CAL.vpmBand.join('–')})</h3><div class="scroll" data-skills></div></div>
+      <div class="panel"><h3>Relics — DEV per fight vs rarity band</h3><div class="scroll" data-relics></div></div>
+      <div class="panel"><h3>Enemies — threat at their floors</h3><div class="scroll" data-enemies></div>
+        <p class="note" style="margin-top:8px">Sim = win% of the reference character (victories = (floor−1)×${A.CAL.winsPerFloor}) over 120 battles
+        at the enemy's LOWEST and HIGHEST legal floor. Bands: minion ${pct(A.CAL.winBands.minion[0])}–${pct(A.CAL.winBands.minion[1])},
+        elite ${pct(A.CAL.winBands.elite[0])}–${pct(A.CAL.winBands.elite[1])}, boss ${pct(A.CAL.winBands.boss[0])}–${pct(A.CAL.winBands.boss[1])}.</p>
+      </div>
+    </div>
+  </div>`);
+  function stats() { return { attack: Number($('[data-ra]', el).value) || 5, magic: Number($('[data-rm]', el).value) || 5 }; }
+  function render() {
+    const st = stats();
+    // skills
+    const skills = [...Object.values(E.SKILL_CATALOG), ...customs.skills];
+    $('[data-skills]', el).innerHTML = `<table><tr><th>Skill</th><th class="num">Cost</th><th class="num">DEV</th><th class="num">V/mana</th><th class="num">Dmg/mana</th><th>Flag</th><th>Notes</th></tr>
+      ${skills.map((s) => {
+        const r = A.skillSummary(s, st);
+        const cls = r.band === 'in band' ? 'good' : (r.band === 'weak' || r.band === 'must-pick' ? 'bad' : (r.band === 'free' ? 'info' : 'warn'));
+        return `<tr><td>${esc(s.name)} <span class="hint">${esc(s.id)}</span></td><td class="num">${r.cost}</td>
+          <td class="num">${f1(r.dev)}</td><td class="num">${r.cost ? f2(r.vpm) : '∞'}</td><td class="num">${r.cost ? f2(r.dpm) : '—'}</td>
+          <td>${tagFor({ cls, label: r.band })}</td><td class="hint">${esc(r.notes.join('; '))}</td></tr>`;
+      }).join('')}</table>`;
+    // relics
+    const relics = [
+      ...Object.values(E.RELIC_CATALOG).map((r) => ({ ...r, _pool: 'player' })),
+      ...Object.values(E.ENEMY_RELIC_CATALOG).map((r) => ({ ...r, _pool: 'enemy' })),
+      ...customs.relics.map((r) => ({ ...r, _pool: 'custom' })),
+    ];
+    $('[data-relics]', el).innerHTML = `<table><tr><th>Relic</th><th>Pool</th><th>Rarity</th><th class="num">DEV/fight</th><th>Flag</th><th>Notes</th></tr>
+      ${relics.map((r) => {
+        const s = A.relicDEVPerFight(r, st);
+        const band = A.RARITY_DEV_BAND[r.rarity] || [0, 999];
+        const t = bandTag(s.dev, band);
+        return `<tr><td>${esc(r.name)} <span class="hint">${esc(r.id)}</span></td><td>${r._pool}</td><td>${r.rarity}</td>
+          <td class="num">${f1(s.dev)} <span class="hint">/${band[0]}–${band[1]}</span></td>
+          <td>${tagFor(t)}</td><td class="hint">${esc(s.notes.join('; '))}</td></tr>`;
+      }).join('')}</table>`;
+    // enemies
+    const enemies = allEnemyDefs().filter((d) => d.floors && d.floors.length);
+    $('[data-enemies]', el).innerHTML = `<table><tr><th>Enemy</th><th>Type</th><th>Floors</th>
+      <th class="num">HP lo→hi</th><th class="num">Atk lo→hi</th><th class="num">Burst est</th><th>Sim lo</th><th>Sim hi</th></tr>
+      ${enemies.map((d) => {
+        d._resolvedSkills = (d.skills || []).map((id) => E.SKILL_CATALOG[id]).filter(Boolean);
+        const lo = d.floors[0], hi = d.floors[d.floors.length - 1];
+        const tLo = A.enemyThreat(d, lo, null), tHi = A.enemyThreat(d, hi, null);
+        return `<tr data-en="${d.id}"><td>${esc(d.name)}</td><td>${d.type}</td><td>${d.floors.join(',')}</td>
+          <td class="num">${tLo.hp}→${tHi.hp}</td><td class="num">${tLo.attack}→${tHi.attack}</td>
+          <td class="num">${f1(tLo.burst)}→${f1(tHi.burst)}</td>
+          <td><button class="btn small" data-sim="${d.id}|${lo}">Sim f${lo}</button></td>
+          <td><button class="btn small" data-sim="${d.id}|${hi}">Sim f${hi}</button></td></tr>`;
+      }).join('')}</table>`;
+    $$('[data-sim]', el).forEach((b) => b.addEventListener('click', async () => {
+      const [id, floorS] = b.dataset.sim.split('|');
+      const floor = Number(floorS);
+      const def = findEnemyDef(id);
+      def._resolvedSkills = (def.skills || []).map((sid) => E.SKILL_CATALOG[sid]).filter(Boolean);
+      b.textContent = '…';
+      const victories = Math.round((floor - 1) * A.CAL.winsPerFloor);
+      const agg = await runBatchAsync(
+        () => E.makePlayerCombatant({ characterId: $('[data-char]', el).value, victories }),
+        () => E.makeEnemyCombatant(def, floor), 120, null, makeToken());
+      const bk = enemyBandKey(def);
+      const t = bandTag(agg.winRate, A.CAL.winBands[bk]);
+      b.outerHTML = `${tagFor(t)} <span class="mono">${pct(agg.winRate)}·${f1(agg.turns.mean)}t</span>`;
+    }));
+  }
+  $('[data-refresh]', el).addEventListener('click', render);
+  return { el, onShow: render };
+})();
+
+/* ═════════════════════════ REFERENCE ═════════════════════════ */
+views.reference = (() => {
+  const el = h(`<div>
+    <h2>Reference & Calibration</h2>
+    <p class="desc">Left: the exact live constants (imported from source — if the game changes, this changes).
+    Right: the analytic model's tunable assumptions. The full framework lives in
+    <a href="../docs/balance-power-model.md">docs/balance-power-model.md</a>.</p>
+    <div class="grid g2">
+      <div>
+        <div class="panel"><h3>Engine constants [CODE — live]</h3><div data-const></div></div>
+        <div class="panel" style="margin-top:12px"><h3>Fidelity notes (what the sim simplifies)</h3>
+          <ul class="note" style="padding-left:16px;margin:4px 0">
+            <li>Both sides use the shipped EnemyAI's greedy 1-ply priorities; custom AIs (sapper, malakor) approximate to skill-first + best swap. Player adds "don't waste pure heals".</li>
+            <li>Targeted skills auto-target (rows/areas pick most skulls; convert_tile prefers a match-enabler spot).</li>
+            <li>onMatch4Plus fires once per cascade step; the game dispatches per step with a real center position.</li>
+            <li>Egg phase, thrall seed/harvest, disease ramp, echo, deathbringer, dynamic attack are modeled; woven-skill exotica (weave surges, greater) are not.</li>
+            <li>No RNG seeding (BoardModel uses Math.random) — differences under ~3pp win rate are noise at n=200.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="panel"><h3>Calibration [MODEL — editable]</h3>
+        <div class="row" style="margin-bottom:8px"><button class="btn small fix" data-reset>Reset defaults</button>
+        <span class="hint">changes apply to the Audit/Designer analytic scores immediately</span></div>
+        <div data-cal style="display:grid;grid-template-columns:1fr 1fr;gap:2px 14px"></div>
+      </div>
+    </div>
+  </div>`);
+  function renderConst() {
+    const weights = Object.values(TILE_TYPES).filter((t) => t.spawnWeight > 0).map((t) => `${t.id} ${t.spawnWeight}`).join(' · ');
+    const growth = Object.values(E.CHARACTERS_BY_ID).map((c) =>
+      `<div class="kv"><span class="k">${esc(c.name)} growth/win</span><span class="v">${esc(JSON.stringify(c.growthPlan || E.DEFAULT_GROWTH_PLAN))}</span></div>`).join('');
+    $('[data-const]', el).innerHTML = `
+      <div class="kv"><span class="k">Spawn weights</span><span class="v">${weights}</span></div>
+      <div class="kv"><span class="k">Matched skulls</span><span class="v">round(N × (1 + (A−1)/3))</span></div>
+      <div class="kv"><span class="k">Destroyed skulls</span><span class="v">N × (1 + ⌊A/3⌋)</span></div>
+      <div class="kv"><span class="k">Mitigation</span><span class="v">status → mark → reduce → barrier → armor → block → HP</span></div>
+      <div class="kv"><span class="k">Magic → mana</span><span class="v">+⌊M/${E.MAGIC_MANA_PER_POINT}⌋ per matched color</span></div>
+      <div class="kv"><span class="k">Poison</span><span class="v">tick = stacks (absorbed), then ⌊/2⌋, applier's turn end</span></div>
+      <div class="kv"><span class="k">Extra turn</span><span class="v">any single match ≥ 4 (or shape ≥ 4); retain flag</span></div>
+      <div class="kv"><span class="k">Enemy HP mult by floor</span><span class="v">${E.ENEMY_HP_FLOOR_MULT.join(', ')}</span></div>
+      <div class="kv"><span class="k">Enemy atk bonus by floor</span><span class="v">${E.ENEMY_ATTACK_FLOOR_BONUS.join(', ')}</span></div>
+      <div class="kv"><span class="k">Relic drop weights</span><span class="v">${esc(JSON.stringify(E.RELIC_RARITY_WEIGHTS))}</span></div>
+      ${growth}
+      <div class="kv"><span class="k">Scaling presets</span><span class="v">${SCALING_PRESETS_KEYS.join(' ')}</span></div>
+      <p class="note" style="margin-top:8px">⚠ Legendary drop weight is 0 → Tsunami/Soul Eater/Reckoning/Gorepike/Deathbringer
+      are currently unobtainable. ⚠ soul_eater references a nonexistent <code>_10</code> scaling preset (heals flat 1).
+      Floor curves + Magic-mana divisor are mirrored constants — if you edit MapScene/BattleController, update engine.mjs.</p>`;
+  }
+  function renderCal() {
+    const flat = Object.entries(A.CAL).filter(([, v]) => typeof v === 'number');
+    $('[data-cal]', el).innerHTML = flat.map(([k, v]) =>
+      `<label class="f" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0">
+      <span>${esc(k)}</span><input type="number" data-cal-k="${k}" value="${v}" step="0.05" style="width:90px"></label>`).join('');
+    $$('[data-cal-k]', el).forEach((i) => i.addEventListener('change', () => {
+      A.CAL[i.dataset.calK] = Number(i.value);
+    }));
+  }
+  $('[data-reset]', el).addEventListener('click', () => { A.resetCal(); renderCal(); });
+  return { el, onShow: () => { renderConst(); renderCal(); } };
+})();
+
+/* deep-link: ?tab=audit … ; ?autorun=1 clicks the primary action of the tab (scripted checks) */
+const params = new URLSearchParams(location.search);
+switchTab(TABS.some(([id]) => id === params.get('tab')) ? params.get('tab') : 'matchup');
+if (params.has('autorun')) {
+  const btn = $('[data-run],[data-go]', main);
+  btn && btn.click();
+}
+</script>
+</body>
+</html>
