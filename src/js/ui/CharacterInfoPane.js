@@ -343,7 +343,7 @@ export default class CharacterInfoPane extends UIPanel {
     header.direction = 'row';
     header.gap = HEADER_GAP;
     header.alignItems = 'stretch';
-    header.height = HEADER_HEIGHT + 1;
+    header.height = HEADER_HEIGHT;
 
     // Portrait SLOT — reserves layout space only. The portrait itself is drawn
     // manually in render() (_renderPortrait), oversized by PORTRAIT_OVERHANG,
@@ -375,7 +375,6 @@ export default class CharacterInfoPane extends UIPanel {
       imageAlignV: 'bottom',
     });
     this._portrait.smoothing = true;
-    //Nothing
 
     // Info column — stacks name / class tag / flair / stats (mock row 1 col 2).
     const info = new UIContainer();
