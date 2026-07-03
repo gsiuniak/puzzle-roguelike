@@ -384,6 +384,12 @@ export default class BattleScene extends UIPanel {
     /** @type {TileParticleEffect[]} */
     this._particleEffects = [];
 
+    // ── Match-4+ flourish SFX one-shot ──
+    // The controller's match4Flourish persists (same reference) through the
+    // SHOW_MATCH beat; remember the last-seen reference so the SFX plays once
+    // per flourish, right as the freeze beat starts.
+    this._lastMatch4Flourish = null;
+
     // ── Screen shake ──
     /** @type {ScreenShake} */
     this._screenShake = new ScreenShake();
@@ -1287,6 +1293,13 @@ export default class BattleScene extends UIPanel {
     // ── Thrall-summon SFX (Baron's Signet) ──
     if (state.thrallSummoned && this._audioManager) {
       this._audioManager.playSfx('sfx_thrall_summon');
+    }
+
+    // ── Match-4+ flourish SFX (TEMP audition asset) ──
+    // Fires once per flourish, the frame the freeze beat begins.
+    if (state.match4Flourish && state.match4Flourish !== this._lastMatch4Flourish) {
+      this._lastMatch4Flourish = state.match4Flourish;
+      if (this._audioManager) this._audioManager.playSfx('sfx_match4_flourish');
     }
 
     // ── Reflect SFX (the `reflecting` buff fired this frame) ──

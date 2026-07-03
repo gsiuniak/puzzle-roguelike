@@ -159,6 +159,12 @@ const SOUNDS = {
   },
   sfx_extra_turn: { sprite: 'extra_turn', category: AudioCategory.SFX },
   sfx_new_turn:   { sprite: 'new_turn',   category: AudioCategory.SFX },
+  // TEMP standalone file — audition clip for the match-4+ flourish beat; move
+  // into the SFX sprite sheet (→ `{ sprite: '...' }`) once the sound is final.
+  sfx_match4_flourish: {
+    src: ['assets/audio/sfx/tmp/tmp_match4.mp3'],
+    category: AudioCategory.SFX,
+  },
   // No clip in the sprite sheet — standalone file (currently unreferenced).
   sfx_damage_taken: {
     src: ['assets/audio/sfx/damage_taken.mp3'],
