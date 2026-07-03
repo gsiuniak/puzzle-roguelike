@@ -390,6 +390,10 @@ export default class BattleScene extends UIPanel {
     // per flourish, right as the freeze beat starts.
     this._lastMatch4Flourish = null;
 
+    // Whether in-flight SFX are currently paused by the hit-stop (so the
+    // pause/resume fires once per freeze edge, not per frame).
+    this._sfxHitStopFrozen = false;
+
     // ── Screen shake ──
     /** @type {ScreenShake} */
     this._screenShake = new ScreenShake();
@@ -818,6 +822,12 @@ export default class BattleScene extends UIPanel {
     //    the default black-bar behavior back.
     if (this._sceneManager && this._sceneManager._app && this._sceneManager._app.setBackgroundImage) {
       this._sceneManager._app.setBackgroundImage(null);
+    }
+
+    // If the scene exits mid hit-stop, don't strand paused SFX.
+    if (this._sfxHitStopFrozen) {
+      this._sfxHitStopFrozen = false;
+      if (this._audioManager) this._audioManager.resumeFrozenSfx();
     }
 
     // Force-close the map overlay if it was open/animating
@@ -2018,7 +2028,16 @@ export default class BattleScene extends UIPanel {
     // screen shake. Only the board's own flourish (darken + glow) keeps playing.
     // The controller's phase timer (advanced above) still counts down so the
     // freeze self-terminates; we just skip advancing every scene animation here.
-    if (this._battleController && this._battleController.isHitStopActive()) {
+    // Audio freezes too: on the freeze's leading edge every in-flight SFX pauses
+    // (the flourish SFX alone keeps playing); on the trailing edge they resume
+    // from where they held.
+    const hitStop = !!(this._battleController && this._battleController.isHitStopActive());
+    if (hitStop !== this._sfxHitStopFrozen && this._audioManager) {
+      if (hitStop) this._audioManager.pauseSfxExcept(['sfx_match4_flourish']);
+      else this._audioManager.resumeFrozenSfx();
+      this._sfxHitStopFrozen = hitStop;
+    }
+    if (hitStop) {
       if (this._board) this._board.update(dt);
       return;
     }

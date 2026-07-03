@@ -64,6 +64,21 @@ class _AudioManager {
     this._config = null;
 
     /**
+     * Active SFX play instances (play id → { howl, key }), tracked so the
+     * match-4+ hit-stop can pause every in-flight SFX (pauseSfxExcept) and
+     * resume them (resumeFrozenSfx). Entries whose sound has finished are
+     * pruned lazily — during each pause sweep and when the map grows.
+     * @type {Map<number, {howl: Howl, key: string}>}
+     */
+    this._activeSfx = new Map();
+
+    /**
+     * SFX instances paused by pauseSfxExcept(), awaiting resumeFrozenSfx().
+     * @type {Array<{howl: Howl, id: number}>}
+     */
+    this._frozenSfx = [];
+
+    /**
      * Track the currently playing music key so we can:
      *   - Prevent restarting the same track
      *   - Fade out before switching
@@ -538,9 +553,62 @@ class _AudioManager {
       if (opts.loop !== undefined) {
         howl.loop(opts.loop, id);
       }
+
+      if (category === AudioCategory.SFX) {
+        this._trackActiveSfx(key, howl, id);
+      }
     }
 
     return id;
+  }
+
+  // ── SFX freeze (match-4+ hit-stop) ────────────────────
+
+  /**
+   * Record an SFX play instance so pauseSfxExcept can reach it. Pruned lazily:
+   * when the registry grows past a small cap, finished instances are dropped
+   * (howl.playing(id) is cheap), so the map stays bounded without per-play
+   * 'end' listeners on the shared sprite Howl.
+   */
+  _trackActiveSfx(key, howl, id) {
+    if (this._activeSfx.size >= 32) {
+      for (const [oldId, entry] of this._activeSfx) {
+        if (!entry.howl.playing(oldId)) this._activeSfx.delete(oldId);
+      }
+    }
+    this._activeSfx.set(id, { howl, key });
+  }
+
+  /**
+   * Pause every currently-playing SFX instance except the given keys, holding
+   * them mid-buffer for resumeFrozenSfx(). Pauses individual play ids, so
+   * sprite-backed clips (which share one Howl) freeze without touching their
+   * siblings. Music/ambient are untouched.
+   *
+   * @param {string[]} [exceptKeys] — sound keys to leave playing
+   */
+  pauseSfxExcept(exceptKeys = []) {
+    const except = new Set(exceptKeys);
+    for (const [id, entry] of this._activeSfx) {
+      if (!entry.howl.playing(id)) {
+        this._activeSfx.delete(id); // finished — prune
+        continue;
+      }
+      if (except.has(entry.key)) continue;
+      entry.howl.pause(id);
+      this._frozenSfx.push({ howl: entry.howl, id });
+    }
+  }
+
+  /**
+   * Resume every SFX instance paused by pauseSfxExcept() from where it froze.
+   * Safe to call when nothing is frozen.
+   */
+  resumeFrozenSfx() {
+    for (const f of this._frozenSfx) {
+      f.howl.play(f.id); // play(id) on a paused id resumes it in place
+    }
+    this._frozenSfx.length = 0;
   }
 
   // ── Volume Control ────────────────────────────────────
