@@ -141,6 +141,27 @@ const MATCH4_FLOURISH = {
   // Brighten the tile art itself (additive sprite-over-sprite — glows on the
   // tile SHAPE, not a boxy square).
   tileBrightenAlpha: 0.5,
+  // "Sekiro parry" flash (EXPERIMENTAL — flip `enabled` to kill it): a sharp
+  // near-white flare + expanding shockwave ring + thin glint streaks bursting
+  // from the matched group's centroid. Own sharper timing curve (brightest on
+  // frame 1, dissipated by `spanFrac` of the beat) rather than the darken env,
+  // so it reads as an instant deflect-spark. Drawn topmost (over the popped
+  // tiles) in the 'tiles' phase, additive, no shadowBlur.
+  parryFlash: {
+    enabled: true,
+    spanFrac: 1.0,         // fraction of the freeze beat the flash lives in
+    color: '255,248,228',  // warm near-white
+    coreRadiusFrac: 1.5,   // flare radius at full spread (× cell size)
+    coreAlpha: 0.95,       // flare strength on frame 1 (decays quadratically)
+    ringEndFrac: 3.4,      // shockwave ring radius at full spread (× cell size)
+    ringWidthFrac: 0.3,    // ring half-thickness at birth (× cell size, thins)
+    ringAlpha: 0.85,       // ring strength (fades with the flash)
+    streaks: 4,            // glint streak count (0 = none)
+    streakAngleDeg: 22,    // rotation of the streak fan
+    streakLenFrac: 2.8,    // streak tip reach at full stretch (× cell size)
+    streakWidthFrac: 0.1,  // streak half-width at the base (× cell size)
+    streakAlpha: 0.8,      // streak strength (fades with the flash)
+  },
 };
 
 /** Vivid per-type glow colors for the match-4 flourish (kept in sync as RGB). */
@@ -585,6 +606,78 @@ export default class BoardPlaceholder extends UIElement {
       if (isWild(it.colorKey)) this._drawWildTileBorder(ctx, dx, dy, drawCs);
     }
     ctx.imageSmoothingEnabled = prevSmoothing;
+
+    // 4. "Sekiro parry" flash — topmost, bursting from the group centroid.
+    if (cfg.parryFlash && cfg.parryFlash.enabled) {
+      this._renderParryFlash(ctx, gx, gy, cs, p);
+    }
+
+    ctx.restore();
+  }
+
+  /**
+   * The match-4+ "parry flash" (see MATCH4_FLOURISH.parryFlash): an instant
+   * near-white flare that spreads from the matched group's centroid — bright
+   * core, expanding thinning shockwave ring, and a fan of tapered glint
+   * streaks — all decaying to nothing within `spanFrac` of the freeze beat.
+   * Additive blending only (no shadowBlur); a handful of gradient fills for a
+   * handful of frames.
+   * @param {number} gx - flash center x (group centroid)
+   * @param {number} gy - flash center y
+   * @param {number} cs - cell size
+   * @param {number} p  - raw flourish progress 0..1 (NOT the darken envelope)
+   * @private
+   */
+  _renderParryFlash(ctx, gx, gy, cs, p) {
+    const cfg = MATCH4_FLOURISH.parryFlash;
+    const fp = Math.min(1, p / Math.max(0.01, cfg.spanFrac));
+    if (fp >= 1) return;
+    const spread = 1 - Math.pow(1 - fp, 3);      // easeOutCubic — fast burst out
+    const decay = Math.pow(1 - fp, 2);           // brightest on frame 1, gone fast
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Central flare — hot white core over the matched tiles.
+    const flareR = cs * cfg.coreRadiusFrac * (0.35 + 0.65 * spread);
+    let g = ctx.createRadialGradient(gx, gy, 0, gx, gy, flareR);
+    g.addColorStop(0, `rgba(255,255,255,${cfg.coreAlpha * decay})`);
+    g.addColorStop(0.35, `rgba(${cfg.color},${cfg.coreAlpha * decay * 0.7})`);
+    g.addColorStop(1, `rgba(${cfg.color},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(gx - flareR, gy - flareR, flareR * 2, flareR * 2);
+
+    // Expanding shockwave ring — thins as it travels outward.
+    const ringR = cs * cfg.ringEndFrac * spread;
+    const ringW = Math.max(1, cs * cfg.ringWidthFrac * (1 - fp * 0.7));
+    if (ringR > ringW) {
+      g = ctx.createRadialGradient(gx, gy, Math.max(0, ringR - ringW), gx, gy, ringR + ringW);
+      g.addColorStop(0, `rgba(${cfg.color},0)`);
+      g.addColorStop(0.5, `rgba(${cfg.color},${cfg.ringAlpha * decay})`);
+      g.addColorStop(1, `rgba(${cfg.color},0)`);
+      ctx.fillStyle = g;
+      const ext = ringR + ringW;
+      ctx.fillRect(gx - ext, gy - ext, ext * 2, ext * 2);
+    }
+
+    // Glint streaks — a fan of thin tapered diamonds stretching outward.
+    if (cfg.streaks > 0) {
+      const len = cs * cfg.streakLenFrac * (0.4 + 0.6 * spread);
+      const halfW = cs * cfg.streakWidthFrac * (1 - fp * 0.5);
+      ctx.fillStyle = `rgba(${cfg.color},${cfg.streakAlpha * decay})`;
+      ctx.translate(gx, gy);
+      ctx.rotate((cfg.streakAngleDeg * Math.PI) / 180);
+      const step = Math.PI / cfg.streaks;         // fan covers the full circle
+      for (let i = 0; i < cfg.streaks; i++) {
+        // Symmetric spike through the center (both directions at once).
+        ctx.beginPath();
+        ctx.moveTo(-len, 0);
+        ctx.quadraticCurveTo(0, -halfW, len, 0);
+        ctx.quadraticCurveTo(0, halfW, -len, 0);
+        ctx.fill();
+        ctx.rotate(step);
+      }
+    }
 
     ctx.restore();
   }
