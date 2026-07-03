@@ -42,6 +42,16 @@ const PORTRAIT_SLOT_WIDTH = 160;  // layout width reserved for the portrait
 // ~20px reaches just past the header edge so the art's faded hem dissolves
 // into the mana row without hiding the orbs.
 const PORTRAIT_OVERHANG = { top: 56, bleedIn: 30, bottom: 20 };
+
+// ── Portrait bottom fade ─────────────────────────────────
+// The bottom fraction of the portrait art fades to fully transparent, so the
+// overhanging hem dissolves into the panel/mana row instead of hard-clipping.
+// Baked ONCE per portrait into an offscreen canvas (destination-out gradient)
+// registered back into the AssetManager under `<key>__fade_bottom` — after the
+// bake, drawing costs exactly the same as the raw sprite (zero per-frame
+// overhead). Static portraits only (video portraits are unused).
+const PORTRAIT_FADE_BOTTOM_FRAC = 0.2;
+const PORTRAIT_FADE_KEY_SUFFIX = '__fade_bottom';
 const HEADER_HEIGHT = 150;        // top-row height (sized to fit the info column)
 const HEADER_GAP = 4;
 const OUTER_GAP = 4; // column gap between the three major rows
@@ -339,6 +349,9 @@ export default class CharacterInfoPane extends UIPanel {
     // The video's near-white pixels are made transparent so the panel shows
     // through. Falls back to the static portrait sprite until frames decode.
     const portraitKey = cd.portrait ? `portrait_${cd.portrait}` : 'placeholder';
+    this._portraitIsVideo = !!cd.portraitVideo;
+    // Re-arm the lazy bottom-fade bake for the (possibly new) portrait key.
+    this._portraitFadeDone = false;
     if (cd.portraitVideo) {
       this._portrait = new VideoPortrait(cd.portraitVideo, portraitKey, this._assetManager);
     } else {
@@ -593,6 +606,9 @@ export default class CharacterInfoPane extends UIPanel {
     const slot = this._portraitSlot && this._portraitSlot.rect;
     if (!slot || slot.w <= 0) return;
 
+    // Swap in the bottom-faded bake once the source sprite has streamed in.
+    this._ensureFadedPortrait();
+
     const r = this._portrait.rect;
     r.w = slot.w + PORTRAIT_OVERHANG.bleedIn;
     // Anchor at the panel-side edge: player bleeds right, enemy bleeds left.
@@ -613,6 +629,50 @@ export default class CharacterInfoPane extends UIPanel {
     ctx.globalAlpha = (ctx.globalAlpha ?? 1) * alpha;
     this._portrait.renderSelf(ctx);
     ctx.restore();
+  }
+
+  /**
+   * Lazily swap the static portrait's asset for a BOTTOM-FADED bake: the
+   * source sprite drawn into an offscreen canvas, then the bottom
+   * PORTRAIT_FADE_BOTTOM_FRAC punched out with a destination-out linear
+   * gradient (alpha 1 → 0). The bake is registered back into the AssetManager
+   * (`<key>__fade_bottom`) so UIImage draws it like any sprite — one-time
+   * cost per portrait, shared across panes/battles via the AssetManager.
+   * Lazy because sheet-sliced portraits stream in after buildHierarchy;
+   * retried each render until the source is available. Skipped for video
+   * portraits (unused).
+   */
+  _ensureFadedPortrait() {
+    if (this._portraitFadeDone || this._portraitIsVideo) return;
+    if (PORTRAIT_FADE_BOTTOM_FRAC <= 0) { this._portraitFadeDone = true; return; }
+    const am = this._assetManager;
+    const key = this._portrait && this._portrait.assetKey;
+    if (!am || !key || typeof document === 'undefined') return;
+
+    const fadedKey = key + PORTRAIT_FADE_KEY_SUFFIX;
+    if (!am.get(fadedKey)) {
+      const img = am.get(key);
+      // Sliced sheet sprites are canvases (complete === undefined); only a
+      // real, still-loading Image reports complete === false.
+      if (!img || img.complete === false || !img.width || !img.height) return;
+
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const cx = c.getContext('2d');
+      cx.drawImage(img, 0, 0);
+      const fadeH = Math.round(c.height * PORTRAIT_FADE_BOTTOM_FRAC);
+      const grad = cx.createLinearGradient(0, c.height - fadeH, 0, c.height);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,1)');
+      cx.globalCompositeOperation = 'destination-out';
+      cx.fillStyle = grad;
+      cx.fillRect(0, c.height - fadeH, c.width, fadeH);
+      am.registerCanvas(fadedKey, c);
+    }
+
+    this._portrait.assetKey = fadedKey;
+    this._portraitFadeDone = true;
   }
 
   /**
