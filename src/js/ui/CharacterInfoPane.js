@@ -343,7 +343,7 @@ export default class CharacterInfoPane extends UIPanel {
     header.direction = 'row';
     header.gap = HEADER_GAP;
     header.alignItems = 'stretch';
-    header.height = HEADER_HEIGHT;
+    header.height = HEADER_HEIGHT + 1;
 
     // Portrait SLOT — reserves layout space only. The portrait itself is drawn
     // manually in render() (_renderPortrait), oversized by PORTRAIT_OVERHANG,
