@@ -119,10 +119,10 @@ const SKILL_CATALOG = {
     id: 'arcane_inscription',
     name: 'Arcane Inscription',
     description: '[[Change]] 1 [[tile]] into Yellow.',
-    // Re-uses the explode icon/sound for now — swap to a dedicated
-    // skill_arcane_inscription asset whenever new art is added.
+    // Re-uses the explode ICON for now — swap to a dedicated icon sprite
+    // whenever new art is added. Sound is the dedicated clip.
     icon: 'skill_explode',
-    sound: 'skill_explode',
+    sound: 'skill_arcane_inscription',
     targeting: 'board_tile',
     area: { radius: 0 },
     cost: { purple: 3 },

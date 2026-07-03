@@ -60,6 +60,13 @@ export const SFX_GENERIC_SPRITE_SHEET = {
 };
 
 /**
+ * Quick-switch for the match-4+ flourish SFX (`sfx_match4_flourish`):
+ * false → the packed `match_4_special` clip in the SFX sprite sheet (default);
+ * true  → the old temporary standalone file (assets/audio/sfx/tmp/tmp_match4.mp3).
+ */
+const USE_TMP_MATCH4_FLOURISH = true; // false;
+
+/**
  * Sound definition registry.
  * Each key maps to { src, category, options? }.
  *
@@ -159,12 +166,12 @@ const SOUNDS = {
   },
   sfx_extra_turn: { sprite: 'extra_turn', category: AudioCategory.SFX },
   sfx_new_turn:   { sprite: 'new_turn',   category: AudioCategory.SFX },
-  // TEMP standalone file — audition clip for the match-4+ flourish beat; move
-  // into the SFX sprite sheet (→ `{ sprite: '...' }`) once the sound is final.
-  sfx_match4_flourish: {
-    src: ['assets/audio/sfx/tmp/tmp_match4.mp3'],
-    category: AudioCategory.SFX,
-  },
+  // Match-4+ flourish beat SFX. Default = the packed `match_4_special` clip;
+  // flip USE_TMP_MATCH4_FLOURISH (top of file) to audition the old temporary
+  // standalone file instead.
+  sfx_match4_flourish: USE_TMP_MATCH4_FLOURISH
+    ? { src: ['assets/audio/sfx/tmp/tmp_match4.mp3'], category: AudioCategory.SFX }
+    : { sprite: 'match_4_special', category: AudioCategory.SFX },
   // No clip in the sprite sheet — standalone file (currently unreferenced).
   sfx_damage_taken: {
     src: ['assets/audio/sfx/damage_taken.mp3'],
@@ -181,6 +188,7 @@ const SOUNDS = {
   skill_create_skull: { sprite: 'skill_create_skull', category: AudioCategory.SFX },
   skill_oungan:       { sprite: 'skill_oungan',       category: AudioCategory.SFX },
   skill_poison_dart:  { sprite: 'skill_poison_dart',  category: AudioCategory.SFX },
+  skill_arcane_inscription: { sprite: 'skill_arcane_inscription', category: AudioCategory.SFX },
 
   // ── Enemy skill resolve sounds ──────────────────────────
   skill_doomsong:      { sprite: 'sfx_skill_doomsong',      category: AudioCategory.SFX },

@@ -64,6 +64,21 @@ const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
 const LEFT_BLOCK_CENTER_FRAC = 0.36;
 
 /**
+ * Vertical spacing of the centered block, as fractions of canvas height.
+ * The block (info panel → heroes row → choose button) is vertically centered,
+ * then the heroes row + button are lifted by BLOCK_Y_LIFT_FRAC so the bottom
+ * of the screen breathes, while the info panel gets its own smaller
+ * PANEL_Y_LIFT_FRAC so it stays near the true center (lifting it as far as
+ * the portraits reads worse). The heroes row sits tighter under the panel
+ * (GAP_PANEL_HEROES_FRAC) and the choose button gets clearer separation
+ * (GAP_HEROES_BUTTON_FRAC).
+ */
+const GAP_PANEL_HEROES_FRAC = 0.01;
+const GAP_HEROES_BUTTON_FRAC = 0.032;
+const BLOCK_Y_LIFT_FRAC = 0.015;
+const PANEL_Y_LIFT_FRAC = 0.005;
+
+/**
  * Left-side readability scrim: a subtle black gradient over the splash that is
  * darkest at the left edge and fades to fully transparent by
  * LEFT_OVERLAY_FADE_END_FRAC across the screen, lifting the floating left-side
@@ -728,12 +743,16 @@ export default class CharacterSelectScene extends UIPanel {
     const heroesH = 110 * S;
     const btnW = 240 * S;
     const btnH = 70 * S;
-    const gapPanelHeroes = Math.floor(H * 0.025);
-    const gapHeroesBtn = Math.floor(H * 0.02);
+    const gapPanelHeroes = Math.floor(H * GAP_PANEL_HEROES_FRAC);
+    const gapHeroesBtn = Math.floor(H * GAP_HEROES_BUTTON_FRAC);
 
     // ── 3. Center the entire block vertically ───────────
+    // The heroes row + button chain lifts by BLOCK_Y_LIFT_FRAC; the info
+    // panel lifts by its own smaller PANEL_Y_LIFT_FRAC (see constants).
     const totalBlockH = panelH + gapPanelHeroes + heroesH + gapHeroesBtn + btnH;
-    const startY = Math.max(0, Math.floor((H - totalBlockH) / 2));
+    const baseStartY = Math.max(0, Math.floor((H - totalBlockH) / 2));
+    const startY = Math.max(0, baseStartY - Math.floor(H * BLOCK_Y_LIFT_FRAC));
+    const panelY = Math.max(0, baseStartY - Math.floor(H * PANEL_Y_LIFT_FRAC));
 
     // ── 4. Position elements ────────────────────────────
     // The info content floats on the LEFT of the splash (opposite the character
@@ -743,7 +762,7 @@ export default class CharacterSelectScene extends UIPanel {
 
     if (panel) {
       panel.rect.x = Math.floor(blockCenterX - panelW / 2);
-      panel.rect.y = startY;
+      panel.rect.y = panelY;
       panel.rect.w = panelW;
       panel.rect.h = panelH;
       panel.layoutChildren();

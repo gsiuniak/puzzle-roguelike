@@ -175,9 +175,12 @@ const STAT_ICON_SIZE = 28;
 const STAT_VALUE_FONT_SIZE = 22;
 // Each stat group (icon + value) gets a FIXED width — without it the groups
 // flex-fill the whole row and drift far apart (the old "attack way left,
-// magic way right" look). Width fits a 3-digit value.
+// magic way right" look). These are only the INITIAL widths: _fitStatsRow
+// re-measures the actual value text each render and shrinks each group to
+// content (a left-aligned 3-digit slot around a 1-digit value pushed the
+// visible icons+numbers left of the row's true center).
 const STAT_VALUE_WIDTH = 44;
-const STAT_GROUP_GAP = 4;   // icon ↔ value, inside a group
+const STAT_GROUP_GAP = 10;  // icon ↔ value slot, inside a group
 const STAT_GROUP_WIDTH = STAT_ICON_SIZE + STAT_GROUP_GAP + STAT_VALUE_WIDTH;
 const STATS_ROW_GAP = 16;   // between the attack and magic groups
 
@@ -278,6 +281,11 @@ export default class CharacterInfoPane extends UIPanel {
     this._attackValue = null;
     this._magicValue = null;
     this._armorValue = null;
+    // Stats row + its groups, re-fit to the live text widths each render
+    // (see _fitStatsRow; cache key mirrors _nameFitFor).
+    this._statsRow = null;
+    this._statGroups = [];
+    this._statsFitFor = null;
     this._manaOrbs = { red: null, blue: null, green: null, yellow: null, purple: null };
     // Active status effects (buffs/debuffs), refreshed from updateFromState().
     // Each entry is the live status object { id, kind, turns, ... }.
@@ -435,6 +443,9 @@ export default class CharacterInfoPane extends UIPanel {
     statsRow.justifyContent = 'center';
     statsRow.gap = STATS_ROW_GAP;
     statsRow.height = STATS_HEIGHT;
+    this._statsRow = statsRow;
+    this._statGroups = [];
+    this._statsFitFor = null;
 
     statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
     statsRow.addChild(this._buildStatGroup('icon_magic',  () => this._magicValue,  (el) => { this._magicValue = el;  }, cd.magic  ?? 0));
@@ -532,6 +543,10 @@ export default class CharacterInfoPane extends UIPanel {
   render(ctx) {
     // Fit the name onto one line BEFORE the children draw this frame.
     this._fitNameFont(ctx);
+
+    // Fit the attack/magic groups to their live text widths so the centered
+    // stats row is visually centered (see _fitStatsRow).
+    this._fitStatsRow(ctx);
 
     super.render(ctx);
     if (!this.visible) return;
@@ -755,7 +770,10 @@ export default class CharacterInfoPane extends UIPanel {
       fontSize: STAT_VALUE_FONT_SIZE,
       color: '#ffffff',
       bold: true,
-      alignH: 'left',
+      // Centered in the slot: the slot reserves 2 digits (see _fitStatsRow),
+      // so a 1-digit value splits the slack evenly instead of piling it on
+      // one side.
+      alignH: 'center',
       alignV: 'center',
       width: STAT_VALUE_WIDTH,
       height: STAT_VALUE_FONT_SIZE + 4,
@@ -763,7 +781,46 @@ export default class CharacterInfoPane extends UIPanel {
     setValueRef(valueText);
     group.addChild(valueText);
 
+    this._statGroups.push({ group, valueText });
     return group;
+  }
+
+  /**
+   * Size each stat group (icon + value) to its value slot so the centered
+   * stats row is truly centered. The slot RESERVES a 2-digit width (the
+   * common case — the stable default look), growing only for wider values
+   * (3+ digits); the value text is centered in the slot so a 1-digit value
+   * splits the slack evenly. The old fixed 3-digit slot with a left-aligned
+   * value piled all the dead space on each group's right, shifting the
+   * visible icons+numbers left of center. Measured at render time (same
+   * pattern as _fitNameFont); re-runs only when a value or font availability
+   * changes, then re-lays the row out in place.
+   */
+  _fitStatsRow(ctx) {
+    const row = this._statsRow;
+    if (!row || !this._statGroups.length || !row.rect || row.rect.w <= 0) return;
+
+    const fontsReady = (typeof document !== 'undefined' && document.fonts)
+      ? (document.fonts.check('bold 12px "Marcellus SC"') ? 1 : 0)
+      : 1;
+    const key = this._statGroups.map(g => g.valueText.text).join('|') + `|${fontsReady}`;
+    if (this._statsFitFor === key) return;
+
+    ctx.save();
+    for (const g of this._statGroups) {
+      ctx.font = g.valueText.getFontString();
+      // Reserve 2 digits minimum so short values keep a consistent footprint.
+      const reserve = ctx.measureText('88').width;
+      const w = Math.ceil(Math.max(ctx.measureText(g.valueText.text).width, reserve));
+      g.valueText.width = w;
+      g.group.width = STAT_ICON_SIZE + STAT_GROUP_GAP + w;
+    }
+    ctx.restore();
+
+    // Re-center the row with the fitted widths (its own rect is already laid
+    // out by the normal pass, so a local re-layout is enough).
+    row.layoutChildren();
+    this._statsFitFor = key;
   }
 
   /**
