@@ -847,6 +847,18 @@ export default class CharacterInfoPane extends UIPanel {
   }
 
   /**
+   * The info column's rect (name / class tag / stats — the header column beside
+   * the portrait) in design-space coordinates, or null until laid out. Used to
+   * anchor the accumulating damage counter.
+   * @returns {{x:number,y:number,w:number,h:number}|null}
+   */
+  getInfoColumnRect() {
+    const r = this._infoCol && this._infoCol.rect;
+    if (!r || r.w <= 0) return null;
+    return { x: r.x, y: r.y, w: r.w, h: r.h };
+  }
+
+  /**
    * Center of a mana orb (by color) in design-space coordinates — the
    * convergence point for incoming mana streams. Biased slightly upward toward
    * the orb symbol. Returns null until laid out.

@@ -120,8 +120,9 @@ const ATTACK_GROWTH_EVERY_N_VICTORIES = 2;
 const ONLY_SHOW_ACTIVE_TURN_DAMAGE = true;
 
 // ── Tunable layout constants ─────────────────────────────
-// Vertical lift of the accumulating damage counter above the receiver's health
-// bar (px above the bar's top edge — the block hovers over the bar).
+// FALLBACK anchor lift for the accumulating damage counter (px above the health
+// bar's top edge) — used only when the pane's info column isn't laid out yet;
+// the primary anchor is the info column's center (_getDamageCounterAnchor).
 const DAMAGE_COUNTER_BAR_LIFT = 60;
 // ── Wide battle viewport (see CanvasApp.setSceneDesignWidth) ──
 // The battle scene requests a FIXED design width slightly wider than the base
@@ -1428,14 +1429,17 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * Anchor for the accumulating damage counter — hovering over the RECEIVING
-   * side's health bar (player pane on the left, enemy pane on the right), so
-   * damage reads next to the bar it's draining instead of covering the board.
+   * Anchor for the accumulating damage counter — centered in the RECEIVING
+   * side's info column (the name/class/stats column beside the portrait), so
+   * damage reads inside that side's pane instead of covering the board.
+   * Falls back to hovering over the health bar if the column isn't laid out.
    * @param {'player'|'enemy'} side - the side taking damage
    * @returns {{x:number, y:number}|null}
    */
   _getDamageCounterAnchor(side) {
     const pane = side === 'player' ? this._playerPane : this._enemyPane;
+    const info = pane && typeof pane.getInfoColumnRect === 'function' ? pane.getInfoColumnRect() : null;
+    if (info) return { x: info.x + info.w / 2, y: info.y + info.h / 2 };
     const bar = pane && typeof pane.getHealthBarRect === 'function' ? pane.getHealthBarRect() : null;
     if (!bar) return null;
     return { x: bar.x + bar.w / 2, y: bar.y - DAMAGE_COUNTER_BAR_LIFT };
@@ -1627,7 +1631,7 @@ export default class BattleScene extends UIPanel {
   _addDamageToCounter(side, amount, maxHp) {
     let counter = this._damageCounters[side];
     if (!counter || counter.done || counter.finalizing) {
-      // Accumulate hovering over the receiver's health bar; the number flies to
+      // Accumulate centered in the receiver's info column; the number flies to
       // that side's portrait when the sequence finalizes (anchors fed each frame).
       const barAnchor = this._getDamageCounterAnchor(side);
       const pane = side === 'player' ? this._playerPane : this._enemyPane;

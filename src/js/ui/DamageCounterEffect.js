@@ -1,17 +1,17 @@
 /**
- * DamageCounterEffect — accumulating combat-damage feedback over the health bar.
+ * DamageCounterEffect — accumulating combat-damage feedback in the info column.
  *
- * A single stylized counter appears hovering over the RECEIVING side's health
- * bar (player pane left, enemy pane right) when a damage sequence begins and
- * ACCUMULATES every hit of that sequence instead of spawning one popup per
- * hit. It shows the running total + a chain count:
+ * A single stylized counter appears centered in the RECEIVING side's info
+ * column (the name/class/stats column beside the portrait — player pane left,
+ * enemy pane right) when a damage sequence begins and ACCUMULATES every hit of
+ * that sequence instead of spawning one popup per hit. It shows the running total + a chain count:
  *
  *     34          ← big damage digits
  *     DAMAGE      ⎫ the "DAMAGE / CHAIN X" label sprite
  *     CHAIN X 3   ⎭ (the "3" is the chain count, drawn over the CHAIN X line)
  *
  * Lifecycle (a four-phase timeline):
- *   1. ACCUMULATE — compact, parked over the receiver's health bar. Each new
+ *   1. ACCUMULATE — compact, parked in the receiver's info column. Each new
  *      hit bumps the
  *      total + chain and replays a punchy "tick": scale pop, small positional
  *      shake, and a couple of slash accents. Stays small so it doesn't block the
@@ -33,7 +33,7 @@
  * externally by BattleScene's _floatingEffects list (same contract as
  * FloatingTextEffect): construct, call update(dt) + render(ctx) each frame,
  * remove once `done` is true. The owning scene feeds it the center anchor
- * (over the receiver's health bar), the target anchor (receiver portrait),
+ * (the receiver's info-column center), the target anchor (receiver portrait),
  * and the `resolving` hint each frame.
  */
 
@@ -108,7 +108,7 @@ const FINALIZE_IDLE_MS = 150;
 const FINAL_GROW_MS = 150;
 const FINAL_HOLD_MS = 130;
 
-// Fly-to-portrait. The hop is short now (health bar → portrait within the
+// Fly-to-portrait. The hop is short now (info column → portrait within the
 // same pane), so the arc bow is modest.
 const FLY_MS = 140;
 const FLY_ARC_LIFT = 55;              // peak upward bow of the arc (px)
@@ -157,7 +157,7 @@ const PHASE = { ACCUMULATE: 0, FINALIZE: 1, FLY: 2, IMPACT: 3 };
 
 export default class DamageCounterEffect {
   /**
-   * @param {number} x - center anchor X (over the receiver's health bar, design space)
+   * @param {number} x - center anchor X (the receiver's info-column center, design space)
    * @param {number} y - center anchor Y
    * @param {object} [assetManager] - AssetManager (for the sliced damage sprites)
    */
@@ -207,7 +207,7 @@ export default class DamageCounterEffect {
     return this._impactFired;
   }
 
-  /** Re-anchor the center (over the receiver's health bar). Only meaningful while accumulating. */
+  /** Re-anchor the center (the receiver's info-column center). Only meaningful while accumulating. */
   setCenter(x, y) {
     if (this._phase === PHASE.ACCUMULATE) {
       this.x = x;
