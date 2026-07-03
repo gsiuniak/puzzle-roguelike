@@ -19,6 +19,7 @@ import PassiveSystem from '../systems/PassiveSystem.js';
 import TRIGGER_TYPES from '../systems/TriggerTypes.js';
 import SKILL_EFFECT_HANDLERS, { LOCK_MIN_TURNS } from './battle/skillEffectHandlers.js';
 import { getBestMove, rankMoves } from './MoveAdvisor.js';
+import { resolveBoardInPlace } from './BoardSimulator.js';
 
 /** @enum {string} */
 export const BattleState = {
@@ -361,6 +362,18 @@ export default class BattleController {
      * @type {string|null}
      */
     this._pendingSkillSound = null;
+
+    /**
+     * Skill resolve sound HELD BACK because the cast's cascade is predicted to
+     * flourish (a guaranteed 4+ match → hit-stop). Released into
+     * _pendingSkillSound the moment the flourish freeze ends (so the flourish
+     * SFX plays alone during the beat, then the skill sound follows), or as a
+     * safety at _finishResolving if the predicted flourish never materialized.
+     * @type {string|null}
+     */
+    this._heldSkillSound = null;
+    /** Whether the held sound's predicted hit-stop has been observed active. */
+    this._heldSkillSoundSawFreeze = false;
 
     // ── Enemy turn ──
     this._enemyTimer = 0;
@@ -1014,9 +1027,50 @@ export default class BattleController {
 
     // If any effect entered a cascade (e.g. CREATE_TILES), the cascade machine
     // finishes the action via _finishResolving.
-    if (enteredCascade) return;
+    if (enteredCascade) {
+      // If the cascade is guaranteed to reach a 4+ flourish (e.g. a convert
+      // that lines up a 4-match, or a row destroy whose gravity settles one),
+      // HOLD the skill's resolve sound so the flourish SFX owns the hit-stop
+      // beat; the held sound releases the moment the freeze ends (update()),
+      // with a safety release at _finishResolving.
+      if (this._pendingSkillSound && this._cascadeWillFlourish()) {
+        this._heldSkillSound = this._pendingSkillSound;
+        this._pendingSkillSound = null;
+        this._heldSkillSoundSawFreeze = false;
+      }
+      return;
+    }
 
     this._finishInstantAction(side);
+  }
+
+  /**
+   * Predict whether the just-started cascade will trigger the match-4+
+   * emphasis flourish (decision #42), using only DETERMINISTIC information:
+   *   - The first step's analysis already flourished (_enterShowMatch ran
+   *     synchronously during the cast — the convert/create case), or
+   *   - removing the in-flight step's tiles and settling the board (gravity,
+   *     refill OFF — the BoardSimulator "guaranteed" mode) produces a 4+ match
+   *     in a later step (the destroy-row/Fracture case).
+   * Refill RNG can only ADD tiles, so a predicted 4+ among settled existing
+   * tiles always materializes; a 4+ CREATED by refill is unpredictable and
+   * simply isn't held (the sound plays normally and the hit-stop pause/resume
+   * covers it). Cheap (one clone + a few analyze/gravity steps), on-demand.
+   * @returns {boolean}
+   */
+  _cascadeWillFlourish() {
+    if (this._match4Flourish) return true;
+    // Same gates as the flourish itself (_enterShowMatch).
+    if (this._resumeTurnAfterResolve) return false;
+    if (!this._canGainExtraTurn(this.activeSide)) return false;
+    const sim = this.board.clone();
+    // A SHOW_MATCH-entered cascade (convert/create) still has its first step's
+    // tiles on the board (removed later in _doRemove) — take them off first. A
+    // destroy-entered cascade already removed them (it starts at REMOVE with
+    // _analysis null), so the clone already carries the holes.
+    if (this._analysis) sim.removeTiles(this._analysis.positions);
+    sim.applyGravity();
+    return resolveBoardInPlace(sim, this._activeState(), false).extraTurn;
   }
 
   /**
@@ -1792,6 +1846,14 @@ export default class BattleController {
   }
 
   _finishResolving() {
+    // Safety: a held skill sound (4+ pre-check) whose predicted flourish never
+    // materialized (refill interference on a deep cascade step) releases now
+    // so the cast is never silent.
+    if (this._heldSkillSound && !this._heldSkillSoundSawFreeze) {
+      this._pendingSkillSound = this._heldSkillSound;
+      this._heldSkillSound = null;
+    }
+
     // Deathbringer: if damage dealt during this resolution queued skull
     // destructions, run them as a follow-up resolution before ending the
     // turn (skip if the battle already ended).
@@ -2191,6 +2253,20 @@ export default class BattleController {
     // "attack = N this turn" guarantee holds.
     this._enforceStatusAttack(this.playerState);
     this._enforceStatusAttack(this.enemyState);
+
+    // ── Release a held skill sound (4+ pre-check) ──
+    // The cast's resolve sound was held so the flourish SFX owns the hit-stop
+    // beat; release it the frame the freeze ends. GAME_OVER also releases (a
+    // mispredicted hold must not silently swallow the cast's sound).
+    if (this._heldSkillSound) {
+      if (this.isHitStopActive()) {
+        this._heldSkillSoundSawFreeze = true;
+      } else if (this._heldSkillSoundSawFreeze || this.state === BattleState.GAME_OVER) {
+        this._pendingSkillSound = this._heldSkillSound;
+        this._heldSkillSound = null;
+        this._heldSkillSoundSawFreeze = false;
+      }
+    }
 
     // ── Swap animation ──
     if (this.state === BattleState.SWAPPING && this.swapAnim) {
