@@ -21,6 +21,62 @@
  *   4. Check `done` property — when true, remove.
  */
 
+// ── Baked glow sprites ──────────────────────────────────────────────────────
+// Mobile tuning: building 2 radial gradients PER PARTICLE PER FRAME (glow +
+// core) was the dominant cascade cost — a big cascade has 100+ live particles.
+// Instead each gradient look is baked ONCE per tile color into a small
+// offscreen sprite (module cache, a handful of colors total) and drawn with a
+// plain scaled drawImage + globalAlpha. Alpha stops scale linearly, so
+// multiplying globalAlpha by the particle alpha reproduces the old gradients
+// exactly.
+const SPRITE_R = 32; // baked sprite radius in px (drawn scaled)
+const _spriteCache = new Map(); // `${kind}|${color}` → canvas
+
+function _rgbaFromHex(hex, alpha) {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
+ * kind: 'glow'  — soft outer halo (color 0.65 → 0.25 → 0)
+ *       'core'  — bright center (white 0.95 → color 0.8 → 0)
+ *       'flash' — burst pop glow (white 0.9 → color 0.55 → 0)
+ */
+function _getSprite(kind, color) {
+  const key = kind + '|' + color;
+  let cv = _spriteCache.get(key);
+  if (cv) return cv;
+  cv = document.createElement('canvas');
+  cv.width = cv.height = SPRITE_R * 2;
+  const c = cv.getContext('2d');
+  const r = SPRITE_R;
+  let g;
+  if (kind === 'glow') {
+    g = c.createRadialGradient(r, r, r * 0.043, r, r, r);
+    g.addColorStop(0, _rgbaFromHex(color, 0.65));
+    g.addColorStop(0.3, _rgbaFromHex(color, 0.25));
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+  } else if (kind === 'core') {
+    g = c.createRadialGradient(r, r, 0, r, r, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.35, _rgbaFromHex(color, 0.8));
+    g.addColorStop(1, _rgbaFromHex(color, 0));
+  } else { // 'flash'
+    g = c.createRadialGradient(r, r, 0, r, r, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(0.25, _rgbaFromHex(color, 0.55));
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+  }
+  c.fillStyle = g;
+  c.fillRect(0, 0, SPRITE_R * 2, SPRITE_R * 2);
+  _spriteCache.set(key, cv);
+  return cv;
+}
+
 export default class TileParticleEffect {
   /**
    * @param {number} originX   - center X in board-local pixels
@@ -257,23 +313,18 @@ export default class TileParticleEffect {
       ctx.lineWidth = thick * 0.5;
       ctx.stroke();
 
-      // Central pop glow
+      // Central pop glow (baked sprite — see _getSprite)
       const glowR = this._flashMaxRadius * 0.35;
-      const grad = ctx.createRadialGradient(
-        this.originX, this.originY, 0,
-        this.originX, this.originY, glowR
-      );
-      grad.addColorStop(0, 'rgba(255,255,255,' + (this._flashAlpha * 0.9) + ')');
-      grad.addColorStop(0.25, this._rgba(this.color, this._flashAlpha * 0.55));
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(this.originX, this.originY, glowR, 0, Math.PI * 2);
-      ctx.fill();
+      const flashSprite = _getSprite('flash', this.color);
+      const prevAlpha = ctx.globalAlpha;
+      ctx.globalAlpha = prevAlpha * this._flashAlpha;
+      ctx.drawImage(flashSprite, this.originX - glowR, this.originY - glowR, glowR * 2, glowR * 2);
+      ctx.globalAlpha = prevAlpha;
     }
 
-    // ── Particles ──
+    // ── Particles ── (baked sprites; no per-frame gradient construction)
+    const glowSprite = _getSprite('glow', this.color);
+    const coreSprite = _getSprite('core', this.color);
     for (const p of this.particles) {
       if (!p.active) continue;
       const alpha = this._particleAlpha(p);
@@ -301,30 +352,15 @@ export default class TileParticleEffect {
       ctx.translate(x, y);
       if (stretchAngle !== 0) ctx.rotate(stretchAngle);
       ctx.scale(stretchX, stretchY);
+      ctx.globalAlpha *= alpha;
 
       // Soft outer glow
       const glowR = radius * 3.5;
-      const glowGrad = ctx.createRadialGradient(0, 0, radius * 0.15, 0, 0, glowR);
-      glowGrad.addColorStop(0, this._rgba(this.color, alpha * 0.65));
-      glowGrad.addColorStop(0.3, this._rgba(this.color, alpha * 0.25));
-      glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-
-      ctx.fillStyle = glowGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, glowR, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(glowSprite, -glowR, -glowR, glowR * 2, glowR * 2);
 
       // Bright core
       const coreR = radius * 0.55;
-      const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR);
-      coreGrad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.95) + ')');
-      coreGrad.addColorStop(0.35, this._rgba(this.color, alpha * 0.8));
-      coreGrad.addColorStop(1, this._rgba(this.color, 0));
-
-      ctx.fillStyle = coreGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, coreR, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(coreSprite, -coreR, -coreR, coreR * 2, coreR * 2);
 
       ctx.restore();
     }

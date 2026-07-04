@@ -26,6 +26,41 @@
  * Everything is tunable via the config object so the harvest feel (color,
  * writhe, flow speed, strand count) can be retuned without touching battle logic.
  */
+// ── Baked glow sprites ──────────────────────────────────────────────────────
+// Mobile tuning (same rationale as ManaStreamEffect): NO ctx.shadowBlur — the
+// additive 'lighter' blend + a wide faint halo stroke supply the glow — and the
+// pulse/anchor/flare radial gradients are baked ONCE per color pair into small
+// sprites (module cache) instead of createRadialGradient every frame.
+const GLOW_SPRITE_R = 32;
+const _glowCache = new Map(); // `${kind}|${color}|${coreColor}` → canvas
+
+function _bakeGlow(kind, color, coreColor) {
+  const key = kind + '|' + color + '|' + coreColor;
+  let cv = _glowCache.get(key);
+  if (cv) return cv;
+  cv = document.createElement('canvas');
+  cv.width = cv.height = GLOW_SPRITE_R * 2;
+  const c = cv.getContext('2d');
+  const r = GLOW_SPRITE_R;
+  const g = c.createRadialGradient(r, r, 0, r, r, r);
+  if (kind === 'pulse') {
+    g.addColorStop(0, coreColor);
+    g.addColorStop(0.4, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+  } else if (kind === 'flare') {
+    g.addColorStop(0, coreColor);
+    g.addColorStop(0.35, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+  } else { // 'anchor'
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+  }
+  c.fillStyle = g;
+  c.fillRect(0, 0, GLOW_SPRITE_R * 2, GLOW_SPRITE_R * 2);
+  _glowCache.set(key, cv);
+  return cv;
+}
+
 export default class HarvestTendrilEffect {
   /**
    * @param {Array<{x:number,y:number}>} sources - origin points (design space)
@@ -98,7 +133,14 @@ export default class HarvestTendrilEffect {
 
       return { sx: s.x, sy: s.y, px, py, strands };
     });
+
+    // Reusable scratch polyline (STEPS+1 points) — filled in place each strand
+    // so render allocates nothing per frame.
+    this._scratchPts = [];
+    for (let i = 0; i <= HarvestTendrilEffect.STEPS; i++) this._scratchPts.push({ x: 0, y: 0 });
   }
+
+  static STEPS = 26;
 
   update(dt) {
     if (this.done) return;
@@ -126,7 +168,7 @@ export default class HarvestTendrilEffect {
    * Straight source→target plus a perpendicular, time-scrolling wave whose
    * amplitude is enveloped to 0 at both ends (sin(u·π)).
    */
-  _pointAt(t, strand, u) {
+  _pointAt(t, strand, u, out) {
     const baseX = t.sx + (this.target.x - t.sx) * u;
     const baseY = t.sy + (this.target.y - t.sy) * u;
     const env = Math.sin(u * Math.PI); // 0 at both ends, peaks mid-path
@@ -135,7 +177,9 @@ export default class HarvestTendrilEffect {
       Math.sin(u * this.waveCount * Math.PI * 2 + phase) * 0.72 +
       Math.sin(u * this.waveCount * 1.7 * Math.PI * 2 + phase * 1.6) * 0.28;
     const w = env * this.amplitude * strand.ampScale * strand.sign * wave;
-    return { x: baseX + t.px * w, y: baseY + t.py * w };
+    out.x = baseX + t.px * w;
+    out.y = baseY + t.py * w;
+    return out;
   }
 
   render(ctx) {
@@ -144,81 +188,71 @@ export default class HarvestTendrilEffect {
     if (alpha <= 0) return;
 
     const head = this._head;
-    const STEPS = 26;
+    const STEPS = HarvestTendrilEffect.STEPS;
+    const pts = this._scratchPts;
+    const pulseSprite = _bakeGlow('pulse', this.color, this.coreColor);
+    const anchorSprite = _bakeGlow('anchor', this.color, this.coreColor);
+    const flareSprite = _bakeGlow('flare', this.color, this.coreColor);
+    const scratch = pts[0]; // reused for pulse positions too
 
     ctx.save();
     ctx.globalAlpha *= alpha;
+    const baseAlpha = ctx.globalAlpha; // includes any host fade (multiplied, not overwritten)
     ctx.globalCompositeOperation = 'lighter'; // additive glow
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = 14;
+    // NOTE: deliberately NO ctx.shadowBlur here — blurred strokes are the most
+    // expensive canvas op on mobile. The additive blend + the wide faint halo
+    // stroke below read as the same glow at a fraction of the cost.
 
     for (const t of this._tendrils) {
       for (const strand of t.strands) {
-        // Build the polyline source(0) → head along the strand.
-        const pts = [];
+        // Build the polyline source(0) → head along the strand (in place).
         for (let i = 0; i <= STEPS; i++) {
           const u = head * (i / STEPS);
-          pts.push(this._pointAt(t, strand, u));
+          this._pointAt(t, strand, u, pts[i]);
         }
 
-        // Outer glow pass (wide, colored).
+        // Wide faint halo pass (replaces the old shadowBlur glow).
         ctx.strokeStyle = this.color;
-        ctx.lineWidth = this.thickness * strand.widthScale;
+        ctx.globalAlpha = baseAlpha * 0.30;
+        ctx.lineWidth = this.thickness * strand.widthScale * 2.4;
         ctx.beginPath();
         ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        for (let i = 1; i <= STEPS; i++) ctx.lineTo(pts[i].x, pts[i].y);
         ctx.stroke();
+        ctx.globalAlpha = baseAlpha;
+
+        // Outer glow pass (wide, colored).
+        ctx.lineWidth = this.thickness * strand.widthScale;
+        ctx.stroke(); // same path is still current
 
         // Bright inner core pass (thin, hot) for an energy look.
         ctx.strokeStyle = this.coreColor;
         ctx.lineWidth = Math.max(1, this.thickness * strand.widthScale * 0.35);
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
         ctx.stroke();
 
-        // Energy pulses flowing along the connection toward the target.
+        // Energy pulses flowing along the connection toward the target
+        // (baked radial sprite instead of a per-pulse gradient).
         for (const offset of strand.pulses) {
           let pu = (this.elapsed * this.pulseSpeed + offset) % 1;
           if (pu > head) continue;
-          const p = this._pointAt(t, strand, pu);
-          const r = this.thickness * strand.widthScale * (0.7 + 0.4 * Math.sin(pu * Math.PI));
-          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.2);
-          g.addColorStop(0, this.coreColor);
-          g.addColorStop(0.4, this.color);
-          g.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, r * 2.2, 0, Math.PI * 2);
-          ctx.fill();
+          const p = this._pointAt(t, strand, pu, scratch);
+          const r = this.thickness * strand.widthScale * (0.7 + 0.4 * Math.sin(pu * Math.PI)) * 2.2;
+          ctx.drawImage(pulseSprite, p.x - r, p.y - r, r * 2, r * 2);
         }
       }
 
       // Small anchor glow pinning the bundle to the tile location.
       const aR = this.thickness * 1.4;
-      const ag = ctx.createRadialGradient(t.sx, t.sy, 0, t.sx, t.sy, aR);
-      ag.addColorStop(0, this.color);
-      ag.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = ag;
-      ctx.beginPath();
-      ctx.arc(t.sx, t.sy, aR, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(anchorSprite, t.sx - aR, t.sy - aR, aR * 2, aR * 2);
     }
 
     // Sustained flare where every tendril converges on the portrait, present
     // once the connection has (mostly) formed.
     if (this.elapsed >= this.formDuration * 0.6) {
       const r = 10 + 22 * Math.min(1, head);
-      const grad = ctx.createRadialGradient(this.target.x, this.target.y, 0, this.target.x, this.target.y, r);
-      grad.addColorStop(0, this.coreColor);
-      grad.addColorStop(0.35, this.color);
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(this.target.x, this.target.y, r, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(flareSprite, this.target.x - r, this.target.y - r, r * 2, r * 2);
     }
 
     ctx.restore();

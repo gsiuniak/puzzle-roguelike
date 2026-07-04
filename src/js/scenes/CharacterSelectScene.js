@@ -53,6 +53,27 @@ const CHOOSE_VIDEO_CROSSFADE_LEAD = 700;
 /** Safety bail-out if the video never reports a usable duration / 'ended' (ms). */
 const CHOOSE_VIDEO_MAX_DURATION = 30000;
 
+/**
+ * Brief fade-in of the choose-hero video over the static splash (ms). The
+ * video is drawn ON TOP of the splash, so ramping its alpha 0→1 reads as the
+ * splash art fading out into the video — masking any small framing/color
+ * inconsistencies between the splash and the video's first frames.
+ * 0 = instant swap (old behavior).
+ *
+ * The video is held PAUSED on its first frame for the whole fade (a static
+ * splash blended with a static frame) and playback only starts once the fade
+ * completes — blending the splash with already-moving video reads as
+ * ghosting/smearing instead of a dissolve.
+ */
+const CHOOSE_VIDEO_FADE_IN_MS = 0;
+
+/**
+ * Safety: if the intro video never becomes paintable (readyState < 2) within
+ * this window, start playback anyway so the normal ended/error fallbacks can
+ * drive the scene transition (ms).
+ */
+const CHOOSE_VIDEO_PLAY_FALLBACK_MS = 1000;
+
 const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
 
 /**
@@ -167,6 +188,10 @@ export default class CharacterSelectScene extends UIPanel {
     this._chooseTransitionStarted = false;
     /** @type {number} 1→0 fade applied to all UI during the video intro */
     this._uiFadeAlpha = 1;
+    /** @type {number} ms the intro video has been drawable — drives its fade-in over the splash */
+    this._videoFadeMs = 0;
+    /** @type {boolean} true once play() has been issued for the intro video */
+    this._videoPlayStarted = false;
 
     // ── UI fill scale ──────────────────────────────────
     // Multiplier applied to all UI sizes so the layout fills more of the
@@ -907,6 +932,8 @@ export default class CharacterSelectScene extends UIPanel {
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
     this._uiFadeAlpha = 1;
+    this._videoFadeMs = 0;
+    this._videoPlayStarted = false;
     // Preload + prime EVERY hero's intro video so whichever hero is confirmed
     // plays instantly with no buffering/decode stall.
     this._preloadAllVideos();
@@ -1125,6 +1152,7 @@ export default class CharacterSelectScene extends UIPanel {
     this._chosenDef = def;
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
+    this._videoFadeMs = 0;
 
     // Grab the (already preloaded + primed) pooled video for this hero.
     const video = this._ensurePooledVideo(def.splashVideo);
@@ -1136,10 +1164,29 @@ export default class CharacterSelectScene extends UIPanel {
       return;
     }
 
+    // The pooled video may still be mid-prime (playing muted) — make sure it
+    // sits paused on frame 0 for the fade.
+    try { video.pause(); } catch (e) { /* ignore */ }
     try { video.currentTime = 0; } catch (e) { /* ignore */ }
+    // Hold the video paused on its first frame while it fades in over the
+    // splash; playback starts from _updateChooseIntro once the fade completes
+    // (blending the splash with already-moving video reads as ghosting).
+    this._videoPlayStarted = false;
+    if (CHOOSE_VIDEO_FADE_IN_MS <= 0) this._startVideoPlayback();
+  }
+
+  /**
+   * Issue play() on the intro video exactly once (deferred until its fade-in
+   * over the splash completes). Autoplay block / decode failure falls back to
+   * an immediate scene transition.
+   */
+  _startVideoPlayback() {
+    if (this._videoPlayStarted) return;
+    this._videoPlayStarted = true;
+    const video = this._video;
+    if (!video) return;
     const playResult = video.play();
     if (playResult && typeof playResult.catch === 'function') {
-      // Autoplay blocked / decode failure — fall back to an immediate transition.
       playResult.catch(() => this._startChooseTransition());
     }
   }
@@ -1332,6 +1379,18 @@ export default class CharacterSelectScene extends UIPanel {
     this._chooseElapsed += dt;
     // Fade the UI out quickly so only the video remains.
     this._uiFadeAlpha = Math.max(0, this._uiFadeAlpha - dt / UI_FADE_OUT_DURATION);
+    // Advance the video's fade-in over the splash, but only once its first
+    // frame is actually paintable — so the fade always starts from the frame
+    // the video appears, never mid-ramp after a buffering stall. The video
+    // stays paused on that first frame until the fade completes, then plays.
+    if (this._video && this._video.readyState >= 2) {
+      this._videoFadeMs += dt;
+      if (this._videoFadeMs >= CHOOSE_VIDEO_FADE_IN_MS) this._startVideoPlayback();
+    } else if (this._chooseElapsed >= CHOOSE_VIDEO_PLAY_FALLBACK_MS) {
+      // Never became paintable — play anyway so the ended/error fallbacks
+      // (and the duration-based near-end check below) still drive the exit.
+      this._startVideoPlayback();
+    }
 
     if (this._chooseTransitionStarted) return;
 
@@ -1411,9 +1470,14 @@ export default class CharacterSelectScene extends UIPanel {
 
     // Choose-hero intro video, drawn full-canvas on top of the splash with the
     // same cover-fit framing (the video matches the splash resolution). The
-    // splash underneath covers any gap until the first frame is decodable.
+    // splash underneath covers any gap until the first frame is decodable,
+    // then the video fades in over CHOOSE_VIDEO_FADE_IN_MS (reading as the
+    // splash fading out into the video) to mask small art inconsistencies.
     if (this._choosingActive && this._video && this._video.readyState >= 2) {
-      app.drawFullCanvasImage(this._video, 1.0);
+      const alpha = CHOOSE_VIDEO_FADE_IN_MS > 0
+        ? Math.min(1.0, this._videoFadeMs / CHOOSE_VIDEO_FADE_IN_MS)
+        : 1.0;
+      app.drawFullCanvasImage(this._video, alpha);
     }
   }
 

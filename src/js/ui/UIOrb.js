@@ -38,9 +38,10 @@ export default class UIOrb extends UIElement {
      * tight row so adjacent plates don't touch/overlap.
      */
     this.plateScale = 1.1;
-    /** Subtle dark shadow on count text by default */
+    /** Subtle dark shadow on count text by default (blur 0 = sharp offset
+     *  shadow; blurred shadows force the slow canvas path — mirrors UIText) */
     this.shadowColor = 'rgba(0,0,0,0.65)';
-    this.shadowBlur = 2;
+    this.shadowBlur = 0;
     this.shadowOffsetX = 1;
     this.shadowOffsetY = 1;
 

@@ -37,12 +37,31 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
  *     `<script src="js/lib/howler.js">`; copying it guarantees that path resolves
  *     in the build whether or not Vite rewrites the tag (harmless dup if it does).
  */
+// Dev-only asset junk that must NOT ship in dist: authoring/source-art dirs and
+// backup files. Runtime code never references these paths (verified — no
+// `/raw/`, `raw_new`, `old/`, `_old*` or `_bak` reference exists in src/js or
+// index.html); they exist only for authoring. Excluding them keeps dist/assets
+// a few hundred MB smaller. `tmp/` is deliberately NOT excluded (the
+// USE_TMP_MATCH4_FLOURISH quick-switch in SoundConfig can point at it).
+const EXCLUDED_ASSET_DIRS = new Set(['raw', 'raw_new', 'old', '(old)']);
+const EXCLUDED_ASSET_FILE_RE = /(_old\d*|_bak\d*)\.[a-z0-9]+$/i;
+
+function shouldCopyAsset(src) {
+  const rel = path.relative(ROOT, src);
+  if (rel.split(path.sep).some((p) => EXCLUDED_ASSET_DIRS.has(p.toLowerCase()))) return false;
+  if (EXCLUDED_ASSET_FILE_RE.test(path.basename(src))) return false;
+  return true;
+}
+
 function copyGameAssets() {
   return {
     name: 'copy-game-assets',
     apply: 'build',
     writeBundle() {
-      fs.cpSync(path.resolve(ROOT, 'src/assets'), path.resolve(ROOT, 'dist/assets'), { recursive: true });
+      fs.cpSync(path.resolve(ROOT, 'src/assets'), path.resolve(ROOT, 'dist/assets'), {
+        recursive: true,
+        filter: shouldCopyAsset,
+      });
       fs.cpSync(path.resolve(ROOT, 'src/js/lib'), path.resolve(ROOT, 'dist/js/lib'), { recursive: true });
     },
   };

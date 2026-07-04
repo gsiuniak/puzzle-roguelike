@@ -42,8 +42,10 @@ export default class KeywordText extends UIElement {
     this.lineHeight = null;
     this._missingColor = KEYWORD_MISSING_COLOR;
 
+    // Blur 0 = sharp offset shadow (blurred shadows are the slow canvas path;
+    // skill cards draw many of these per frame) — mirrors UIText's default.
     this.shadowColor = 'rgba(0,0,0,0.65)';
-    this.shadowBlur = 2;
+    this.shadowBlur = 0;
     this.shadowOffsetX = 1;
     this.shadowOffsetY = 1;
 

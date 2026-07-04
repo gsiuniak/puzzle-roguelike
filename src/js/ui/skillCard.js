@@ -311,12 +311,15 @@ export function drawCardModel(ctx, model, rect, m, opts = {}) {
       const gemColor = MANA_COLORS[color] || '#888';
 
       // Subtle gem-colored glow under the pill, then the dark pill + trim.
+      // The glow is a slightly enlarged gem-colored rounded rect BEHIND the
+      // pill (the opaque pill covers its center, leaving a colored rim) — not
+      // shadowBlur, which forces the slow canvas path per pill per frame.
       ctx.save();
-      ctx.shadowColor = gemColor;
-      ctx.shadowBlur = 7;
       ctx.globalAlpha *= COST_BADGE_GLOW_ALPHA;
-      roundRectPath(ctx, px, py, pillW, COST_BADGE_H, COST_BADGE_H / 2);
-      ctx.fillStyle = COST_BADGE_BG;
+      const glowPad = 3;
+      roundRectPath(ctx, px - glowPad, py - glowPad, pillW + glowPad * 2,
+        COST_BADGE_H + glowPad * 2, (COST_BADGE_H + glowPad * 2) / 2);
+      ctx.fillStyle = gemColor;
       ctx.fill();
       ctx.restore();
       roundRectPath(ctx, px, py, pillW, COST_BADGE_H, COST_BADGE_H / 2);
@@ -362,8 +365,11 @@ export function drawCardModel(ctx, model, rect, m, opts = {}) {
   ctx.fillStyle = NAME_COLOR;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
+  // Sharp 1px offset shadow — blur-free shadows skip the expensive canvas
+  // blur path (this draws every frame for every visible card).
   ctx.shadowColor = 'rgba(0,0,0,0.6)';
-  ctx.shadowBlur = 2;
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
   for (const line of m.nameLines) {
     ctx.fillText(line, textX, lineY + NAME_LINE_HEIGHT / 2);
     lineY += NAME_LINE_HEIGHT;

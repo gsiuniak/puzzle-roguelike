@@ -60,6 +60,12 @@ export default class VideoPortrait extends UIImage {
     this._frameReady = false;
     /** video.currentTime of the last processed frame */
     this._lastFrameTime = -1;
+    /** true when requestVideoFrameCallback signalled a new decoded frame */
+    this._hasNewFrame = false;
+    /** whether this browser supports requestVideoFrameCallback */
+    this._useRVFC = false;
+    /** performance.now() of the last keying pass (fallback throttle) */
+    this._lastProcessMs = 0;
     /** @type {(() => void)|null} removable loadedmetadata handler */
     this._onLoadedMeta = null;
 
@@ -93,6 +99,21 @@ export default class VideoPortrait extends UIImage {
 
     this._video = video;
 
+    // Only re-run the (expensive) chroma-key pass when the video actually has
+    // a NEW decoded frame. requestVideoFrameCallback is the precise signal;
+    // without it we fall back to a time throttle in _processFrame. (The old
+    // currentTime equality check was useless — currentTime advances
+    // continuously, so the pass ran at full render fps.)
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      this._useRVFC = true;
+      const onFrame = () => {
+        this._hasNewFrame = true;
+        // Keep listening as long as this instance still owns the video.
+        if (this._video === video) video.requestVideoFrameCallback(onFrame);
+      };
+      video.requestVideoFrameCallback(onFrame);
+    }
+
     const playResult = video.play();
     if (playResult && typeof playResult.catch === 'function') {
       // Autoplay blocked / load failure — silently keep the static fallback.
@@ -120,9 +141,15 @@ export default class VideoPortrait extends UIImage {
     if (!v || v.readyState < 2 || !this._offCtx || !this._offscreen) return false;
 
     // The video decodes at ~24-30fps while the game renders at 60 — when the
-    // video hasn't advanced, the already-keyed offscreen frame is still valid,
-    // so skip the expensive getImageData/putImageData pass.
-    if (this._frameReady && v.currentTime === this._lastFrameTime) return true;
+    // video hasn't produced a new frame, the already-keyed offscreen frame is
+    // still valid, so skip the expensive getImageData/putImageData pass.
+    if (this._frameReady) {
+      if (this._useRVFC) {
+        if (!this._hasNewFrame) return true;
+      } else if (performance.now() - this._lastProcessMs < 33) {
+        return true; // no frame signal available — cap keying at ~30fps
+      }
+    }
 
     const w = this._offscreen.width;
     const h = this._offscreen.height;
@@ -152,6 +179,8 @@ export default class VideoPortrait extends UIImage {
     }
     ctx.putImageData(frame, 0, 0);
     this._lastFrameTime = v.currentTime;
+    this._hasNewFrame = false;
+    this._lastProcessMs = performance.now();
     this._frameReady = true;
     return true;
   }

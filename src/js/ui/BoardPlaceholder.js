@@ -912,12 +912,13 @@ export default class BoardPlaceholder extends UIElement {
         const hy = oy + pos.row * cs;
         ctx.save();
         const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 120);
-        ctx.shadowColor = `rgba(255, 255, 255, ${0.4 + pulse * 0.4})`;
-        ctx.shadowBlur = 12 + (pulse * 8);
+        // Pulsing glow via a wide faint outer stroke — no shadowBlur (the
+        // expensive canvas op; this runs per cell per frame while targeting).
         ctx.fillStyle = `rgba(255, 255, 255, ${0.05 + pulse * 0.15})`;
         ctx.fillRect(hx, hy, cs, cs);
-        ctx.shadowColor = "transparent";
-        ctx.shadowBlur = 0;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.10 + pulse * 0.14})`;
+        ctx.lineWidth = 9;
+        ctx.strokeRect(hx, hy, cs, cs);
         ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
         ctx.lineWidth = 3;
         ctx.strokeRect(hx, hy, cs, cs);
@@ -942,11 +943,13 @@ export default class BoardPlaceholder extends UIElement {
       const sx = ox + this.selectedCell.col * cs;
       const sy = oy + this.selectedCell.row * cs;
       ctx.save();
+      // Glow = wide faint stroke under the crisp one (no shadowBlur — this
+      // draws every frame while a tile is selected).
+      ctx.strokeStyle = 'rgba(255,255,0,0.30)';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(sx + 1, sy + 1, cs - 2, cs - 2);
       ctx.strokeStyle = '#ffff00';
       ctx.lineWidth = 3;
-      ctx.strokeRect(sx + 1, sy + 1, cs - 2, cs - 2);
-      ctx.shadowColor = '#ffff00';
-      ctx.shadowBlur = 8;
       ctx.strokeRect(sx + 1, sy + 1, cs - 2, cs - 2);
       ctx.restore();
     }
@@ -989,12 +992,11 @@ export default class BoardPlaceholder extends UIElement {
         if (isWild(typeKey)) this._drawWildTileBorder(ctx, x, y, cs);
       };
 
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.4)';
-      ctx.shadowBlur = 6;
+      // No drop shadow on the moving tiles — shadowBlur on drawImage forces
+      // the slow canvas path every swap frame (mobile), and the motion itself
+      // already separates the pair from the grid.
       drawTile(ax, ay, fromType);
       drawTile(bx, by, toType);
-      ctx.restore();
     }
 
     // Restore smoothing to previous state
@@ -1036,10 +1038,9 @@ export default class BoardPlaceholder extends UIElement {
       ctx.lineWidth = Math.max(2, fs * 0.2);
       ctx.strokeStyle = 'rgba(0,0,0,0.85)';
       ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = 'rgba(0,0,0,0.6)';
-      ctx.shadowBlur = Math.max(2, fs * 0.15);
+      // The thick dark strokeText already supplies the legibility halo —
+      // no shadowBlur (drawn per locked tile per frame).
       ctx.strokeText(String(turns), cx, cy);
-      ctx.shadowBlur = 0;
       ctx.fillText(String(turns), cx, cy);
       ctx.restore();
     }

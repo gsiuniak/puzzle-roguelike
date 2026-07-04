@@ -2279,7 +2279,13 @@ export default class BattleScene extends UIPanel {
     const c = this._battleController;
     if (!c || c.state !== BattleState.PLAYER_TURN) return null;
     if (this._suggestedMove === undefined) {
-      this._suggestedMove = c.getSuggestedMove() || null;
+      // samples: 2 (vs the simulator default 4) — this runs SYNCHRONOUSLY on
+      // the main thread the first time a hint/glint is wanted each turn, and
+      // on mobile the full-fat run is a visible one-frame hitch. Fewer
+      // Monte-Carlo refill samples only soften the expected-value estimate;
+      // the deterministic (guaranteed) ranking is unaffected — plenty for a
+      // hint.
+      this._suggestedMove = c.getSuggestedMove({ samples: 2 }) || null;
     }
     return this._suggestedMove;
   }

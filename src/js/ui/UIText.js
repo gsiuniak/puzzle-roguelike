@@ -92,9 +92,12 @@ export default class UIText extends UIElement {
     this.alignV = 'center';
     this.maxWidth = 0; // 0 = unconstrained single-line; > 0 = word-wrap at this width
     this.lineHeight = null; // null = auto (fontSize * 1.35)
-    /** Subtle dark shadow on all text by default */
+    /** Subtle dark shadow on all text by default. Blur defaults to 0 (sharp
+     *  1px offset shadow): ANY shadowBlur > 0 forces the slow blurred-shadow
+     *  canvas path on EVERY text draw — a constant mobile cost across the
+     *  whole UI — and at these sizes the sharp shadow reads the same. */
     this.shadowColor = 'rgba(0,0,0,0.65)';
-    this.shadowBlur = 2;
+    this.shadowBlur = 0;
     this.shadowOffsetX = 1;
     this.shadowOffsetY = 1;
 

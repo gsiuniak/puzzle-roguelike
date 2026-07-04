@@ -554,10 +554,9 @@ export default class DamageCounterEffect {
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha *= fresh * 0.8;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = rgb([255, 240, 200]);
-    ctx.shadowColor = rgb(col);
-    ctx.shadowBlur = 16;
-    // Two crossing diagonal flicks.
+    // Two crossing diagonal flicks. The colored glow is a wide faint
+    // under-stroke — NOT shadowBlur (too expensive on mobile for a per-hit,
+    // per-frame accent); the additive blend supplies the heat.
     const offs = [
       { a: -0.5, o: -fontPx * 0.2 },
       { a: -0.5, o: fontPx * 0.22 },
@@ -565,10 +564,14 @@ export default class DamageCounterEffect {
     for (const s of offs) {
       const dx = Math.cos(s.a) * len * 0.5;
       const dy = Math.sin(s.a) * len * 0.5;
-      ctx.lineWidth = 4 * fresh + 1;
       ctx.beginPath();
       ctx.moveTo(-dx, -dy + s.o);
       ctx.lineTo(dx, dy + s.o);
+      ctx.strokeStyle = rgb(col, 0.35);
+      ctx.lineWidth = (4 * fresh + 1) * 3;
+      ctx.stroke();
+      ctx.strokeStyle = rgb([255, 240, 200]);
+      ctx.lineWidth = 4 * fresh + 1;
       ctx.stroke();
     }
     ctx.restore();
