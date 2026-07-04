@@ -109,6 +109,166 @@ const LEFT_OVERLAY_ALPHA = 0.65;
 const LEFT_OVERLAY_HOLD_FRAC = 0.45;
 const LEFT_OVERLAY_FADE_END_FRAC = 0.75;
 
+/**
+ * ── UI LAYOUT / TYPOGRAPHY TUNABLES ──────────────────────────────────
+ * Every size, gap, font size and color used by the info panel, heroes row
+ * and choose button lives here. All pixel values are in DESIGN-SPACE px
+ * BEFORE the aspect-aware `_uiScale` multiplier (S) — the scale is applied
+ * at the usage sites, so just tweak the raw numbers.
+ */
+const UI = {
+  // Info panel — the floating left "card" holding all character info.
+  panel: {
+    widthFrac: 0.65,     // preferred width as a fraction of canvas width… (0.55 original)
+    widthMin: 640,       // …clamped to this min…
+    widthMax: 880,       // …and this max (780 original)
+    padding: { top: 32, right: 44, bottom: 48, left: 44 },
+    gap: 10,             // vertical gap between panel sections
+  },
+
+  // Character name — the big header at the top of the panel.
+  name: {
+    fontSize: 48, // 42 original
+    height: 48,
+    marginTop: 20,
+    color: '#e8d8b0',
+  },
+
+  // Class row: [flair] ClassName [flair]
+  classRow: {
+    height: 28,
+    gap: 14,
+    flairWidth: 100,
+    flairHeight: 24,
+    fontSize: 24, // 22 original
+    textWidth: 120,
+    textHeight: 26,
+    textMarginX: 95,     // left/right margin around the class text
+    color: '#ccaa77',
+  },
+
+  // Character description under the class row.
+  desc: {
+    fontSize: 21, // 18 original
+    height: 60,
+    maxWidth: 640, // 560 original
+    color: '#b0a880',
+  },
+
+  // Divider image between description and the stats row.
+  divider: {
+    widthPercent: 0.78,  // fraction of the panel's inner width
+    height: 15,
+  },
+
+  // Health + mana single centered row.
+  statRow: {
+    height: 28,
+    gap: 12,
+    heartSize: 24,
+    healthFontSize: 20,
+    healthWidth: 80,
+    healthHeight: 26,
+    healthMarginRight: 70,
+    healthColor: '#ff6666',
+    spacerWidth: 14,     // gap between the health group and the mana groups
+    manaGroupWidth: 50,
+    manaGroupGap: 4,
+    manaIconSize: 26,
+    manaIconMarginRight: 3,
+    manaFontSize: 19,
+    manaCountWidth: 30,
+    manaCountHeight: 22,
+    manaCountMarginRight: 12,
+    manaCountColor: '#b0a880',
+  },
+
+  // Section title rows ("Starting Skills" / "Starting Relic").
+  sectionTitle: {
+    height: 26,
+    gap: 12,
+    flairWidth: 220,
+    flairHeight: 18,
+    fontSize: 21,
+    textWidth: 150,
+    textHeight: 22,
+    textMarginX: 90,     // left/right margin around the title text
+    color: '#ccaa77',
+  },
+
+  // Skills row + a single skill block (icon | name + description).
+  skillsRow: { height: 90, gap: 30, marginTop: -5 },
+  skillBlock: {
+    width: 240,
+    height: 120,
+    gap: 12,             // gap between icon and text column
+    iconSize: 84,
+    textColGap: 4,
+    nameFontSize: 19,
+    nameHeight: 14,
+    nameMarginTop: 20,
+    nameMarginBottom: 5,
+    nameColor: '#e8d8b0',
+    descFontSize: 16,
+    descHeight: 60,
+    descMaxWidth: 160,
+    descColor: '#c0b890',
+  },
+
+  // Relic row + the single relic block (wider than a skill block).
+  relicRow: { height: 90, marginTop: -5 },
+  relicBlock: {
+    width: 460,
+    height: 80,
+    gap: 16,
+    iconSize: 80,
+    textColGap: 4,
+    textColWidth: 320,   // fixed text column width; desc maxWidth follows it
+    nameFontSize: 19,
+    nameHeight: 14,
+    nameMarginTop: 20,
+    nameMarginBottom: 5,
+    nameColor: '#e8d8b0',
+    descFontSize: 16,
+    descHeight: 60,
+    descColor: '#c0b890',
+  },
+
+  // Heroes portrait row.
+  heroes: {
+    portraitSize: 130,   // portrait image size (square)
+    slotWidth: 124,      // per-portrait horizontal slot used to size/center the row
+    rowHeight: 110,
+    gap: 24,
+  },
+
+  // Choose Hero button.
+  button: {
+    imageWidth: 320,     // the button art itself
+    imageHeight: 80,
+    slotWidth: 240,      // the container rect used for horizontal centering
+    slotHeight: 70,
+  },
+
+  // Selected-portrait golden highlight (raw px — NOT multiplied by _uiScale).
+  highlight: {
+    margin: 4,
+    lineWidth: 3,
+    glowLineWidth: 6,
+    color: '#e8c850',
+    glowColor: 'rgba(232, 200, 80, 0.3)',
+  },
+
+  // Aspect-aware UI scale clamp (see _computeUIScale).
+  scaleMin: 1.3,
+  scaleMax: 1.5,
+};
+
+/** Scale a UI.panel-style padding object by S. */
+function scalePadding(p, S) {
+  return { top: p.top * S, right: p.right * S, bottom: p.bottom * S, left: p.left * S };
+}
+
 export default class CharacterSelectScene extends UIPanel {
   constructor() {
     super();
@@ -234,8 +394,8 @@ export default class CharacterSelectScene extends UIPanel {
     this._infoPanel = new UIContainer();
     this._infoPanel.direction = 'column';
     this._infoPanel.alignItems = 'center';
-    this._infoPanel.gap = 10 * S;
-    this._infoPanel.padding = { top: 32 * S, right: 44 * S, bottom: 48 * S, left: 44 * S };
+    this._infoPanel.gap = UI.panel.gap * S;
+    this._infoPanel.padding = scalePadding(UI.panel.padding, S);
     this._infoPanel.smoothing = true;
     this.addChild(this._infoPanel);
 
@@ -244,7 +404,7 @@ export default class CharacterSelectScene extends UIPanel {
     this._heroesRow.direction = 'row';
     this._heroesRow.justifyContent = 'center';
     this._heroesRow.alignItems = 'center';
-    this._heroesRow.gap = 24 * S;
+    this._heroesRow.gap = UI.heroes.gap * S;
     this.addChild(this._heroesRow);
 
     // ── Build portrait images ──────────────────────────
@@ -253,8 +413,8 @@ export default class CharacterSelectScene extends UIPanel {
       const def = this._definitions[i];
       const portrait = new UIImage(`character_select_portrait_${def.id}`, null); // assetManager set in onEnter
       portrait.setStyle({
-        width: 150 * S,
-        height: 150 * S,
+        width: UI.heroes.portraitSize * S,
+        height: UI.heroes.portraitSize * S,
         fitMode: 'contain',
         imageAlignH: 'center',
         imageAlignV: 'center',
@@ -272,8 +432,8 @@ export default class CharacterSelectScene extends UIPanel {
 
     this._chooseButton = new UIImage('character_select_choose_hero_button', null);
     this._chooseButton.setStyle({
-      width: 320 * S,
-      height: 80 * S,
+      width: UI.button.imageWidth * S,
+      height: UI.button.imageHeight * S,
       fitMode: 'contain',
       imageAlignH: 'center',
       imageAlignV: 'center',
@@ -312,107 +472,109 @@ export default class CharacterSelectScene extends UIPanel {
 
     // Sync container's own padding/gap to the current scale so the panel
     // body grows with the rest of the UI when scale changes.
-    panel.gap = 10 * S;
-    panel.padding = { top: 32 * S, right: 44 * S, bottom: 48 * S, left: 44 * S };
+    panel.gap = UI.panel.gap * S;
+    panel.padding = scalePadding(UI.panel.padding, S);
 
     // ── Character Name — large, dominant, the visual anchor ─
     const nameText = new UIText(cd.name || '');
     nameText.setStyle({
-      fontSize: 42 * S,
-      color: '#e8d8b0',
+      fontSize: UI.name.fontSize * S,
+      color: UI.name.color,
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      height: 48 * S,
+      height: UI.name.height * S,
       shadowColor: 'rgba(0,0,0,0.7)',
       shadowBlur: 4,
       shadowOffsetX: 2,
       shadowOffsetY: 2,
-      margin: { top: 20 * S }
+      margin: { top: UI.name.marginTop * S }
     });
     panel.addChild(nameText);
 
     // ── Class row: [flair] ClassName [flair] ────────────
+    const CR = UI.classRow;
     const classRow = new UIContainer();
     classRow.direction = 'row';
     classRow.justifyContent = 'center';
     classRow.alignItems = 'center';
-    classRow.gap = 14 * S;
-    classRow.height = 28 * S;
+    classRow.gap = CR.gap * S;
+    classRow.height = CR.height * S;
 
     const flairL = new UIImage('character_select_flair_left', am);
-    flairL.setStyle({ width: 100 * S, height: 24 * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    flairL.setStyle({ width: CR.flairWidth * S, height: CR.flairHeight * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
     classRow.addChild(flairL);
 
     const classText = new UIText(cd.className || '');
     classText.setStyle({
-      fontSize: 22 * S,
-      color: '#ccaa77',
+      fontSize: CR.fontSize * S,
+      color: CR.color,
       bold: true,
       alignH: 'center',
       alignV: 'center',
-      width: 120 * S,
-      height: 26 * S,
-      margin: { left: 95 * S, right: 95 * S }
+      width: CR.textWidth * S,
+      height: CR.textHeight * S,
+      margin: { left: CR.textMarginX * S, right: CR.textMarginX * S }
     });
     classRow.addChild(classText);
 
     const flairR = new UIImage('character_select_flair_right', am);
-    flairR.setStyle({ width: 100 * S, height: 24 * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    flairR.setStyle({ width: CR.flairWidth * S, height: CR.flairHeight * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
     classRow.addChild(flairR);
     panel.addChild(classRow);
 
     // ── Character description — centered, readable ──────
     const descText = new KeywordText(cd.description || '');
     descText.setStyle({
-      fontSize: 18 * S,
-      color: '#b0a880',
+      fontSize: UI.desc.fontSize * S,
+      color: UI.desc.color,
       alignH: 'center',
       alignV: 'center',
-      height: 60 * S,
-      maxWidth: 560 * S,
+      height: UI.desc.height * S,
+      maxWidth: UI.desc.maxWidth * S,
     });
     panel.addChild(descText);
     this._keywordDescs.push(descText);
 
     // ── Divider ─────────────────────────────────────────
     const divider1 = new UIImage('character_select_divider', am);
-    divider1.setStyle({ widthPercent: 0.78, height: 15 * S, fitMode: 'stretch' });
+    divider1.setStyle({ widthPercent: UI.divider.widthPercent, height: UI.divider.height * S, fitMode: 'stretch' });
     panel.addChild(divider1);
 
     // ── Health + mana single centered row ───────────────
     // Mock: "Health and mana sit in a single elegant centered row.
     //        Icons are evenly spaced. Values align visually with icons.
     //        Everything sits on the same baseline."
+    const SR = UI.statRow;
     const statManaRow = new UIContainer();
     statManaRow.direction = 'row';
     statManaRow.justifyContent = 'center';
     statManaRow.alignItems = 'center';
-    statManaRow.gap = 12 * S;
-    statManaRow.height = 25 * S;
+    statManaRow.gap = SR.gap * S;
+    statManaRow.height = SR.height * S;
 
     // Heart icon + health value group
     const heartIcon = new UIImage('character_select_heart', am);
-    heartIcon.setStyle({ width: 22 * S, height: 22 * S, fitMode: 'contain' });
+    heartIcon.setStyle({ width: SR.heartSize * S, height: SR.heartSize * S, fitMode: 'contain' });
     statManaRow.addChild(heartIcon);
 
     const baseStats = cd.baseStats || {};
     const healthText = new UIText(`${baseStats.maxHp ?? 0} / ${baseStats.maxHp ?? 0}`);
     healthText.setStyle({
-      fontSize: 18 * S,
-      color: '#ff6666',
+      fontSize: SR.healthFontSize * S,
+      color: SR.healthColor,
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      width: 80 * S,
-      height: 26 * S,
-      margin: { right: 50 * S }
+      width: SR.healthWidth * S,
+      height: SR.healthHeight * S,
+      margin: { right: SR.healthMarginRight * S }
     });
     statManaRow.addChild(healthText);
 
     // Spacer between health and mana groups
     const spacer = new UIContainer();
-    spacer.width = 14 * S;
+    spacer.width = SR.spacerWidth * S;
     spacer.height = 1;
     statManaRow.addChild(spacer);
 
@@ -430,27 +592,27 @@ export default class CharacterSelectScene extends UIPanel {
       const manaGroup = new UIContainer();
       manaGroup.direction = 'row';
       manaGroup.alignItems = 'center';
-      manaGroup.gap = 4 * S;
-      manaGroup.width = 50 * S;
+      manaGroup.gap = SR.manaGroupGap * S;
+      manaGroup.width = SR.manaGroupWidth * S;
 
       const symbol = new UIImage(`mana_${mc.key}`, am);
-      symbol.setStyle({ width: 22 * S, height: 22 * S, fitMode: 'contain', margin: { right: 3 * S } });
+      symbol.setStyle({ width: SR.manaIconSize * S, height: SR.manaIconSize * S, fitMode: 'contain', margin: { right: SR.manaIconMarginRight * S } });
       manaGroup.addChild(symbol);
 
       const countText = new UIText(String(manaData[mc.key] ?? 0));
       countText.setStyle({
-        fontSize: 14 * S,
-        color: '#b0a880',
+        fontSize: SR.manaFontSize * S,
+        color: SR.manaCountColor,
         bold: true,
         alignH: 'left',
         alignV: 'center',
-        width: 30 * S,
-        height: 22 * S,
+        width: SR.manaCountWidth * S,
+        height: SR.manaCountHeight * S,
         shadowColor: 'rgba(0,0,0,0.7)',
         shadowBlur: 2,
         shadowOffsetX: 1,
         shadowOffsetY: 1,
-        margin: { right: 10 * S }
+        margin: { right: SR.manaCountMarginRight * S }
       });
       manaGroup.addChild(countText);
 
@@ -464,34 +626,7 @@ export default class CharacterSelectScene extends UIPanel {
     // panel.addChild(divider2);
 
     // ── "Starting Skills" title row with flairs ─────────
-    const skillsTitleRow = new UIContainer();
-    skillsTitleRow.direction = 'row';
-    skillsTitleRow.justifyContent = 'center';
-    skillsTitleRow.alignItems = 'center';
-    skillsTitleRow.gap = 12 * S;
-    skillsTitleRow.height = 24 * S;
-
-    const sFlairL = new UIImage('character_select_flair_left', am);
-    sFlairL.setStyle({ width: 200 * S, height: 18 * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
-    skillsTitleRow.addChild(sFlairL);
-
-    const skillsTitle = new UIText('Starting Skills');
-    skillsTitle.setStyle({
-      fontSize: 20 * S,
-      color: '#ccaa77',
-      bold: true,
-      alignH: 'center',
-      alignV: 'center',
-      width: 150 * S,
-      height: 22 * S,
-      margin: { left: 90 * S, right: 90 * S }
-    });
-    skillsTitleRow.addChild(skillsTitle);
-
-    const sFlairR = new UIImage('character_select_flair_right', am);
-    sFlairR.setStyle({ width: 200 * S, height: 18 * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
-    skillsTitleRow.addChild(sFlairR);
-    panel.addChild(skillsTitleRow);
+    panel.addChild(this._buildSectionTitleRow('Starting Skills', am));
 
     // ── Skills blocks row ──────────────────────────────
     // characterData.skills are skill ID strings — resolve via the
@@ -501,9 +636,9 @@ export default class CharacterSelectScene extends UIPanel {
     skillsRow.direction = 'row';
     skillsRow.justifyContent = 'center';
     skillsRow.alignItems = 'center';
-    skillsRow.gap = 30 * S;
-    skillsRow.height = 90 * S;
-    skillsRow.margin = { top: -5 * S };
+    skillsRow.gap = UI.skillsRow.gap * S;
+    skillsRow.height = UI.skillsRow.height * S;
+    skillsRow.margin = { top: UI.skillsRow.marginTop * S };
 
     for (const skillData of skills) {
       const skillBlock = this._buildSkillBlock(skillData, am);
@@ -515,34 +650,7 @@ export default class CharacterSelectScene extends UIPanel {
     const relics = resolveRelicIds(cd.relics || []);
     if (relics.length > 0) {
       // Title row with flairs — mirrors the Starting Skills header style.
-      const relicsTitleRow = new UIContainer();
-      relicsTitleRow.direction = 'row';
-      relicsTitleRow.justifyContent = 'center';
-      relicsTitleRow.alignItems = 'center';
-      relicsTitleRow.gap = 12 * S;
-      relicsTitleRow.height = 24 * S;
-
-      const rFlairL = new UIImage('character_select_flair_left', am);
-      rFlairL.setStyle({ width: 200 * S, height: 18 * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
-      relicsTitleRow.addChild(rFlairL);
-
-      const relicsTitle = new UIText('Starting Relic');
-      relicsTitle.setStyle({
-        fontSize: 20 * S,
-        color: '#ccaa77',
-        bold: true,
-        alignH: 'center',
-        alignV: 'center',
-        width: 150 * S,
-        height: 22 * S,
-        margin: { left: 90 * S, right: 90 * S }
-      });
-      relicsTitleRow.addChild(relicsTitle);
-
-      const rFlairR = new UIImage('character_select_flair_right', am);
-      rFlairR.setStyle({ width: 200 * S, height: 18 * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
-      relicsTitleRow.addChild(rFlairR);
-      panel.addChild(relicsTitleRow);
+      panel.addChild(this._buildSectionTitleRow('Starting Relic', am));
 
       // Single centered relic block — wider than a skill block since
       // only ever one relic occupies the row, so it can spread out and
@@ -551,8 +659,8 @@ export default class CharacterSelectScene extends UIPanel {
       relicsRow.direction = 'row';
       relicsRow.justifyContent = 'center';
       relicsRow.alignItems = 'center';
-      relicsRow.height = 90 * S;
-      relicsRow.margin = { top: -5 * S };
+      relicsRow.height = UI.relicRow.height * S;
+      relicsRow.margin = { top: UI.relicRow.marginTop * S };
 
       const relicBlock = this._buildRelicBlock(relics[0], am);
       relicsRow.addChild(relicBlock);
@@ -577,25 +685,70 @@ export default class CharacterSelectScene extends UIPanel {
   }
 
   /**
+   * Build a "[flair] Title [flair]" section header row (used by both the
+   * Starting Skills and Starting Relic sections). All sizing comes from
+   * UI.sectionTitle.
+   * @param {string} title
+   * @param {import('../engine/AssetManager.js').default} am
+   * @returns {UIContainer}
+   */
+  _buildSectionTitleRow(title, am) {
+    const S = this._uiScale;
+    const ST = UI.sectionTitle;
+
+    const row = new UIContainer();
+    row.direction = 'row';
+    row.justifyContent = 'center';
+    row.alignItems = 'center';
+    row.gap = ST.gap * S;
+    row.height = ST.height * S;
+
+    const flairL = new UIImage('character_select_flair_left', am);
+    flairL.setStyle({ width: ST.flairWidth * S, height: ST.flairHeight * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    row.addChild(flairL);
+
+    const titleText = new UIText(title);
+    titleText.setStyle({
+      fontSize: ST.fontSize * S,
+      color: ST.color,
+      bold: true,
+      alignH: 'center',
+      alignV: 'center',
+      width: ST.textWidth * S,
+      height: ST.textHeight * S,
+      margin: { left: ST.textMarginX * S, right: ST.textMarginX * S }
+    });
+    row.addChild(titleText);
+
+    const flairR = new UIImage('character_select_flair_right', am);
+    flairR.setStyle({ width: ST.flairWidth * S, height: ST.flairHeight * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    row.addChild(flairR);
+
+    return row;
+  }
+
+  /**
    * Build a single skill block (icon + name + description) for the info panel.
    * Larger, breathable composition that matches the mock's visual weight.
+   * All sizing comes from UI.skillBlock.
    * @param {object} skillData - { name, description, icon }
    * @param {import('../engine/AssetManager.js').default} am
    * @returns {UIContainer}
    */
   _buildSkillBlock(skillData, am) {
     const S = this._uiScale;
+    const SB = UI.skillBlock;
     const block = new UIContainer();
     block.direction = 'row';
     block.alignItems = 'center';
-    block.gap = 12 * S;
-    block.width = 240 * S;
-    block.height = 80 * S;
+    block.gap = SB.gap * S;
+    block.width = SB.width * S;
+    block.height = SB.height * S;
 
     // Column 1: Skill icon
     const iconKey = skillData.icon || 'placeholder';
     const icon = new UIImage(iconKey, am);
-    icon.setStyle({ width: 80 * S, height: 80 * S, fitMode: 'contain' });
+    icon.setStyle({ width: SB.iconSize * S, height: SB.iconSize * S, fitMode: 'contain' });
     block.addChild(icon);
 
     // Column 2: Name + Description in their own rows
@@ -603,28 +756,28 @@ export default class CharacterSelectScene extends UIPanel {
     textCol.direction = 'column';
     textCol.justifyContent = 'center';
     textCol.alignItems = 'start';
-    textCol.gap = 4 * S;
+    textCol.gap = SB.textColGap * S;
 
     const nameText = new UIText(skillData.name || '');
     nameText.setStyle({
-      fontSize: 18 * S,
-      color: '#e8d8b0',
+      fontSize: SB.nameFontSize * S,
+      color: SB.nameColor,
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 8 * S,
-      margin: { bottom: 5 * S, top: 20 * S }
+      height: SB.nameHeight * S,
+      margin: { bottom: SB.nameMarginBottom * S, top: SB.nameMarginTop * S }
     });
     textCol.addChild(nameText);
 
     const descText = new KeywordText(skillData.description || '');
     descText.setStyle({
-      fontSize: 14 * S,
-      color: '#c0b890',
+      fontSize: SB.descFontSize * S,
+      color: SB.descColor,
       alignH: 'left',
       alignV: 'top',
-      height: 50 * S,
-      maxWidth: 150 * S,
+      height: SB.descHeight * S,
+      maxWidth: SB.descMaxWidth * S,
     });
     textCol.addChild(descText);
     this._keywordDescs.push(descText);
@@ -645,6 +798,7 @@ export default class CharacterSelectScene extends UIPanel {
    */
   _buildRelicBlock(relicData, am) {
     const S = this._uiScale;
+    const RB = UI.relicBlock;
     // Center the icon+text pair WITHIN the block (block.justifyContent =
     // 'center'). Without this, textCol's implicit flexGrow:1 stretches it to
     // fill the block, leaving the icon anchored to the left edge — which
@@ -652,48 +806,48 @@ export default class CharacterSelectScene extends UIPanel {
     // centered in the row. textCol now has a fixed width and explicit
     // flexGrow:0 so the icon+textCol stays compact and slack distributes
     // evenly on both sides.
-    const TEXT_COL_WIDTH = 300 * S;
+    const textColWidth = RB.textColWidth * S;
     const block = new UIContainer();
     block.direction = 'row';
     block.justifyContent = 'center';
     block.alignItems = 'center';
-    block.gap = 16 * S;
-    block.width = 460 * S;
-    block.height = 80 * S;
+    block.gap = RB.gap * S;
+    block.width = RB.width * S;
+    block.height = RB.height * S;
 
     const iconKey = relicData.icon || 'placeholder';
     const icon = new UIImage(iconKey, am);
-    icon.setStyle({ width: 80 * S, height: 80 * S, fitMode: 'contain' });
+    icon.setStyle({ width: RB.iconSize * S, height: RB.iconSize * S, fitMode: 'contain' });
     block.addChild(icon);
 
     const textCol = new UIContainer();
     textCol.direction = 'column';
     textCol.justifyContent = 'center';
     textCol.alignItems = 'start';
-    textCol.gap = 4 * S;
-    textCol.width = TEXT_COL_WIDTH;
+    textCol.gap = RB.textColGap * S;
+    textCol.width = textColWidth;
     textCol.flexGrow = 0;
 
     const nameText = new UIText(relicData.name || '');
     nameText.setStyle({
-      fontSize: 18 * S,
-      color: '#e8d8b0',
+      fontSize: RB.nameFontSize * S,
+      color: RB.nameColor,
       bold: true,
       alignH: 'left',
       alignV: 'center',
-      height: 8 * S,
-      margin: { bottom: 5 * S, top: 20 * S }
+      height: RB.nameHeight * S,
+      margin: { bottom: RB.nameMarginBottom * S, top: RB.nameMarginTop * S }
     });
     textCol.addChild(nameText);
 
     const descText = new KeywordText(relicData.description || '');
     descText.setStyle({
-      fontSize: 14 * S,
-      color: '#c0b890',
+      fontSize: RB.descFontSize * S,
+      color: RB.descColor,
       alignH: 'left',
       alignV: 'top',
-      height: 50 * S,
-      maxWidth: TEXT_COL_WIDTH,
+      height: RB.descHeight * S,
+      maxWidth: textColWidth,
     });
     textCol.addChild(descText);
     this._keywordDescs.push(descText);
@@ -738,12 +892,12 @@ export default class CharacterSelectScene extends UIPanel {
 
     // ── 1. Compute info panel dimensions ─────────────────
     // Wider card proportions to match the updated character_select_info_panel
-    // asset's aspect ratio. ~50–60% of canvas width, clamped to 640–780px.
+    // asset's aspect ratio — see UI.panel (widthFrac clamped to widthMin/Max).
     let panelW = 700 * S;
     let panelH = 200 * S;
 
     if (panel) {
-      panelW = Math.min(780 * S, Math.max(640 * S, W * 0.55 * S));
+      panelW = Math.min(UI.panel.widthMax * S, Math.max(UI.panel.widthMin * S, W * UI.panel.widthFrac * S));
 
       // Do a trial layout with generous height so child rects are computed
       panel.rect.x = 0;
@@ -764,10 +918,10 @@ export default class CharacterSelectScene extends UIPanel {
     }
 
     // ── 2. Fixed heights for heroes row and button ──────
-    const heroesW = this._definitions.length * 124 * S;
-    const heroesH = 110 * S;
-    const btnW = 240 * S;
-    const btnH = 70 * S;
+    const heroesW = this._definitions.length * UI.heroes.slotWidth * S;
+    const heroesH = UI.heroes.rowHeight * S;
+    const btnW = UI.button.slotWidth * S;
+    const btnH = UI.button.slotHeight * S;
     const gapPanelHeroes = Math.floor(H * GAP_PANEL_HEROES_FRAC);
     const gapHeroesBtn = Math.floor(H * GAP_HEROES_BUTTON_FRAC);
 
@@ -836,7 +990,7 @@ export default class CharacterSelectScene extends UIPanel {
       ? cssAspect / designAspect
       : designAspect / cssAspect;
 
-    return Math.min(1.5, Math.max(1.3, ratio));
+    return Math.min(UI.scaleMax, Math.max(UI.scaleMin, ratio));
   }
 
   /**
@@ -849,15 +1003,15 @@ export default class CharacterSelectScene extends UIPanel {
     const S = this._uiScale;
 
     if (this._heroesRow) {
-      this._heroesRow.gap = 24 * S;
+      this._heroesRow.gap = UI.heroes.gap * S;
     }
 
     for (const portrait of this._portraitImages) {
-      portrait.setStyle({ width: 130 * S, height: 130 * S });
+      portrait.setStyle({ width: UI.heroes.portraitSize * S, height: UI.heroes.portraitSize * S });
     }
 
     if (this._chooseButton) {
-      this._chooseButton.setStyle({ width: 320 * S, height: 80 * S });
+      this._chooseButton.setStyle({ width: UI.button.imageWidth * S, height: UI.button.imageHeight * S });
     }
   }
 
@@ -1572,16 +1726,17 @@ export default class CharacterSelectScene extends UIPanel {
     if (this._selectedIndex >= 0 && this._selectedIndex < this._portraitImages.length) {
       const portrait = this._portraitImages[this._selectedIndex];
       const pr = portrait.rect;
-      const margin = 4;
+      const HL = UI.highlight;
+      const margin = HL.margin;
 
       ctx.save();
       // Golden highlight border
-      ctx.strokeStyle = '#e8c850';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = HL.color;
+      ctx.lineWidth = HL.lineWidth;
       ctx.strokeRect(pr.x - margin, pr.y - margin, pr.w + margin * 2, pr.h + margin * 2);
       // Subtle glow
-      ctx.strokeStyle = 'rgba(232, 200, 80, 0.3)';
-      ctx.lineWidth = 6;
+      ctx.strokeStyle = HL.glowColor;
+      ctx.lineWidth = HL.glowLineWidth;
       ctx.strokeRect(pr.x - margin - 2, pr.y - margin - 2, pr.w + margin * 2 + 4, pr.h + margin * 2 + 4);
       ctx.restore();
     }

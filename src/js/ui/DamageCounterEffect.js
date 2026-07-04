@@ -105,12 +105,12 @@ const FINALIZE_IDLE_MS = 150;
 
 // Finalize timeline: the whole block (number + label) pops to FINAL_SCALE
 // (easeOutBack) then holds briefly before flying to the portrait AS ONE UNIT.
-const FINAL_GROW_MS = 150;
-const FINAL_HOLD_MS = 130;
+const FINAL_GROW_MS = 140;
+const FINAL_HOLD_MS = 120;
 
 // Fly-to-portrait. The hop is short now (info column → portrait within the
 // same pane), so the arc bow is modest.
-const FLY_MS = 140;
+const FLY_MS = 80;
 const FLY_ARC_LIFT = 55;              // peak upward bow of the arc (px)
 
 // Impact burst at the portrait.
