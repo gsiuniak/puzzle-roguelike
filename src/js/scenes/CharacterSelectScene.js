@@ -152,7 +152,7 @@ const UI = {
     fontSize: 21, // 18 original
     height: 60,
     maxWidth: 640, // 560 original
-    color: '#b0a880',
+    color: '#c0b890', // #b0a880 original
   },
 
   // Divider image between description and the stats row.
