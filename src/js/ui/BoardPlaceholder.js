@@ -709,8 +709,31 @@ export default class BoardPlaceholder extends UIElement {
     const ox = Math.floor(offsetX);
     const oy = Math.floor(offsetY);
 
-    const gridDark = this._assetManager ? this._assetManager.get('grid_dark') : null;
-    const gridLight = this._assetManager ? this._assetManager.get('grid_light') : null;
+    // PHYSICAL pixels per design pixel under the current transform (DPR ×
+    // contain-fit scale). The pre-scaled tile cache must bake at PHYSICAL
+    // resolution: a cs-design-px cell rasterizes to cs×pxScale device pixels,
+    // and baking at plain cs then upscaling made tiles blurry/jagged on hiDPI.
+    // Baked at bakeCs the blit is 1:1 on screen — same pixels as the old
+    // direct full-res nearest draw.
+    let pxScale = 1;
+    if (typeof ctx.getTransform === 'function') {
+      const m = ctx.getTransform();
+      pxScale = Math.max(0.1, Math.hypot(m.a, m.b));
+    } else if (typeof window !== 'undefined' && window.devicePixelRatio) {
+      pxScale = window.devicePixelRatio;
+    }
+    const bakeCs = Math.max(1, Math.round(cs * pxScale));
+    this._bakeCs = bakeCs; // shared with the swap-anim tile draw below
+
+    // Pre-scaled physical-resolution copies (nearest, matching the old live
+    // downscale) — 1:1 blits instead of 64 full-res downscales per frame.
+    // Falls back to the raw sprite while the sheet is still loading.
+    const gridDark = this._assetManager
+      ? (this._assetManager.getScaled('grid_dark', bakeCs, bakeCs) || this._assetManager.get('grid_dark'))
+      : null;
+    const gridLight = this._assetManager
+      ? (this._assetManager.getScaled('grid_light', bakeCs, bakeCs) || this._assetManager.get('grid_light'))
+      : null;
 
     const fallbackColors = {
       red: '#cc3333', blue: '#3366cc', green: '#33aa33',
@@ -834,9 +857,19 @@ export default class BoardPlaceholder extends UIElement {
         const prevAlpha = ctx.globalAlpha;
         if (tileAlpha < 1) ctx.globalAlpha = prevAlpha * tileAlpha;
 
-        // Tile sprite
+        // Tile sprite. At the normal cell size use the physical-resolution
+        // pre-scaled cache (1:1 device-pixel blit — the sheet slices are much
+        // larger than the cell, and downscaling all 64 every frame is the
+        // board's constant floor cost). Odd sizes (the shuffle fly-in animates
+        // drawCs) fall back to the full-res draw so the scaled cache never
+        // thrashes with per-frame sizes.
         const assetKey = `tile_${colorKey}`;
-        const tileImg = this._assetManager ? this._assetManager.get(assetKey) : null;
+        let tileImg = null;
+        if (this._assetManager) {
+          tileImg = drawCs === cs
+            ? (this._assetManager.getScaled(assetKey, bakeCs, bakeCs) || this._assetManager.get(assetKey))
+            : this._assetManager.get(assetKey);
+        }
         if (tileImg) {
           ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, drawX, drawY, drawCs, drawCs);
         } else {
@@ -976,7 +1009,9 @@ export default class BoardPlaceholder extends UIElement {
       const drawTile = (x, y, typeKey) => {
         if (!typeKey) return;
         const assetKey = `tile_${typeKey}`;
-        const tileImg = this._assetManager ? this._assetManager.get(assetKey) : null;
+        const tileImg = this._assetManager
+          ? (this._assetManager.getScaled(assetKey, this._bakeCs || cs, this._bakeCs || cs) || this._assetManager.get(assetKey))
+          : null;
         if (tileImg) {
           ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, x, y, cs, cs);
         } else {
