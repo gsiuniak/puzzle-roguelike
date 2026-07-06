@@ -365,7 +365,11 @@ curve at mid-run stats.
 
 Three numbers, in order of authority:
 1. **Sim uplift:** win%/TTK delta when the skill is added to (or swapped into) the reference kit,
-   measured at the floor band where it's obtainable.
+   measured at the floor band where it's obtainable. **AUTOMATED catalog-wide by the trainer
+   (`node sim/toolbench/trainer.mjs skills`)** — paired common-seed batches per (skill, host, frame),
+   reported as ΔWin ± CI, **eqHP** (ΔWin ÷ the measured local win-per-HP slope — a saturation-proof
+   currency), Δcasts (≈0 = the greedy policy never fired it → unmeasured, not weak), plus the
+   analytic score alongside with UNDER-/OVER-SCORED rank-disagreement flags.
 2. **dmg/mana vs the 1.6 / 2.5 thresholds** (pure-damage component only).
 3. **Analytic V/mana** (full DEV ÷ cost) vs the [2.5, 3.5] band.
 The synthesizer's POWER table prices the same effects for woven skills — when you re-tune DEV
@@ -450,7 +454,26 @@ ES-module MIME) — and open `http://localhost:8123/sim/balance-toolbench.html`.
 server works too (`npx serve`, `python3 -m http.server` if your Python maps `.mjs` to JS).
 Deep links: `?tab=audit|run|sweep|designer|reference`, `?autorun=1` (auto-clicks the tab's primary action).
 The battle engine (`sim/toolbench/engine.mjs`) also runs headless under node — smoke checks:
-`node sim/toolbench/smoke.mjs` and `node sim/toolbench/smoke-analytic.mjs`.
+`node sim/toolbench/smoke.mjs`, `node sim/toolbench/smoke-analytic.mjs`, `node sim/toolbench/smoke-trainer.mjs`.
+
+**The trainer (`sim/toolbench/trainer.mjs`, node CLI)** is the automated MEASURED-power harness on
+top of the engine — the §6 sim-uplift definitions run catalog-wide:
+`node sim/toolbench/trainer.mjs skills|relics|stats|all [--quick] [--n 240] [--floors 2,5,8]
+[--hosts a,b|owner] [--skills ids] [--relics ids] [--out f.json]` → console table + JSON report in
+`sim/toolbench/reports/`. Method: for every item, PAIRED batches (baseline kit vs kit+item) under
+**common random numbers** (`rng.mjs` `withSeededRandom` — same seed ⇒ same board/refills until
+decisions diverge, ~10× variance reduction; baselines cached and shared across items so everything
+is measured on the same boards). Reports ΔWin ± 95% CI, **eqHP** (ΔWin ÷ measured win-per-HP slope
+at that host/frame; unreliable when the frame is saturated — slope < 0.15pp/HP is skipped — or when
+uplift is huge, it's a LOCAL linear estimate), Δcasts, and analytic-vs-measured rank-disagreement
+flags (the "under-scored skill detector"; e.g. it flags `arcane_inscription` UNDER-SCORED — analytic
+prices `convert_tile` flat while its real value is completing 4+/extra-turns). Caveats: measured
+power = power **under the engine's greedy policy** (a skill the greedy AI never casts measures ~0 —
+surfaced as NEVER CAST; a skill it misuses, e.g. Encroach cast every turn, measures negative). The
+engine's `Battle` opts now expose a **policy seam** (`playerPolicy`/`enemyPolicy` — cast/swap/pass +
+cast-hold + targeting override; see the engine header) so a smarter/trained policy can replace
+greedy without engine changes — that, plus fitting the analytic DEV/POWER tables to measured eqHP,
+is the intended next layer.
 
 | Tab | What it answers | Method |
 |---|---|---|

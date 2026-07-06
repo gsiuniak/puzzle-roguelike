@@ -27,11 +27,26 @@
  *   - AI is greedy 1-ply (like the shipped standard EnemyAI); no MoveAdvisor
  *     lookahead. Custom AIs (sapper/malakor) approximate to skill-first.
  *   - Targeted skills auto-target: rows/areas pick the most-skull line/cluster,
- *     convert_tile prefers a match-making spot.
+ *     convert_tile picks the BEST match-making spot (4+/extra-turn preferred)
+ *     and a convert-only skill (Arcane Inscription) is HELD — not cast —
+ *     unless the convert completes a 4+/extra turn (the competent play; a
+ *     3-match cast is a tempo loss, a no-match cast a pure waste).
  *   - onMatch4Plus fires once per cascade step (game: per step w/ centerPos).
  *   - lock/mark/consume/transmute are modeled simply; no woven-skill statuses
  *     beyond the 9 catalog ones.
- *   - No seeded RNG (BoardModel uses Math.random internally); use batch sizes.
+ *   - RNG flows through Math.random (BoardModel internals too). For seeded /
+ *     PAIRED batches wrap battle construction+run in rng.mjs withSeededRandom
+ *     (see trainer.mjs); otherwise use batch sizes.
+ *
+ * POLICY SEAM (trainer.mjs / future trained policies):
+ *   new Battle(p, e, { playerPolicy, enemyPolicy }) — a policy is
+ *   `(battle, combatant) => action | null` (or `{ chooseAction(battle, c) }`):
+ *     { type:'cast', skill, target? }  target = {col,row} for targeted effects
+ *     { type:'swap', swap }            swap from board.getValidSwaps()
+ *     { type:'pass' }                  spend the action doing nothing
+ *     null / undefined                 fall back to the default greedy AI
+ *   Policies are trusted harness code: they may call the battle's helpers
+ *   (greedySkill/greedySwap/canAfford) and read board/combatants directly.
  *
  * MIRRORED CONSTANTS (not exported by their homes — keep in sync):
  *   ENEMY_HP_FLOOR_MULT / ENEMY_ATTACK_FLOOR_BONUS   ← src/js/scenes/MapScene.js
@@ -175,7 +190,8 @@ export class Battle {
   /**
    * @param {object} player — combatant from makePlayerCombatant
    * @param {object} enemy  — combatant from makeEnemyCombatant
-   * @param {object} [opts] — { maxTurns, log:boolean }
+   * @param {object} [opts] — { maxTurns, log:boolean, playerPolicy, enemyPolicy }
+   *   (policies: see POLICY SEAM in the file header)
    */
   constructor(player, enemy, opts = {}) {
     this.p = player; this.e = enemy;
@@ -610,8 +626,12 @@ export class Battle {
 
   _isDamageSkill(skill) { return (skill.effects || []).some((e) => e.effectType === 'damage'); }
 
-  /** cast → returns true if an extra turn was earned */
-  _castSkill(c, skill) {
+  /**
+   * cast → returns true if an extra turn was earned.
+   * `target` ({col,row}, optional) overrides auto-targeting for targeted
+   * effects (convert_tile spot, destroy_tiles center, row/column line).
+   */
+  _castSkill(c, skill, target = null) {
     const opp = this.other(c);
     this._spend(c, skill);
     c.casts++;
@@ -677,11 +697,16 @@ export class Battle {
           break;
         }
         case 'convert_tile': {
-          // targeted single-tile recolor — AI targets a match-making spot if any
+          // targeted single-tile recolor — pick the BEST match-making spot
+          // (4+/extra-turn first, then biggest clear); random only as a last
+          // resort (a multi-effect skill was cast for its other effects).
           const type = (ef.convertTile && ef.convertTile.type) || 'red';
-          const candidates = this.board.getTilesNotOfType(type);
-          let spot = candidates.find((p) => this.board.positionCreatesMatch(p.col, p.row, type));
-          if (!spot && candidates.length) spot = pick(candidates);
+          let spot = target && !this.board.isEmpty(target.col, target.row) ? target : null;
+          if (!spot) spot = this._bestConvertSpot(c, type);
+          if (!spot) {
+            const candidates = this.board.getTilesNotOfType(type);
+            if (candidates.length) spot = pick(candidates);
+          }
           if (spot) { this.board.convertTilesToType([spot], type); needCascade = true; }
           break;
         }
@@ -692,13 +717,14 @@ export class Battle {
           break;
         }
         case 'destroy_tiles_row': {
-          // target the row with the most skulls
+          // target the row with the most skulls (or the policy-chosen row)
           let bestRow = 0, bestScore = -1;
           for (let row = 0; row < BOARD_ROWS; row++) {
             let s = 0;
             for (let col = 0; col < BOARD_COLS; col++) if (isSkull(this.board.get(col, row) || '')) s++;
             if (s > bestScore) { bestScore = s; bestRow = row; }
           }
+          if (target && target.row >= 0 && target.row < BOARD_ROWS) bestRow = target.row;
           const rows = 1 + (typeof skill.area === 'number' ? skill.area - 1 : 0);
           const positions = [];
           for (let r = 0; r < rows; r++) {
@@ -716,6 +742,7 @@ export class Battle {
             for (let row = 0; row < BOARD_ROWS; row++) if (isSkull(this.board.get(col, row) || '')) s++;
             if (s > bestScore) { bestScore = s; bestCol = col; }
           }
+          if (target && target.col >= 0 && target.col < BOARD_COLS) bestCol = target.col;
           const positions = [];
           for (let row = 0; row < BOARD_ROWS; row++) if (!this.board.isEmpty(bestCol, row)) positions.push({ col: bestCol, row });
           this._destroyPositions(c, positions);
@@ -734,6 +761,7 @@ export class Battle {
             }
             if (s > bestScore) { bestScore = s; best = { col, row }; }
           }
+          if (target && target.col >= 0 && target.col < BOARD_COLS && target.row >= 0 && target.row < BOARD_ROWS) best = target;
           const positions = [];
           for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
             const col = best.col + dx, row = best.row + dy;
@@ -816,12 +844,43 @@ export class Battle {
   }
 
   /* ── AI (mirrors EnemyAI's greedy priorities for both sides) ── */
+
+  /**
+   * Best board spot to convert a tile INTO `type`: only match-making spots
+   * qualify, preferring one whose resulting match grants an extra turn (4+),
+   * then the biggest clear. Returns {col,row,extraTurn} or null (no spot).
+   */
+  _bestConvertSpot(c, type) {
+    let best = null, bestScore = -1;
+    for (const p of this.board.getTilesNotOfType(type)) {
+      if (!this.board.positionCreatesMatch(p.col, p.row, type)) continue;
+      const clone = this.board.clone();
+      clone.convertTilesToType([p], type);
+      const a = resolver.analyzeMatches(clone, c);
+      if (!a) continue;
+      const score = (a.extraTurnTrigger ? 1000 : 0) + a.positions.length;
+      if (score > bestScore) { bestScore = score; best = { col: p.col, row: p.row, extraTurn: !!a.extraTurnTrigger }; }
+    }
+    return best;
+  }
+
   _chooseSkill(c) {
     if (this._hasStatus(c, 'silenced')) return null;
     const opp = this.other(c);
     let best = null, bestIsDamage = false;
     for (const skill of c.skills) {
       if (!this._canAfford(c, skill)) continue;
+      // convert-only skill (Arcane Inscription): HOLD it unless the convert
+      // completes a 4+ (extra turn) — that's the competent play. A 3-match
+      // cast spends the whole action + mana for ~3 tiles (a tempo loss),
+      // and a no-match cast is a pure waste.
+      const effects = skill.effects || [];
+      const convertOnly = effects.length > 0 && effects.every((e) => e.effectType === 'convert_tile');
+      if (convertOnly) {
+        const type = (effects[0].convertTile && effects[0].convertTile.type) || 'red';
+        const spot = this._bestConvertSpot(c, type);
+        if (!spot || !spot.extraTurn) continue;
+      }
       // player-side "don't waste it" heuristics
       if (c.side === 'player') {
         const healAmt = sum((skill.effects || []).filter((e) => e.effectType === 'heal')
@@ -912,8 +971,36 @@ export class Battle {
     c.maxTurnDamageTaken = Math.max(c.maxTurnDamageTaken, c._turnDamageTaken);
   }
 
+  /* ── public policy helpers (for opts.playerPolicy / opts.enemyPolicy) ── */
+  canAfford(c, skill) { return this._canAfford(c, skill); }
+  greedySkill(c) { return this._chooseSkill(c); }
+  greedySwap(c) { return this._chooseSwap(c); }
+
+  _performSwap(c, sw) {
+    this.board.swap(sw.col1, sw.row1, sw.col2, sw.row2);
+    return this._resolveCascade(c);
+  }
+
   _act(c) {
-    // one action: prefer skill (damage-first), else best swap. Returns extraTurn.
+    // one action: policy seam first (see header), else greedy. Returns extraTurn.
+    const policy = c === this.p ? this.opts.playerPolicy : this.opts.enemyPolicy;
+    if (policy) {
+      const action = typeof policy === 'function' ? policy(this, c) : policy.chooseAction(this, c);
+      if (action) {
+        if (action.type === 'cast' && action.skill
+            && this._canAfford(c, action.skill) && !this._hasStatus(c, 'silenced')) {
+          return this._castSkill(c, action.skill, action.target || null);
+        }
+        if (action.type === 'swap' && action.swap) return this._performSwap(c, action.swap);
+        if (action.type === 'pass') return false;
+      }
+      // null / invalid action → fall back to greedy
+    }
+    return this._greedyAct(c);
+  }
+
+  _greedyAct(c) {
+    // prefer skill (damage-first), else best swap
     const skill = this._chooseSkill(c);
     if (skill) return this._castSkill(c, skill);
     const sw = this._chooseSwap(c);
@@ -921,8 +1008,7 @@ export class Battle {
       this.board.reshuffle();
       return false;
     }
-    this.board.swap(sw.col1, sw.row1, sw.col2, sw.row2);
-    return this._resolveCascade(c);
+    return this._performSwap(c, sw);
   }
 
   _alive() { return this.p.hp > 0 && (this.e.hp > 0 || this.e.isEgg); }
