@@ -502,7 +502,27 @@ surfaced as NEVER CAST). The engine's `Battle` opts expose a **policy seam**
   DEV **correction multipliers** (prior = 1 = "analytic price is right") so the analytic per-effect
   decomposition predicts the sweep's measured eqHP; prints RAISE/LOWER suggestions + per-skill
   measured-vs-analytic ratios. It NEVER auto-edits `analytic.mjs`; when applying suggestions,
-  re-align `SYNTH_POWER` / weaveConfig `POWER` (§5 drift contract).
+  re-align `SYNTH_POWER` / weaveConfig `POWER` (§5 drift contract). Degenerate items (analytic
+  dev > 100, |ΔWin| > 30pp) are disregarded by the fit with a printed reason.
+
+**The full-run layer (`runs.mjs`) — the PRIMARY measurement unit (2026-07-06).** Per-battle uplift
+under-rates ramp/economy items (a floor-3 relic pays rent for 7 more floors) and misses
+interactions (Cestus × starting mana); the RUN is the real unit of power. `runs.mjs simulate` plays
+seeded, policy-driven full runs (via `engine.simulateRun` + its `battleOpts`/`onReward`/`weave`
+hooks) in which the player starts with ONLY the character kit and acquires everything in-run:
+- **Relic rewards**: the game's real rarity-weighted 3-option roll, picked UNIFORMLY AT RANDOM —
+  realistic exposure with zero selection bias, so every reward node is a randomized controlled
+  trial. Per relic, `runs.mjs analyze` compares forward outcomes (ΔSurvival ± SE, ΔFloors,
+  Δnext-fight-win) between "picked" and "offered-but-not-picked" events — same contexts by
+  construction, so survivorship bias cancels.
+- **Weave training nodes**: a fraction of non-fight floors grant a woven skill via a
+  random-of-offered TAG draft through the real `drawTagsForRound`/`synthesize` pipeline — the same
+  RCT per weave TAG (maps directly onto `weaveConfig`'s tables).
+- **Health metrics**: per-character run survival, death-floor histogram, per-floor win curve —
+  the TOP-LEVEL balance target every change should be checked against, measured under BOTH skill
+  brackets (greedy policy = struggling player, trained value policy = expert). One reference
+  policy cannot represent both audiences; the two bracket the human range.
+- Every JSONL line carries its seed — any interesting death is exactly replayable.
 
 | Tab | What it answers | Method |
 |---|---|---|

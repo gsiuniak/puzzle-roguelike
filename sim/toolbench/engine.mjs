@@ -1141,20 +1141,33 @@ export function pickRelicRewards(ownedIds, count = 3) {
 /**
  * Simulate ONE full run: floors 1..10. Node types: boss at floor 10, two elite
  * floors sampled from 5..9, others battles — with `fightChance` odds a non-boss
- * floor is a fight at all (chest/rest/training density knob; those floors grant
- * nothing here).
+ * floor is a fight at all (chest/rest/training density knob). A non-fight floor
+ * may be a TRAINING node when `cfg.weave` is supplied (grants a woven skill).
+ *
+ * The player starts with ONLY the character's kit; everything else arrives
+ * in-run (relic rewards after victories, woven skills at training nodes).
  *
  * @param {object} cfg
  *  characterId, fightChance (default 0.75), relicPickPolicy: 'random'|'first'|'none',
- *  eliteFloors (default: sample 2 of 5..9), maxTurns
- * @returns per-floor records + final outcome
+ *  eliteFloors (default: sample 2 of 5..9), maxTurns,
+ *  battleOpts    — extra Battle opts (playerPolicy/enemyPolicy — see POLICY SEAM),
+ *  onReward(ev)  — called per relic reward: { floor, offered: string[], picked: string }
+ *                  (offered = the real rarity-weighted 3-option roll — logging this
+ *                  is what makes random-pick runs a randomized trial per item),
+ *  weave         — { chance, makeSkill({floor}) → { skill, meta? } | null }:
+ *                  probability that a NON-fight floor is a training node; the
+ *                  returned full skill object joins the player's kit for the
+ *                  rest of the run (deep-cloned per battle by the factory).
+ * @returns per-floor records + final outcome (+ wovenSkills)
  */
 export function simulateRun(cfg = {}) {
   const characterId = cfg.characterId || 'warrior';
   const fightChance = cfg.fightChance != null ? cfg.fightChance : 0.75;
   const relicPolicy = cfg.relicPickPolicy || 'random';
+  const battleOpts = { maxTurns: cfg.maxTurns || MAX_TURN_CYCLES, ...(cfg.battleOpts || {}) };
   let victories = 0;
   const ownedRelicIds = [];
+  const customSkills = [];
   const seenByAct = {};
   const floors = [];
   // elite placement: 2 distinct floors in 5..9 (approximates MapGenerator's two reachable elites)
@@ -1170,15 +1183,27 @@ export function simulateRun(cfg = {}) {
     const isBoss = floor === FLOOR_COUNT;
     const isElite = eliteFloors.includes(floor);
     const isFight = isBoss || isElite || Math.random() < fightChance;
-    if (!isFight) { floors.push({ floor, type: 'skip' }); continue; }
+    if (!isFight) {
+      // training node approximation: some non-fight floors grant a woven skill
+      if (cfg.weave && typeof cfg.weave.makeSkill === 'function' && Math.random() < (cfg.weave.chance || 0)) {
+        const made = cfg.weave.makeSkill({ floor });
+        if (made && made.skill) {
+          customSkills.push(made.skill);
+          floors.push({ floor, type: 'training', weave: made.meta || null });
+          continue;
+        }
+      }
+      floors.push({ floor, type: 'skip' });
+      continue;
+    }
     const nodeType = isBoss ? 'boss' : (isElite ? 'elite' : 'battle');
     const def = selectEnemyForNode({ floor, nodeType, seenByAct });
     const act = def.act || 1;
     (seenByAct[act] = seenByAct[act] || []).push(def.id);
-    const player = makePlayerCombatant({ characterId, victories, relicIds: ownedRelicIds });
+    const player = makePlayerCombatant({ characterId, victories, relicIds: ownedRelicIds, customSkills });
     const enemy = makeEnemyCombatant(def, floor);
-    const res = new Battle(player, enemy, { maxTurns: cfg.maxTurns || MAX_TURN_CYCLES }).run();
-    floors.push({ floor, type: nodeType, enemyId: def.id, enemyName: def.name, won: res.playerWon, turns: res.turns, hpFrac: res.playerHpFrac });
+    const res = new Battle(player, enemy, battleOpts).run();
+    floors.push({ floor, type: nodeType, enemyId: def.id, enemyName: def.name, won: res.playerWon, turns: res.turns, hpFrac: res.playerHpFrac, casts: res.playerCasts });
     if (!res.playerWon) { alive = false; break; }
     victories++;
     if (relicPolicy !== 'none') {
@@ -1186,6 +1211,9 @@ export function simulateRun(cfg = {}) {
       if (options.length) {
         const chosen = relicPolicy === 'first' ? options[0] : pick(options);
         ownedRelicIds.push(chosen.id);
+        if (typeof cfg.onReward === 'function') {
+          cfg.onReward({ floor, offered: options.map((o) => o.id), picked: chosen.id });
+        }
       }
     }
   }
@@ -1194,6 +1222,7 @@ export function simulateRun(cfg = {}) {
     deathFloor: alive ? null : floors[floors.length - 1].floor,
     victories,
     relics: [...ownedRelicIds],
+    wovenSkills: customSkills.map((s) => ({ id: s.id, name: s.name, recipe: (s.woven && s.woven.recipe) || null })),
     floors,
   };
 }
