@@ -95,7 +95,9 @@ function main() {
   const battles = parseInt(args.battles, 10) || 72;
   const eliteFrac = 0.25;
   const selfplay = parseInt(args.selfplay, 10) || 0;
-  const floors = String(args.floors || '2,5,8').split(',').map(Number).filter((f) => f >= 1 && f <= 10);
+  // default floors need WIN-RATE HEADROOM (a saturated 100%-win task gives CEM
+  // no gradient): f6 minion ~85-95%, f8/f9 elites ~50-70% for the ref player
+  const floors = String(args.floors || '6,8,9').split(',').map(Number).filter((f) => f >= 1 && f <= 10);
   const allHosts = Object.keys(CHARACTERS_BY_ID);
   const hosts = args.hosts ? String(args.hosts).split(',').filter((h) => allHosts.includes(h)) : allHosts;
   const frames = resolveFrames(floors);

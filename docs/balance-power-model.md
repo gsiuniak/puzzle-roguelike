@@ -468,12 +468,29 @@ at that host/frame; unreliable when the frame is saturated — slope < 0.15pp/HP
 uplift is huge, it's a LOCAL linear estimate), Δcasts, and analytic-vs-measured rank-disagreement
 flags (the "under-scored skill detector"; e.g. it flags `arcane_inscription` UNDER-SCORED — analytic
 prices `convert_tile` flat while its real value is completing 4+/extra-turns). Caveats: measured
-power = power **under the engine's greedy policy** (a skill the greedy AI never casts measures ~0 —
-surfaced as NEVER CAST; a skill it misuses, e.g. Encroach cast every turn, measures negative). The
-engine's `Battle` opts now expose a **policy seam** (`playerPolicy`/`enemyPolicy` — cast/swap/pass +
-cast-hold + targeting override; see the engine header) so a smarter/trained policy can replace
-greedy without engine changes — that, plus fitting the analytic DEV/POWER tables to measured eqHP,
-is the intended next layer.
+power = power **under the chosen play policy** (a skill the policy never casts measures ~0 —
+surfaced as NEVER CAST). The engine's `Battle` opts expose a **policy seam**
+(`playerPolicy`/`enemyPolicy` — cast/swap/pass + cast-hold + targeting override; engine header).
+
+**The value-policy layer** (on top of the seam):
+- **`policy.mjs`** — a linear, effect-FEATURIZED action evaluator (`makeValuePolicy(weights)`):
+  argmax over every affordable cast + legal swap; swaps scored by a deterministic no-refill settle
+  (BoardSimulator's "guaranteed outcome" philosophy); skills valued by their EFFECTS, not ids, so it
+  prices unseen woven skills; side-agnostic. Sweeping with `--policy value` gives "competent hands"
+  numbers and kills the greedy artifacts (measured: Encroach −24pp greedy → NEVER CAST value;
+  Oungan −9pp greedy → +5pp value; Defend −4pp → +1pp). The greedy-vs-value uplift GAP per skill is
+  itself a metric (skill expression). `DEFAULT_VALUE_WEIGHTS` is the interpretable training surface
+  — each weight is "what X is worth, in damage units".
+- **`train.mjs`** — CEM self-play trainer for that weight vector: population sampling → fitness =
+  mean win on a FIXED common-seed task pool (floors with win-rate headroom, default 6/8/9, × all 3
+  characters so it can't overfit a matchup) → refit to the top quartile, decaying noise;
+  `--selfplay k` re-arms the ENEMY with best-so-far weights every k generations. Emits a weights
+  JSON consumed by `trainer.mjs --weights` (sweeps) or `policy.mjs loadWeights` (code).
+- **`trainer.mjs rescore`** — closes the loop back to the analytic model: ridge-fits per-effect-type
+  DEV **correction multipliers** (prior = 1 = "analytic price is right") so the analytic per-effect
+  decomposition predicts the sweep's measured eqHP; prints RAISE/LOWER suggestions + per-skill
+  measured-vs-analytic ratios. It NEVER auto-edits `analytic.mjs`; when applying suggestions,
+  re-align `SYNTH_POWER` / weaveConfig `POWER` (§5 drift contract).
 
 | Tab | What it answers | Method |
 |---|---|---|

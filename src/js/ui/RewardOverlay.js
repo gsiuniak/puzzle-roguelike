@@ -26,7 +26,7 @@
  */
 
 import UIImage from './UIImage.js';
-import RewardOptionPanel from './RewardOptionPanel.js';
+import RewardOptionPanel, { PANEL_ASSET_FALLBACK } from './RewardOptionPanel.js';
 import AudioManager from '../audio/AudioManager.js';
 
 // ═══════════════════════════════════════════════════════════
@@ -397,8 +397,11 @@ export default class RewardOverlay {
       enterScale = OVERLAY_ENTER_FROM_SCALE + (1 - OVERLAY_ENTER_FROM_SCALE) * easedT;
     }
 
+    // Reference art for the shared card aspect — every card is laid out at
+    // the SAME rect regardless of rarity (the per-rarity panels are near-
+    // identical in size; each stretches to the common rect).
     const cardImg = this._assetManager
-      ? this._assetManager.get('rewards_option_panel_vertical')
+      ? this._assetManager.get(PANEL_ASSET_FALLBACK)
       : null;
     if (!cardImg || !cardImg.width || !cardImg.height) return;
 

@@ -1,7 +1,8 @@
 /**
  * RewardOptionPanel — a single, reusable post-battle relic reward option.
  *
- * A TALL VERTICAL card backed by the `rewards_option_panel_vertical` art.
+ * A TALL VERTICAL card backed by the per-rarity `relics_pane_panel_<rarity>`
+ * art (each rarity tier has its own frame with matching baked gem/trim color).
  * Content flows top-to-bottom, all centered:
  *
  *   ┌──────────────┐
@@ -44,8 +45,8 @@ const ICON_MAX_HEIGHT_FRAC = 0.34;
 const OPTION_PADDING = { top: 26, right: 22, bottom: 28, left: 22 };
 
 // ── Art geometry (fractions of the card height, measured from the
-//    `rewards_option_panel_vertical` art, 448×780: the inner ornate frame's
-//    gold trim sits at y≈44-47 / y≈383-391) ──
+//    `relics_pane_panel_common` art, 450×784: the inner ornate frame's
+//    trim sits at y≈49 / y≈385 — all four rarity panels share the layout) ──
 /** Top edge of the dark inset area inside the inner ornate frame */
 const INSET_TOP_FRAC = 48 / 780;
 /** Bottom edge of the dark inset area */
@@ -66,6 +67,16 @@ const RARITY_FONT_SIZE = 27;
 const DESC_FONT_SIZE = 26;
 const NAME_COLOR = '#e8d8b0';
 const DESC_COLOR = '#c0b890';
+
+// ── Per-rarity panel art (each tier has its own frame) ────
+const PANEL_ASSET_BY_RARITY = {
+  common: 'relics_pane_panel_common',
+  uncommon: 'relics_pane_panel_uncommon',
+  rare: 'relics_pane_panel_rare',
+  legendary: 'relics_pane_panel_legendary',
+};
+/** Panel used for rarities without dedicated art (e.g. starter) */
+export const PANEL_ASSET_FALLBACK = 'relics_pane_panel_common';
 
 /** Rarity → label color. Future: may also drive borders/glow. */
 const RARITY_COLORS = {
@@ -108,7 +119,7 @@ export default class RewardOptionPanel extends UIPanel {
     this._relic = null;
 
     this.setStyle({
-      backgroundAssetKey: 'rewards_option_panel_vertical',
+      backgroundAssetKey: PANEL_ASSET_FALLBACK,
       assetManager: this._assetManager,
       direction: 'column',
       alignItems: 'stretch',
@@ -202,6 +213,10 @@ export default class RewardOptionPanel extends UIPanel {
     this._nameText.setStyle({ text: relicDef.name || 'Unknown Relic' });
 
     const rarity = relicDef.rarity || 'common';
+
+    // Each rarity tier has its own panel frame art.
+    this.backgroundAssetKey = PANEL_ASSET_BY_RARITY[rarity] || PANEL_ASSET_FALLBACK;
+
     const label = rarity.charAt(0).toUpperCase() + rarity.slice(1);
     this._rarityText.setStyle({
       text: label,
