@@ -377,56 +377,56 @@ const RELIC_CATALOG = {
   cestus: {
     id: 'cestus',
     name: 'Cestus',
-    description: 'Gain +1 [[Attack]] for every 2 unspent Red [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Red [[mana]].',
     icon: 'relic_cestus',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      // 2026-07-06 buff: the stat-per-mana rares measured +2-3pp (rare band 6-12pp) — per 3→2.
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'red', per: 2, amount: 1 } },
+      // 2026-07-06: briefly buffed per 3→2, REVERTED same day — in real play the unspent-pool ramp (esp. with starting mana) made these far too strong. Measure in run context before touching again.
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'red', per: 3, amount: 1 } },
     ],
   },
 
   harpoon: {
     id: 'harpoon',
     name: 'Harpoon',
-    description: 'Gain +1 [[Attack]] for every 2 unspent Blue [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Blue [[mana]].',
     icon: 'relic_harpoon',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'blue', per: 2, amount: 1 } },
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'blue', per: 3, amount: 1 } },
     ],
   },
 
   club: {
     id: 'club',
     name: 'Club',
-    description: 'Gain +1 [[Attack]] for every 2 unspent Green [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Green [[mana]].',
     icon: 'relic_club',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'green', per: 2, amount: 1 } },
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'green', per: 3, amount: 1 } },
     ],
   },
 
   stiletto: {
     id: 'stiletto',
     name: 'Stiletto',
-    description: 'Gain +1 [[Attack]] for every 2 unspent Yellow [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Yellow [[mana]].',
     icon: 'relic_stiletto',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'yellow', per: 2, amount: 1 } },
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'yellow', per: 3, amount: 1 } },
     ],
   },
 
   wand: {
     id: 'wand',
     name: 'Wand',
-    description: 'Gain +1 [[Attack]] for every 2 unspent Purple [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 3 unspent Purple [[mana]].',
     icon: 'relic_wand',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'purple', per: 2, amount: 1 } },
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'purple', per: 3, amount: 1 } },
     ],
   },
 
