@@ -56,11 +56,13 @@ const TITLE_GAP_BELOW = 20;
 /**
  * Vertical center of the header text as a FRACTION of the banner height.
  * The banner art's diamond ornament pokes above the frame, so the dark text
- * band sits BELOW the image's geometric center (0.5) — hence > 0.5 here.
+ * band sits BELOW the image's geometric center (0.5). Measured from the
+ * `rewards_title_panel` art (1139×252): the band's dark interior spans
+ * y≈98..230, so its center is at ≈0.65 of the art height.
  */
-const TITLE_TEXT_CENTER_FRAC = 0.56;
+const TITLE_TEXT_CENTER_FRAC = 0.65;
 /** Additional header text fine-tune offset within the title panel (px, +down) */
-const TITLE_TEXT_Y_OFFSET = 5;
+const TITLE_TEXT_Y_OFFSET = 2;
 
 const HEADER_TEXT = 'Choose a Relic';
 const HEADER_FONT_SIZE = 34;

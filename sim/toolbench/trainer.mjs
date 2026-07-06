@@ -20,26 +20,32 @@
  *            orderings diverge — the "Arcane Inscription detector".
  *
  * Usage (node, repo root):
- *   node sim/toolbench/trainer.mjs skills [opts]     player-skill uplift sweep
- *   node sim/toolbench/trainer.mjs relics [opts]     player-relic uplift sweep
- *   node sim/toolbench/trainer.mjs stats  [opts]     stat exchange curves (+1 atk/mag/HP)
- *   node sim/toolbench/trainer.mjs all    [opts]     all three
+ *   node sim/toolbench/trainer.mjs skills  [opts]    player-skill uplift sweep
+ *   node sim/toolbench/trainer.mjs relics  [opts]    player-relic uplift sweep
+ *   node sim/toolbench/trainer.mjs stats   [opts]    stat exchange curves (+1 atk/mag/HP)
+ *   node sim/toolbench/trainer.mjs all     [opts]    all three
+ *   node sim/toolbench/trainer.mjs rescore [--report skills-*.json]
+ *       fit per-effect-type DEV correction multipliers to a sweep's measured
+ *       eqHP → suggested analytic.mjs price changes (printed, never auto-edited)
  * Options:
  *   --n <int>          paired battles per (item, host, frame)   [default 240, quick 80]
  *   --quick            small fast pass (n=80, floors 2,6, hosts=owner)
  *   --floors 2,5,8     gauntlet floors (>=7 fights the elite frame)
  *   --hosts a,b        character ids, or "owner" (each skill on its kit owner,
  *                      off-kit skills on all characters)        [default: all]
+ *   --policy value     play with the featurized VALUE policy (policy.mjs)
+ *                      instead of greedy — "competent hands" measurement
+ *   --weights <path>   value-policy weights JSON (train.mjs output; implies --policy value)
  *   --skills a,b       filter to specific skill ids
  *   --relics a,b       filter to specific relic ids
  *   --out <path>       report JSON path [default sim/toolbench/reports/<cmd>-<stamp>.json]
  *
  * Notes:
- *   - Measured power is only as honest as the play policy. This harness uses
- *     the engine's greedy policy (now with convert-hold + best-convert-spot);
- *     a trained policy plugs into the same seam later (Battle opts.playerPolicy).
- *   - Baselines are cached per (host, kit, frame) and every arm shares the same
- *     seed stream, so all items are measured on the SAME boards.
+ *   - Measured power is only as honest as the play policy: greedy is the floor,
+ *     --policy value is competent play, and the gap between the two sweeps is
+ *     itself a metric (skill expression). Train weights with train.mjs.
+ *   - Baselines are cached per (host, kit, frame, policy) and every arm shares
+ *     the same seed stream, so all items are measured on the SAME boards.
  */
 
 import fs from 'node:fs';
@@ -50,8 +56,9 @@ import {
   SKILL_CATALOG, RELIC_CATALOG, CHARACTERS_BY_ID, ALL_ENEMIES,
   hpMultForFloor,
 } from './engine.mjs';
-import { skillSummary, relicDEVPerFight } from './analytic.mjs';
+import { skillSummary, relicDEVPerFight, effectDEV } from './analytic.mjs';
 import { hashSeed, withSeededRandom } from './rng.mjs';
+import { makeValuePolicy, loadWeights } from './policy.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const line = (s) => process.stdout.write(s + '\n');
@@ -63,18 +70,21 @@ const WINS_PER_FLOOR = 0.7;     // doc §6.1 reference progression
 
 /* ═════════════════════════ frames (reference gauntlet) ═════════════════════ */
 
-/** Median-HP eligible enemy for (floor, type) — the doc's "spawn table median". */
-function refEnemyFor(floor, type) {
-  let pool = ALL_ENEMIES.filter((d) => (d.floors || []).includes(floor) && d.type === type);
-  if (!pool.length) pool = ALL_ENEMIES.filter((d) => (d.floors || []).includes(floor) && d.type !== 'boss');
-  if (!pool.length) pool = ALL_ENEMIES.filter((d) => d.type === 'minion');
+/** Median-HP eligible enemy for (floor, type) — the doc's "spawn table median".
+ *  Transform/phase enemies (Sanguine Phoenix) are excluded: their bimodal
+ *  outcomes make terrible measurement references. */
+export function refEnemyFor(floor, type) {
+  const measurable = ALL_ENEMIES.filter((d) => !d.transformForms);
+  let pool = measurable.filter((d) => (d.floors || []).includes(floor) && d.type === type);
+  if (!pool.length) pool = measurable.filter((d) => (d.floors || []).includes(floor) && d.type !== 'boss');
+  if (!pool.length) pool = measurable.filter((d) => d.type === 'minion');
   const scored = pool
     .map((d) => ({ d, hp: ((d.hp != null ? d.hp : d.maxHp) || 1) * hpMultForFloor(floor) }))
     .sort((a, b) => a.hp - b.hp || a.d.id.localeCompare(b.d.id));
   return scored[Math.floor((scored.length - 1) / 2)].d;
 }
 
-function resolveFrames(floors) {
+export function resolveFrames(floors) {
   return floors.map((floor) => {
     const type = floor >= 7 ? 'elite' : 'minion';
     const enemy = refEnemyFor(floor, type);
@@ -123,27 +133,27 @@ function pairedStats(base, varr) {
   };
 }
 
-/* Baseline arms are shared across every item on the same (host, kit, frame). */
+/* Baseline arms are shared across every item on the same (host, kit, frame, policy). */
 const armCache = new Map();
-function baselineArm(hostId, skillIds, frame, n, extraKey = '', makeOpts = {}) {
-  const key = `${hostId}|${(skillIds || ['<kit>']).join(',')}|f${frame.floor}|${frame.enemyId}|n${n}|${extraKey}`;
+function baselineArm(hostId, skillIds, frame, cfg) {
+  const key = `${hostId}|${(skillIds || ['<kit>']).join(',')}|f${frame.floor}|${frame.enemyId}|n${cfg.n}|${cfg.policyTag}`;
   if (!armCache.has(key)) {
     armCache.set(key, runArm(
-      () => makePlayerCombatant({ characterId: hostId, victories: frame.victories, skillIds, ...makeOpts }),
-      frame, n));
+      () => makePlayerCombatant({ characterId: hostId, victories: frame.victories, skillIds }),
+      frame, cfg.n, cfg.battleOpts));
   }
   return armCache.get(key);
 }
 
 /** win-fraction gained per +1 maxHp at (host, frame) — the eqHP denominator. */
 const slopeCache = new Map();
-function hpSlopeFor(hostId, frame, n) {
-  const key = `${hostId}|f${frame.floor}|${frame.enemyId}|n${n}`;
+function hpSlopeFor(hostId, frame, cfg) {
+  const key = `${hostId}|f${frame.floor}|${frame.enemyId}|n${cfg.n}|${cfg.policyTag}`;
   if (!slopeCache.has(key)) {
-    const base = baselineArm(hostId, null, frame, n);
+    const base = baselineArm(hostId, null, frame, cfg);
     const varr = runArm(
       () => makePlayerCombatant({ characterId: hostId, victories: frame.victories, statDelta: { maxHp: HP_SLOPE_DELTA } }),
-      frame, n);
+      frame, cfg.n, cfg.battleOpts);
     const s = pairedStats(base, varr);
     slopeCache.set(key, { slope: s.dWin / HP_SLOPE_DELTA, winBase: s.winBase });
   }
@@ -191,13 +201,13 @@ function measureSkills(cfg) {
       const frameResults = [];
       const slopes = [];
       for (const frame of cfg.frames) {
-        const base = baselineArm(hostId, baseIds.length === kit.length ? null : baseIds, frame, cfg.n);
+        const base = baselineArm(hostId, baseIds.length === kit.length ? null : baseIds, frame, cfg);
         const varr = runArm(
           () => makePlayerCombatant({ characterId: hostId, victories: frame.victories, skillIds: varIds }),
-          frame, cfg.n);
+          frame, cfg.n, cfg.battleOpts);
         const s = pairedStats(base, varr);
         frameResults.push({ floor: frame.floor, enemyId: frame.enemyId, ...s });
-        slopes.push(hpSlopeFor(hostId, frame, cfg.n));
+        slopes.push(hpSlopeFor(hostId, frame, cfg));
       }
       const dWinMean = frameResults.reduce((a, r) => a + r.dWin, 0) / frameResults.length;
       const ci95Mean = frameResults.reduce((a, r) => a + r.ci95, 0) / frameResults.length / Math.sqrt(frameResults.length);
@@ -245,13 +255,13 @@ function measureRelics(cfg) {
       const frameResults = [];
       const slopes = [];
       for (const frame of cfg.frames) {
-        const base = baselineArm(hostId, null, frame, cfg.n);
+        const base = baselineArm(hostId, null, frame, cfg);
         const varr = runArm(
           () => makePlayerCombatant({ characterId: hostId, victories: frame.victories, relicIds: [relic.id] }),
-          frame, cfg.n);
+          frame, cfg.n, cfg.battleOpts);
         const s = pairedStats(base, varr);
         frameResults.push({ floor: frame.floor, enemyId: frame.enemyId, ...s });
-        slopes.push(hpSlopeFor(hostId, frame, cfg.n));
+        slopes.push(hpSlopeFor(hostId, frame, cfg));
       }
       const dWinMean = frameResults.reduce((a, r) => a + r.dWin, 0) / frameResults.length;
       const ci95Mean = frameResults.reduce((a, r) => a + r.ci95, 0) / frameResults.length / Math.sqrt(frameResults.length);
@@ -282,13 +292,13 @@ function measureStats(cfg) {
   const items = [];
   for (const hostId of cfg.hosts) {
     for (const frame of cfg.frames) {
-      const base = baselineArm(hostId, null, frame, cfg.n);
+      const base = baselineArm(hostId, null, frame, cfg);
       for (const [stat, deltas] of Object.entries(sweeps)) {
         const points = [];
         for (const delta of deltas) {
           const varr = runArm(
             () => makePlayerCombatant({ characterId: hostId, victories: frame.victories, statDelta: { [stat]: delta } }),
-            frame, cfg.n);
+            frame, cfg.n, cfg.battleOpts);
           const s = pairedStats(base, varr);
           points.push({ delta, dWin: s.dWin, ci95: s.ci95, perPoint: s.dWin / delta });
         }
@@ -309,6 +319,99 @@ function measureStats(cfg) {
     }
   }
   return items;
+}
+
+/* ═══════════════════════════════ re-scoring ════════════════════════════════ */
+
+/** Ridge solve (XᵀX + λI)m = Xᵀy + λ·prior — tiny Gaussian elimination. */
+function solveRidge(X, y, lambda, prior) {
+  const d = prior.length;
+  const A = Array.from({ length: d }, () => new Array(d).fill(0));
+  const b = new Array(d).fill(0);
+  for (let i = 0; i < X.length; i++) {
+    for (let j = 0; j < d; j++) {
+      if (!X[i][j]) continue;
+      b[j] += X[i][j] * y[i];
+      for (let k = 0; k < d; k++) if (X[i][k]) A[j][k] += X[i][j] * X[i][k];
+    }
+  }
+  for (let j = 0; j < d; j++) { A[j][j] += lambda; b[j] += lambda * prior[j]; }
+  // gaussian elimination w/ partial pivot
+  for (let col = 0; col < d; col++) {
+    let piv = col;
+    for (let r = col + 1; r < d; r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    [A[col], A[piv]] = [A[piv], A[col]]; [b[col], b[piv]] = [b[piv], b[col]];
+    if (Math.abs(A[col][col]) < 1e-12) continue;
+    for (let r = 0; r < d; r++) {
+      if (r === col) continue;
+      const f = A[r][col] / A[col][col];
+      for (let k = col; k < d; k++) A[r][k] -= f * A[col][k];
+      b[r] -= f * b[col];
+    }
+  }
+  return prior.map((p, j) => (Math.abs(A[j][j]) < 1e-12 ? p : b[j] / A[j][j]));
+}
+
+/**
+ * Fit per-EFFECT-TYPE correction multipliers so that the analytic per-effect
+ * DEV decomposition predicts the MEASURED eqHP (1 DEV ≈ 1 damage ≈ 1 HP).
+ * Reads a `skills` report JSON produced by this tool.
+ */
+function rescoreFromReport(report) {
+  const frames = report.config.frames;
+  const midFrame = frames[Math.floor(frames.length / 2)];
+  // usable items: measured eqHP exists, the skill actually fired, uplift ≥ noise
+  const usable = report.items.filter((it) =>
+    it.eqHpBest != null && !it.neverCast && Math.abs(it.dWinBest) > (it.ci95Best || 0) * 0.5);
+  line(`rescore: ${usable.length}/${report.items.length} skills usable (measured eqHP + actually cast)`);
+  if (usable.length < 4) { line('  too few usable items — run a bigger sweep (more frames / higher n / value policy)'); return null; }
+  // feature matrix: X[i][t] = analytic dev contribution of effect-type t in skill i
+  const typeIndex = new Map();
+  const rows = [];
+  for (const it of usable) {
+    const skill = SKILL_CATALOG[it.id];
+    if (!skill) continue;
+    const stats = hostStatsAt(it.bestHost, midFrame);
+    const feats = {};
+    for (const ef of skill.effects || []) {
+      const r = effectDEV(ef, stats);
+      const t = ef.effectType;
+      feats[t] = (feats[t] || 0) + Math.max(0.25, r.dev); // floor so zero-priced effects can still learn a price
+      if (!typeIndex.has(t)) typeIndex.set(t, typeIndex.size);
+    }
+    rows.push({ it, feats, y: it.eqHpBest });
+  }
+  const d = typeIndex.size;
+  const X = rows.map((r) => {
+    const x = new Array(d).fill(0);
+    for (const [t, v] of Object.entries(r.feats)) x[typeIndex.get(t)] = v;
+    return x;
+  });
+  const y = rows.map((r) => r.y);
+  const prior = new Array(d).fill(1); // multiplier 1 = "analytic price is right"
+  const mult = solveRidge(X, y, 2.0, prior);
+  const out = [];
+  for (const [t, j] of typeIndex.entries()) {
+    const m = Math.max(0, mult[j]);
+    out.push({ effectType: t, multiplier: +m.toFixed(2), verdict: m > 1.5 ? 'RAISE' : (m < 0.6 ? 'LOWER' : 'ok') });
+  }
+  out.sort((a, b) => b.multiplier - a.multiplier);
+  line('\n  suggested analytic DEV correction multipliers (fit to measured eqHP):');
+  for (const o of out) {
+    line(`    ${o.effectType.padEnd(24)} ×${String(o.multiplier).padStart(5)}  ${o.verdict !== 'ok' ? o.verdict : ''}`);
+  }
+  // per-skill residual view (largest analytic misses first)
+  line('\n  per-skill: measured eqHP vs analytic dev (sorted by miss):');
+  const detail = rows.map((r) => {
+    const dev = Object.values(r.feats).reduce((a, b) => a + b, 0);
+    return { id: r.it.id, host: r.it.bestHost, measured: +r.y.toFixed(1), analyticDev: +dev.toFixed(1), ratio: +(r.y / Math.max(0.1, dev)).toFixed(2) };
+  }).sort((a, b) => Math.abs(Math.log(Math.max(0.05, b.ratio))) - Math.abs(Math.log(Math.max(0.05, a.ratio))));
+  for (const dd of detail) {
+    line(`    ${dd.id.padEnd(24)} measured=${String(dd.measured).padStart(6)} analytic=${String(dd.analyticDev).padStart(6)} ratio=${dd.ratio}`);
+  }
+  line('\n  NOTE: apply RAISE/LOWER suggestions to analytic.mjs effectDEV (and re-align');
+  line('  SYNTH_POWER / weaveConfig POWER per the doc contract) — not auto-edited.');
+  return { multipliers: out, detail, sourceReport: report.kind + ' ' + (report.date || '') };
 }
 
 /* ═════════════════════════ disagreement flags + report ═════════════════════ */
@@ -352,7 +455,7 @@ function writeReport(kind, cfg, items, outPath) {
       n: cfg.n,
       frames: cfg.frames,
       hosts: cfg.hostsMode === 'owner' ? 'owner' : cfg.hosts,
-      policy: 'greedy (engine default)',
+      policy: cfg.policyTag,
     },
     hpSlopes: Object.fromEntries([...slopeCache.entries()].map(([k, v]) => [k, v])),
     items,
@@ -385,14 +488,26 @@ function main() {
   const hostsMode = args.hosts === 'owner' || (quick && !args.hosts) ? 'owner' : 'list';
   const hosts = hostsMode === 'owner' ? allHosts
     : (args.hosts ? String(args.hosts).split(',').filter((h) => allHosts.includes(h)) : allHosts);
+  // play policy: greedy (engine default) or the featurized value policy,
+  // optionally with trained weights from train.mjs
+  let policyTag = 'greedy', battleOpts = {};
+  if (args.policy === 'value' || args.weights) {
+    let weights = {};
+    if (args.weights) {
+      weights = loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8')));
+      policyTag = `value:${path.basename(String(args.weights))}`;
+    } else policyTag = 'value';
+    battleOpts = { playerPolicy: makeValuePolicy(weights) };
+  }
   const cfg = {
     n: parseInt(args.n, 10) || (quick ? 80 : 240),
     frames: resolveFrames(floors),
     hosts, hostsMode,
+    policyTag, battleOpts,
     skillFilter: args.skills ? String(args.skills).split(',') : null,
     relicFilter: args.relics ? String(args.relics).split(',') : null,
   };
-  line(`trainer: cmd=${cmd} n=${cfg.n} frames=${cfg.frames.map((f) => `f${f.floor}:${f.enemyId}`).join(' ')} hosts=${hostsMode === 'owner' ? 'owner' : hosts.join(',')}`);
+  line(`trainer: cmd=${cmd} n=${cfg.n} policy=${policyTag} frames=${cfg.frames.map((f) => `f${f.floor}:${f.enemyId}`).join(' ')} hosts=${hostsMode === 'owner' ? 'owner' : hosts.join(',')}`);
   const t0 = Date.now();
   const run = (kind, fn) => {
     line(`\n== ${kind} ==`);
@@ -402,8 +517,28 @@ function main() {
   if (cmd === 'skills' || cmd === 'all') run('skills', measureSkills);
   if (cmd === 'relics' || cmd === 'all') run('relics', measureRelics);
   if (cmd === 'stats' || cmd === 'all') run('stats', measureStats);
-  if (!['skills', 'relics', 'stats', 'all'].includes(cmd)) {
-    line(`unknown command "${cmd}" — use skills | relics | stats | all`);
+  if (cmd === 'rescore') {
+    const dir = path.join(DIR, 'reports');
+    let file = args.report ? String(args.report) : null;
+    if (!file && fs.existsSync(dir)) {
+      const cands = fs.readdirSync(dir).filter((f) => f.startsWith('skills-') && f.endsWith('.json')).sort();
+      if (cands.length) file = path.join(dir, cands[cands.length - 1]);
+    }
+    if (!file || !fs.existsSync(file)) {
+      line('rescore: no skills report found — run `trainer.mjs skills` first (or pass --report <path>)');
+      process.exitCode = 1;
+      return;
+    }
+    line(`\n== rescore (from ${path.relative(process.cwd(), file)}, policy=${JSON.parse(fs.readFileSync(file, 'utf8')).config?.policy || '?'}) ==`);
+    const res = rescoreFromReport(JSON.parse(fs.readFileSync(file, 'utf8')));
+    if (res) {
+      const out = args.out ? String(args.out) : path.join(dir, `rescore-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`);
+      fs.writeFileSync(out, JSON.stringify(res, null, 2));
+      line(`\nreport → ${path.relative(process.cwd(), out)}`);
+    }
+  }
+  if (!['skills', 'relics', 'stats', 'all', 'rescore'].includes(cmd)) {
+    line(`unknown command "${cmd}" — use skills | relics | stats | all | rescore`);
     process.exitCode = 1;
     return;
   }

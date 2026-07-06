@@ -5,6 +5,7 @@
  */
 import { Battle, makePlayerCombatant, makeEnemyCombatant } from './engine.mjs';
 import { withSeededRandom, hashSeed, mulberry32 } from './rng.mjs';
+import { makeValuePolicy, loadWeights, DEFAULT_VALUE_WEIGHTS, WEIGHT_KEYS } from './policy.mjs';
 
 const line = (s) => process.stdout.write(s + '\n');
 const assert = (cond, msg) => { if (!cond) throw new Error(`SMOKE FAIL: ${msg}`); };
@@ -87,6 +88,41 @@ const assert = (cond, msg) => { if (!cond) throw new Error(`SMOKE FAIL: ${msg}`)
   }
   assert(Number.isFinite(dSum), 'uplift must be finite');
   line(`mini uplift (arcane_inscription on mage): base=${((wB / N) * 100).toFixed(0)}% var=${((wV / N) * 100).toFixed(0)}% ΔWin=${((dSum / N) * 100).toFixed(1)}pp casts/fight=${(casts / N).toFixed(1)}`);
+}
+
+// 6) value policy: battles complete on all hosts; weights round-trip
+{
+  assert(WEIGHT_KEYS.length > 10, 'weight vector should be non-trivial');
+  const loaded = loadWeights({ weights: { extraTurn: 9.5, bogus: 3 } });
+  assert(loaded.extraTurn === 9.5 && !('bogus' in loaded), 'loadWeights must filter to known keys');
+  const policy = makeValuePolicy({});
+  for (const host of ['warrior', 'mage', 'witch_doctor']) {
+    const r = withSeededRandom(hashSeed('vp', host), () => new Battle(
+      makePlayerCombatant({ characterId: host, victories: 2 }),
+      makeEnemyCombatant('goblin', 3),
+      { playerPolicy: policy, enemyPolicy: policy },  // both sides — side-agnostic
+    ).run());
+    assert(['player', 'enemy', 'draw'].includes(r.winner), `value-policy battle must complete (${host})`);
+  }
+  line('value policy: OK');
+}
+
+// 7) value policy vs greedy: paired comparison on a mid frame (informational)
+{
+  const N = 60;
+  const policy = makeValuePolicy({});
+  let wG = 0, wV = 0;
+  for (let i = 0; i < N; i++) {
+    const seed = hashSeed('vp-vs-greedy', i);
+    const mk = (opts) => new Battle(
+      makePlayerCombatant({ characterId: 'warrior', victories: 3 }),
+      makeEnemyCombatant('cyclops', 5),
+      opts,
+    ).run();
+    if (withSeededRandom(seed, () => mk({})).playerWon) wG++;
+    if (withSeededRandom(seed, () => mk({ playerPolicy: policy })).playerWon) wV++;
+  }
+  line(`value vs greedy (warrior f5 cyclops): greedy=${((wG / N) * 100).toFixed(0)}% value=${((wV / N) * 100).toFixed(0)}%`);
 }
 
 line('SMOKE-TRAINER OK');

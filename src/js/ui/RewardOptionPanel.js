@@ -5,10 +5,10 @@
  * Content flows top-to-bottom, all centered:
  *
  *   ┌──────────────┐
- *   │              │
- *   │   [ icon ]   │   large, prominent, upper portion
- *   │              │
- *   │  Relic Name  │   centered
+ *   │ ┌──────────┐ │
+ *   │ │  [icon]  │ │   centered inside the art's dark INSET frame
+ *   │ └──────────┘ │
+ *   │  Relic Name  │   centered, below the inset frame
  *   │    Rarity    │   centered, rarity-colored
  *   │  ──────────  │   divider
  *   │ Multiline    │   centered, wrapped description
@@ -42,10 +42,19 @@ const ICON_WIDTH_FRAC = 0.62;
 const ICON_MAX_HEIGHT_FRAC = 0.34;
 /** Inner padding of the option card (clears the ornate frame art) */
 const OPTION_PADDING = { top: 26, right: 22, bottom: 28, left: 22 };
-/** Top margin above the icon, as a fraction of card height (pushes icon down from the frame) */
-const ICON_TOP_MARGIN_FRAC = 0.04;
-/** Gap between the icon and the name row (px) */
-const ICON_TO_NAME_GAP = 18;
+
+// ── Art geometry (fractions of the card height, measured from the
+//    `rewards_option_panel_vertical` art, 448×780: the inner ornate frame's
+//    gold trim sits at y≈44-47 / y≈383-391) ──
+/** Top edge of the dark inset area inside the inner ornate frame */
+const INSET_TOP_FRAC = 48 / 780;
+/** Bottom edge of the dark inset area */
+const INSET_BOTTOM_FRAC = 383 / 780;
+/**
+ * Where the text block (name/rarity/divider/description) starts — just below
+ * the inset frame's bottom corner flourishes (which hang to ~y≈405/780).
+ */
+const TEXT_TOP_FRAC = 0.53;
 /** Vertical gap between stacked text rows (px) */
 const TEXT_ROW_GAP = 2;
 /** Horizontal inset of the description text from the card's content edges (px) */
@@ -127,7 +136,6 @@ export default class RewardOptionPanel extends UIPanel {
       alignH: 'center',
       alignV: 'center',
       height: Math.round(NAME_FONT_SIZE * 1.3),
-      margin: { top: ICON_TO_NAME_GAP },
     });
     this.addChild(this._nameText);
 
@@ -212,9 +220,12 @@ export default class RewardOptionPanel extends UIPanel {
   }
 
   /**
-   * Size the icon from the card's current width, give it a top margin to sit
-   * in the upper portion, then measure the wrapped description height — BEFORE
-   * running the column layout — so the stacked rows lay out without overflow.
+   * Size the icon from the card's current width and center it inside the
+   * art's dark inset frame (INSET_TOP_FRAC..INSET_BOTTOM_FRAC), push the text
+   * block below the inset (TEXT_TOP_FRAC), then measure the wrapped
+   * description height — BEFORE running the column layout — so the stacked
+   * rows lay out without overflow. The anchoring is done purely via top
+   * margins so the normal column flow still owns the layout.
    *
    * IMPORTANT: every text row must be given an explicit `maxWidth` here. The
    * column layout clamps each child's width to `Math.min(child.maxWidth, …)`,
@@ -231,9 +242,19 @@ export default class RewardOptionPanel extends UIPanel {
     );
     this._icon.width = iconSize;
     this._icon.height = iconSize;
-    this._icon.margin = { top: this.rect.h * ICON_TOP_MARGIN_FRAC };
 
     const pad = this._resolvePadding();
+
+    // Center the icon vertically inside the art's dark inset frame.
+    const insetCenterY = this.rect.h * (INSET_TOP_FRAC + INSET_BOTTOM_FRAC) / 2;
+    this._icon.margin = { top: Math.max(0, insetCenterY - iconSize / 2 - pad.top) };
+
+    // Start the text block (name onward) just below the inset frame,
+    // regardless of where the icon's bottom edge landed.
+    const iconBottomY = insetCenterY + iconSize / 2;
+    this._nameText.margin = {
+      top: Math.max(0, this.rect.h * TEXT_TOP_FRAC - iconBottomY - TEXT_ROW_GAP),
+    };
     const contentW = Math.max(10, this.rect.w - pad.left - pad.right);
 
     // Name & rarity span the full content width (centered, single-line).
