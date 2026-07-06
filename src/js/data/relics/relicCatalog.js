@@ -335,23 +335,25 @@ const RELIC_CATALOG = {
   aegis: {
     id: 'aegis',
     name: 'Aegis',
-    description: 'Gain <<2>> [[Armor]] at the start of each turn.',
+    description: 'Gain <<1>> [[Armor]] at the start of each turn.',
     icon: 'relic_aegis',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      // Armor scales with Attack at the _33 (×1/3) preset by default.
-      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
+      // 2026-07-06 nerf: measured +7.2pp (common band ≤ +3pp) — amount 2→1, scaling _50→_33.
+      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
     ],
   },
 
   thorned_rose: {
     id: 'thorned_rose',
     name: 'Thorned Rose',
-    description: 'Deal <<3>> [[phys]] to the enemy whenever you take damage.',
+    description: 'Deal <<1>> [[phys]] to the enemy whenever you take damage.',
     icon: 'relic_thorned_rose',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 3, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
+      // 2026-07-06 nerf: measured +5.6pp, still +5.0pp at amount 2 (common band
+      // ≤ +3pp — it triggers ~once per enemy turn, so the flat part dominates) — amount 3→1.
+      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 
@@ -375,55 +377,56 @@ const RELIC_CATALOG = {
   cestus: {
     id: 'cestus',
     name: 'Cestus',
-    description: 'Gain +1 [[Attack]] for every 3 unspent Red [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 2 unspent Red [[mana]].',
     icon: 'relic_cestus',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'red', per: 3, amount: 1 } },
+      // 2026-07-06 buff: the stat-per-mana rares measured +2-3pp (rare band 6-12pp) — per 3→2.
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'red', per: 2, amount: 1 } },
     ],
   },
 
   harpoon: {
     id: 'harpoon',
     name: 'Harpoon',
-    description: 'Gain +1 [[Attack]] for every 3 unspent Blue [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 2 unspent Blue [[mana]].',
     icon: 'relic_harpoon',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'blue', per: 3, amount: 1 } },
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'blue', per: 2, amount: 1 } },
     ],
   },
 
   club: {
     id: 'club',
     name: 'Club',
-    description: 'Gain +1 [[Attack]] for every 3 unspent Green [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 2 unspent Green [[mana]].',
     icon: 'relic_club',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'green', per: 3, amount: 1 } },
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'green', per: 2, amount: 1 } },
     ],
   },
 
   stiletto: {
     id: 'stiletto',
     name: 'Stiletto',
-    description: 'Gain +1 [[Attack]] for every 3 unspent Yellow [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 2 unspent Yellow [[mana]].',
     icon: 'relic_stiletto',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'yellow', per: 3, amount: 1 } },
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'yellow', per: 2, amount: 1 } },
     ],
   },
 
   wand: {
     id: 'wand',
     name: 'Wand',
-    description: 'Gain +1 [[Attack]] for every 3 unspent Purple [[mana]].',
+    description: 'Gain +1 [[Attack]] for every 2 unspent Purple [[mana]].',
     icon: 'relic_wand',
     rarity: RELIC_RARITY.RARE,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'purple', per: 3, amount: 1 } },
+      { trigger: 'onBattleStart', effectType: 'attack_per_unspent_mana', attackPerMana: { color: 'purple', per: 2, amount: 1 } },
     ],
   },
 
@@ -448,35 +451,38 @@ const RELIC_CATALOG = {
   tsunami: {
     id: 'tsunami',
     name: 'Tsunami',
-    description: 'Gain +2 [[Attack]] at the start of each turn.',
+    description: 'Gain +3 [[Attack]] at the start of each turn.',
     icon: 'relic_tsunami',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
-      { trigger: 'onTurnStart', effectType: 'gain_attack', gainAttack: { amount: 2 } },
+      // 2026-07-06 buff: measured +6.7pp (legendary band > +12pp) — amount 2→3.
+      { trigger: 'onTurnStart', effectType: 'gain_attack', gainAttack: { amount: 3 } },
     ],
   },
 
   soul_eater: {
     id: 'soul_eater',
     name: 'Soul Eater',
-    description: '[[Heal]] <<1>> life whenever you deal [[damage]].',
+    description: '[[Heal]] <<2>> life whenever you deal [[damage]].',
     icon: 'relic_soul_eater',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
       // onDealDamage fires with side = the attacker, so heal restores the owner.
       // Heal scales off BOTH Attack and Magic at the _10 (×1/10 each) preset.
-      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._10, magic: DAMAGE_SCALING_PRESETS._10 } } },
+      // 2026-07-06 buff: measured +2.5pp (legendary band > +12pp) — amount 1→2.
+      { trigger: 'onDealDamage', effectType: 'heal', heal: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._10, magic: DAMAGE_SCALING_PRESETS._10 } } },
     ],
   },
 
   reckoning: {
     id: 'reckoning',
     name: 'Reckoning',
-    description: 'Gain +1 [[Attack]] whenever you take [[damage]].',
+    description: 'Gain +2 [[Attack]] whenever you take [[damage]].',
     icon: 'relic_reckoning',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
-      { trigger: 'onTakeDamage', effectType: 'gain_attack', gainAttack: { amount: 1 } },
+      // 2026-07-06 buff: measured +4.4pp (legendary band > +12pp) — amount 1→2.
+      { trigger: 'onTakeDamage', effectType: 'gain_attack', gainAttack: { amount: 2 } },
     ],
   },
 
@@ -691,7 +697,8 @@ const RELIC_CATALOG = {
     icon: 'relic_slingshot',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 3, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
+      // 2026-07-06 nerf: measured +5.8pp (common band ≤ +3pp) — amount 3→2.
+      { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 2, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
     ],
   },
 

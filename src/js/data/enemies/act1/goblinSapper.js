@@ -14,8 +14,8 @@ const goblinSapper = {
   type: 'minion',
   floors: [3, 4, 5, 6, 7],
 
-  hp: 11, // floor-1-equivalent baseline (MapScene scales maxHp by depth); frail bomber
-  maxHp: 11,
+  hp: 9, // floor-1-equivalent baseline (MapScene scales maxHp by depth); frail bomber. 2026-07-06: 11→9 (measured 37-43% player win — the bomb race was near-unwinnable; pairs with sulfur 15→10)
+  maxHp: 9,
   attack: 2,
   armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },

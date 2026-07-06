@@ -16,10 +16,15 @@ import { ENEMY_HP_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS, MAGIC_MANA_PER_POINT } f
 /* ── calibration [MODEL] — every number here is a tunable assumption ──────── */
 export const CAL_DEFAULT = {
   // value equivalences (DEV per unit)
+  // (2026-07-06 measured recalibration — trainer paired sweeps under the
+  //  trained value policy; see reports/rescore-*. armor/heal raised ~×1.2,
+  //  V_turn_floor 4→6: extra turns measured FAR above the old floor.)
   DEV_damage: 1.0,
-  DEV_armor: 0.9,
-  DEV_barrier: 0.9,
-  DEV_heal: 0.9,
+  dmgCap: 45,               // cap a single damage effect's priced amount — a 999 nuke
+                            // is worth "kills anything", not 999 (boom_baby fix)
+  DEV_armor: 1.1,
+  DEV_barrier: 1.0,
+  DEV_heal: 1.1,
   DEV_poisonStack: 1.4,     // ~2× raw over the halving tail, discounted for absorption/fight end
   DEV_tile: 0.5,            // a created color tile = deferred mana
   DEV_skullTile: 0.5,       // a skull placed on the board (ammo; opponent can reap it too)
@@ -29,7 +34,9 @@ export const CAL_DEFAULT = {
   DEV_statusTurn: 4.0,      // one turn of a strong status (silence/cripple) on the opponent
   V_mana: 2.8,              // DEV a point of mana buys via the best skill it funds
   econEff: 0.35,            // fraction of granted/drained mana that converts to real value
-  V_turn_floor: 4.0,        // extra-turn value floor (real value = own per-turn output)
+  V_turn_floor: 6.0,        // extra-turn value floor (real value = own per-turn output;
+                            // raised 4→6: CEM-trained policy weighs an extra turn ≈17 dmg,
+                            // measured uplift of extra-turn skills confirms the old floor was low)
   // play model (measured anchors — see §7 of the doc; re-measure in Matchup Lab)
   skullMatchPerTurn: 0.30,
   colorMatchPerTurn: 0.85,
@@ -73,9 +80,11 @@ export function effectDEV(ef, stats, cal = CAL) {
   switch (ef.effectType) {
     case 'damage': {
       const d = ef.damage || {};
-      const amt = (d.amount == null ? (s.attack || 1) : d.amount)
+      const raw = (d.amount == null ? (s.attack || 1) : d.amount)
         + (d.perSkull || 0) * cal.E_SKULLS + scaledBonus(d.scaling, s);
-      return { dev: amt * cal.DEV_damage, dmg: amt };
+      // cap: overkill isn't value — a 999 nuke is "kills anything" (~cap), not 999
+      const amt = Math.min(raw, cal.dmgCap != null ? cal.dmgCap : 45);
+      return { dev: amt * cal.DEV_damage, dmg: amt, note: raw > amt ? `overkill capped ${raw}→${amt}` : undefined };
     }
     case 'heal': { const h = ef.heal || {}; const amt = (h.amount || 0) + scaledBonus(h.scaling, s); return { dev: amt * cal.DEV_heal, dmg: 0 }; }
     case 'armor': { const a = ef.armor || {}; const amt = (a.amount || 0) + scaledBonus(a.scaling, s); return { dev: amt * cal.DEV_armor, dmg: 0 }; }
@@ -104,7 +113,14 @@ export function effectDEV(ef, stats, cal = CAL) {
       }
       return { dev: (ct.amount || 0) * cal.DEV_tile, dmg: 0 };
     }
-    case 'convert_tile': return { dev: 1.0 + cal.DEV_tile, dmg: 0, note: 'match enabler' };
+    case 'convert_tile': {
+      // priced as a CONDITIONAL extra turn (competent play holds it until the
+      // convert completes a 4+). DELIBERATELY under-priced vs measurement —
+      // sweeps under the trained policy put it at ~10-20 DEV (Arcane
+      // Inscription is an intentional premium pick); we price ~60% of an
+      // extra turn so it reads "good", not "broken". Do NOT "fix" this up.
+      return { dev: 0.6 * extraTurnValue(s, cal) + cal.DEV_tile, dmg: 0, note: 'match enabler (deliberately under-priced)' };
+    }
     case 'convert_tiles_by_type': {
       const cb = ef.convertByType || {};
       const n = cb.from === 'skull' ? cal.E_SKULLS : (cb.from === 'disease' ? cal.E_DISEASE : cal.E_COLOR);
@@ -181,8 +197,9 @@ export function skillSummary(skill, stats = { attack: 5, magic: 5 }, cal = CAL) 
    clamp 3..15). Useful to cross-check an authored skill's cost against the
    game's own pricing rubric. */
 export const SYNTH_POWER = {
-  perDamage: 0.5, perArmor: 0.45, perHeal: 0.4, perAttack: 2, perMagic: 2.5,
-  perTileCreated: 1.1, extraTurn: 8, perPoisonStack: 1.0, perManaGained: 0.5, perManaDrained: 0.4,
+  // MIRRORS skillSynthesizer POWER — re-aligned 2026-07-06 with it
+  perDamage: 0.5, perArmor: 0.5, perHeal: 0.5, perAttack: 2, perMagic: 2.5,
+  perTileCreated: 1.1, extraTurn: 10, perPoisonStack: 1.0, perManaGained: 0.5, perManaDrained: 0.4,
 };
 export function synthCostEstimate(skill, stats = { attack: 5, magic: 5 }) {
   let power = 0;

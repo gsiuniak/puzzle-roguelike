@@ -14,8 +14,8 @@ const orcTaskmaster = {
   type: 'elite',
   floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
 
-  hp: 28, // floor-1-equivalent elite baseline (MapScene scales maxHp by depth)
-  maxHp: 28,
+  hp: 23, // floor-1-equivalent elite baseline (MapScene scales maxHp by depth); 2026-07-06: 28→23 (measured 59% player win at f5 — elite band 65-80%; f9 was in band and stays so)
+  maxHp: 23,
   attack: 3,
   armor: 0,
   mana: { red: 4, blue: 0, green: 0, yellow: 0, purple: 0 }, // starting red toward Charge

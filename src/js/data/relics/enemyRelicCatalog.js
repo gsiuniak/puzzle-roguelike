@@ -83,7 +83,9 @@ const ENEMY_RELIC_CATALOG = {
   },
 
   // Static spawn-rate modifier — aggregated at setup by _initStaticModifiers
-  // (board-global). +15 percentage points of Yellow spawn chance.
+  // (board-global). +10 percentage points of Yellow spawn chance.
+  // 2026-07-06: 15→10 — the Sapper's bomb race measured 37-43% player win
+  // (minion band 85-95%); slower yellow funding + the hp 11→9 nerf together.
   sulfur: {
     id: 'sulfur',
     name: 'Sulfur',
@@ -91,7 +93,7 @@ const ENEMY_RELIC_CATALOG = {
     icon: 'relic_sulfur',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'yellow', amount: 15 } },
+      { trigger: 'onBattleStart', effectType: 'modify_spawn_rate', spawnRate: { tile: 'yellow', amount: 10 } },
     ],
   },
 

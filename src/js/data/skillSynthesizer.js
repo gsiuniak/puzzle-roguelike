@@ -253,10 +253,13 @@ const SOUND_PRIORITY = Object.freeze({
 // armor/barrier ≈ 0.9 DEV, heal ≈ 0.8 DEV (sustain uptime discount), a created
 // tile ≈ deferred mana (was over-valued at 1.5), and a PERMANENT stat point is
 // worth several DEV over a fight (Magic most, §3.5) — these were badly under-priced.
+// (2026-07-06 measured re-alignment: perArmor/perHeal/extraTurn raised to track
+// the trainer's paired-sweep recalibration of the DEV model — armor/heal/extra
+// turns measured above their old prices; see sim/toolbench/reports/rescore-*.)
 const POWER = Object.freeze({
   perDamage: 0.5,
-  perArmor: 0.45,        // ~0.9 DEV/pt (armor & barrier)
-  perHeal: 0.4,          // ~0.8 DEV/pt — heal only pays full when below max
+  perArmor: 0.5,         // ~1.1 DEV/pt (armor & barrier; measured up from 0.9)
+  perHeal: 0.5,          // ~1.1 DEV/pt — heal only pays full when below max
   perManaGained: 0.5,
   perManaDrainedOneColor: 1,
   perManaDrainedAllColors: 1.5,
@@ -277,7 +280,7 @@ const POWER = Object.freeze({
   convertArea: 16,       // targeted 3×3 (9 tiles → one color = guaranteed big match)
   perDebuffTurn: 3,
   perBuffTurn: 3,
-  extraTurn: 8,
+  extraTurn: 10,          // raised from 8 — extra turns measured well above their old price
   shuffleBoard: 10,       // whole-board reshuffle (always paired with an extra turn)
   perPoisonStack: 1.0,    // `apply N poison`: ~2× damage over the halving tail = ~2 DEV/stack = 1.0 power (was 2.0, double-counted). NOTE: poison tag is currently disabled (decision #39); pricing matters only if re-enabled.
   perSkullDamage: 0.5,    // `skull + damage`: weight per "+N per Skull" (× est. skulls)

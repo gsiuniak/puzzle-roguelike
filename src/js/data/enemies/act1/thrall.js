@@ -23,8 +23,8 @@ const thrall = {
   // ── Spawn placement ──
   floors: [2, 3, 4, 5],
 
-  hp: 20, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 20,
+  hp: 22, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 20→22 (measured 95-99% player win — band 85-95%)
+  maxHp: 22,
   attack: 2,
   armor: 0,
   // No starting mana — the AI builds red via swaps to afford Claw.

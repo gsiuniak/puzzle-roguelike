@@ -422,6 +422,18 @@ model; re-measure in the toolbench after any primitive change):
 
 ## 8. Known distortions & data bugs (as of 2026-07-03)
 
+> **2026-07-06 measured retune:** the first trainer-driven balance pass landed —
+> analytic DEV recalibration (armor/heal/extra-turn up, damage capped, convert_tile
+> re-priced but DELIBERATELY under-priced), weave POWER re-alignment, relic band
+> corrections (aegis/slingshot/thorned_rose nerfs; Cestus group + ramp legendaries
+> buffed), and enemy baselines tuned into the §6.4 win bands (Sapper's bomb race
+> 37%→~90%+ player win; Phoenix, Flesh Mongrel, Taskmaster, weak floor-1 minions).
+> Full record: [`balance-changes-2026-07-06.md`](balance-changes-2026-07-06.md).
+> §7's reference numbers should be re-derived. Still-open from that pass: mana
+> potions/familiars measure ≈0 (root cause: generous starting kit mana), ramp
+> legendaries still below the legendary band at standard frames, flint measured
+> slightly negative (noisy — watch).
+
 1. **Unbounded in-fight attack engines still exist** — Tsunami (+2/turn), Scythe (+1/skull-match),
    Reckoning (+1/hit-taken), Cestus group (+1/3 unspent mana). Currently *quarantined by the
    legendary drop weight of 0* (Tsunami/Reckoning/Soul Eater unobtainable) — but Scythe/Cestus group

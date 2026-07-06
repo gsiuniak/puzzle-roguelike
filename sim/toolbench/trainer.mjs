@@ -24,6 +24,9 @@
  *   node sim/toolbench/trainer.mjs relics  [opts]    player-relic uplift sweep
  *   node sim/toolbench/trainer.mjs stats   [opts]    stat exchange curves (+1 atk/mag/HP)
  *   node sim/toolbench/trainer.mjs all     [opts]    all three
+ *   node sim/toolbench/trainer.mjs enemies [opts]    band-check every enemy at its
+ *       lowest+highest legal floor (win% vs the doc's per-type bands; the
+ *       reference player gets a floor-scaled median-build relic count)
  *   node sim/toolbench/trainer.mjs rescore [--report skills-*.json]
  *       fit per-effect-type DEV correction multipliers to a sweep's measured
  *       eqHP → suggested analytic.mjs price changes (printed, never auto-edited)
@@ -321,6 +324,52 @@ function measureStats(cfg) {
   return items;
 }
 
+/* ═══════════════════════════════ enemy bands ═══════════════════════════════ */
+
+/** Median-build relic draw: `count` uniform picks from the non-starter player
+ *  pool (fresh per battle — inside the seeded RNG, so reproducible). */
+function pickRandomRelicIds(count) {
+  if (count <= 0) return [];
+  const pool = Object.values(RELIC_CATALOG).filter((r) => r.rarity !== 'starter').map((r) => r.id);
+  const out = [];
+  while (out.length < count && pool.length) {
+    out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  return out;
+}
+
+/**
+ * Band-check every spawnable enemy at its lowest + highest legal floor against
+ * the doc's win-rate bands (§6.4): reference warrior + winsPerFloor growth +
+ * a floor-scaled median-build relic count (≈0.5/floor climbed).
+ */
+function measureEnemies(cfg) {
+  const bands = { minion: [0.85, 0.95], elite: [0.65, 0.8], boss: [0.45, 0.65] };
+  const items = [];
+  for (const def of ALL_ENEMIES) {
+    if (!def.floors || !def.floors.length) continue;
+    const floors = [...new Set([def.floors[0], def.floors[def.floors.length - 1]])];
+    for (const floor of floors) {
+      const victories = Math.round((floor - 1) * WINS_PER_FLOOR);
+      const relicCount = Math.round((floor - 1) * 0.5);
+      const frame = { floor, enemyId: def.id, victories };
+      const arm = runArm(
+        () => makePlayerCombatant({ characterId: 'warrior', victories, relicIds: pickRandomRelicIds(relicCount) }),
+        frame, cfg.n, cfg.battleOpts);
+      const n = arm.length;
+      const win = arm.filter((r) => r.playerWon).length / n;
+      const winsArr = arm.filter((r) => r.playerWon);
+      const ttk = winsArr.length ? winsArr.reduce((a, r) => a + r.turns, 0) / winsArr.length : 0;
+      const burst = arm.reduce((a, r) => a + r.playerMaxTurnDamageTaken / Math.max(1, r.playerMaxHp), 0) / n;
+      const band = bands[def.type] || bands.minion;
+      const verdict = win < band[0] ? 'TOO STRONG' : (win > band[1] ? 'TOO WEAK' : 'in band');
+      items.push({ id: def.id, name: def.name, type: def.type, floor, relicCount, win, ttk, burst, band, verdict });
+      line(`  ${def.id.padEnd(20)} ${String(def.type).padEnd(6)} f${String(floor).padEnd(2)} +${relicCount}r win=${pct(win, 0).padStart(4)} band=[${pct(band[0], 0)}-${pct(band[1], 0)}] ttk=${ttk.toFixed(1).padStart(5)} burst=${pct(burst, 0).padStart(4)}  ${verdict !== 'in band' ? '← ' + verdict : ''}`);
+    }
+  }
+  return items;
+}
+
 /* ═══════════════════════════════ re-scoring ════════════════════════════════ */
 
 /** Ridge solve (XᵀX + λI)m = Xᵀy + λ·prior — tiny Gaussian elimination. */
@@ -357,13 +406,28 @@ function solveRidge(X, y, lambda, prior) {
  * DEV decomposition predicts the MEASURED eqHP (1 DEV ≈ 1 damage ≈ 1 HP).
  * Reads a `skills` report JSON produced by this tool.
  */
+const RESCORE_MAX_DEV = 100;    // analytic dev above this is degenerate (boom_baby's 999 nuke) — poisons the fit
+const RESCORE_MAX_DWIN = 0.30;  // above ~30pp the eqHP linear extrapolation is out of range (fracture)
+
 function rescoreFromReport(report) {
   const frames = report.config.frames;
   const midFrame = frames[Math.floor(frames.length / 2)];
   // usable items: measured eqHP exists, the skill actually fired, uplift ≥ noise
-  const usable = report.items.filter((it) =>
+  const candidates = report.items.filter((it) =>
     it.eqHpBest != null && !it.neverCast && Math.abs(it.dWinBest) > (it.ci95Best || 0) * 0.5);
+  // outlier guards: absurd analytic prices and saturation-range uplifts are
+  // DISREGARDED by the fit (listed below with the reason for the exclusion)
+  const usable = [], excluded = [];
+  for (const it of candidates) {
+    const skill = SKILL_CATALOG[it.id];
+    const stats = hostStatsAt(it.bestHost, midFrame);
+    const dev = skill ? (skill.effects || []).reduce((a, ef) => a + effectDEV(ef, stats).dev, 0) : 0;
+    if (dev > RESCORE_MAX_DEV) excluded.push({ it, why: `degenerate analytic dev ${dev.toFixed(0)} (> ${RESCORE_MAX_DEV})` });
+    else if (Math.abs(it.dWinBest) > RESCORE_MAX_DWIN) excluded.push({ it, why: `ΔWin ${pp(it.dWinBest)} beyond eqHP linear range` });
+    else usable.push(it);
+  }
   line(`rescore: ${usable.length}/${report.items.length} skills usable (measured eqHP + actually cast)`);
+  for (const e of excluded) line(`  disregarded ${e.it.id} — ${e.why}`);
   if (usable.length < 4) { line('  too few usable items — run a bigger sweep (more frames / higher n / value policy)'); return null; }
   // feature matrix: X[i][t] = analytic dev contribution of effect-type t in skill i
   const typeIndex = new Map();
@@ -517,6 +581,7 @@ function main() {
   if (cmd === 'skills' || cmd === 'all') run('skills', measureSkills);
   if (cmd === 'relics' || cmd === 'all') run('relics', measureRelics);
   if (cmd === 'stats' || cmd === 'all') run('stats', measureStats);
+  if (cmd === 'enemies') run('enemies', measureEnemies);
   if (cmd === 'rescore') {
     const dir = path.join(DIR, 'reports');
     let file = args.report ? String(args.report) : null;
@@ -537,8 +602,8 @@ function main() {
       line(`\nreport → ${path.relative(process.cwd(), out)}`);
     }
   }
-  if (!['skills', 'relics', 'stats', 'all', 'rescore'].includes(cmd)) {
-    line(`unknown command "${cmd}" — use skills | relics | stats | all | rescore`);
+  if (!['skills', 'relics', 'stats', 'all', 'enemies', 'rescore'].includes(cmd)) {
+    line(`unknown command "${cmd}" — use skills | relics | stats | all | enemies | rescore`);
     process.exitCode = 1;
     return;
   }

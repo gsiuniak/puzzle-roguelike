@@ -208,7 +208,10 @@ const SKILL_CATALOG = {
     description: 'Deal 999 [[damage]]',
     icon: 'skill_boom_baby',
     sound: 'skill_boom_baby',
-    cost: { red: 20 },
+    // 2026-07-06: 20→25 red — the bomb race measured 37-43% player win
+    // (minion band 85-95%); +5 cost ≈ ~2 extra turns to disarm (with the
+    // sulfur 15→10 and hp 11→9 nerfs).
+    cost: { red: 25 },
     effects: [
       { effectType: 'damage', damage: { amount: 999 } }
     ],
@@ -216,12 +219,14 @@ const SKILL_CATALOG = {
   ignition: {
     id: 'ignition',
     name: 'Ignition',
-    description: '[[Create]] 20 Red [[tiles]]',
+    description: '[[Create]] 12 Red [[tiles]]',
     icon: 'skill_ignition',
     sound: 'skill_ignition',
     cost: { yellow: 10 },
     effects: [
-      { effectType: 'create_tiles', createTiles: { amount: 20, type: 'red' } },
+      // 2026-07-06: 20→12 tiles — one Ignition near-instantly funded the 25-red
+      // bomb; the Sapper race measured 68-73% player win (minion band 85-95%).
+      { effectType: 'create_tiles', createTiles: { amount: 12, type: 'red' } },
     ],
   },
 
