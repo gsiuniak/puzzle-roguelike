@@ -22,7 +22,7 @@ const warrior = {
     startingMagic: 1,
     startingArmor: 0,
     startingMana: {
-      red: 3,
+      red: 0,
       blue: 5,
       green: 0,
       yellow: 0,
@@ -42,7 +42,7 @@ const warrior = {
    * heaviest HP growth in the cast, plus steady Attack (its skull/Bash damage
    * scales with Attack). Both axes grow every win, so HP is never the lone pick.
    */
-  growthPlan: { maxHp: 5, startingAttack: 1 },
+  growthPlan: { maxHp: 5, startingAttack: 1, startingMagic: 0.334 },
 };
 
 export default warrior;
