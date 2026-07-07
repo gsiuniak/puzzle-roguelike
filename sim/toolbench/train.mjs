@@ -93,7 +93,7 @@ function buildTasks(hosts, battles) {
  * enemy policy) — which is the right opponent: it never adapts in the game,
  * so self-play trains for the wrong game.
  */
-async function evaluateRunBatch(pool, candidateSpecs, hosts, nRuns) {
+async function evaluateRunBatch(pool, candidateSpecs, hosts, nRuns, seedNs = 'train-run-screen') {
   const policies = {};
   candidateSpecs.forEach((s, k) => { policies[`c${k}`] = s; });
   const poolTasks = [];
@@ -101,7 +101,7 @@ async function evaluateRunBatch(pool, candidateSpecs, hosts, nRuns) {
     for (let i = 0; i < nRuns; i++) {
       poolTasks.push({
         type: 'run',
-        opts: { seed: hashSeed('train-run-v5', i), characterId: hosts[i % hosts.length], fightChance: 0.75, weaveFloors: 2 },
+        opts: { seed: hashSeed(seedNs, i), characterId: hosts[i % hosts.length], fightChance: 0.75, weaveFloors: 2 },
         playerPolicy: candidateSpecs[k] ? `c${k}` : null,
       });
     }
@@ -157,7 +157,9 @@ async function main() {
   const eliteFrac = 0.25;
   const objective = args.objective === 'battles' ? 'battles' : 'runs';
   const selfplay = objective === 'runs' ? 0 : (parseInt(args.selfplay, 10) || 0); // runs mode: enemy IS the shipped AI — selfplay is the wrong game
-  const nRuns = parseInt(args.runs, 10) || 120;
+  const nRuns = parseInt(args.runs, 10) || 80;             // SCREEN runs per candidate
+  const nConfirm = parseInt(args.confirmRuns, 10) || 400;  // CONFIRM runs (fresh seeds) for the top-K
+  const CONFIRM_K = parseInt(args.confirmK, 10) || 4;
   const allHosts = Object.keys(CHARACTERS_BY_ID);
   const hosts = args.hosts ? String(args.hosts).split(',').filter((h) => allHosts.includes(h)) : allHosts;
   const tasks = objective === 'battles' ? buildTasks(hosts, battles) : null;
@@ -167,7 +169,7 @@ async function main() {
     ? evaluateRunBatch(pool, specs, hosts, nRuns)
     : evaluateBatch(pool, specs, enemySpec, tasks));
   if (objective === 'runs') {
-    line(`train: pop=${pop} gen=${gens} objective=RUN-SURVIVAL (${nRuns} full runs/candidate, CRN) workers=${pool.size}`);
+    line(`train: pop=${pop} gen=${gens} objective=RUN-SURVIVAL (screen ${nRuns} runs/candidate, confirm top-${CONFIRM_K} on ${nConfirm} fresh runs) workers=${pool.size}`);
     line(`fitness ≡ deployment: real map composition, rarity-weighted random-of-offered relics, weave drafts, shipped enemy AI (selfplay off)`);
   } else {
     line(`train: pop=${pop} gen=${gens} objective=battles (${tasks.length}/candidate) selfplay=${selfplay || 'off'} workers=${pool.size}`);
@@ -176,10 +178,13 @@ async function main() {
     line(`tasks: floors ${Object.entries(floorSpread).map(([f, n]) => `f${f}:${n}`).join(' ')}`);
   }
 
-  // reference baselines on the same objective (one pooled batch)
+  // reference baselines — in runs mode, on the CONFIRM set so best.fitness
+  // starts on the same scale bestEver is tracked on
   const t0 = Date.now();
-  const [baselineGreedy, baselineDefault] = await evalCandidates([null, { kind: 'value' }], null);
-  line(`baselines: greedy=${(baselineGreedy * 100).toFixed(1)}% valueDefault=${(baselineDefault * 100).toFixed(1)}%`);
+  const [baselineGreedy, baselineDefault] = objective === 'runs'
+    ? await evaluateRunBatch(pool, [null, { kind: 'value' }], hosts, nConfirm, 'train-run-confirm')
+    : await evalCandidates([null, { kind: 'value' }], null);
+  line(`baselines (confirm-scale): greedy=${(baselineGreedy * 100).toFixed(1)}% valueDefault=${(baselineDefault * 100).toFixed(1)}%`);
 
   const defaults = toVec(DEFAULT_VALUE_WEIGHTS);
   let mean = [...defaults];
@@ -198,11 +203,26 @@ async function main() {
     while (candidates.length < pop) {
       candidates.push(mean.map((m, i) => m + sigma[i] * gaussian()));
     }
-    // whole generation in ONE pooled batch
+    // whole generation in ONE pooled batch (runs mode: the cheap SCREEN pass)
     const fitness = await evalCandidates(candidates.map((vec) => ({ kind: 'value', weights: toWeights(vec) })), enemySpec);
     const scored = candidates.map((vec, k) => ({ vec, fitness: fitness[k] }));
     scored.sort((a, b) => b.fitness - a.fitness);
-    if (scored[0].fitness >= best.fitness) best = { vec: [...scored[0].vec], fitness: scored[0].fitness };
+    let confirmNote = '';
+    if (objective === 'runs') {
+      // TWO-STAGE EVALUATION (winner's-curse fix): the screen max over `pop`
+      // noisy estimates overshoots by ~1.5-2 SE, so nothing legitimately beats
+      // an inflated bestEver and CEM stalls. CONFIRM the top few on a larger,
+      // SEPARATE seed set; bestEver lives on the confirm scale only.
+      const topK = scored.slice(0, CONFIRM_K);
+      const confirmFit = await evaluateRunBatch(
+        pool, topK.map((s) => ({ kind: 'value', weights: toWeights(s.vec) })), hosts, nConfirm, 'train-run-confirm');
+      let genBest = null;
+      topK.forEach((s, i) => { s.confirm = confirmFit[i]; if (!genBest || s.confirm > genBest.confirm) genBest = s; });
+      if (genBest.confirm > best.fitness) best = { vec: [...genBest.vec], fitness: genBest.confirm };
+      confirmNote = ` confirm=${(genBest.confirm * 100).toFixed(1)}%`;
+    } else if (scored[0].fitness >= best.fitness) {
+      best = { vec: [...scored[0].vec], fitness: scored[0].fitness };
+    }
     const elites = scored.slice(0, Math.max(2, Math.round(pop * eliteFrac)));
     // refit mean/std to elites, with a decaying exploration floor
     const decay = 1 - gen / gens;
@@ -214,7 +234,7 @@ async function main() {
     });
     const meanFit = scored.reduce((a, s) => a + s.fitness, 0) / scored.length;
     history.push({ gen, best: scored[0].fitness, mean: meanFit, bestEver: best.fitness });
-    line(`  gen ${String(gen + 1).padStart(2)}/${gens}: best=${(scored[0].fitness * 100).toFixed(1)}% mean=${(meanFit * 100).toFixed(1)}% bestEver=${(best.fitness * 100).toFixed(1)}% (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+    line(`  gen ${String(gen + 1).padStart(2)}/${gens}: screenBest=${(scored[0].fitness * 100).toFixed(1)}% mean=${(meanFit * 100).toFixed(1)}%${confirmNote} bestEver=${(best.fitness * 100).toFixed(1)}% (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
   }
 
   const outDir = path.join(DIR, 'reports');
