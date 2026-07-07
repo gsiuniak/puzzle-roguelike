@@ -131,11 +131,13 @@ export function makePlayerCombatant(opts = {}) {
   const c = baseCombatant();
   c.side = 'player';
   c.name = def.name || def.id;
-  c.maxHp = (bs.maxHp || 1) + (g.maxHp || 0) * v + (d.maxHp || 0);
+  // Growth plans may be fractional (e.g. startingAttack: 0.5 → +1 every other
+  // win); effective stats floor, mirroring playerStats.getEffectivePlayerStats.
+  c.maxHp = Math.floor((bs.maxHp || 1) + (g.maxHp || 0) * v + (d.maxHp || 0));
   c.hp = c.maxHp;
-  c.attack = (bs.startingAttack || 0) + (g.startingAttack || 0) * v + (d.attack || 0);
-  c.magic = (bs.startingMagic || 0) + (g.startingMagic || 0) * v + (d.magic || 0);
-  c.armor = (bs.startingArmor || 0) + (d.armor || 0);
+  c.attack = Math.floor((bs.startingAttack || 0) + (g.startingAttack || 0) * v + (d.attack || 0));
+  c.magic = Math.floor((bs.startingMagic || 0) + (g.startingMagic || 0) * v + (d.magic || 0));
+  c.armor = Math.floor((bs.startingArmor || 0) + (d.armor || 0));
   for (const col of MANA_COLORS) c.mana[col] = (bs.startingMana && bs.startingMana[col]) || 0;
   const skillIds = opts.skillIds || def.skills || [];
   c.skills = [...resolveIds(skillIds, SKILL_CATALOG), ...deep(opts.customSkills || [])];

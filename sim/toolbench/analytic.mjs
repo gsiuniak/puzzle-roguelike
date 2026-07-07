@@ -225,7 +225,13 @@ export function synthCostEstimate(skill, stats = { attack: 5, magic: 5 }) {
       case 'apply_poison': power += (((ef.poison && ef.poison.amount) || 0) + scaledBonus(ef.poison && ef.poison.scaling, stats)) * SYNTH_POWER.perPoisonStack; break;
       case 'gain_mana': power += ((ef.gainMana && ef.gainMana.amount) || 0) * SYNTH_POWER.perManaGained; break;
       case 'drain_mana': power += ((ef.drainMana && ef.drainMana.amount) || 0) * 2.5 * SYNTH_POWER.perManaDrained; break;
-      case 'apply_status': case 'silence': case 'set_attack': power += 3; break;
+      case 'apply_status': case 'silence': case 'set_attack': {
+        // mirrors skillSynthesizer DEBUFF_POWER_MULT (per-status pricing, 2026-07-07)
+        const id = (ef.applyStatus && ef.applyStatus.id) || (ef.effectType === 'silence' ? 'silenced' : 'crippled');
+        const mult = { silenced: 0.25, crippled: 1.5, enfeebled: 0.8, brittle: 1.1, frozen: 0.8, berserk: 0.5 }[id] || 1;
+        power += 3 * mult;
+        break;
+      }
       default: break;
     }
   }

@@ -24,7 +24,7 @@ const witchDoctor = {
       blue: 0,
       green: 5,
       yellow: 0,
-      purple: 2,
+      purple: 5,
     },
   },
 
@@ -37,7 +37,7 @@ const witchDoctor = {
    * its poison application (Poison Dart _25), Barrier, and mana economy. Both
    * axes grow every win.
    */
-  growthPlan: { maxHp: 4, startingMagic: 1 },
+  growthPlan: { maxHp: 5, startingMagic: 0.68, startingAttack: 0.68 },
 };
 
 export default witchDoctor;

@@ -15,7 +15,7 @@ const mage = {
 
   /** Immutable base stats — never modified during a run */
   baseStats: {
-    maxHp: 18,
+    maxHp: 20,
     startingAttack: 1,
     startingMagic: 3,
     startingArmor: 0,
@@ -23,7 +23,7 @@ const mage = {
       red: 0,
       blue: 0,
       green: 0,
-      yellow: 0,
+      yellow: 3,
       purple: 3,
     },
   },
@@ -37,7 +37,7 @@ const mage = {
    * stat (it scales Fracture at _150 AND prints +⌊M/3⌋ mana per matched color,
    * so it is both damage and economy). See docs/balance-combat-math.md §3.5.
    */
-  growthPlan: { maxHp: 4, startingMagic: 1 },
+  growthPlan: { maxHp: 5, startingMagic: 1, startingAttack: 0.334 },
 };
 
 export default mage;

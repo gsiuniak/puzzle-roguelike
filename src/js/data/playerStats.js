@@ -127,15 +127,19 @@ export function getEffectivePlayerStats(characterDef, runState) {
   const modMana = (mods && mods.startingMana) ? mods.startingMana : {};
   const resolvedMana = {};
   for (const color of ['red', 'blue', 'green', 'yellow', 'purple']) {
-    resolvedMana[color] = (baseMana[color] || 0) + (modMana[color] || 0);
+    resolvedMana[color] = Math.floor((baseMana[color] || 0) + (modMana[color] || 0));
   }
 
+  // Modifiers may accumulate FRACTIONAL amounts (e.g. a growthPlan of
+  // startingAttack: 0.5 → +1 effective attack every other victory). The raw
+  // fraction persists in statModifiers; the EFFECTIVE stat is always floored
+  // here, at the single resolution point.
   return {
-    maxHp: (base.maxHp || 0) + ((mods && mods.maxHp) ? mods.maxHp : 0),
+    maxHp: Math.floor((base.maxHp || 0) + ((mods && mods.maxHp) ? mods.maxHp : 0)),
     startingMana: resolvedMana,
-    startingArmor: (base.startingArmor || 0) + ((mods && mods.startingArmor) ? mods.startingArmor : 0),
-    startingAttack: (base.startingAttack || 0) + ((mods && mods.startingAttack) ? mods.startingAttack : 0),
-    startingMagic: (base.startingMagic || 0) + ((mods && mods.startingMagic) ? mods.startingMagic : 0),
+    startingArmor: Math.floor((base.startingArmor || 0) + ((mods && mods.startingArmor) ? mods.startingArmor : 0)),
+    startingAttack: Math.floor((base.startingAttack || 0) + ((mods && mods.startingAttack) ? mods.startingAttack : 0)),
+    startingMagic: Math.floor((base.startingMagic || 0) + ((mods && mods.startingMagic) ? mods.startingMagic : 0)),
   };
 }
 
@@ -230,6 +234,9 @@ export function syncBattleResultsToRunState(runState, battleState) {
  *   'startingMagic'     → statModifiers.startingMagic += amount
  *   'startingMana.red'  → statModifiers.startingMana.red += amount
  *   'startingMana.blue' → etc.
+ *
+ * Fractional amounts are allowed (e.g. a growthPlan of 0.5) — they accumulate
+ * exactly here and are floored only when resolved by getEffectivePlayerStats.
  *
  * @param {object} runState — player run state (mutated in place)
  * @param {string} statPath — dotted path to the stat (e.g. 'startingMana.purple')

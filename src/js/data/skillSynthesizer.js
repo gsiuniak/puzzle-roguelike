@@ -276,7 +276,7 @@ const POWER = Object.freeze({
   // extra turn) AND dump a flood of that color's mana — priced high so they cost
   // a lot (and, paired with the no-same-color-cost rule, can't self-fund a loop).
   convertByType: 8,     // all of one color → another (board-wide flood)
-  convertTile: 3,        // targeted single tile
+  convertTile: 5,        // targeted single tile
   convertArea: 16,       // targeted 3×3 (9 tiles → one color = guaranteed big match)
   perDebuffTurn: 3,
   perBuffTurn: 3,
@@ -289,10 +289,32 @@ const POWER = Object.freeze({
   // ── New mechanics (decision #40) ──
   perConsumeUnit: 0.5,    // `consume`: per-unit damage × est. pool size (EST_CONSUMED)
   perMark: 0.5,           // `mark`: one-time multiplier (priced via EST_MARK_DAMAGE)
-  lockTurn: 3,            // `lock`: denial, priced like a debuff turn
+  lockTurn: 1,            // `lock`: denial, priced like a debuff turn
   reflectTurn: 6,         // `reflect`: reflects ALL damage taken → strong per turn
   // leech adds POWER as estimated healed = est. damage × fraction × perHeal.
 });
+
+/**
+ * Per-STATUS price multipliers applied ON TOP of perDebuffTurn/perBuffTurn
+ * (1 = neutral). Measured 2026-07-07 via the champion-AI weave-tag RCT
+ * (docs/balance-recommendations-2026-07-07.md): a turn of Silence delivers far
+ * less run survival than the shared price implied (ΔSurv −8.6pp — overpriced),
+ * Berserk is still a mechanical stub, while Cripple over-delivers (+7.3pp).
+ * Cheaper multiplier ⇒ the woven skill costs LESS mana for the same turns.
+ * TUNE HERE for a specific debuff's value-for-mana; tune its DURATION rolls in
+ * weaveConfig TAG_VALUE_TABLES; tune what it DOES in BattleController.
+ */
+export const DEBUFF_POWER_MULT = Object.freeze({
+  silenced: 0.25,
+  crippled: 1.5,
+  enfeebled: 0.8,
+  brittle: 1.1,
+  bleeding: 1.0,
+  frozen: 0.8,
+  intangible: 1.0, // buff (self)
+  berserk: 0.5,    // buff (self) — stub mechanics; cheap until finished
+});
+
 
 /**
  * Canonical RESOLUTION + DESCRIPTION order for a woven skill's effects. The
@@ -1267,7 +1289,7 @@ export function synthesize(recipe, options = {}) {
         effects.push({ effectType: 'apply_status', applyStatus });
         const turnsText = turns === 1 ? '1 turn' : `${turns} turns`;
         lines.push(isSelf ? `Gain [[${capitalize(tag)}]] for ${turnsText}` : `Apply [[${capitalize(tag)}]] for ${turnsText}`);
-        power += turns * (isSelf ? POWER.perBuffTurn : POWER.perDebuffTurn);
+        power += turns * (isSelf ? POWER.perBuffTurn : POWER.perDebuffTurn) * (DEBUFF_POWER_MULT[statusId] || 1);
         return true;
       }
     }
@@ -1593,7 +1615,7 @@ export function synthesize(recipe, options = {}) {
     lines.push(isSelf
       ? `Gain [[${capitalize(tag)}]] for ${turnsText}`
       : `Apply [[${capitalize(tag)}]] for ${turnsText}`);
-    power += turns * (isSelf ? POWER.perBuffTurn : POWER.perDebuffTurn);
+    power += turns * (isSelf ? POWER.perBuffTurn : POWER.perDebuffTurn) * (DEBUFF_POWER_MULT[statusId] || 1);
   }
 
   // ── Fallback: a verb-less bag (the round-0 action guarantee is SOFT) still

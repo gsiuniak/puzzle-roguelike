@@ -98,7 +98,7 @@ const DAMAGE_ROLL = { 4: 18, 5: 22, 6: 20, 7: 14, 8: 10, 9: 7, 10: 5, 11: 2.5, 1
 
 export const TAG_VALUE_TABLES = Object.freeze({
   // `create N tiles` — small rolls common, a 12 is a jackpot.
-  create: { 3: 18, 4: 26, 5: 16, 6: 13, 7: 10, 8: 7, 9: 5, 10: 3, 11: 1.5, 12: 0.5 },
+  create: { 3: 1, 4: 26, 5: 16, 6: 13, 7: 10, 8: 7, 9: 5, 10: 3, 11: 1.5, 12: 0.5 },
 
   // ── Action magnitudes ──
   // `deal N strike/blast` — mid rolls common (same base for both types; the
@@ -129,11 +129,11 @@ export const TAG_VALUE_TABLES = Object.freeze({
   // ── New mechanic magnitudes ──
   // `transmute N mana` — how much of your OTHER mana is converted into the
   // destination color (a battery for next turn — see emitTransmute).
-  transmute: { 5: 20, 6: 30, 7: 22, 8: 14, 8: 9, 10: 5 },
+  transmute: { 8: 20, 9: 30, 10: 22, 11: 14, 12: 9, 15: 5 },
   // `consume`: the DIVISOR — consume N units of a pool (leftover mana / armor /
   // barrier) per 1 damage. 2 (the cap = 1/2 damage per mana) is the lucky roll;
   // 3/4 are weaker. No stat scaling — the payoff is hoarding a big pool. See decision #40.
-  consume:   { 1: 3, 2: 20, 3: 60 },
+  consume:   { 1: 3, 2: 30, 3: 40 },
   // `leech`: lifesteal PERCENT of damage dealt (divided by 100 at synthesis).
   leech:     { 25: 40, 33: 35, 50: 20, 66: 5 },
   // `lock N`: turns the targeted color stays locked (unmatchable + unmovable for
@@ -144,7 +144,7 @@ export const TAG_VALUE_TABLES = Object.freeze({
   reflect:   { 1: 30, 2: 45, 3: 25 },
 
   // ── Status durations (turn cycles) ──
-  silence:    { 2: 50, 3: 35 },
+  silence:    { 3: 50, 4: 35 },
   cripple:    { 2: 70, 3: 30 },
   enfeeble:   { 2: 65, 3: 35 },
   brittle:    { 2: 45, 3: 38, 4: 0 },

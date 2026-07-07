@@ -362,7 +362,7 @@ const RELIC_CATALOG = {
     name: 'Alabaster Flask',
     description: '[[Heal]] <<2>> HP at the start of each of your turns.',
     icon: 'relic_alabaster_flask',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       // Heal scales off BOTH Attack and Magic at the _50 (×1/2 each) preset. (Amount
       // aligned to the long-standing "2 HP" description; was previously 1.)
@@ -451,12 +451,12 @@ const RELIC_CATALOG = {
   tsunami: {
     id: 'tsunami',
     name: 'Tsunami',
-    description: 'Gain +3 [[Attack]] at the start of each turn.',
+    description: 'Gain +2 [[Attack]] at the start of each turn.',
     icon: 'relic_tsunami',
     rarity: RELIC_RARITY.LEGENDARY,
     effects: [
       // 2026-07-06 buff: measured +6.7pp (legendary band > +12pp) — amount 2→3.
-      { trigger: 'onTurnStart', effectType: 'gain_attack', gainAttack: { amount: 3 } },
+      { trigger: 'onTurnStart', effectType: 'gain_attack', gainAttack: { amount: 2 } },
     ],
   },
 
@@ -519,55 +519,55 @@ const RELIC_CATALOG = {
   red_potion: {
     id: 'red_potion',
     name: 'Red Potion',
-    description: 'Gain 5 red [[mana]] at the start of battle.',
+    description: 'Gain 6 red [[mana]] at the start of battle.',
     icon: 'relic_potion_red',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'red', amount: 5 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'red', amount: 6 } },
     ],
   },
 
   blue_potion: {
     id: 'blue_potion',
     name: 'Blue Potion',
-    description: 'Gain 5 blue [[mana]] at the start of battle.',
+    description: 'Gain 6 blue [[mana]] at the start of battle.',
     icon: 'relic_potion_blue',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'blue', amount: 5 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'blue', amount: 6 } },
     ],
   },
 
   green_potion: {
     id: 'green_potion',
     name: 'Green Potion',
-    description: 'Gain 5 green [[mana]] at the start of battle.',
+    description: 'Gain 6 green [[mana]] at the start of battle.',
     icon: 'relic_potion_green',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'green', amount: 5 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'green', amount: 6 } },
     ],
   },
 
   yellow_potion: {
     id: 'yellow_potion',
     name: 'Yellow Potion',
-    description: 'Gain 5 yellow [[mana]] at the start of battle.',
+    description: 'Gain 6 yellow [[mana]] at the start of battle.',
     icon: 'relic_potion_yellow',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'yellow', amount: 5 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'yellow', amount: 6 } },
     ],
   },
 
   purple_potion: {
     id: 'purple_potion',
     name: 'Purple Potion',
-    description: 'Gain 5 purple [[mana]] at the start of battle.',
+    description: 'Gain 6 purple [[mana]] at the start of battle.',
     icon: 'relic_potion_purple',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'purple', amount: 5 } },
+      { trigger: 'onBattleStart', effectType: 'grant_starting_mana', startingMana: { color: 'purple', amount: 6 } },
     ],
   },
 
@@ -582,7 +582,7 @@ const RELIC_CATALOG = {
     icon: 'relic_flaming_arrow',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onGainMana', condition: { color: 'red' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._10 } } },
     ],
   },
 
@@ -593,7 +593,7 @@ const RELIC_CATALOG = {
     icon: 'relic_water_balloon',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onGainMana', condition: { color: 'blue' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._10 } } },
     ],
   },
 
@@ -604,7 +604,7 @@ const RELIC_CATALOG = {
     icon: 'relic_thorned_branch',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onGainMana', condition: { color: 'green' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._10 } } },
     ],
   },
 
@@ -615,7 +615,7 @@ const RELIC_CATALOG = {
     icon: 'relic_static_comb',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onGainMana', condition: { color: 'yellow' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._10 } } },
     ],
   },
 
@@ -626,7 +626,7 @@ const RELIC_CATALOG = {
     icon: 'relic_tuning_fork',
     rarity: RELIC_RARITY.COMMON,
     effects: [
-      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onGainMana', condition: { color: 'purple' }, effectType: 'damage', damage: { amount: 1, scaling: { magic: DAMAGE_SCALING_PRESETS._10 } } },
     ],
   },
 
@@ -695,7 +695,7 @@ const RELIC_CATALOG = {
     name: 'Slingshot',
     description: 'Deal <<1>> [[phys]] at the start of your turn.',
     icon: 'relic_slingshot',
-    rarity: RELIC_RARITY.COMMON,
+    rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       // 2026-07-06 nerf: measured +5.8pp (common band ≤ +3pp) — amount 3→2.
       { trigger: 'onTurnStart', effectType: 'damage', damage: { amount: 2, scaling: { attack: DAMAGE_SCALE_PER_POINT } } },
@@ -707,7 +707,7 @@ const RELIC_CATALOG = {
     name: 'Death Familiar',
     description: '[[Destroy]] a random [[skull]] whenever you [[match]] 4 or more [[tiles]].',
     icon: 'relic_familiar_skull',
-    rarity: RELIC_RARITY.UNCOMMON,
+    rarity: RELIC_RARITY.RARE,
     effects: [
       // Board-touching — queues a deferred skull destruction (same path as
       // Deathbringer) but on a match trigger; bypasses the once-per-action
