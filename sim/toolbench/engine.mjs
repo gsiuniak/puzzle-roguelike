@@ -1154,10 +1154,15 @@ export function pickRelicRewards(ownedIds, count = 3) {
  *  onReward(ev)  — called per relic reward: { floor, offered: string[], picked: string }
  *                  (offered = the real rarity-weighted 3-option roll — logging this
  *                  is what makes random-pick runs a randomized trial per item),
- *  weave         — { chance, makeSkill({floor}) → { skill, meta? } | null }:
- *                  probability that a NON-fight floor is a training node; the
- *                  returned full skill object joins the player's kit for the
- *                  rest of the run (deep-cloned per battle by the factory).
+ *  weave         — { floors?, chance?, makeSkill({floor}) → { skill, meta? } | null }:
+ *                  training-node model. `floors: N` pre-samples N distinct
+ *                  TRAINING floors from 2..9 (excluding elites — a training
+ *                  node REPLACES that floor's fight, like a real map path;
+ *                  design target: ~2 weaves per act). `floors: [..]` pins
+ *                  them. Legacy `chance` instead makes each NON-fight floor a
+ *                  training node with that probability. The returned full
+ *                  skill object joins the player's kit for the rest of the
+ *                  run (deep-cloned per battle by the factory).
  * @returns per-floor records + final outcome (+ wovenSkills)
  */
 export function simulateRun(cfg = {}) {
@@ -1178,21 +1183,38 @@ export function simulateRun(cfg = {}) {
     const b = cand.splice(rint(cand.length), 1)[0];
     eliteFloors = [a, b];
   }
+  // training-floor placement (weave.floors mode): N distinct floors in 2..9,
+  // never on an elite floor — a training node replaces that floor's fight
+  let trainingFloors = null;
+  if (cfg.weave && typeof cfg.weave.makeSkill === 'function' && cfg.weave.floors != null) {
+    if (Array.isArray(cfg.weave.floors)) trainingFloors = cfg.weave.floors;
+    else {
+      trainingFloors = [];
+      const cand = [2, 3, 4, 5, 6, 7, 8, 9].filter((f) => !eliteFloors.includes(f));
+      for (let k = 0; k < cfg.weave.floors && cand.length; k++) trainingFloors.push(cand.splice(rint(cand.length), 1)[0]);
+    }
+  }
+  const grantWeave = (floor) => {
+    const made = cfg.weave.makeSkill({ floor });
+    if (made && made.skill) {
+      customSkills.push(made.skill);
+      floors.push({ floor, type: 'training', weave: made.meta || null });
+      return true;
+    }
+    return false;
+  };
   let alive = true;
   for (let floor = 1; floor <= FLOOR_COUNT && alive; floor++) {
     const isBoss = floor === FLOOR_COUNT;
     const isElite = eliteFloors.includes(floor);
+    if (trainingFloors && trainingFloors.includes(floor) && !isBoss && !isElite) {
+      if (grantWeave(floor)) continue;
+    }
     const isFight = isBoss || isElite || Math.random() < fightChance;
     if (!isFight) {
-      // training node approximation: some non-fight floors grant a woven skill
-      if (cfg.weave && typeof cfg.weave.makeSkill === 'function' && Math.random() < (cfg.weave.chance || 0)) {
-        const made = cfg.weave.makeSkill({ floor });
-        if (made && made.skill) {
-          customSkills.push(made.skill);
-          floors.push({ floor, type: 'training', weave: made.meta || null });
-          continue;
-        }
-      }
+      // legacy chance mode: some non-fight floors grant a woven skill
+      if (cfg.weave && typeof cfg.weave.makeSkill === 'function' && !trainingFloors
+          && Math.random() < (cfg.weave.chance || 0) && grantWeave(floor)) continue;
       floors.push({ floor, type: 'skip' });
       continue;
     }

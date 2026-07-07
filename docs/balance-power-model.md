@@ -515,14 +515,32 @@ hooks) in which the player starts with ONLY the character kit and acquires every
   trial. Per relic, `runs.mjs analyze` compares forward outcomes (ΔSurvival ± SE, ΔFloors,
   Δnext-fight-win) between "picked" and "offered-but-not-picked" events — same contexts by
   construction, so survivorship bias cancels.
-- **Weave training nodes**: a fraction of non-fight floors grant a woven skill via a
-  random-of-offered TAG draft through the real `drawTagsForRound`/`synthesize` pipeline — the same
-  RCT per weave TAG (maps directly onto `weaveConfig`'s tables).
+- **Weave training nodes**: 2 pre-sampled training floors per run (design target: ~2 weaves per
+  act; a training node REPLACES that floor's fight, like a real map path) grant a woven skill via
+  a random-of-offered TAG draft through the real `drawTagsForRound`/`synthesize` pipeline — the
+  same RCT per weave TAG (maps directly onto `weaveConfig`'s tables). Verified: surviving runs
+  average exactly 2.0 weaves. Caveat: the greedy bracket casts ANY affordable skill, so random
+  woven kits actively hurt it — read greedy-bracket numbers with that in mind (the learned policy
+  does not have this failure mode).
 - **Health metrics**: per-character run survival, death-floor histogram, per-floor win curve —
   the TOP-LEVEL balance target every change should be checked against, measured under BOTH skill
   brackets (greedy policy = struggling player, trained value policy = expert). One reference
   policy cannot represent both audiences; the two bracket the human range.
 - Every JSONL line carries its seed — any interesting death is exactly replayable.
+
+**The learned-value layer (`learn.mjs` + `features.mjs`) — "plays without knowing why".**
+The hand-value policy encodes MY judgments; the learned one encodes none: `features.mjs`
+describes states with rules-derived facts only (HP, mana, board composition, affordability
+distances, who moves next), and `learn.mjs` fits V(state) ≈ P(win) by logistic regression on
+self-play outcomes, then plays argmax-V over each action's previewed next state
+(`previewAction` on a cloned Battle). `iterate` = collect → fit → eval with the improved policy
+fed back into the collection mix. Two uses: (a) the least-biased player for run-context
+measurement (a skill the featurizer never names still gets valued by the states it produces —
+including woven skills); (b) the learned weight table is itself evidence — e.g. it re-derived
+tempo value (`selfToMove` as a top weight) from outcomes alone. Caveat: linear V pools across
+characters, so correlates can confound (an early fit priced `magic` negative because
+mage/witch-doctor lose more) — check weights before trusting subtle calls, and prefer more
+rounds/data over hand-fixes.
 
 | Tab | What it answers | Method |
 |---|---|---|

@@ -23,7 +23,9 @@
  * Usage (node, repo root):
  *   node sim/toolbench/runs.mjs simulate [--n 1000] [--chars a,b|all]
  *     [--policy greedy|value] [--weights <trained.json>] [--fightChance 0.75]
- *     [--weaveChance 0.35] [--out <file.jsonl>]
+ *     [--weaves 2] [--out <file.jsonl>]
+ *   (--weaves N = training floors per run, design target ~2 weaves/act; a
+ *    training node replaces that floor's fight)
  *   node sim/toolbench/runs.mjs analyze [--log <runs-*.jsonl | newest>] [--min 25]
  *
  * Output: JSONL (one run per line, meta header first) in sim/toolbench/reports/.
@@ -64,31 +66,42 @@ function affinityColorsFor(characterId) {
   return [...colors];
 }
 
-/** Random-of-offered weave draft through the REAL roll tables + synthesizer.
- *  Records one event per draft round: { floor, round, offered, picked }. */
-function makeWeaveHook(characterId, weaveEvents) {
+/**
+ * One random-of-offered weave draft through the REAL roll tables + synthesizer.
+ * Returns { skill, recipe, events } or null. `events` = one per draft round:
+ * { round, offered, picked } (floor stamped by the caller). Exported so
+ * learn.mjs can deal realistic woven skills into its training battles.
+ */
+export function makeRandomWovenSkill(characterId) {
   const affinityColors = affinityColorsFor(characterId);
+  const rounds = rollRoundsPerWeave();
+  const recipe = [];
+  const events = [];
+  for (let r = 0; r < rounds; r++) {
+    const options = drawTagsForRound({ roundIndex: r, chosen: recipe, count: rollTagsPerRound() });
+    if (!options.length) break;
+    const picked = options[Math.floor(Math.random() * options.length)];
+    events.push({ round: r, offered: options, picked });
+    recipe.push(picked);
+  }
+  if (!recipe.length) return null;
+  // synthesize() logs each woven skill — mute it for bulk runs
+  const origLog = console.log;
+  let synthesis;
+  console.log = () => {};
+  try { synthesis = synthesize(recipe, { affinityColors }); } finally { console.log = origLog; }
+  if (!synthesis || !synthesis.skill) return null;
+  return { skill: synthesis.skill, recipe, events };
+}
+
+/** simulateRun weave hook: random-of-offered draft + per-round event logging. */
+function makeWeaveHook(characterId, weaveEvents) {
   return {
     makeSkill({ floor }) {
-      const rounds = rollRoundsPerWeave();
-      const recipe = [];
-      const events = [];
-      for (let r = 0; r < rounds; r++) {
-        const options = drawTagsForRound({ roundIndex: r, chosen: recipe, count: rollTagsPerRound() });
-        if (!options.length) break;
-        const picked = options[Math.floor(Math.random() * options.length)];
-        events.push({ floor, round: r, offered: options, picked });
-        recipe.push(picked);
-      }
-      if (!recipe.length) return null;
-      // synthesize() logs each woven skill — mute it for bulk runs
-      const origLog = console.log;
-      let synthesis;
-      console.log = () => {};
-      try { synthesis = synthesize(recipe, { affinityColors }); } finally { console.log = origLog; }
-      if (!synthesis || !synthesis.skill) return null;
-      weaveEvents.push(...events);
-      return { skill: synthesis.skill, meta: { recipe, name: synthesis.skill.name } };
+      const made = makeRandomWovenSkill(characterId);
+      if (!made) return null;
+      weaveEvents.push(...made.events.map((e) => ({ floor, ...e })));
+      return { skill: made.skill, meta: { recipe: made.recipe, name: made.skill.name } };
     },
   };
 }
@@ -99,7 +112,9 @@ async function cmdSimulate(args) {
   const chars = !args.chars || args.chars === 'all'
     ? allChars : String(args.chars).split(',').filter((c) => allChars.includes(c));
   const fightChance = args.fightChance != null ? Number(args.fightChance) : 0.75;
-  const weaveChance = args.weaveChance != null ? Number(args.weaveChance) : 0.35;
+  // design target: ~2 weaves per act → 2 pre-sampled training floors per run
+  // (a training node replaces that floor's fight, like a real map path)
+  const weaveFloors = args.weaves != null ? parseInt(args.weaves, 10) : 2;
   let policyTag = 'greedy', playerPolicy = null;
   if (args.policy === 'value' || args.weights) {
     let weights = {};
@@ -114,8 +129,8 @@ async function cmdSimulate(args) {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
   const file = args.out ? String(args.out) : path.join(dir, `runs-${stamp}.jsonl`);
   const out = fs.createWriteStream(file);
-  out.write(JSON.stringify({ type: 'meta', date: new Date().toISOString(), n, chars, policy: policyTag, fightChance, weaveChance }) + '\n');
-  line(`simulate: ${n} runs × ${chars.join(',')} policy=${policyTag} fightChance=${fightChance} weaveChance=${weaveChance}`);
+  out.write(JSON.stringify({ type: 'meta', date: new Date().toISOString(), n, chars, policy: policyTag, fightChance, weaveFloors }) + '\n');
+  line(`simulate: ${n} runs × ${chars.join(',')} policy=${policyTag} fightChance=${fightChance} weaveFloors=${weaveFloors}`);
   const t0 = Date.now();
   let total = 0;
   for (const characterId of chars) {
@@ -130,7 +145,7 @@ async function cmdSimulate(args) {
         relicPickPolicy: 'random',
         battleOpts: playerPolicy ? { playerPolicy } : {},
         onReward: (ev) => rewards.push(ev),
-        weave: { chance: weaveChance, makeSkill: makeWeaveHook(characterId, weaveEvents).makeSkill },
+        weave: { floors: weaveFloors, makeSkill: makeWeaveHook(characterId, weaveEvents).makeSkill },
       }));
       survived += run.survived ? 1 : 0;
       out.write(JSON.stringify({ seed, characterId, policy: policyTag, ...run, rewards, weaveEvents }) + '\n');

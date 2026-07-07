@@ -328,7 +328,7 @@ function measureStats(cfg) {
 
 /** Median-build relic draw: `count` uniform picks from the non-starter player
  *  pool (fresh per battle — inside the seeded RNG, so reproducible). */
-function pickRandomRelicIds(count) {
+export function pickRandomRelicIds(count) {
   if (count <= 0) return [];
   const pool = Object.values(RELIC_CATALOG).filter((r) => r.rarity !== 'starter').map((r) => r.id);
   const out = [];
