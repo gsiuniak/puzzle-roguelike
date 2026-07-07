@@ -202,6 +202,13 @@ async function cmdCollect(args, mixExtraSpecs = []) {
     policies.cem = { kind: 'value', weights: loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8'))) };
     refs.push('cem');
   }
+  if (args.formula && fs.existsSync(String(args.formula))) {
+    // champion-quality play (formula + chains) — dominant data source when given
+    const { loadFormulaWeights } = await import('./formula.mjs');
+    const fw = loadFormulaWeights(JSON.parse(fs.readFileSync(String(args.formula), 'utf8')));
+    policies.champ = { kind: 'formula', weights: fw };
+    refs.push('champ', 'champ', 'champ'); // over-weight the champion in the rotation
+  }
   mixExtraSpecs.forEach((s, i) => { policies[`mix${i}`] = s; refs.push(`mix${i}`); });
   const dir = path.join(DIR, 'reports');
   fs.mkdirSync(dir, { recursive: true });
