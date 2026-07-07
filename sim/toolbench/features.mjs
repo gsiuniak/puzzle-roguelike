@@ -44,6 +44,27 @@ export const FEATURE_NAMES = (() => {
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
+/** Stable tile-id → plane index for the SPATIAL board encoding (Phase B).
+ *  Index 9 = empty/unknown. Order is part of the model contract — do not
+ *  reorder without retraining. */
+export const TILE_INDEX = ['red', 'blue', 'green', 'yellow', 'purple', 'skull', 'disease', 'wild', 'thrall'];
+export const TILE_PLANES = TILE_INDEX.length + 1; // + empty/other
+
+/** 8×8 board as 64 small ints (row-major), for spatial models. */
+export function boardTensor(battle) {
+  const board = battle.board;
+  const out = new Array(board.cols * board.rows);
+  let i = 0;
+  for (let row = 0; row < board.rows; row++) {
+    for (let col = 0; col < board.cols; col++) {
+      const t = board.get(col, row);
+      const idx = t ? TILE_INDEX.indexOf(t) : -1;
+      out[i++] = idx >= 0 ? idx : TILE_INDEX.length;
+    }
+  }
+  return out;
+}
+
 /** affordability facts for a combatant: [affordableCount/4, minMissingFrac] */
 function affordability(c) {
   let affordable = 0;

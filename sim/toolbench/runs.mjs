@@ -135,7 +135,11 @@ async function cmdSimulate(args) {
   const weaveFloors = args.weaves != null ? parseInt(args.weaves, 10) : 2;
   // policy travels as a serializable SPEC (resolved inside each pool worker)
   let policyTag = 'greedy', policySpec = null, playerPolicy = null;
-  if (args.learned) {
+  if (args.formula) {
+    const { loadFormulaWeights } = await import('./formula.mjs');
+    policySpec = { kind: 'formula', weights: loadFormulaWeights(JSON.parse(fs.readFileSync(String(args.formula), 'utf8'))) };
+    policyTag = `formula:${path.basename(String(args.formula))}`;
+  } else if (args.learned) {
     // dynamic import — learn.mjs imports runs.mjs (makeRandomWovenSkill), so a
     // static import here would be a module cycle
     const { loadModel } = await import('./learn.mjs');

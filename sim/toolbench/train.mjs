@@ -30,7 +30,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Battle, makePlayerCombatant, makeEnemyCombatant, CHARACTERS_BY_ID } from './engine.mjs';
 import { selectEnemyForNode } from '../../src/js/data/enemies/index.js';
-import { DEFAULT_VALUE_WEIGHTS, WEIGHT_KEYS, makeValuePolicy } from './policy.mjs';
+import { DEFAULT_VALUE_WEIGHTS, WEIGHT_KEYS, makeValuePolicy, loadWeights } from './policy.mjs';
+import { DEFAULT_FORMULA_WEIGHTS, FORMULA_WEIGHT_KEYS, loadFormulaWeights } from './formula.mjs';
 import { resolveFrames, pickRandomRelicIds } from './trainer.mjs';
 import { makeRandomWovenSkill } from './runs.mjs';
 import { hashSeed, withSeededRandom } from './rng.mjs';
@@ -178,33 +179,53 @@ async function main() {
     line(`tasks: floors ${Object.entries(floorSpread).map(([f, n]) => `f${f}:${n}`).join(' ')}`);
   }
 
+  // evaluator family: 'value' (preview-search delta) or 'formula'
+  // (deterministic — measured FAR stronger in deployment; see formula.mjs)
+  const evaluator = args.evaluator === 'formula' ? 'formula' : 'value';
+  const KEYS = evaluator === 'formula' ? FORMULA_WEIGHT_KEYS : WEIGHT_KEYS;
+  const DEFAULTS_MAP = evaluator === 'formula' ? DEFAULT_FORMULA_WEIGHTS : DEFAULT_VALUE_WEIGHTS;
+  const toV = (w) => KEYS.map((k) => w[k]);
+  const toW = (vec) => Object.fromEntries(KEYS.map((k, i) => [k, vec[i]]));
+  const mkSpec = (vec) => ({ kind: evaluator, weights: toW(vec) });
+  line(`evaluator: ${evaluator} (${KEYS.length} weights)`);
+
   // reference baselines — in runs mode, on the CONFIRM set so best.fitness
   // starts on the same scale bestEver is tracked on
   const t0 = Date.now();
   const [baselineGreedy, baselineDefault] = objective === 'runs'
-    ? await evaluateRunBatch(pool, [null, { kind: 'value' }], hosts, nConfirm, 'train-run-confirm')
-    : await evalCandidates([null, { kind: 'value' }], null);
-  line(`baselines (confirm-scale): greedy=${(baselineGreedy * 100).toFixed(1)}% valueDefault=${(baselineDefault * 100).toFixed(1)}%`);
+    ? await evaluateRunBatch(pool, [null, { kind: evaluator }], hosts, nConfirm, 'train-run-confirm')
+    : await evalCandidates([null, { kind: evaluator }], null);
+  line(`baselines (confirm-scale): greedy=${(baselineGreedy * 100).toFixed(1)}% ${evaluator}Default=${(baselineDefault * 100).toFixed(1)}%`);
 
-  const defaults = toVec(DEFAULT_VALUE_WEIGHTS);
+  const defaults = toV(DEFAULTS_MAP);
+  // --seedWeights <file>: WARM-START the search MEAN at proven weights
+  // (population, not just distribution: the raw defaults are also injected as
+  // a gen-1 candidate — multi-start, fitness decides)
   let mean = [...defaults];
+  if (args.seedWeights && fs.existsSync(String(args.seedWeights))) {
+    const sw = JSON.parse(fs.readFileSync(String(args.seedWeights), 'utf8'));
+    const loaded = evaluator === 'formula' ? loadFormulaWeights(sw) : loadWeights(sw);
+    mean = toV({ ...DEFAULTS_MAP, ...loaded });
+    line(`seed mean ← ${String(args.seedWeights)}`);
+  }
   let sigma = defaults.map((d) => Math.abs(d) * 0.35 + 0.05);
-  let best = { vec: [...defaults], fitness: baselineDefault };
+  let best = { vec: [...mean], fitness: -1 }; // confirmed on first generation
   let enemySpec = null;
   const history = [];
 
   for (let gen = 0; gen < gens; gen++) {
     if (selfplay && gen > 0 && gen % selfplay === 0) {
-      enemySpec = { kind: 'value', weights: toWeights(best.vec) };
+      enemySpec = mkSpec(best.vec);
       line(`  [selfplay] enemy re-armed with best-so-far weights`);
     }
     // population: current mean + best-ever (elitism) + gaussian samples
     const candidates = [[...mean], [...best.vec]];
+    if (gen === 0) candidates.push([...defaults]); // multi-start: audition raw defaults too
     while (candidates.length < pop) {
       candidates.push(mean.map((m, i) => m + sigma[i] * gaussian()));
     }
     // whole generation in ONE pooled batch (runs mode: the cheap SCREEN pass)
-    const fitness = await evalCandidates(candidates.map((vec) => ({ kind: 'value', weights: toWeights(vec) })), enemySpec);
+    const fitness = await evalCandidates(candidates.map(mkSpec), enemySpec);
     const scored = candidates.map((vec, k) => ({ vec, fitness: fitness[k] }));
     scored.sort((a, b) => b.fitness - a.fitness);
     let confirmNote = '';
@@ -215,7 +236,7 @@ async function main() {
       // SEPARATE seed set; bestEver lives on the confirm scale only.
       const topK = scored.slice(0, CONFIRM_K);
       const confirmFit = await evaluateRunBatch(
-        pool, topK.map((s) => ({ kind: 'value', weights: toWeights(s.vec) })), hosts, nConfirm, 'train-run-confirm');
+        pool, topK.map((s) => mkSpec(s.vec)), hosts, nConfirm, 'train-run-confirm');
       let genBest = null;
       topK.forEach((s, i) => { s.confirm = confirmFit[i]; if (!genBest || s.confirm > genBest.confirm) genBest = s; });
       if (genBest.confirm > best.fitness) best = { vec: [...genBest.vec], fitness: genBest.confirm };
@@ -241,11 +262,12 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   const file = args.out ? String(args.out) : path.join(outDir, 'trained-weights.json');
   fs.writeFileSync(file, JSON.stringify({
-    weights: toWeights(best.vec),
+    evaluator,
+    weights: toW(best.vec),
     fitness: best.fitness,
-    baselines: { greedy: baselineGreedy, valueDefault: baselineDefault },
+    baselines: { greedy: baselineGreedy, [`${evaluator}Default`]: baselineDefault },
     history,
-    config: { pop, gens, objective, runsPerCandidate: objective === 'runs' ? nRuns : undefined, battles: tasks ? tasks.length : undefined, hosts, selfplay },
+    config: { pop, gens, objective, evaluator, runsPerCandidate: objective === 'runs' ? nRuns : undefined, battles: tasks ? tasks.length : undefined, hosts, selfplay, seedWeights: args.seedWeights || null },
     date: new Date().toISOString(),
   }, null, 2));
   line(`\nbest fitness ${(best.fitness * 100).toFixed(1)}% (greedy ${(baselineGreedy * 100).toFixed(1)}%, default ${(baselineDefault * 100).toFixed(1)}%)`);

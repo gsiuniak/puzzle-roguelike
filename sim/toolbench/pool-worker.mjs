@@ -23,6 +23,12 @@ async function resolvePolicy(ref) {
   else if (spec && spec.kind === 'learned') {
     const { makeLearnedPolicy } = await import('./learn.mjs');
     pol = makeLearnedPolicy(spec.model, spec.opts || {});
+  } else if (spec && spec.kind === 'conv') {
+    const { makeConvPolicy, loadConvModel } = await import('./nn.mjs');
+    pol = makeConvPolicy(loadConvModel(spec.model), spec.opts || {});
+  } else if (spec && spec.kind === 'formula') {
+    const { makeFormulaPolicy } = await import('./formula.mjs');
+    pol = makeFormulaPolicy(spec.weights || {}, spec.opts || {});
   }
   cache.set(ref, pol);
   return pol;

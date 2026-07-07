@@ -48,7 +48,7 @@ import {
   makeValuePolicy, makeSearchPolicy, loadWeights,
   previewBattle, previewAction, enumerateActions,
 } from './policy.mjs';
-import { featurize, FEATURE_NAMES } from './features.mjs';
+import { featurize, FEATURE_NAMES, boardTensor } from './features.mjs';
 import { hashSeed, withSeededRandom } from './rng.mjs';
 
 export { previewBattle, previewAction }; // re-export (moved to policy.mjs)
@@ -131,20 +131,37 @@ function recordingPolicy(base, sink) {
   };
 }
 
-/** ONE fully seeded recorded self-play battle → { samples } (shared by the
- *  serial path and pool-worker.mjs 'collect' tasks). Players are dealt a
- *  floor-scaled random relic load + up to ~2 random woven skills so the state
- *  distribution matches real runs. */
-export function collectOneBattle({ seed, hostId, frame, epsilon = 0.08 }, pPolicy = null, ePolicy = null) {
-  const sink = [];
-  const wrapped = recordingPolicy(pPolicy, sink);
-  const eWrapped = (battle, c) => {
+/** EPISODE recorder (Phase A/TD): wraps a REAL policy (must return actions —
+ *  no greedy fallback) with ε-exploration, and records the AFTERSTATE of every
+ *  action taken — flat features `f` + spatial board `b` — in decision order.
+ *  The per-side afterstate SEQUENCE is exactly what TD(λ) trains on. */
+function episodeRecorder(base, episode, epsilon) {
+  return (battle, c) => {
+    let action = null;
     if (epsilon > 0 && Math.random() < epsilon) {
-      const sw = battle.board.getValidSwaps();
-      if (sw.length) return { type: 'swap', swap: sw[Math.floor(Math.random() * sw.length)] };
+      const actions = enumerateActions(battle, c);
+      if (actions.length) action = actions[Math.floor(Math.random() * actions.length)];
     }
-    return ePolicy ? ePolicy(battle, c) : null;
+    if (!action) action = base(battle, c);
+    if (action) {
+      const { preview, self, opp: pOpp, extraTurn } = previewAction(battle, c, action);
+      if (self.hp > 0 && (pOpp.hp > 0 || pOpp.isEgg)) {
+        episode.push({ f: featurize(preview, self, pOpp, extraTurn ? 1 : 0), b: boardTensor(preview) });
+      }
+    }
+    return action;
   };
+}
+
+/** ONE fully seeded recorded self-play battle (shared by the serial path and
+ *  pool-worker.mjs 'collect' tasks). Players are dealt a floor-scaled random
+ *  relic load + up to ~2 random woven skills so the state distribution matches
+ *  real runs. Returns { episodes: [{xs, y}] } — one per side (both sides run
+ *  REAL policies here so both afterstate sequences are observable). */
+export function collectOneBattle({ seed, hostId, frame, epsilon = 0.08 }, pPolicy = null, ePolicy = null) {
+  const pEp = [], eEp = [];
+  const wrapped = episodeRecorder(pPolicy || makeValuePolicy({}), pEp, epsilon);
+  const eWrapped = episodeRecorder(ePolicy || makeValuePolicy({}), eEp, epsilon);
   const res = withSeededRandom(seed, () => {
     const floor = frame.floor;
     const relicCount = Math.round((floor - 1) * 0.5 * (0.4 + Math.random() * 1.2));
@@ -163,8 +180,11 @@ export function collectOneBattle({ seed, hostId, frame, epsilon = 0.08 }, pPolic
       { playerPolicy: wrapped, enemyPolicy: eWrapped },
     ).run();
   });
-  if (res.winner === 'draw') return { samples: [] };
-  return { samples: sink.map((s) => ({ x: s.x, y: s.side === res.winner ? 1 : 0 })) };
+  if (res.winner === 'draw') return { episodes: [] };
+  const episodes = [];
+  if (pEp.length) episodes.push({ xs: pEp, y: res.winner === 'player' ? 1 : 0 });
+  if (eEp.length) episodes.push({ xs: eEp, y: res.winner === 'enemy' ? 1 : 0 });
+  return { episodes };
 }
 
 async function cmdCollect(args, mixExtraSpecs = []) {
@@ -173,9 +193,11 @@ async function cmdCollect(args, mixExtraSpecs = []) {
   const hosts = Object.keys(CHARACTERS_BY_ID);
   const tasks = buildTasks(floors, hosts);
   const epsilon = args.epsilon != null ? Number(args.epsilon) : 0.08;
-  // policy SPEC pool for state diversity (resolved worker-side)
-  const policies = { greedy: null, hand: { kind: 'value' } };
-  const refs = ['greedy', 'hand'];
+  // policy SPEC pool for state diversity (resolved worker-side). Episode
+  // recording needs REAL policies on both sides (afterstates must be
+  // observable), so no engine-greedy here — ε-exploration supplies diversity.
+  const policies = { hand: { kind: 'value' } };
+  const refs = ['hand'];
   if (args.weights && fs.existsSync(String(args.weights))) {
     policies.cem = { kind: 'value', weights: loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8'))) };
     refs.push('cem');
@@ -202,14 +224,35 @@ async function cmdCollect(args, mixExtraSpecs = []) {
     context: { policies },
     onProgress: (done, totalN) => { if (done % 1000 === 0) line(`  collect ${done}/${totalN} battles (${((Date.now() - t0) / 1000).toFixed(0)}s)`); },
   });
-  let samples = 0;
+  let episodes = 0, samples = 0;
   for (const r of results) {
-    for (const s of r.samples) { out.write(JSON.stringify(s) + '\n'); samples++; }
+    for (const ep of r.episodes || []) {
+      out.write(JSON.stringify(ep) + '\n');
+      episodes++;
+      samples += ep.xs.length;
+    }
   }
   return new Promise((resolve) => out.end(() => {
-    line(`collect → ${path.relative(process.cwd(), file)} (${samples} samples from ${battles} battles, ${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+    line(`collect → ${path.relative(process.cwd(), file)} (${episodes} episodes / ${samples} afterstates from ${battles} battles, ${((Date.now() - t0) / 1000).toFixed(0)}s)`);
     resolve(file);
   }));
+}
+
+/** Load an episode JSONL: [{xs:[{f,b}|array,...], y}] (tolerates the legacy
+ *  flat {x,y} sample format by wrapping each as a 1-step episode). */
+async function loadEpisodes(file) {
+  const episodes = [];
+  const rl = readline.createInterface({ input: fs.createReadStream(file), crlfDelay: Infinity });
+  for await (const raw of rl) {
+    if (!raw.trim()) continue;
+    const r = JSON.parse(raw);
+    if (Array.isArray(r.xs)) {
+      episodes.push({ xs: r.xs.map((s) => (Array.isArray(s) ? { f: s } : s)), y: r.y });
+    } else if (r.x) {
+      episodes.push({ xs: [{ f: r.x }], y: r.y });
+    }
+  }
+  return episodes;
 }
 
 /* ═══════════════════════════════ fit ═══════════════════════════════════════ */
@@ -220,12 +263,10 @@ async function cmdFit(args) {
   const hidden = args.hidden != null ? parseInt(args.hidden, 10) : 24; // 0 → plain logistic
   const lr0 = args.lr != null ? Number(args.lr) : (hidden ? 0.03 : 0.05);
   const l2 = args.l2 != null ? Number(args.l2) : 1e-4;
+  // Monte-Carlo fit: flatten episodes → (afterstate, final outcome) pairs
   const X = [], Y = [];
-  const rl = readline.createInterface({ input: fs.createReadStream(file), crlfDelay: Infinity });
-  for await (const raw of rl) {
-    if (!raw.trim()) continue;
-    const r = JSON.parse(raw);
-    X.push(r.x); Y.push(r.y);
+  for (const ep of await loadEpisodes(file)) {
+    for (const s of ep.xs) { X.push(s.f); Y.push(ep.y); }
   }
   if (X.length < 200) { line(`fit: only ${X.length} samples — collect more`); process.exitCode = 1; return null; }
   const d = FEATURE_NAMES.length;
@@ -325,6 +366,155 @@ async function cmdFit(args) {
 
 /* ═══════════════════════════════ eval ══════════════════════════════════════ */
 
+/* ═══════════════════════════ fit-td (Phase A) ══════════════════════════════ */
+
+/**
+ * FITTED TD(λ) on afterstate episodes — per-decision credit assignment (the
+ * TD-Gammon recipe) instead of Monte-Carlo outcome labels. Each sweep freezes
+ * the current model, computes λ-returns backward through every episode
+ * (G_last = outcome; G_t = (1-λ)·V_frozen(x_{t+1}) + λ·G_{t+1}), then trains
+ * one SGD epoch toward those soft targets. MLP head only.
+ */
+async function cmdFitTd(args) {
+  const file = args.data ? String(args.data) : path.join(DIR, 'reports', 'learn-states.jsonl');
+  const sweeps = parseInt(args.sweeps, 10) || 8;
+  const hidden = parseInt(args.hidden, 10) || 24;
+  const lambda = args.lambda != null ? Number(args.lambda) : 0.8;
+  const lr0 = args.lr != null ? Number(args.lr) : 0.03;
+  const l2 = args.l2 != null ? Number(args.l2) : 1e-4;
+  const episodes = await loadEpisodes(file);
+  const nSamples = episodes.reduce((a, e) => a + e.xs.length, 0);
+  if (nSamples < 200) { line(`fit-td: only ${nSamples} samples — collect more`); process.exitCode = 1; return null; }
+  line(`fit-td: ${episodes.length} episodes / ${nSamples} afterstates, λ=${lambda}, ${sweeps} sweeps, mlp(h=${hidden})`);
+  const d = FEATURE_NAMES.length;
+  const h = hidden;
+  const r = () => (Math.random() - 0.5) * 0.3;
+  const model = {
+    type: 'mlp', h, featureNames: FEATURE_NAMES,
+    W1: Array.from({ length: h }, () => Array.from({ length: d }, r)),
+    b1: new Array(h).fill(0),
+    W2: Array.from({ length: h }, r),
+    b2: 0,
+  };
+  const a = new Array(h);
+  const trainPair = (x, target, lr) => {
+    let z2 = model.b2;
+    for (let j = 0; j < h; j++) {
+      let z1 = model.b1[j];
+      const row = model.W1[j];
+      for (let k = 0; k < d; k++) z1 += row[k] * x[k];
+      a[j] = Math.tanh(z1);
+      z2 += model.W2[j] * a[j];
+    }
+    const p = sigmoid(z2);
+    const g2 = p - target; // ∂CE/∂z2 for soft targets too
+    for (let j = 0; j < h; j++) {
+      const g1 = g2 * model.W2[j] * (1 - a[j] * a[j]);
+      model.W2[j] -= lr * (g2 * a[j] + l2 * model.W2[j]);
+      const row = model.W1[j];
+      const x_ = x;
+      for (let k = 0; k < d; k++) row[k] -= lr * (g1 * x_[k] + l2 * row[k]);
+      model.b1[j] -= lr * g1;
+    }
+    model.b2 -= lr * g2;
+    return p;
+  };
+  const order = episodes.map((_, i) => i);
+  for (let sweep = 0; sweep < sweeps; sweep++) {
+    // λ-returns from the FROZEN model (deep copy — targets stable within a sweep)
+    const frozen = JSON.parse(JSON.stringify(model));
+    const targets = episodes.map((ep) => {
+      const n = ep.xs.length;
+      const G = new Array(n);
+      G[n - 1] = ep.y;
+      for (let t = n - 2; t >= 0; t--) {
+        G[t] = (1 - lambda) * predict(frozen, ep.xs[t + 1].f) + lambda * G[t + 1];
+      }
+      return G;
+    });
+    // one SGD epoch over shuffled episodes
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    const lr = lr0 / (1 + sweep * 0.4);
+    let loss = 0;
+    for (const ei of order) {
+      const ep = episodes[ei], G = targets[ei];
+      for (let t = 0; t < ep.xs.length; t++) {
+        const p = trainPair(ep.xs[t].f, G[t], lr);
+        loss += -(G[t] * Math.log(Math.max(1e-9, p)) + (1 - G[t]) * Math.log(Math.max(1e-9, 1 - p)));
+      }
+    }
+    line(`  sweep ${sweep + 1}/${sweeps}: logloss(vs λ-targets)=${(loss / nSamples).toFixed(4)}`);
+  }
+  // reference accuracy vs final outcomes (comparable with cmdFit's metric)
+  let correct = 0, n = 0;
+  for (const ep of episodes) for (const s of ep.xs) {
+    if ((predict(model, s.f) >= 0.5 ? 1 : 0) === ep.y) correct++;
+    n++;
+  }
+  model.acc = correct / n;
+  model.trainedWith = 'td';
+  model.lambda = lambda;
+  model.samples = n;
+  model.date = new Date().toISOString();
+  const out = args.out ? String(args.out) : path.join(DIR, 'reports', 'learned-value-td.json');
+  fs.writeFileSync(out, JSON.stringify(model, null, 2));
+  line(`fit-td: outcome-acc=${pct(model.acc)} → ${path.relative(process.cwd(), out)}`);
+  return out;
+}
+
+/* ═══════════════════════ gate 1 (TD vs MC, run survival) ═══════════════════ */
+
+async function evalRunSurvival(pool, spec, n, tag, seedNs = 'gate-runs') {
+  const hosts = Object.keys(CHARACTERS_BY_ID);
+  const poolTasks = [];
+  for (let i = 0; i < n; i++) {
+    poolTasks.push({
+      type: 'run',
+      opts: { seed: hashSeed(seedNs, i), characterId: hosts[i % hosts.length], fightChance: 0.75, weaveFloors: 2 },
+      playerPolicy: spec ? 'p' : null,
+    });
+  }
+  const results = await pool.map(poolTasks, { context: { policies: { p: spec } } });
+  const surv = results.filter((r) => r.survived).length / results.length;
+  const se = Math.sqrt((surv * (1 - surv)) / results.length);
+  line(`  ${tag.padEnd(22)} runSurvival=${pct(surv)} ±${(se * 100).toFixed(1)}`);
+  return surv;
+}
+
+/**
+ * GATE 1: same episodes, same features, same budget — Monte-Carlo-labeled V
+ * vs TD(λ) V — judged on CONFIRMED RUN SURVIVAL. Pass = TD clearly beats MC.
+ */
+async function cmdGate1(args) {
+  const battles = parseInt(args.battles, 10) || 6000;
+  const evalRuns = parseInt(args.evalRuns, 10) || 400;
+  const dir = path.join(DIR, 'reports');
+  const dataFile = path.join(dir, 'gate1-episodes.jsonl');
+  line(`== GATE 1: TD(λ) vs Monte-Carlo value, identical data ==`);
+  await cmdCollect({ ...args, battles, out: dataFile });
+  const mcOut = await cmdFit({ ...args, data: dataFile, out: path.join(dir, 'gate1-mc.json') });
+  const tdOut = await cmdFitTd({ ...args, data: dataFile, out: path.join(dir, 'gate1-td.json') });
+  if (!mcOut || !tdOut) return;
+  const { getPool } = await import('./pool.mjs');
+  const pool = getPool();
+  line(`\n  run-survival eval (${evalRuns} runs each, same seeds):`);
+  const results = {
+    handDefaults: await evalRunSurvival(pool, { kind: 'value' }, evalRuns, 'hand-defaults'),
+    mc: await evalRunSurvival(pool, { kind: 'learned', model: loadModel(mcOut) }, evalRuns, 'learned-MC'),
+    td: await evalRunSurvival(pool, { kind: 'learned', model: loadModel(tdOut) }, evalRuns, 'learned-TD'),
+  };
+  if (args.weights && fs.existsSync(String(args.weights))) {
+    results.cem = await evalRunSurvival(
+      pool, { kind: 'value', weights: loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8'))) },
+      evalRuns, 'trained-CEM');
+  }
+  const se = Math.sqrt((results.td * (1 - results.td) + results.mc * (1 - results.mc)) / evalRuns);
+  const verdict = results.td - results.mc > 2 * se ? 'PASS — TD credit assignment is real here'
+    : (results.mc - results.td > 2 * se ? 'FAIL — TD underperforms MC' : 'INCONCLUSIVE — difference within noise');
+  line(`\n  GATE 1 verdict: ${verdict} (TD ${pct(results.td)} vs MC ${pct(results.mc)}, 2·SE=${(2 * se * 100).toFixed(1)}pp)`);
+  return results;
+}
+
 async function evalPolicySpec(pool, spec, tasks, battles, tag) {
   const poolTasks = [];
   for (let i = 0; i < battles; i++) {
@@ -374,24 +564,28 @@ async function cmdIterate(args) {
   const dataFile = path.join(DIR, 'reports', 'learn-states.jsonl');
   let mixExtra = [];
   let best = { win: -1, round: 0 };
+  const { getPool } = await import('./pool.mjs');
+  const pool = getPool();
   for (let r = 0; r < rounds; r++) {
     line(`\n== learn round ${r + 1}/${rounds} ==`);
     // data ACCUMULATES across rounds (fit on everything so far)
     await cmdCollect({ ...args, out: dataFile, append: r > 0 }, mixExtra);
-    const fitted = await cmdFit({ ...args, data: dataFile, out: roundModel });
+    // TD(λ) is the default fitter (gate 1: TD 17.5% vs MC 11.8% run survival);
+    // --mc for the legacy Monte-Carlo fit
+    const fitted = await (args.mc ? cmdFit : cmdFitTd)({ ...args, data: dataFile, out: roundModel });
     if (!fitted) return;
     const model = loadModel(roundModel);
     // feed the current policy back into the next round's collection mix (as a SPEC)
     mixExtra = [{ kind: 'learned', model, opts: { epsilon: 0.05 } }];
-    const results = await cmdEval({ ...args, model: roundModel });
-    // keep the BEST round's model as the final output (rounds can regress)
-    if (results.learned > best.win) {
-      best = { win: results.learned, round: r + 1 };
+    // keep-best on CONFIRMED RUN SURVIVAL — the deployment metric, nothing else
+    const surv = await evalRunSurvival(pool, { kind: 'learned', model }, parseInt(args.evalRuns, 10) || 400, `round-${r + 1} model`);
+    if (surv > best.win) {
+      best = { win: surv, round: r + 1 };
       fs.copyFileSync(roundModel, modelOut);
-      line(`  ↑ new best (round ${r + 1}, ${pct(results.learned)}) → ${path.relative(process.cwd(), modelOut)}`);
+      line(`  ↑ new best (round ${r + 1}, ${pct(surv)} run survival) → ${path.relative(process.cwd(), modelOut)}`);
     }
   }
-  line(`\nbest model: round ${best.round} at ${pct(best.win)} → ${path.relative(process.cwd(), modelOut)}`);
+  line(`\nbest model: round ${best.round} at ${pct(best.win)} run survival → ${path.relative(process.cwd(), modelOut)}`);
 }
 
 /* ═══════════════════════════════════ main ══════════════════════════════════ */
@@ -414,9 +608,11 @@ async function main() {
   const cmd = args._[0] || 'iterate';
   if (cmd === 'collect') await cmdCollect(args);
   else if (cmd === 'fit') await cmdFit(args);
+  else if (cmd === 'fit-td') await cmdFitTd(args);
+  else if (cmd === 'gate1') await cmdGate1(args);
   else if (cmd === 'eval') await cmdEval(args);
   else if (cmd === 'iterate') await cmdIterate(args);
-  else { line(`unknown command "${cmd}" — use collect | fit | eval | iterate`); process.exitCode = 1; }
+  else { line(`unknown command "${cmd}" — use collect | fit | fit-td | gate1 | eval | iterate`); process.exitCode = 1; }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
