@@ -84,9 +84,34 @@ function buildTasks(hosts, battles) {
   return tasks;
 }
 
-/** Evaluate MANY candidate policy specs on the same task set in one pooled
- *  batch (CRN: identical seeds per candidate). Returns fitness[] aligned with
- *  candidateSpecs. A spec of null = engine greedy. */
+/**
+ * RUN-SURVIVAL fitness (the default objective): each candidate plays the SAME
+ * seeded set of FULL runs (CRN); fitness = fraction survived. Training metric
+ * ≡ deployment metric — no hand-approximated battle distribution to get wrong
+ * (fight composition, relic acquisition, enemy dedup all come from the real
+ * run simulator). The enemy is inherently the SHIPPED AI (runs don't take an
+ * enemy policy) — which is the right opponent: it never adapts in the game,
+ * so self-play trains for the wrong game.
+ */
+async function evaluateRunBatch(pool, candidateSpecs, hosts, nRuns) {
+  const policies = {};
+  candidateSpecs.forEach((s, k) => { policies[`c${k}`] = s; });
+  const poolTasks = [];
+  for (let k = 0; k < candidateSpecs.length; k++) {
+    for (let i = 0; i < nRuns; i++) {
+      poolTasks.push({
+        type: 'run',
+        opts: { seed: hashSeed('train-run-v5', i), characterId: hosts[i % hosts.length], fightChance: 0.75, weaveFloors: 2 },
+        playerPolicy: candidateSpecs[k] ? `c${k}` : null,
+      });
+    }
+  }
+  const results = await pool.map(poolTasks, { context: { policies } });
+  return candidateSpecs.map((_, k) =>
+    results.slice(k * nRuns, (k + 1) * nRuns).filter((r) => r.survived).length / nRuns);
+}
+
+/** Per-battle fitness on a fixed task set (legacy objective, --objective battles). */
 async function evaluateBatch(pool, candidateSpecs, enemySpec, tasks) {
   const policies = {};
   if (enemySpec) policies.enemy = enemySpec;
@@ -130,20 +155,30 @@ async function main() {
   const gens = parseInt(args.gen, 10) || 20;
   const battles = parseInt(args.battles, 10) || 72;
   const eliteFrac = 0.25;
-  const selfplay = parseInt(args.selfplay, 10) || 0;
+  const objective = args.objective === 'battles' ? 'battles' : 'runs';
+  const selfplay = objective === 'runs' ? 0 : (parseInt(args.selfplay, 10) || 0); // runs mode: enemy IS the shipped AI — selfplay is the wrong game
+  const nRuns = parseInt(args.runs, 10) || 120;
   const allHosts = Object.keys(CHARACTERS_BY_ID);
   const hosts = args.hosts ? String(args.hosts).split(',').filter((h) => allHosts.includes(h)) : allHosts;
-  const tasks = buildTasks(hosts, battles);
+  const tasks = objective === 'battles' ? buildTasks(hosts, battles) : null;
   const { getPool } = await import('./pool.mjs');
   const pool = getPool();
-  line(`train: pop=${pop} gen=${gens} battles/candidate=${tasks.length} selfplay=${selfplay || 'off'} workers=${pool.size}`);
-  const floorSpread = {};
-  for (const t of tasks) floorSpread[t.floor] = (floorSpread[t.floor] || 0) + 1;
-  line(`tasks: RUN-REALISTIC pool (all floors, spawn-table enemies, random relic/woven loadouts) — floors ${Object.entries(floorSpread).map(([f, n]) => `f${f}:${n}`).join(' ')}`);
+  const evalCandidates = (specs, enemySpec) => (objective === 'runs'
+    ? evaluateRunBatch(pool, specs, hosts, nRuns)
+    : evaluateBatch(pool, specs, enemySpec, tasks));
+  if (objective === 'runs') {
+    line(`train: pop=${pop} gen=${gens} objective=RUN-SURVIVAL (${nRuns} full runs/candidate, CRN) workers=${pool.size}`);
+    line(`fitness ≡ deployment: real map composition, rarity-weighted random-of-offered relics, weave drafts, shipped enemy AI (selfplay off)`);
+  } else {
+    line(`train: pop=${pop} gen=${gens} objective=battles (${tasks.length}/candidate) selfplay=${selfplay || 'off'} workers=${pool.size}`);
+    const floorSpread = {};
+    for (const t of tasks) floorSpread[t.floor] = (floorSpread[t.floor] || 0) + 1;
+    line(`tasks: floors ${Object.entries(floorSpread).map(([f, n]) => `f${f}:${n}`).join(' ')}`);
+  }
 
-  // reference baselines on the same tasks (one pooled batch)
+  // reference baselines on the same objective (one pooled batch)
   const t0 = Date.now();
-  const [baselineGreedy, baselineDefault] = await evaluateBatch(pool, [null, { kind: 'value' }], null, tasks);
+  const [baselineGreedy, baselineDefault] = await evalCandidates([null, { kind: 'value' }], null);
   line(`baselines: greedy=${(baselineGreedy * 100).toFixed(1)}% valueDefault=${(baselineDefault * 100).toFixed(1)}%`);
 
   const defaults = toVec(DEFAULT_VALUE_WEIGHTS);
@@ -163,8 +198,8 @@ async function main() {
     while (candidates.length < pop) {
       candidates.push(mean.map((m, i) => m + sigma[i] * gaussian()));
     }
-    // whole generation in ONE pooled batch (pop × tasks battles)
-    const fitness = await evaluateBatch(pool, candidates.map((vec) => ({ kind: 'value', weights: toWeights(vec) })), enemySpec, tasks);
+    // whole generation in ONE pooled batch
+    const fitness = await evalCandidates(candidates.map((vec) => ({ kind: 'value', weights: toWeights(vec) })), enemySpec);
     const scored = candidates.map((vec, k) => ({ vec, fitness: fitness[k] }));
     scored.sort((a, b) => b.fitness - a.fitness);
     if (scored[0].fitness >= best.fitness) best = { vec: [...scored[0].vec], fitness: scored[0].fitness };
@@ -190,7 +225,7 @@ async function main() {
     fitness: best.fitness,
     baselines: { greedy: baselineGreedy, valueDefault: baselineDefault },
     history,
-    config: { pop, gens, battles: tasks.length, taskPool: 'run-realistic-v4', hosts, selfplay },
+    config: { pop, gens, objective, runsPerCandidate: objective === 'runs' ? nRuns : undefined, battles: tasks ? tasks.length : undefined, hosts, selfplay },
     date: new Date().toISOString(),
   }, null, 2));
   line(`\nbest fitness ${(best.fitness * 100).toFixed(1)}% (greedy ${(baselineGreedy * 100).toFixed(1)}%, default ${(baselineDefault * 100).toFixed(1)}%)`);

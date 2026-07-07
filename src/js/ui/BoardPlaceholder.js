@@ -151,6 +151,7 @@ const MATCH4_FLOURISH = {
     enabled: true,
     spanFrac: 1.0,         // fraction of the freeze beat the flash lives in
     color: '255,248,228',  // warm near-white
+    centerColor: '255,255,255', // hottest flare-center color
     coreRadiusFrac: 1.5,   // flare radius at full spread (× cell size)
     coreAlpha: 0.95,       // flare strength on frame 1 (decays quadratically)
     ringEndFrac: 3.4,      // shockwave ring radius at full spread (× cell size)
@@ -161,6 +162,18 @@ const MATCH4_FLOURISH = {
     streakLenFrac: 2.8,    // streak tip reach at full stretch (× cell size)
     streakWidthFrac: 0.1,  // streak half-width at the base (× cell size)
     streakAlpha: 0.8,      // streak strength (fades with the flash)
+    // Per-side override merged over the base when the flourish is the ENEMY's:
+    // slightly toned down and shifted toward red (a hostile deflect-spark).
+    enemy: {
+      color: '255,120,96',
+      centerColor: '255,214,200',
+      coreRadiusFrac: 1.3,
+      coreAlpha: 0.8,
+      ringEndFrac: 2.9,
+      ringAlpha: 0.7,
+      streakLenFrac: 2.3,
+      streakAlpha: 0.65,
+    },
   },
 };
 
@@ -629,7 +642,9 @@ export default class BoardPlaceholder extends UIElement {
    * @private
    */
   _renderParryFlash(ctx, gx, gy, cs, p) {
-    const cfg = MATCH4_FLOURISH.parryFlash;
+    const base = MATCH4_FLOURISH.parryFlash;
+    const enemySide = this.match4Flourish && this.match4Flourish.side === 'enemy';
+    const cfg = enemySide && base.enemy ? { ...base, ...base.enemy } : base;
     const fp = Math.min(1, p / Math.max(0.01, cfg.spanFrac));
     if (fp >= 1) return;
     const spread = 1 - Math.pow(1 - fp, 3);      // easeOutCubic — fast burst out
@@ -641,7 +656,7 @@ export default class BoardPlaceholder extends UIElement {
     // Central flare — hot white core over the matched tiles.
     const flareR = cs * cfg.coreRadiusFrac * (0.35 + 0.65 * spread);
     let g = ctx.createRadialGradient(gx, gy, 0, gx, gy, flareR);
-    g.addColorStop(0, `rgba(255,255,255,${cfg.coreAlpha * decay})`);
+    g.addColorStop(0, `rgba(${cfg.centerColor},${cfg.coreAlpha * decay})`);
     g.addColorStop(0.35, `rgba(${cfg.color},${cfg.coreAlpha * decay * 0.7})`);
     g.addColorStop(1, `rgba(${cfg.color},0)`);
     ctx.fillStyle = g;
