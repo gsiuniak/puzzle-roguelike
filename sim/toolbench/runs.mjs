@@ -108,6 +108,22 @@ function makeWeaveHook(characterId, weaveEvents) {
   };
 }
 
+/** ONE fully seeded run → serializable record (shared by the serial path and
+ *  pool-worker.mjs 'run' tasks). */
+export function runOneRun({ seed, characterId, fightChance = 0.75, weaveFloors = 2 }, playerPolicy = null) {
+  const rewards = [];
+  const weaveEvents = [];
+  const run = withSeededRandom(seed, () => simulateRun({
+    characterId,
+    fightChance,
+    relicPickPolicy: 'random',
+    battleOpts: playerPolicy ? { playerPolicy } : {},
+    onReward: (ev) => rewards.push(ev),
+    weave: { floors: weaveFloors, makeSkill: makeWeaveHook(characterId, weaveEvents).makeSkill },
+  }));
+  return { seed, characterId, ...run, rewards, weaveEvents };
+}
+
 async function cmdSimulate(args) {
   const n = parseInt(args.n, 10) || 1000;
   const allChars = Object.keys(CHARACTERS_BY_ID);
@@ -117,12 +133,13 @@ async function cmdSimulate(args) {
   // design target: ~2 weaves per act → 2 pre-sampled training floors per run
   // (a training node replaces that floor's fight, like a real map path)
   const weaveFloors = args.weaves != null ? parseInt(args.weaves, 10) : 2;
-  let policyTag = 'greedy', playerPolicy = null;
+  // policy travels as a serializable SPEC (resolved inside each pool worker)
+  let policyTag = 'greedy', policySpec = null, playerPolicy = null;
   if (args.learned) {
     // dynamic import — learn.mjs imports runs.mjs (makeRandomWovenSkill), so a
     // static import here would be a module cycle
-    const { makeLearnedPolicy, loadModel } = await import('./learn.mjs');
-    playerPolicy = makeLearnedPolicy(loadModel(String(args.learned)));
+    const { loadModel } = await import('./learn.mjs');
+    policySpec = { kind: 'learned', model: loadModel(String(args.learned)) };
     policyTag = `learned:${path.basename(String(args.learned))}`;
   } else if (args.policy === 'value' || args.weights) {
     let weights = {};
@@ -130,42 +147,43 @@ async function cmdSimulate(args) {
       weights = loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8')));
       policyTag = `value:${path.basename(String(args.weights))}`;
     } else policyTag = 'value';
-    playerPolicy = makeValuePolicy(weights);
+    policySpec = { kind: 'value', weights };
   }
+  playerPolicy = policySpec != null;
   const dir = path.join(DIR, 'reports');
   fs.mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
   const file = args.out ? String(args.out) : path.join(dir, `runs-${stamp}.jsonl`);
   const out = fs.createWriteStream(file);
   out.write(JSON.stringify({ type: 'meta', date: new Date().toISOString(), n, chars, policy: policyTag, fightChance, weaveFloors }) + '\n');
-  line(`simulate: ${n} runs × ${chars.join(',')} policy=${policyTag} fightChance=${fightChance} weaveFloors=${weaveFloors}`);
+  const { getPool } = await import('./pool.mjs');
+  const pool = getPool();
+  line(`simulate: ${n} runs × ${chars.join(',')} policy=${policyTag} fightChance=${fightChance} weaveFloors=${weaveFloors} workers=${pool.size}`);
   const t0 = Date.now();
-  let total = 0;
+  // fully seeded per-task → pool scheduling cannot change any result
+  const tasks = [];
   for (const characterId of chars) {
-    let survived = 0;
     for (let i = 0; i < n; i++) {
-      const seed = hashSeed('gems-runs', characterId, i);
-      const rewards = [];
-      const weaveEvents = [];
-      const run = withSeededRandom(seed, () => simulateRun({
-        characterId,
-        fightChance,
-        relicPickPolicy: 'random',
-        battleOpts: playerPolicy ? { playerPolicy } : {},
-        onReward: (ev) => rewards.push(ev),
-        weave: { floors: weaveFloors, makeSkill: makeWeaveHook(characterId, weaveEvents).makeSkill },
-      }));
-      survived += run.survived ? 1 : 0;
-      out.write(JSON.stringify({ seed, characterId, policy: policyTag, ...run, rewards, weaveEvents }) + '\n');
-      total++;
-      if (total % 250 === 0) line(`  ...${total} runs (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+      tasks.push({
+        type: 'run',
+        opts: { seed: hashSeed('gems-runs', characterId, i), characterId, fightChance, weaveFloors },
+        playerPolicy: playerPolicy ? 'p' : null,
+      });
     }
-    line(`  ${characterId.padEnd(13)} survival=${pct(survived / n)}`);
   }
-  // the sync loop never yields, so the stream is still buffered — wait for
-  // the actual flush before anyone (e.g. --analyze) reads the file
+  const context = { policies: { p: policySpec } };
+  const results = await pool.map(tasks, {
+    context,
+    onProgress: (done, totalN) => { if (done % 500 === 0) line(`  ...${done}/${totalN} runs (${((Date.now() - t0) / 1000).toFixed(0)}s)`); },
+  });
+  const survivedBy = {};
+  for (const rec of results) {
+    survivedBy[rec.characterId] = (survivedBy[rec.characterId] || 0) + (rec.survived ? 1 : 0);
+    out.write(JSON.stringify({ policy: policyTag, ...rec }) + '\n');
+  }
+  for (const characterId of chars) line(`  ${characterId.padEnd(13)} survival=${pct((survivedBy[characterId] || 0) / n)}`);
   await new Promise((resolve) => out.end(resolve));
-  line(`log → ${path.relative(process.cwd(), file)} (${total} runs, ${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+  line(`log → ${path.relative(process.cwd(), file)} (${results.length} runs, ${((Date.now() - t0) / 1000).toFixed(0)}s)`);
   return file;
 }
 

@@ -1,330 +1,312 @@
 /**
- * toolbench/policy.mjs — featurized VALUE POLICY for the engine's policy seam.
+ * toolbench/policy.mjs — SEARCH POLICY over simulated action previews.
  *
- * A policy for `new Battle(p, e, { playerPolicy/enemyPolicy })` that evaluates
- * EVERY candidate action (each affordable cast + each legal swap) with one
- * shared linear value function over hand-designed features, and plays argmax.
+ * Architecture (the chess-engine split — nothing about "what's good" is
+ * hard-coded here):
+ *   - enumerateActions(): the MOVE GENERATOR. Pure rules: every legal swap,
+ *     every affordable cast, and — crucially — every TARGET of a targeted
+ *     skill as its own candidate (each fracture row, each inscription spot).
+ *     This is what lets a policy *see* "destroy the in-between row to line up
+ *     a 4+", instead of being stuck with the engine's auto-target.
+ *   - previewAction(): the SIMULATOR. Applies the action on a disposable
+ *     clone of the battle THROUGH THE REAL ENGINE — cascades, refill, relic
+ *     passives, statuses all fire — so the policy sees actual consequences,
+ *     not formula estimates.
+ *   - the EVALUATOR judges the previewed afterstate. Pluggable + trained:
+ *       makeDeltaEvaluator(weights) — scores the before→after DELTAS with a
+ *         weight vector; DEFAULT_VALUE_WEIGHTS is the CEM training surface
+ *         (train.mjs learns these from win rates — hand-seeded, not hand-held).
+ *       learn.mjs supplies a fully learned V(afterstate) evaluator.
+ *   - EXTRA-TURN CHAIN SEARCH: when a previewed action retains the turn, the
+ *     policy recursively evaluates the best FOLLOW-UP on the preview (depth-
+ *     limited, discounted) — inscription→4+→keep turn→fracture becomes one
+ *     scored plan.
  *
- * Why linear-over-features (not a net, not deep search):
- *   - the WEIGHTS are the interpretable balance model — training them tells
- *     you what an extra turn / a skull point / a mana of a needed color is
- *     actually worth (the re-scoring signal);
- *   - skills are featurized BY THEIR EFFECTS, not by id, so the same policy
- *     evaluates woven/synthesized skills it has never seen;
- *   - cast-hold falls out naturally: a cast happens only when its estimated
- *     value beats the best swap (fixes greedy's "cast whenever affordable"
- *     artifacts — Encroach spam, Defend-over-swap, 3-match Inscription).
- *
- * Swap evaluation uses a DETERMINISTIC settle (cascade with refill OFF, same
- * philosophy as src BoardSimulator's "guaranteed" outcome): what the swap
- * certainly yields regardless of refill luck.
- *
- * WEIGHTS: `DEFAULT_VALUE_WEIGHTS` is the hand-seeded personality and the
- * TRAINING SURFACE — train.mjs optimizes exactly this vector (CEM self-play).
- * All estimates share the currency "≈1 point of damage".
+ * makeValuePolicy(weights, opts) is the delta-evaluator search policy (the
+ * name every other tool imports); old trained-weights JSONs still load
+ * (loadWeights filters to known keys).
  */
 
-import MatchResolver, { calculateDestroyedSkullDamage } from '../../src/js/game/MatchResolver.js';
-import { MANA_COLORS, isSkull } from '../../src/js/game/TileTypes.js';
-import { scaledBonus } from '../../src/js/data/scalingConfig.js';
+import { MANA_COLORS } from '../../src/js/game/TileTypes.js';
+import MatchResolver from '../../src/js/game/MatchResolver.js';
 
 const resolver = new MatchResolver();
+const BIG = 1e9;
+const CHAIN_DISCOUNT = 0.9;
+const SWAP_BEAM = 12; // fully preview at most this many swaps (cheap-settle prefilter)
+
+/** Fast combatant clone for previews: deep-copies MUTABLE battle state, shares
+ *  immutable defs (skills/relics are never mutated mid-battle by the engine). */
+function cloneCombatant(c) {
+  return {
+    ...c,
+    mana: { ...c.mana },
+    statuses: (c.statuses || []).map((s) => ({ ...s })),
+    dealt: { ...c.dealt },
+  };
+}
+
+/* ═══════════════════ the training surface (delta weights) ══════════════════ */
 
 export const DEFAULT_VALUE_WEIGHTS = {
-  /* board outcomes (per point / per event) */
-  skullDamage: 1.0,     // skull damage dealt to the opponent
-  lethal: 30,           // this action kills (through armor+barrier+block)
-  manaNeeded: 0.8,      // +1 mana of a color my skills cost
-  manaOther: 0.15,      // +1 mana of any other color
-  denial: 0.2,          // +1 mana of a color the OPPONENT's skills cost
-  extraTurn: 8,         // the action retains the turn
-  enablesCast: 2.5,     // a previously unaffordable skill becomes affordable
-  tilesCleared: 0.05,   // board churn (cascade potential)
-  /* skill effects (per point, effect-featurized — works for woven skills) */
-  dmg: 1.0,             // direct damage (capped vs opp's effective pool)
-  heal: 0.7,            // effective healing (capped by missing HP)
-  armor: 0.5,
+  /* observed before→after deltas (all in ~"1 point of damage" currency) */
+  dmg: 1.0,             // damage dealt to the opponent's pool (hp+armor+barrier+block)
+  selfLoss: 1.0,        // own pool lost (self-damage / retaliation seen in preview)
+  lethal: 30,           // the preview kills the opponent
+  heal: 0.7,            // own HP recovered
+  armor: 0.5,           // own armor gained
   barrier: 0.45,
-  gainAttack: 3.0,      // permanent +1 attack (ramp)
+  gainAttack: 3.0,      // permanent attack gained (ramp)
   gainMagic: 2.5,
   gainMaxHp: 0.6,
-  poisonStack: 1.6,
-  drainMana: 0.3,       // per mana actually drainable from the opponent
-  gainMana: 0.6,        // per mana granted by the skill itself
-  statusTurn: 3.0,      // strong status (silence/cripple/intangible/frozen) per turn
-  weakStatusTurn: 1.2,  // other statuses per turn
-  createTile: 0.5,      // per tile created/converted toward a useful type
-  skullTile: 0.9,       // per SKULL tile created (ambient damage potential)
-  lockTurn: 2.0,        // per turn of a color lock
-  markPoint: 4.0,       // per +1x of a mark multiplier
-  shuffleValue: 1.0,
-  /* action costs */
-  manaSpent: 0.55,      // opportunity cost per mana spent on a cast (subtracted)
-  castTempo: 1.5,       // flat tempo cost of casting instead of swapping (subtracted)
+  poisonStack: 1.6,     // poison added to the opponent (minus poison taken)
+  manaNeeded: 0.8,      // +1 mana of a color my skills cost
+  manaOther: 0.15,
+  manaSpent: 0.4,       // mana leaving my pool (cast costs — opportunity cost)
+  denial: 0.2,          // opponent mana removed
+  enablesCast: 2.5,     // a previously unaffordable skill becomes affordable
+  statusTurn: 3.0,      // strong status turns applied to the opponent
+  weakStatusTurn: 1.2,
+  markPoint: 4.0,       // mark multiplier armed
+  lockTurn: 2.0,
+  createTile: 0.5,      // board gained tiles of colors I need (deferred mana)
+  skullTile: 0.7,       // board gained skulls (ammo — for either side)
+  extraTurn: 8,         // retained turn at the search HORIZON (unchained leaf)
+  castTempo: 1.5,       // flat cost of casting instead of swapping
 };
 
 export const WEIGHT_KEYS = Object.keys(DEFAULT_VALUE_WEIGHTS);
 
-const STRONG_STATUS = new Set(['silenced', 'crippled', 'intangible', 'frozen']);
-
-/** Deterministic cascade settle on a (caller-owned) board clone — refill OFF. */
-export function settleBoard(board, attacker, maxSteps = 12) {
-  const out = { mana: {}, skullDamage: 0, extraTurn: false, tiles: 0 };
-  for (let step = 0; step < maxSteps; step++) {
-    const a = resolver.analyzeMatches(board, attacker);
-    if (!a) break;
-    for (const [c, n] of Object.entries(a.mana)) out.mana[c] = (out.mana[c] || 0) + n;
-    out.skullDamage += a.skullDamage;
-    if (a.extraTurnTrigger) out.extraTurn = true;
-    out.tiles += a.positions.length;
-    board.removeTiles(a.positions);
-    board.applyGravity();
-  }
-  return out;
-}
-
-const costColorsOf = (combatant) => {
-  const m = {};
-  for (const s of combatant.skills || []) {
-    for (const [col, amt] of Object.entries(s.cost || {})) m[col] = (m[col] || 0) + amt;
-  }
-  return m;
-};
-
-const oppPool = (opp) => Math.max(1, opp.hp) + (opp.armor || 0) + (opp.barrier || 0) + (opp.block || 0);
-
-/** Would gaining `gained` mana make a currently unaffordable skill affordable? */
-function enablesNewCast(c, gained) {
-  for (const skill of c.skills || []) {
-    const cost = skill.cost || {};
-    if (!Object.keys(cost).length) continue;
-    let affordableNow = true, affordableAfter = true;
-    for (const [col, amt] of Object.entries(cost)) {
-      if ((c.mana[col] || 0) < amt) affordableNow = false;
-      if ((c.mana[col] || 0) + (gained[col] || 0) < amt) affordableAfter = false;
-    }
-    if (!affordableNow && affordableAfter) return true;
-  }
-  return false;
-}
-
-/** Value of the mana bundle `gained` for combatant c (needed/other/denial). */
-function manaValue(gained, myColors, oppColors, w) {
-  let v = 0;
-  for (const [col, n] of Object.entries(gained)) {
-    if (n <= 0) continue;
-    v += n * (myColors[col] ? w.manaNeeded : w.manaOther);
-    if (oppColors[col]) v += n * w.denial;
-  }
-  return v;
-}
-
-/** Estimate the value of casting `skill` right now (effect-featurized). */
-export function estimateCastValue(battle, c, skill, w) {
-  const opp = battle.other(c);
-  const board = battle.board;
-  const myColors = costColorsOf(c);
-  const oppColors = costColorsOf(opp);
-  let v = 0;
-  let dmgTotal = 0;
-  for (const ef of skill.effects || []) {
-    switch (ef.effectType) {
-      case 'damage': {
-        const d = ef.damage || {};
-        const skulls = d.perSkull ? board.getTilesOfType('skull').length : 0;
-        const amt = (d.amount == null ? c.attack : d.amount) + (d.perSkull || 0) * skulls + scaledBonus(d.scaling, c);
-        const eff = Math.min(amt, oppPool(opp));
-        dmgTotal += eff;
-        v += eff * w.dmg;
-        if (d.leech) v += Math.floor(eff * d.leech) * w.heal * (c.hp < c.maxHp ? 1 : 0);
-        break;
-      }
-      case 'heal': {
-        const h = ef.heal || {};
-        const amt = (h.amount || 0) + scaledBonus(h.scaling, c);
-        v += Math.min(amt, c.maxHp - c.hp) * w.heal;
-        break;
-      }
-      case 'armor': { const a = ef.armor || {}; v += ((a.amount || 0) + scaledBonus(a.scaling, c)) * w.armor; break; }
-      case 'barrier': { const b = ef.barrier || {}; v += ((b.amount || 0) + scaledBonus(b.scaling, c)) * w.barrier; break; }
-      case 'extra_turn': v += w.extraTurn; break;
-      case 'gain_attack': v += ((ef.gainAttack && ef.gainAttack.amount) || 1) * w.gainAttack; break;
-      case 'gain_magic': v += ((ef.gainMagic && ef.gainMagic.amount) || 1) * w.gainMagic; break;
-      case 'gain_max_hp': v += ((ef.gainMaxHp && ef.gainMaxHp.amount) || 0) * w.gainMaxHp; break;
-      case 'apply_poison': {
-        const p = ef.poison || {};
-        const skulls = p.perSkull ? board.getTilesOfType('skull').length : 0;
-        const stacks = (p.amount || 0) + Math.min(p.perSkull ? skulls * p.perSkull : 0, skulls) + scaledBonus(p.scaling, c);
-        v += stacks * w.poisonStack;
-        break;
-      }
-      case 'drain_mana': {
-        const d = ef.drainMana || {};
-        let drained = 0;
-        for (const col of d.color ? [d.color] : MANA_COLORS) drained += Math.min(opp.mana[col] || 0, d.amount || 0);
-        v += drained * w.drainMana;
-        break;
-      }
-      case 'gain_mana': {
-        const g = ef.gainMana || {};
-        if (g.color) v += (g.amount || 0) * (myColors[g.color] ? w.manaNeeded : w.gainMana);
-        break;
-      }
-      case 'silence': v += (((ef.silence && ef.silence.turns) || 1)) * w.statusTurn; break;
-      case 'set_attack': v += (((ef.setAttack && ef.setAttack.turns) || 1)) * w.statusTurn; break;
-      case 'apply_status': {
-        const s = ef.applyStatus || {};
-        v += (s.turns || 1) * (STRONG_STATUS.has(s.id) ? w.statusTurn : w.weakStatusTurn);
-        break;
-      }
-      case 'create_tiles': {
-        const ct = ef.createTiles || {};
-        const n = ct.amount || 1;
-        if (ct.type === 'skull') v += n * w.skullTile;
-        else v += n * w.createTile * (myColors[ct.type] ? 1.5 : 1);
-        break;
-      }
-      case 'convert_tile': {
-        // simulate: only worth casting when it completes a match; 4+ = extra turn
-        const type = (ef.convertTile && ef.convertTile.type) || 'red';
-        const spot = battle._bestConvertSpot(c, type);
-        if (spot) {
-          const clone = board.clone();
-          clone.convertTilesToType([{ col: spot.col, row: spot.row }], type);
-          const s = settleBoard(clone, c);
-          v += s.skullDamage * w.skullDamage + manaValue(s.mana, myColors, oppColors, w) + s.tiles * w.tilesCleared;
-          if (s.extraTurn) v += w.extraTurn;
-          dmgTotal += s.skullDamage;
-        }
-        break;
-      }
-      case 'convert_tiles_by_type': {
-        const cb = ef.convertByType || {};
-        const n = board.getTilesOfType(cb.from || '').length;
-        if ((cb.to || 'skull') === 'skull') v += n * w.skullTile;
-        else v += n * w.createTile * (myColors[cb.to] ? 1.5 : 1);
-        break;
-      }
-      case 'destroy_tiles_row': case 'destroy_tiles_column': {
-        const lineLen = 8;
-        let bestSkulls = 0; // engine auto-targets the most-skull line
-        const horizontal = ef.effectType === 'destroy_tiles_row';
-        for (let i = 0; i < 8; i++) {
-          let s = 0;
-          for (let j = 0; j < 8; j++) {
-            const t = horizontal ? board.get(j, i) : board.get(i, j);
-            if (t && isSkull(t)) s++;
-          }
-          bestSkulls = Math.max(bestSkulls, s);
-        }
-        const dmg = calculateDestroyedSkullDamage(c, bestSkulls);
-        dmgTotal += dmg;
-        v += dmg * w.skullDamage + (lineLen - bestSkulls) * w.manaOther + lineLen * w.tilesCleared;
-        break;
-      }
-      case 'destroy_tiles': {
-        const r = (skill.area && skill.area.radius != null) ? skill.area.radius : 1;
-        const size = (2 * r + 1) ** 2;
-        let bestSkulls = 0;
-        for (let col = 0; col < 8; col++) for (let row = 0; row < 8; row++) {
-          let s = 0;
-          for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
-            const t = board.get(col + dx, row + dy);
-            if (t && isSkull(t)) s++;
-          }
-          bestSkulls = Math.max(bestSkulls, s);
-        }
-        const dmg = calculateDestroyedSkullDamage(c, bestSkulls);
-        dmgTotal += dmg;
-        v += dmg * w.skullDamage + Math.max(0, size - bestSkulls) * w.manaOther + size * w.tilesCleared;
-        break;
-      }
-      case 'destroy_tiles_by_type': {
-        const db = ef.destroyByType || {};
-        let n = board.getTilesOfType(db.type || 'skull').length;
-        if (db.amount != null) n = Math.min(n, db.amount);
-        if ((db.type || 'skull') === 'skull') {
-          const dmg = calculateDestroyedSkullDamage(c, n);
-          dmgTotal += dmg;
-          v += dmg * w.skullDamage;
-        } else v += n * w.manaOther;
-        break;
-      }
-      case 'transmute_mana': {
-        const t = ef.transmuteMana || {};
-        v += (t.amount || 0) * (myColors[t.color] ? w.manaNeeded - w.manaOther : 0);
-        break;
-      }
-      case 'consume': {
-        const cs = ef.consume || {};
-        const div = Math.max(2, cs.divisor || 2);
-        let pool = 0;
-        if (cs.resource === 'armor') pool = c.armor;
-        else if (cs.resource === 'barrier') pool = c.barrier;
-        else if (cs.color) pool = c.mana[cs.color] || 0;
-        else for (const col of MANA_COLORS) pool += c.mana[col] || 0;
-        const dmg = Math.min(Math.floor(pool / div), oppPool(opp));
-        dmgTotal += dmg;
-        v += dmg * w.dmg - pool * w.manaOther; // spends the pool
-        break;
-      }
-      case 'mark': v += (((ef.mark && ef.mark.multiplier) || 2) - 1) * w.markPoint; break;
-      case 'lock_color': v += Math.max(2, (ef.lockColor && ef.lockColor.turns) || 2) * w.lockTurn; break;
-      case 'shuffle': v += w.shuffleValue; break;
-      case 'self_destruct': v -= 1e6; break;
-      default: break;
-    }
-  }
-  if (dmgTotal >= oppPool(opp)) v += w.lethal;
-  const costTotal = Object.values(skill.cost || {}).reduce((a, b) => a + b, 0);
-  return v - costTotal * w.manaSpent - w.castTempo;
-}
-
-/** Value of a swap: deterministic settle of the post-swap board. */
-export function evaluateSwapValue(battle, c, sw, w) {
-  const opp = battle.other(c);
-  const myColors = costColorsOf(c);
-  const oppColors = costColorsOf(opp);
-  const clone = battle.board.clone();
-  clone.swap(sw.col1, sw.row1, sw.col2, sw.row2);
-  const s = settleBoard(clone, c);
-  if (s.tiles === 0) return -Infinity; // not a match-making swap
-  let v = s.skullDamage * w.skullDamage
-    + manaValue(s.mana, myColors, oppColors, w)
-    + s.tiles * w.tilesCleared;
-  if (s.extraTurn) v += w.extraTurn;
-  if (s.skullDamage >= oppPool(opp)) v += w.lethal;
-  if (enablesNewCast(c, s.mana)) v += w.enablesCast;
-  return v;
-}
-
-/**
- * Build a policy for the Battle seam. Plays argmax over all casts + swaps.
- * Returns null (→ engine greedy fallback, incl. reshuffle) when no candidate.
- */
-export function makeValuePolicy(weights = {}) {
-  const w = { ...DEFAULT_VALUE_WEIGHTS, ...weights };
-  return (battle, c) => {
-    let best = null, bestVal = -Infinity;
-    if (!battle._hasStatus(c, 'silenced')) {
-      for (const skill of c.skills || []) {
-        if (!battle.canAfford(c, skill)) continue;
-        const v = estimateCastValue(battle, c, skill, w);
-        if (v > bestVal) { bestVal = v; best = { type: 'cast', skill }; }
-      }
-    }
-    for (const sw of battle.board.getValidSwaps()) {
-      const v = evaluateSwapValue(battle, c, sw, w);
-      if (v > bestVal) { bestVal = v; best = { type: 'swap', swap: sw }; }
-    }
-    return best;
-  };
-}
-
-/** Load weights from a trainer/train.mjs JSON report ({weights} or bare map). */
+/** Load a weights map from a train.mjs JSON ({weights} or bare), known keys only. */
 export function loadWeights(json) {
   const w = json && typeof json === 'object' ? (json.weights || json) : {};
   const out = {};
   for (const k of WEIGHT_KEYS) if (typeof w[k] === 'number' && Number.isFinite(w[k])) out[k] = w[k];
   return out;
+}
+
+/* ═══════════════════════ preview (the simulator) ═══════════════════════════ */
+
+/** Disposable copy of a Battle sharing its prototype — engine methods run on
+ *  cloned combatants + board without touching the real battle. */
+export function previewBattle(battle) {
+  const b = Object.create(Object.getPrototypeOf(battle));
+  Object.assign(b, battle);
+  b.p = cloneCombatant(battle.p);
+  b.e = cloneCombatant(battle.e);
+  b.board = battle.board.clone();
+  b.log = null;
+  b.opts = { ...battle.opts, playerPolicy: null, enemyPolicy: null };
+  return b;
+}
+
+/** Apply `action` for side `c` on a preview. Returns { preview, self, opp, extraTurn }. */
+export function previewAction(battle, c, action) {
+  const b = previewBattle(battle);
+  const self = c === battle.p ? b.p : b.e;
+  const opp = c === battle.p ? b.e : b.p;
+  let extraTurn = false;
+  if (action.type === 'cast') extraTurn = b._castSkill(self, action.skill, action.target || null);
+  else if (action.type === 'swap') extraTurn = b._performSwap(self, action.swap);
+  return { preview: b, self, opp, extraTurn };
+}
+
+/* ═══════════════════ move generator (pure rules, no judgment) ══════════════ */
+
+const AREA_CENTERS = (() => {
+  const out = [];
+  for (const col of [1, 3, 5, 6]) for (const row of [1, 3, 5, 6]) out.push({ col, row });
+  return out;
+})();
+
+/** Candidate targets for a skill's first targeted effect (empty = untargeted). */
+export function enumerateTargets(battle, c, skill) {
+  for (const ef of skill.effects || []) {
+    switch (ef.effectType) {
+      case 'destroy_tiles_row': {
+        const out = [];
+        for (let row = 0; row < battle.board.rows; row++) out.push({ col: 0, row });
+        return out;
+      }
+      case 'destroy_tiles_column': {
+        const out = [];
+        for (let col = 0; col < battle.board.cols; col++) out.push({ col, row: 0 });
+        return out;
+      }
+      case 'destroy_tiles': return AREA_CENTERS;
+      case 'convert_tile': {
+        const type = (ef.convertTile && ef.convertTile.type) || 'red';
+        const out = [];
+        for (const p of battle.board.getTilesNotOfType(type)) {
+          if (battle.board.positionCreatesMatch(p.col, p.row, type)) out.push({ col: p.col, row: p.row });
+          if (out.length >= 12) break;
+        }
+        return out; // may be empty → single untargeted candidate (engine picks)
+      }
+      default: break;
+    }
+  }
+  return [];
+}
+
+/** Cheap deterministic settle (no refill, board-only) used ONLY as a WIDE
+ *  prefilter beam over swaps — full engine previews are too expensive for all
+ *  ~25 valid swaps × chain depth. Every extra-turn-triggering swap always
+ *  survives the beam; judgment still happens in the evaluator. */
+function quickSwapScore(battle, c, sw) {
+  const clone = battle.board.clone();
+  clone.swap(sw.col1, sw.row1, sw.col2, sw.row2);
+  let score = 0;
+  for (let step = 0; step < 6; step++) {
+    const a = resolver.analyzeMatches(clone, c);
+    if (!a) break;
+    score += a.skullDamage * 2 + a.positions.length * 0.3;
+    for (const n of Object.values(a.mana)) score += n * 0.5;
+    if (a.extraTurnTrigger) score += 1000; // never beam out a turn-retainer
+    clone.removeTiles(a.positions);
+    clone.applyGravity();
+  }
+  return score;
+}
+
+/** Every legal action for `c`: affordable casts × candidate targets + the
+ *  beam-filtered swaps. */
+export function enumerateActions(battle, c, { swapBeam = SWAP_BEAM } = {}) {
+  const actions = [];
+  if (!battle._hasStatus(c, 'silenced')) {
+    for (const skill of c.skills || []) {
+      if (!battle.canAfford(c, skill)) continue;
+      const targets = enumerateTargets(battle, c, skill);
+      if (targets.length) for (const target of targets) actions.push({ type: 'cast', skill, target });
+      else actions.push({ type: 'cast', skill });
+    }
+  }
+  let swaps = battle.board.getValidSwaps();
+  if (swaps.length > swapBeam) {
+    swaps = swaps
+      .map((sw) => ({ sw, s: quickSwapScore(battle, c, sw) }))
+      .sort((a, b) => b.s - a.s)
+      .slice(0, swapBeam)
+      .map((x) => x.sw);
+  }
+  for (const sw of swaps) actions.push({ type: 'swap', swap: sw });
+  return actions;
+}
+
+/* ═══════════════════ delta evaluator (CEM training surface) ════════════════ */
+
+const pool = (x) => Math.max(0, x.hp) + (x.armor || 0) + (x.barrier || 0) + (x.block || 0);
+const manaTotalOf = (c) => MANA_COLORS.reduce((a, col) => a + (c.mana[col] || 0), 0);
+const statusTurnsOf = (c, strong) => (c.statuses || []).reduce((a, s) =>
+  a + (STRONG_STATUS.has(s.id) === strong ? (s.turns || 1) : 0), 0);
+const STRONG_STATUS = new Set(['silenced', 'crippled', 'intangible', 'frozen', 'reflecting']);
+
+const costColorsOf = (c) => {
+  const m = {};
+  for (const s of c.skills || []) for (const col of Object.keys(s.cost || {})) m[col] = (m[col] || 0) + s.cost[col];
+  return m;
+};
+
+function affordableCount(c) {
+  let n = 0;
+  for (const skill of c.skills || []) {
+    let ok = true;
+    for (const [col, amt] of Object.entries(skill.cost || {})) if ((c.mana[col] || 0) < amt) { ok = false; break; }
+    if (ok) n++;
+  }
+  return n;
+}
+
+/**
+ * Score the observable before→after deltas of a previewed action.
+ * mode 'add' — chain search ADDS discounted follow-up value.
+ */
+export function makeDeltaEvaluator(weights = {}) {
+  const w = { ...DEFAULT_VALUE_WEIGHTS, ...weights };
+  const fn = (battle, c, opp, action, preview, self, pOpp, extraTurn, atHorizon) => {
+    const myColors = costColorsOf(c);
+    const oppColors = costColorsOf(opp);
+    let v = 0;
+    v += Math.max(0, pool(opp) - pool(pOpp)) * w.dmg;
+    v -= Math.max(0, pool(c) - pool(self)) * w.selfLoss;
+    v += Math.max(0, self.hp - c.hp) * w.heal;
+    v += Math.max(0, (self.armor || 0) - (c.armor || 0)) * w.armor;
+    v += Math.max(0, (self.barrier || 0) - (c.barrier || 0)) * w.barrier;
+    v += ((self.attack || 0) - (c.attack || 0)) * w.gainAttack;
+    v += ((self.magic || 0) - (c.magic || 0)) * w.gainMagic;
+    v += Math.max(0, (self.maxHp || 0) - (c.maxHp || 0)) * w.gainMaxHp;
+    v += (((pOpp.poison || 0) - (opp.poison || 0)) - ((self.poison || 0) - (c.poison || 0))) * w.poisonStack;
+    for (const col of MANA_COLORS) {
+      const d = (self.mana[col] || 0) - (c.mana[col] || 0);
+      if (d > 0) v += d * (myColors[col] ? w.manaNeeded : w.manaOther);
+      else if (d < 0) v += d * w.manaSpent; // d negative → subtracts
+      const od = (opp.mana[col] || 0) - (pOpp.mana[col] || 0);
+      if (od > 0) v += od * (oppColors[col] ? w.denial : w.denial * 0.5);
+    }
+    if (affordableCount(self) > affordableCount(c) && manaTotalOf(self) >= manaTotalOf(c)) v += w.enablesCast;
+    v += Math.max(0, statusTurnsOf(pOpp, true) - statusTurnsOf(opp, true)) * w.statusTurn;
+    v += Math.max(0, statusTurnsOf(pOpp, false) - statusTurnsOf(opp, false)) * w.weakStatusTurn;
+    v += Math.max(0, (self.mark || 0) - (c.mark || 0)) * w.markPoint;
+    const locked = (b) => [...MANA_COLORS, 'skull'].filter((col) => b.isColorLocked && b.isColorLocked(col)).length;
+    v += Math.max(0, locked(preview.board) - locked(battle.board)) * w.lockTurn;
+    // board composition shifts (create/convert effects observed generically)
+    for (const col of MANA_COLORS) {
+      const d = preview.board.getTilesOfType(col).length - battle.board.getTilesOfType(col).length;
+      if (d > 0 && myColors[col]) v += d * w.createTile;
+    }
+    v += (preview.board.getTilesOfType('skull').length - battle.board.getTilesOfType('skull').length) * w.skullTile;
+    if (extraTurn && atHorizon) v += w.extraTurn; // unchained leaf — chain search handles the rest
+    if (action.type === 'cast') v -= w.castTempo;
+    return v;
+  };
+  fn.mode = 'add';
+  return fn;
+}
+
+/* ═══════════════════════════ the search policy ═════════════════════════════ */
+
+/**
+ * makeSearchPolicy(evaluator, { chainDepth }) — argmax over enumerated,
+ * previewed actions; extra-turn actions recurse into the best follow-up.
+ * evaluator(battle, c, opp, action, preview, self, pOpp, extraTurn, atHorizon)
+ *   → scalar. evaluator.mode: 'add' (chain adds discounted follow-up — delta
+ *   evaluators) | 'replace' (an afterstate V already encodes the future; chain
+ *   REPLACES the leaf value with the deeper evaluation — learned-V).
+ */
+export function makeSearchPolicy(evaluator, { chainDepth = 1, swapBeam = 10, chainSwapBeam = 6, epsilon = 0 } = {}) {
+  function bestValue(battle, c, depth) {
+    const opp = battle.other(c);
+    const actions = enumerateActions(battle, c, { swapBeam: depth === chainDepth ? swapBeam : chainSwapBeam });
+    if (!actions.length) return { action: null, value: 0 };
+    let best = null, bestV = -Infinity;
+    for (const action of actions) {
+      const { preview, self, opp: pOpp, extraTurn } = previewAction(battle, c, action);
+      let v;
+      if (pOpp.hp <= 0 && !pOpp.isEgg) v = BIG + Math.max(0, self.hp); // win — prefer healthier wins
+      else if (self.hp <= 0) v = -BIG;
+      else {
+        const canChain = extraTurn && depth > 0;
+        v = evaluator(battle, c, opp, action, preview, self, pOpp, extraTurn, !canChain);
+        if (canChain) {
+          const follow = bestValue(preview, self, depth - 1);
+          if (evaluator.mode === 'replace') v = follow.action ? follow.value : v;
+          else v += CHAIN_DISCOUNT * Math.max(0, follow.value);
+        }
+      }
+      if (v > bestV) { bestV = v; best = action; }
+    }
+    return { action: best, value: bestV };
+  }
+  return (battle, c) => {
+    if (epsilon > 0 && Math.random() < epsilon) {
+      const actions = enumerateActions(battle, c);
+      return actions.length ? actions[Math.floor(Math.random() * actions.length)] : null;
+    }
+    return bestValue(battle, c, chainDepth).action; // null → engine greedy fallback (reshuffle)
+  };
+}
+
+/** The standard trained policy: delta evaluator + chain search. */
+export function makeValuePolicy(weights = {}, opts = {}) {
+  return makeSearchPolicy(makeDeltaEvaluator(weights), opts);
 }

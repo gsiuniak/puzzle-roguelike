@@ -44,40 +44,19 @@ import { fileURLToPath } from 'node:url';
 import { Battle, makePlayerCombatant, makeEnemyCombatant, CHARACTERS_BY_ID } from './engine.mjs';
 import { resolveFrames, pickRandomRelicIds } from './trainer.mjs';
 import { makeRandomWovenSkill } from './runs.mjs';
-import { makeValuePolicy, loadWeights } from './policy.mjs';
+import {
+  makeValuePolicy, makeSearchPolicy, loadWeights,
+  previewBattle, previewAction, enumerateActions,
+} from './policy.mjs';
 import { featurize, FEATURE_NAMES } from './features.mjs';
 import { hashSeed, withSeededRandom } from './rng.mjs';
+
+export { previewBattle, previewAction }; // re-export (moved to policy.mjs)
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const line = (s) => process.stdout.write(s + '\n');
 const pct = (x, d = 1) => `${(x * 100).toFixed(d)}%`;
 const deep = (o) => JSON.parse(JSON.stringify(o));
-
-/* ═══════════════════════ preview (apply action on a clone) ═════════════════ */
-
-/** A disposable copy of a Battle sharing the prototype: cloned combatants +
- *  board, so engine methods (_castSkill/_performSwap) can run without touching
- *  the real battle. */
-export function previewBattle(battle) {
-  const b = Object.create(Object.getPrototypeOf(battle));
-  Object.assign(b, battle);
-  b.p = deep(battle.p);
-  b.e = deep(battle.e);
-  b.board = battle.board.clone();
-  b.log = null;
-  b.opts = { ...battle.opts, playerPolicy: null, enemyPolicy: null };
-  return b;
-}
-
-/** Apply `action` for side `c` on a preview; returns { preview, self, extraTurn }. */
-export function previewAction(battle, c, action) {
-  const b = previewBattle(battle);
-  const self = c === battle.p ? b.p : b.e;
-  let extraTurn = false;
-  if (action.type === 'cast') extraTurn = b._castSkill(self, action.skill, action.target || null);
-  else if (action.type === 'swap') extraTurn = b._performSwap(self, action.swap);
-  return { preview: b, self, extraTurn };
-}
 
 /* ═══════════════════════════ model + learned policy ════════════════════════ */
 
@@ -101,34 +80,15 @@ export function predict(model, x) {
   return sigmoid(z);
 }
 
-/** Policy for the Battle seam: argmax V over previewed next states. */
-export function makeLearnedPolicy(model, { epsilon = 0 } = {}) {
-  return (battle, c) => {
-    const opp = battle.other(c);
-    const candidates = [];
-    if (!battle._hasStatus(c, 'silenced')) {
-      for (const skill of c.skills || []) {
-        if (battle.canAfford(c, skill)) candidates.push({ type: 'cast', skill });
-      }
-    }
-    for (const sw of battle.board.getValidSwaps()) candidates.push({ type: 'swap', swap: sw });
-    if (!candidates.length) return null; // engine greedy handles reshuffle
-    if (epsilon > 0 && Math.random() < epsilon) {
-      return candidates[Math.floor(Math.random() * candidates.length)];
-    }
-    let best = null, bestV = -Infinity;
-    for (const action of candidates) {
-      const { preview, self, extraTurn } = previewAction(battle, c, action);
-      const pOpp = self === preview.p ? preview.e : preview.p;
-      // terminal shortcuts: a killing action is a win, dying to your own action a loss
-      let v;
-      if (pOpp.hp <= 0 && !pOpp.isEgg) v = 1 + 1e-6;
-      else if (self.hp <= 0) v = -1;
-      else v = predict(model, featurize(preview, self, pOpp, extraTurn ? 1 : 0));
-      if (v > bestV) { bestV = v; best = action; }
-    }
-    return best;
-  };
+/** Learned-V evaluator for the SEARCH policy (policy.mjs): scores the
+ *  previewed afterstate with V; mode 'replace' — deeper chain evaluations
+ *  supersede the leaf (V already encodes the future). Targets + extra-turn
+ *  chains come from the shared search wrapper, judgment from the model. */
+export function makeLearnedPolicy(model, { epsilon = 0, chainDepth = 2 } = {}) {
+  const evaluator = (battle, c, opp, action, preview, self, pOpp, extraTurn) =>
+    predict(model, featurize(preview, self, pOpp, extraTurn ? 1 : 0));
+  evaluator.mode = 'replace';
+  return makeSearchPolicy(evaluator, { chainDepth, epsilon });
 }
 
 export function loadModel(file) {
@@ -150,7 +110,9 @@ function buildTasks(floors, hosts) {
 }
 
 /** A recording wrapper: records both-perspective features at each decision
- *  point, then delegates to `base` (or engine greedy when base is null). */
+ *  point, PLUS the afterstate of the chosen action (what the search policy
+ *  actually queries V with — matching train/inference distributions), then
+ *  delegates to `base` (or engine greedy when base is null). */
 function recordingPolicy(base, sink) {
   return (battle, c) => {
     const opp = battle.other(c);
@@ -158,71 +120,94 @@ function recordingPolicy(base, sink) {
       { x: featurize(battle, c, opp, 1), side: c.side },
       { x: featurize(battle, opp, c, 0), side: opp.side },
     );
-    return base ? base(battle, c) : null;
+    const action = base ? base(battle, c) : null;
+    if (action) {
+      const { preview, self, opp: pOpp, extraTurn } = previewAction(battle, c, action);
+      if (self.hp > 0 && (pOpp.hp > 0 || pOpp.isEgg)) {
+        sink.push({ x: featurize(preview, self, pOpp, extraTurn ? 1 : 0), side: c.side });
+      }
+    }
+    return action;
   };
 }
 
-function cmdCollect(args, mixExtra = []) {
+/** ONE fully seeded recorded self-play battle → { samples } (shared by the
+ *  serial path and pool-worker.mjs 'collect' tasks). Players are dealt a
+ *  floor-scaled random relic load + up to ~2 random woven skills so the state
+ *  distribution matches real runs. */
+export function collectOneBattle({ seed, hostId, frame, epsilon = 0.08 }, pPolicy = null, ePolicy = null) {
+  const sink = [];
+  const wrapped = recordingPolicy(pPolicy, sink);
+  const eWrapped = (battle, c) => {
+    if (epsilon > 0 && Math.random() < epsilon) {
+      const sw = battle.board.getValidSwaps();
+      if (sw.length) return { type: 'swap', swap: sw[Math.floor(Math.random() * sw.length)] };
+    }
+    return ePolicy ? ePolicy(battle, c) : null;
+  };
+  const res = withSeededRandom(seed, () => {
+    const floor = frame.floor;
+    const relicCount = Math.round((floor - 1) * 0.5 * (0.4 + Math.random() * 1.2));
+    const customSkills = [];
+    const wovenCount = (floor >= 3 && Math.random() < 0.5 ? 1 : 0) + (floor >= 6 && Math.random() < 0.5 ? 1 : 0);
+    for (let k = 0; k < wovenCount; k++) {
+      const made = makeRandomWovenSkill(hostId);
+      if (made) customSkills.push(made.skill);
+    }
+    return new Battle(
+      makePlayerCombatant({
+        characterId: hostId, victories: frame.victories,
+        relicIds: pickRandomRelicIds(relicCount), customSkills,
+      }),
+      makeEnemyCombatant(frame.enemyId, frame.floor),
+      { playerPolicy: wrapped, enemyPolicy: eWrapped },
+    ).run();
+  });
+  if (res.winner === 'draw') return { samples: [] };
+  return { samples: sink.map((s) => ({ x: s.x, y: s.side === res.winner ? 1 : 0 })) };
+}
+
+async function cmdCollect(args, mixExtraSpecs = []) {
   const battles = parseInt(args.battles, 10) || 3000;
   const floors = String(args.floors || '2,4,6,8,9').split(',').map(Number).filter((f) => f >= 1 && f <= 10);
   const hosts = Object.keys(CHARACTERS_BY_ID);
   const tasks = buildTasks(floors, hosts);
   const epsilon = args.epsilon != null ? Number(args.epsilon) : 0.08;
-  // policy pool for state diversity: null = engine greedy
-  const pool = [null, makeValuePolicy({}), ...mixExtra];
+  // policy SPEC pool for state diversity (resolved worker-side)
+  const policies = { greedy: null, hand: { kind: 'value' } };
+  const refs = ['greedy', 'hand'];
   if (args.weights && fs.existsSync(String(args.weights))) {
-    pool.push(makeValuePolicy(loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8')))));
+    policies.cem = { kind: 'value', weights: loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8'))) };
+    refs.push('cem');
   }
+  mixExtraSpecs.forEach((s, i) => { policies[`mix${i}`] = s; refs.push(`mix${i}`); });
   const dir = path.join(DIR, 'reports');
   fs.mkdirSync(dir, { recursive: true });
   const file = args.out ? String(args.out) : path.join(dir, 'learn-states.jsonl');
   const out = fs.createWriteStream(file, { flags: args.append ? 'a' : 'w' });
   const t0 = Date.now();
-  let samples = 0;
+  const { getPool } = await import('./pool.mjs');
+  const pool = getPool();
+  const poolTasks = [];
   for (let i = 0; i < battles; i++) {
     const task = tasks[i % tasks.length];
-    const seed = hashSeed('gems-learn', i);
-    const sink = [];
-    const pPol = pool[i % pool.length];
-    const ePol = pool[(i * 7 + 3) % pool.length];
-    const wrapped = recordingPolicy(pPol, sink);
-    const eWrapped = (battle, c) => {
-      if (epsilon > 0 && Math.random() < epsilon) {
-        const sw = battle.board.getValidSwaps();
-        if (sw.length) return { type: 'swap', swap: sw[Math.floor(Math.random() * sw.length)] };
-      }
-      return ePol ? ePol(battle, c) : null;
-    };
-    const res = withSeededRandom(seed, () => {
-      // REALISTIC state distribution: deal a floor-scaled random relic load
-      // and up to ~2 random woven skills into the player (matching what real
-      // runs accumulate — kit-only states would leave V blind to them)
-      const floor = task.frame.floor;
-      const relicCount = Math.round((floor - 1) * 0.5 * (0.4 + Math.random() * 1.2));
-      const customSkills = [];
-      const wovenCount = (floor >= 3 && Math.random() < 0.5 ? 1 : 0) + (floor >= 6 && Math.random() < 0.5 ? 1 : 0);
-      for (let k = 0; k < wovenCount; k++) {
-        const made = makeRandomWovenSkill(task.hostId);
-        if (made) customSkills.push(made.skill);
-      }
-      return new Battle(
-        makePlayerCombatant({
-          characterId: task.hostId, victories: task.frame.victories,
-          relicIds: pickRandomRelicIds(relicCount), customSkills,
-        }),
-        makeEnemyCombatant(task.frame.enemyId, task.frame.floor),
-        { playerPolicy: wrapped, enemyPolicy: eWrapped },
-      ).run();
+    poolTasks.push({
+      type: 'collect',
+      opts: { seed: hashSeed('gems-learn', i), hostId: task.hostId, frame: task.frame, epsilon },
+      playerPolicy: refs[i % refs.length],
+      enemyPolicy: refs[(i * 7 + 3) % refs.length],
     });
-    if (res.winner === 'draw') continue; // no signal
-    for (const s of sink) {
-      out.write(JSON.stringify({ x: s.x, y: s.side === res.winner ? 1 : 0 }) + '\n');
-      samples++;
-    }
-    if ((i + 1) % 500 === 0) line(`  collect ${i + 1}/${battles} battles, ${samples} samples (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+  }
+  const results = await pool.map(poolTasks, {
+    context: { policies },
+    onProgress: (done, totalN) => { if (done % 1000 === 0) line(`  collect ${done}/${totalN} battles (${((Date.now() - t0) / 1000).toFixed(0)}s)`); },
+  });
+  let samples = 0;
+  for (const r of results) {
+    for (const s of r.samples) { out.write(JSON.stringify(s) + '\n'); samples++; }
   }
   return new Promise((resolve) => out.end(() => {
-    line(`collect → ${path.relative(process.cwd(), file)} (${samples} samples from ${battles} battles)`);
+    line(`collect → ${path.relative(process.cwd(), file)} (${samples} samples from ${battles} battles, ${((Date.now() - t0) / 1000).toFixed(0)}s)`);
     resolve(file);
   }));
 }
@@ -340,21 +325,22 @@ async function cmdFit(args) {
 
 /* ═══════════════════════════════ eval ══════════════════════════════════════ */
 
-function evalPolicy(policy, tasks, battles, tag) {
-  let wins = 0, n = 0;
+async function evalPolicySpec(pool, spec, tasks, battles, tag) {
+  const poolTasks = [];
   for (let i = 0; i < battles; i++) {
-    const task = tasks[i % tasks.length];
-    const seed = hashSeed('gems-learn-eval', i);
-    const res = withSeededRandom(seed, () => new Battle(
-      makePlayerCombatant({ characterId: task.hostId, victories: task.frame.victories }),
-      makeEnemyCombatant(task.frame.enemyId, task.frame.floor),
-      { playerPolicy: policy },
-    ).run());
-    if (res.playerWon) wins++;
-    n++;
+    const t = tasks[i % tasks.length];
+    poolTasks.push({
+      type: 'battle',
+      seed: hashSeed('gems-learn-eval', i),
+      player: { characterId: t.hostId, victories: t.frame.victories },
+      enemy: { id: t.frame.enemyId, floor: t.frame.floor },
+      playerPolicy: spec ? 'p' : null,
+    });
   }
-  line(`  eval ${tag.padEnd(16)} win=${pct(wins / n)}`);
-  return wins / n;
+  const results = await pool.map(poolTasks, { context: { policies: { p: spec } } });
+  const win = results.filter((r) => r.playerWon).length / results.length;
+  line(`  eval ${tag.padEnd(16)} win=${pct(win)}`);
+  return win;
 }
 
 async function cmdEval(args) {
@@ -363,15 +349,17 @@ async function cmdEval(args) {
   const battles = parseInt(args.battles, 10) || 400;
   const floors = String(args.floors || '6,8,9').split(',').map(Number).filter((f) => f >= 1 && f <= 10);
   const tasks = buildTasks(floors, Object.keys(CHARACTERS_BY_ID));
-  line(`eval on floors ${floors.join(',')} (${battles} battles each, same seeds):`);
+  const { getPool } = await import('./pool.mjs');
+  const pool = getPool();
+  line(`eval on floors ${floors.join(',')} (${battles} battles each, same seeds, workers=${pool.size}):`);
   const results = {
-    greedy: evalPolicy(null, tasks, battles, 'greedy'),
-    handValue: evalPolicy(makeValuePolicy({}), tasks, battles, 'hand-value'),
-    learned: evalPolicy(makeLearnedPolicy(model), tasks, battles, 'LEARNED'),
+    greedy: await evalPolicySpec(pool, null, tasks, battles, 'greedy'),
+    handValue: await evalPolicySpec(pool, { kind: 'value' }, tasks, battles, 'hand-value'),
+    learned: await evalPolicySpec(pool, { kind: 'learned', model }, tasks, battles, 'LEARNED'),
   };
   if (args.weights && fs.existsSync(String(args.weights))) {
-    results.trainedCEM = evalPolicy(
-      makeValuePolicy(loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8')))),
+    results.trainedCEM = await evalPolicySpec(
+      pool, { kind: 'value', weights: loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8'))) },
       tasks, battles, 'trained-CEM');
   }
   return results;
@@ -393,8 +381,8 @@ async function cmdIterate(args) {
     const fitted = await cmdFit({ ...args, data: dataFile, out: roundModel });
     if (!fitted) return;
     const model = loadModel(roundModel);
-    // feed the current policy back into the next round's collection mix
-    mixExtra = [makeLearnedPolicy(model, { epsilon: 0.05 })];
+    // feed the current policy back into the next round's collection mix (as a SPEC)
+    mixExtra = [{ kind: 'learned', model, opts: { epsilon: 0.05 } }];
     const results = await cmdEval({ ...args, model: roundModel });
     // keep the BEST round's model as the final output (rounds can regress)
     if (results.learned > best.win) {

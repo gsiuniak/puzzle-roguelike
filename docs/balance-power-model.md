@@ -484,15 +484,19 @@ power = power **under the chosen play policy** (a skill the policy never casts m
 surfaced as NEVER CAST). The engine's `Battle` opts expose a **policy seam**
 (`playerPolicy`/`enemyPolicy` — cast/swap/pass + cast-hold + targeting override; engine header).
 
-**The value-policy layer** (on top of the seam):
-- **`policy.mjs`** — a linear, effect-FEATURIZED action evaluator (`makeValuePolicy(weights)`):
-  argmax over every affordable cast + legal swap; swaps scored by a deterministic no-refill settle
-  (BoardSimulator's "guaranteed outcome" philosophy); skills valued by their EFFECTS, not ids, so it
-  prices unseen woven skills; side-agnostic. Sweeping with `--policy value` gives "competent hands"
-  numbers and kills the greedy artifacts (measured: Encroach −24pp greedy → NEVER CAST value;
-  Oungan −9pp greedy → +5pp value; Defend −4pp → +1pp). The greedy-vs-value uplift GAP per skill is
-  itself a metric (skill expression). `DEFAULT_VALUE_WEIGHTS` is the interpretable training surface
-  — each weight is "what X is worth, in damage units".
+**The search-policy layer** (on top of the seam; reworked 2026-07-06 for "high-elo" play):
+- **`policy.mjs`** — the chess-engine split: a MOVE GENERATOR (`enumerateActions` — every swap +
+  every cast × every TARGET of a targeted skill, so "destroy the in-between row to line up a 4+"
+  is a visible candidate, not the engine's auto-target; wide-beam settle prefilter over swaps that
+  never drops an extra-turn trigger), a SIMULATOR (`previewAction` — the real engine on a
+  disposable battle clone: cascades, refill, relic passives, statuses), an **extra-turn chain
+  search** (turn-retaining actions recurse into their best follow-up, discounted — combo plans get
+  scored end-to-end), and a pluggable EVALUATOR holding ALL the judgment:
+  `makeDeltaEvaluator(weights)` scores observed before→after deltas (`DEFAULT_VALUE_WEIGHTS` = the
+  CEM training surface; RETRAIN after any evaluator/action-space change — old weight files load
+  but are stale) or learn.mjs's learned V(afterstate). Effects are judged by their SIMULATED
+  consequences, so unseen woven skills are handled natively. The greedy-vs-trained uplift GAP per
+  skill remains a skill-expression metric.
 - **`train.mjs`** — CEM self-play trainer for that weight vector: population sampling → fitness =
   mean win on a FIXED common-seed task pool (floors with win-rate headroom, default 6/8/9, × all 3
   characters so it can't overfit a matchup) → refit to the top quartile, decaying noise;
@@ -527,6 +531,12 @@ hooks) in which the player starts with ONLY the character kit and acquires every
   brackets (greedy policy = struggling player, trained value policy = expert). One reference
   policy cannot represent both audiences; the two bracket the human range.
 - Every JSONL line carries its seed — any interesting death is exactly replayable.
+
+**Worker pool (`pool.mjs`/`pool-worker.mjs`):** train/runs/learn fan their battles across a
+`worker_threads` pool (cpus−1; `GEMS_POOL_WORKERS` overrides). Tasks are fully seeded, so
+parallelism never changes a number — only wall-clock (~30× on a 32-thread machine). Policies are
+sent as serializable specs and resolved worker-side; the shared per-unit helpers are
+`runs.runOneRun` and `learn.collectOneBattle`.
 
 **Analyzer conditionals:** `analyze` also reports a per-CHARACTER relic split and a
 COLOR-SYNERGY conditional (a color-linked relic's ΔSurv with vs without that color in the
