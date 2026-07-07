@@ -172,6 +172,12 @@ const SOUNDS = {
   sfx_match4_flourish: USE_TMP_MATCH4_FLOURISH
     ? { src: ['assets/audio/sfx/tmp/tmp_match4.mp3'], category: AudioCategory.SFX }
     : { sprite: 'match_4_special', category: AudioCategory.SFX },
+  // Enemy-side variant of the flourish beat (played when the ENEMY earns the
+  // 4+ extra turn; the player keeps sfx_match4_flourish).
+  sfx_match4_flourish_enemy: {
+    src: ['assets/audio/sfx/tmp/tmp_match4_enemy.mp3'],
+    category: AudioCategory.SFX,
+  },
   // No clip in the sprite sheet — standalone file (currently unreferenced).
   sfx_damage_taken: {
     src: ['assets/audio/sfx/damage_taken.mp3'],

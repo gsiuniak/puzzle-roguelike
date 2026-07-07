@@ -29,6 +29,7 @@
 
 import { MANA_COLORS } from '../../src/js/game/TileTypes.js';
 import MatchResolver from '../../src/js/game/MatchResolver.js';
+import { withSeededRandom } from './rng.mjs';
 
 const resolver = new MatchResolver();
 const BIG = 1e9;
@@ -100,15 +101,23 @@ export function previewBattle(battle) {
   return b;
 }
 
-/** Apply `action` for side `c` on a preview. Returns { preview, self, opp, extraTurn }. */
-export function previewAction(battle, c, action) {
-  const b = previewBattle(battle);
-  const self = c === battle.p ? b.p : b.e;
-  const opp = c === battle.p ? b.e : b.p;
-  let extraTurn = false;
-  if (action.type === 'cast') extraTurn = b._castSkill(self, action.skill, action.target || null);
-  else if (action.type === 'swap') extraTurn = b._performSwap(self, action.swap);
-  return { preview: b, self, opp, extraTurn };
+/** Apply `action` for side `c` on a preview. Returns { preview, self, opp, extraTurn }.
+ *  `seed` (optional): run the application under a seeded RNG — the search
+ *  passes the SAME seed to every candidate at a decision node (common random
+ *  numbers), so refill luck can't decide the argmax (the optimizer's-curse
+ *  fix: a single noisy sample per candidate systematically favors lucky
+ *  previews; identical streams make the comparison fair). */
+export function previewAction(battle, c, action, seed = null) {
+  const apply = () => {
+    const b = previewBattle(battle);
+    const self = c === battle.p ? b.p : b.e;
+    const opp = c === battle.p ? b.e : b.p;
+    let extraTurn = false;
+    if (action.type === 'cast') extraTurn = b._castSkill(self, action.skill, action.target || null);
+    else if (action.type === 'swap') extraTurn = b._performSwap(self, action.swap);
+    return { preview: b, self, opp, extraTurn };
+  };
+  return seed == null ? apply() : withSeededRandom(seed >>> 0, apply);
 }
 
 /* ═══════════════════ move generator (pure rules, no judgment) ══════════════ */
@@ -273,14 +282,17 @@ export function makeDeltaEvaluator(weights = {}) {
  *   evaluators) | 'replace' (an afterstate V already encodes the future; chain
  *   REPLACES the leaf value with the deeper evaluation — learned-V).
  */
-export function makeSearchPolicy(evaluator, { chainDepth = 1, swapBeam = 10, chainSwapBeam = 6, epsilon = 0 } = {}) {
-  function bestValue(battle, c, depth) {
+export function makeSearchPolicy(evaluator, { chainDepth = 1, swapBeam = 14, chainSwapBeam = 8, epsilon = 0 } = {}) {
+  function bestValue(battle, c, depth, baseSeed) {
     const opp = battle.other(c);
     const actions = enumerateActions(battle, c, { swapBeam: depth === chainDepth ? swapBeam : chainSwapBeam });
     if (!actions.length) return { action: null, value: 0 };
+    // ONE preview seed per decision node — every candidate sees the same
+    // refill stream (common random numbers; see previewAction)
+    const nodeSeed = (baseSeed ^ Math.imul(depth + 1, 0x9e3779b9)) >>> 0;
     let best = null, bestV = -Infinity;
     for (const action of actions) {
-      const { preview, self, opp: pOpp, extraTurn } = previewAction(battle, c, action);
+      const { preview, self, opp: pOpp, extraTurn } = previewAction(battle, c, action, nodeSeed);
       let v;
       if (pOpp.hp <= 0 && !pOpp.isEgg) v = BIG + Math.max(0, self.hp); // win — prefer healthier wins
       else if (self.hp <= 0) v = -BIG;
@@ -288,7 +300,7 @@ export function makeSearchPolicy(evaluator, { chainDepth = 1, swapBeam = 10, cha
         const canChain = extraTurn && depth > 0;
         v = evaluator(battle, c, opp, action, preview, self, pOpp, extraTurn, !canChain);
         if (canChain) {
-          const follow = bestValue(preview, self, depth - 1);
+          const follow = bestValue(preview, self, depth - 1, nodeSeed);
           if (evaluator.mode === 'replace') v = follow.action ? follow.value : v;
           else v += CHAIN_DISCOUNT * Math.max(0, follow.value);
         }
@@ -302,7 +314,8 @@ export function makeSearchPolicy(evaluator, { chainDepth = 1, swapBeam = 10, cha
       const actions = enumerateActions(battle, c);
       return actions.length ? actions[Math.floor(Math.random() * actions.length)] : null;
     }
-    return bestValue(battle, c, chainDepth).action; // null → engine greedy fallback (reshuffle)
+    const baseSeed = Math.floor(Math.random() * 0xffffffff); // ambient (battle-seeded) → deterministic
+    return bestValue(battle, c, chainDepth, baseSeed).action; // null → engine greedy fallback (reshuffle)
   };
 }
 

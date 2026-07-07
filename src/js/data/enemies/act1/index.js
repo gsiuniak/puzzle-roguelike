@@ -3,7 +3,7 @@
  */
 import goblin from './goblin.js';
 // import orc from './orc.js';
-import goblinSapper from './goblinSapper.js';
+// import goblinSapper from './goblinSapper.js'; // disabled 2026-07-06 — the bomb-race is a near-binary RNG check that skews balance measurement & AI training; re-enable after a redesign
 import acolyte from './acolyte.js';
 // import shadowWeaver from './shadowWeaver.js';
 import cyclops from './cyclops.js';
@@ -21,7 +21,7 @@ import lordMalakor from './lordMalakor.js';
 const ACT1_ENEMIES = [
   goblin,
   // orc,
-  goblinSapper,
+  // goblinSapper, // disabled — see import note
   acolyte,
   // shadowWeaver,
   cyclops,
@@ -39,7 +39,7 @@ const ACT1_ENEMIES = [
 export {
   goblin,
   // orc,
-  goblinSapper,
+  // goblinSapper, // disabled — see import note
   acolyte,
   // shadowWeaver,
   cyclops,

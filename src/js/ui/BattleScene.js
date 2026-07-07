@@ -1309,7 +1309,11 @@ export default class BattleScene extends UIPanel {
     // Fires once per flourish, the frame the freeze beat begins.
     if (state.match4Flourish && state.match4Flourish !== this._lastMatch4Flourish) {
       this._lastMatch4Flourish = state.match4Flourish;
-      if (this._audioManager) this._audioManager.playSfx('sfx_match4_flourish');
+      if (this._audioManager) {
+        this._audioManager.playSfx(state.match4Flourish.side === 'enemy'
+          ? 'sfx_match4_flourish_enemy'
+          : 'sfx_match4_flourish');
+      }
     }
 
     // ── Reflect SFX (the `reflecting` buff fired this frame) ──
@@ -2028,7 +2032,7 @@ export default class BattleScene extends UIPanel {
     // from where they held.
     const hitStop = !!(this._battleController && this._battleController.isHitStopActive());
     if (hitStop !== this._sfxHitStopFrozen && this._audioManager) {
-      if (hitStop) this._audioManager.pauseSfxExcept(['sfx_match4_flourish']);
+      if (hitStop) this._audioManager.pauseSfxExcept(['sfx_match4_flourish', 'sfx_match4_flourish_enemy']);
       else this._audioManager.resumeFrozenSfx();
       this._sfxHitStopFrozen = hitStop;
     }

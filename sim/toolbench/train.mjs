@@ -29,8 +29,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Battle, makePlayerCombatant, makeEnemyCombatant, CHARACTERS_BY_ID } from './engine.mjs';
+import { selectEnemyForNode } from '../../src/js/data/enemies/index.js';
 import { DEFAULT_VALUE_WEIGHTS, WEIGHT_KEYS, makeValuePolicy } from './policy.mjs';
-import { resolveFrames } from './trainer.mjs';
+import { resolveFrames, pickRandomRelicIds } from './trainer.mjs';
+import { makeRandomWovenSkill } from './runs.mjs';
 import { hashSeed, withSeededRandom } from './rng.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -47,17 +49,38 @@ function gaussian() { // Box-Muller
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-/* ── evaluation (fixed tasks, fixed seeds → CRN across candidates) ── */
-function buildTasks(hosts, frames, battles) {
-  const combos = [];
-  for (const hostId of hosts) for (const frame of frames) combos.push({ hostId, frame });
-  const nPer = Math.max(1, Math.round(battles / combos.length));
+/* ── evaluation (fixed tasks, fixed seeds → CRN across candidates) ──
+ *
+ * RUN-REALISTIC task pool (v4 fix): fitness battles must look like the
+ * battles the policy will actually play in runs — all floors, the real spawn
+ * table (minions/elites/boss), and players carrying floor-scaled RANDOM relic
+ * loads + woven skills. Training on 3 kit-only frames overfit: v3 matched the
+ * old architecture on its eval pool (65.7%) while collapsing in runs
+ * (warrior 51.7%→18.5%). Task generation is seeded → identical pool every
+ * invocation → fitness comparable across generations AND runs.
+ */
+function buildTasks(hosts, battles) {
   const tasks = [];
-  for (let ci = 0; ci < combos.length; ci++) {
-    for (let i = 0; i < nPer; i++) {
-      tasks.push({ ...combos[ci], seed: hashSeed('train-eval', ci, i) });
+  withSeededRandom(hashSeed('train-tasks-v4'), () => {
+    for (let i = 0; i < battles; i++) {
+      const hostId = hosts[i % hosts.length];
+      const floor = 1 + Math.floor(Math.random() * 10);
+      const nodeType = floor === 10 ? 'boss' : (floor >= 5 && Math.random() < 0.3 ? 'elite' : 'battle');
+      const def = selectEnemyForNode({ floor, nodeType, seenByAct: {} });
+      const victories = Math.round((floor - 1) * 0.7);
+      const relicIds = pickRandomRelicIds(Math.round((floor - 1) * 0.5 * (0.4 + Math.random() * 1.2)));
+      const customSkills = [];
+      const wovenCount = (floor >= 3 && Math.random() < 0.5 ? 1 : 0) + (floor >= 6 && Math.random() < 0.5 ? 1 : 0);
+      for (let k = 0; k < wovenCount; k++) {
+        const made = makeRandomWovenSkill(hostId);
+        if (made) customSkills.push(made.skill);
+      }
+      tasks.push({
+        hostId, enemyId: def.id, floor, victories, relicIds, customSkills,
+        seed: hashSeed('train-eval-v4', i),
+      });
     }
-  }
+  });
   return tasks;
 }
 
@@ -74,8 +97,8 @@ async function evaluateBatch(pool, candidateSpecs, enemySpec, tasks) {
       poolTasks.push({
         type: 'battle',
         seed: t.seed,
-        player: { characterId: t.hostId, victories: t.frame.victories },
-        enemy: { id: t.frame.enemyId, floor: t.frame.floor },
+        player: { characterId: t.hostId, victories: t.victories, relicIds: t.relicIds, customSkills: t.customSkills },
+        enemy: { id: t.enemyId, floor: t.floor },
         playerPolicy: candidateSpecs[k] ? `c${k}` : null,
         enemyPolicy: enemySpec ? 'enemy' : null,
       });
@@ -108,17 +131,15 @@ async function main() {
   const battles = parseInt(args.battles, 10) || 72;
   const eliteFrac = 0.25;
   const selfplay = parseInt(args.selfplay, 10) || 0;
-  // default floors need WIN-RATE HEADROOM (a saturated 100%-win task gives CEM
-  // no gradient): f6 minion ~85-95%, f8/f9 elites ~50-70% for the ref player
-  const floors = String(args.floors || '6,8,9').split(',').map(Number).filter((f) => f >= 1 && f <= 10);
   const allHosts = Object.keys(CHARACTERS_BY_ID);
   const hosts = args.hosts ? String(args.hosts).split(',').filter((h) => allHosts.includes(h)) : allHosts;
-  const frames = resolveFrames(floors);
-  const tasks = buildTasks(hosts, frames, battles);
+  const tasks = buildTasks(hosts, battles);
   const { getPool } = await import('./pool.mjs');
   const pool = getPool();
   line(`train: pop=${pop} gen=${gens} battles/candidate=${tasks.length} selfplay=${selfplay || 'off'} workers=${pool.size}`);
-  line(`tasks: ${frames.map((f) => `f${f.floor}:${f.enemyId}`).join(' ')} × ${hosts.join(',')}`);
+  const floorSpread = {};
+  for (const t of tasks) floorSpread[t.floor] = (floorSpread[t.floor] || 0) + 1;
+  line(`tasks: RUN-REALISTIC pool (all floors, spawn-table enemies, random relic/woven loadouts) — floors ${Object.entries(floorSpread).map(([f, n]) => `f${f}:${n}`).join(' ')}`);
 
   // reference baselines on the same tasks (one pooled batch)
   const t0 = Date.now();
@@ -169,7 +190,7 @@ async function main() {
     fitness: best.fitness,
     baselines: { greedy: baselineGreedy, valueDefault: baselineDefault },
     history,
-    config: { pop, gens, battles: tasks.length, floors, hosts, selfplay },
+    config: { pop, gens, battles: tasks.length, taskPool: 'run-realistic-v4', hosts, selfplay },
     date: new Date().toISOString(),
   }, null, 2));
   line(`\nbest fitness ${(best.fitness * 100).toFixed(1)}% (greedy ${(baselineGreedy * 100).toFixed(1)}%, default ${(baselineDefault * 100).toFixed(1)}%)`);
