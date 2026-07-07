@@ -1,0 +1,88 @@
+{
+  "meta": {
+    "sheet_w": 1166,
+    "sheet_h": 999,
+    "sprite_count": 7,
+    "mode": "bin_pack",
+    "padding": 4
+  },
+  "sprites": {
+    "character_select_heart": {
+      "x": 832,
+      "y": 4,
+      "w": 310,
+      "h": 277,
+      "index": 0,
+      "source_w": 824,
+      "source_h": 605,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "character_select_info_panel": {
+      "x": 4,
+      "y": 4,
+      "w": 824,
+      "h": 605,
+      "index": 1,
+      "source_w": 824,
+      "source_h": 605,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "character_select_choose_hero_button_hover": {
+      "x": 4,
+      "y": 613,
+      "w": 698,
+      "h": 189,
+      "index": 2,
+      "source_w": 824,
+      "source_h": 605,
+      "trim_x": 3,
+      "trim_y": 0
+    },
+    "character_select_choose_hero_button": {
+      "x": 4,
+      "y": 806,
+      "w": 698,
+      "h": 189,
+      "index": 3,
+      "source_w": 824,
+      "source_h": 605,
+      "trim_x": 3,
+      "trim_y": 0
+    },
+    "character_select_flair_right": {
+      "x": 855,
+      "y": 649,
+      "w": 144,
+      "h": 27,
+      "index": 4,
+      "source_w": 824,
+      "source_h": 605,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "character_select_flair_left": {
+      "x": 706,
+      "y": 649,
+      "w": 145,
+      "h": 27,
+      "index": 5,
+      "source_w": 824,
+      "source_h": 605,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "character_select_divider": {
+      "x": 706,
+      "y": 613,
+      "w": 456,
+      "h": 32,
+      "index": 6,
+      "source_w": 824,
+      "source_h": 605,
+      "trim_x": 1,
+      "trim_y": 0
+    }
+  }
+}

@@ -168,7 +168,10 @@ async function cmdSimulate(args) {
   out.write(JSON.stringify({ type: 'meta', date: new Date().toISOString(), n, chars, policy: policyTag, fightChance, weaveFloors }) + '\n');
   const { getPool } = await import('./pool.mjs');
   const pool = getPool();
-  line(`simulate: ${n} runs × ${chars.join(',')} policy=${policyTag} fightChance=${fightChance} weaveFloors=${weaveFloors} workers=${pool.size}`);
+  // --seedNs <str> selects an INDEPENDENT seed set (default 'gems-runs') — a
+  // fresh, non-overlapping sample to confirm a result isn't a lucky seed set
+  const seedNs = args.seedNs ? `gems-runs:${args.seedNs}` : 'gems-runs';
+  line(`simulate: ${n} runs × ${chars.join(',')} policy=${policyTag} fightChance=${fightChance} weaveFloors=${weaveFloors} seedNs=${seedNs} workers=${pool.size}`);
   const t0 = Date.now();
   // fully seeded per-task → pool scheduling cannot change any result
   const tasks = [];
@@ -176,7 +179,7 @@ async function cmdSimulate(args) {
     for (let i = 0; i < n; i++) {
       tasks.push({
         type: 'run',
-        opts: { seed: hashSeed('gems-runs', characterId, i), characterId, fightChance, weaveFloors },
+        opts: { seed: hashSeed(seedNs, characterId, i), characterId, fightChance, weaveFloors },
         playerPolicy: playerPolicy ? 'p' : null,
       });
     }
