@@ -183,6 +183,36 @@ const UI = {
     manaCountColor: '#b0a880',
   },
 
+  // Growth section: per-victory stat growth shown as 1-5 filled blips.
+  // A FREE-FLOATING panel anchored to the bottom-right of the screen
+  // (positioned manually in layoutChildren, like the heroes row / button).
+  growth: {
+    panelWidth: 300,
+    marginRight: 70,     // inset from the right screen edge
+    marginBottom: 60,    // inset from the bottom screen edge
+    titleHeight: 30,
+    titleGap: 8,
+    titleFontSize: 24,
+    titleWidth: 110,
+    titleMarginX: 6,
+    titleColor: '#ccaa77',
+    // NOTE: title row total (2×flairWidth + titleWidth + 2×titleMarginX +
+    // 2×titleGap) must stay under panelWidth or the row overflows onto itself.
+    flairWidth: 64,
+    flairHeight: 12,
+    rowHeight: 26,
+    rowGap: 4,
+    labelWidth: 52,
+    labelMarginRight: 16,
+    labelFontSize: 20,
+    labelColor: '#e8d8b0',
+    blipSize: 24,
+    blipGap: 6,
+    bottomFlairWidth: 240,
+    bottomFlairHeight: 30,
+    bottomMarginTop: 2,
+  },
+
   // Section title rows ("Starting Skills" / "Starting Relic").
   sectionTitle: {
     height: 26,
@@ -269,6 +299,23 @@ function scalePadding(p, S) {
   return { top: p.top * S, right: p.right * S, bottom: p.bottom * S, left: p.left * S };
 }
 
+/** Number of growth "blips" (diamonds) per stat row in the Growth section. */
+const GROWTH_BLIP_COUNT = 5;
+
+/**
+ * Map a growthPlan per-victory value to 0..GROWTH_BLIP_COUNT filled blips.
+ * The stats are weighed differently, so each has its own scale:
+ *  - maxHp: blips = growth − 1 (6 HP/level → 5 blips, 5 → 4, …)
+ *  - attack/magic: 1/level is the cap (5 blips); fractional growth floors,
+ *    so ≈0.334/level → 1 blip, 0.68 → 3, 0 → 0.
+ */
+function growthBlips(statKey, value) {
+  const raw = statKey === 'maxHp'
+    ? Math.round(value) - 1
+    : Math.floor(value * GROWTH_BLIP_COUNT + 1e-6);
+  return Math.max(0, Math.min(GROWTH_BLIP_COUNT, raw));
+}
+
 export default class CharacterSelectScene extends UIPanel {
   constructor() {
     super();
@@ -307,6 +354,8 @@ export default class CharacterSelectScene extends UIPanel {
     this._chooseButton = null;
     /** @type {UIContainer|null} */
     this._btnContainer = null;
+    /** @type {UIContainer|null} free-floating Growth panel (bottom-right) */
+    this._growthPanel = null;
     /** @type {UIImage[]} portrait images in heroes row */
     this._portraitImages = [];
 
@@ -667,6 +716,13 @@ export default class CharacterSelectScene extends UIPanel {
       panel.addChild(relicsRow);
     }
 
+    // ── Growth panel: free-floating, rebuilt per selection ──
+    // Lives on the SCENE root (not the info panel); positioned near the
+    // bottom-right of the screen in layoutChildren.
+    if (this._growthPanel) this.removeChild(this._growthPanel);
+    this._growthPanel = this._buildGrowthSection(cd, am);
+    this.addChild(this._growthPanel);
+
     // Re-register the rebuilt description elements as keyword tooltip sources.
     this._registerKeywordTooltips();
   }
@@ -682,6 +738,123 @@ export default class CharacterSelectScene extends UIPanel {
     tm.clearKeywordSources();
     const opts = { scale: 1.0, padding: 22, offset: 16, hitPadding: 7 };
     for (const kt of this._keywordDescs) tm.attachKeywordSource(kt, opts);
+  }
+
+  /**
+   * Build the Growth section: a "[growth flair] Growth [growth flair]" title,
+   * one row per stat (HP / Atk / Mag) of GROWTH_BLIP_COUNT diamond blips
+   * (filled = character_select_growth_fill, empty = _growth_outline) scaled
+   * from the character's per-victory growthPlan via growthBlips(), and the
+   * growth_flair_bottom flourish underneath. All sizing comes from UI.growth.
+   * @param {object} cd - characterData (reads cd.growthPlan)
+   * @param {import('../engine/AssetManager.js').default} am
+   * @returns {UIContainer}
+   */
+  _buildGrowthSection(cd, am) {
+    const S = this._uiScale;
+    const G = UI.growth;
+    const plan = cd.growthPlan || {};
+
+    const stats = [
+      { label: 'HP',  blips: growthBlips('maxHp', plan.maxHp || 0) },
+      { label: 'Atk', blips: growthBlips('startingAttack', plan.startingAttack || 0) },
+      { label: 'Mag', blips: growthBlips('startingMagic', plan.startingMagic || 0) },
+    ];
+
+    const section = new UIContainer();
+    section.direction = 'column';
+    section.alignItems = 'center';
+    section.gap = G.rowGap * S;
+    // Explicit dimensions — the panel is positioned manually in
+    // layoutChildren, so it must know its own size.
+    section.width = G.panelWidth * S;
+    section.height = (
+      G.titleHeight +
+      stats.length * G.rowHeight +
+      G.bottomFlairHeight + G.bottomMarginTop +
+      (stats.length + 1) * G.rowGap
+    ) * S;
+
+    // Title row: [growth flair] Growth [growth flair]
+    const titleRow = new UIContainer();
+    titleRow.direction = 'row';
+    titleRow.justifyContent = 'center';
+    titleRow.alignItems = 'center';
+    titleRow.gap = G.titleGap * S;
+    titleRow.height = G.titleHeight * S;
+
+    const gFlairL = new UIImage('character_select_growth_flair_left', am);
+    gFlairL.setStyle({ width: G.flairWidth * S, height: G.flairHeight * S, fitMode: 'contain', imageAlignH: 'right', imageAlignV: 'center' });
+    titleRow.addChild(gFlairL);
+
+    const titleText = new UIText('Growth');
+    titleText.setStyle({
+      fontSize: G.titleFontSize * S,
+      color: G.titleColor,
+      bold: true,
+      alignH: 'center',
+      alignV: 'center',
+      width: G.titleWidth * S,
+      // maxWidth REQUIRED: UIText defaults it to 0, which UIContainer's flex
+      // clamp reads as "max width 0" → a zero-width rect the text spills out
+      // of, letting the flairs overlap the word (the CharacterInfoPane gotcha).
+      maxWidth: G.titleWidth * S,
+      height: G.titleHeight * S,
+      margin: { left: G.titleMarginX * S, right: G.titleMarginX * S }
+    });
+    titleRow.addChild(titleText);
+
+    const gFlairR = new UIImage('character_select_growth_flair_right', am);
+    gFlairR.setStyle({ width: G.flairWidth * S, height: G.flairHeight * S, fitMode: 'contain', imageAlignH: 'left', imageAlignV: 'center' });
+    titleRow.addChild(gFlairR);
+    section.addChild(titleRow);
+
+    // Stat rows: [label] ◆◆◆◇◇ — identical fixed widths per row so the
+    // centered rows align their blip columns across stats.
+    for (const stat of stats) {
+      const row = new UIContainer();
+      row.direction = 'row';
+      row.justifyContent = 'center';
+      row.alignItems = 'center';
+      row.gap = G.blipGap * S;
+      row.height = G.rowHeight * S;
+
+      const label = new UIText(stat.label);
+      label.setStyle({
+        fontSize: G.labelFontSize * S,
+        color: G.labelColor,
+        bold: true,
+        alignH: 'right',
+        alignV: 'center',
+        width: G.labelWidth * S,
+        maxWidth: G.labelWidth * S, // see titleText maxWidth note
+        height: G.rowHeight * S,
+        margin: { right: G.labelMarginRight * S }
+      });
+      row.addChild(label);
+
+      for (let i = 0; i < GROWTH_BLIP_COUNT; i++) {
+        const blipKey = i < stat.blips
+          ? 'character_select_growth_fill'
+          : 'character_select_growth_outline';
+        const blip = new UIImage(blipKey, am);
+        blip.setStyle({ width: G.blipSize * S, height: G.blipSize * S, fitMode: 'contain' });
+        row.addChild(blip);
+      }
+      section.addChild(row);
+    }
+
+    // Bottom flourish
+    const bottomFlair = new UIImage('character_select_growth_flair_bottom', am);
+    bottomFlair.setStyle({
+      width: G.bottomFlairWidth * S,
+      height: G.bottomFlairHeight * S,
+      fitMode: 'contain',
+      margin: { top: G.bottomMarginTop * S }
+    });
+    section.addChild(bottomFlair);
+
+    return section;
   }
 
   /**
@@ -961,6 +1134,19 @@ export default class CharacterSelectScene extends UIPanel {
       this._btnContainer.rect.w = btnW;
       this._btnContainer.rect.h = btnH;
       this._btnContainer.layoutChildren();
+    }
+
+    // ── 5. Growth panel: free-floating near the bottom-right ──
+    const growth = this._growthPanel;
+    if (growth) {
+      const G = UI.growth;
+      const gw = growth.width;
+      const gh = growth.height;
+      growth.rect.x = Math.floor(W - gw - G.marginRight * S);
+      growth.rect.y = Math.floor(H - gh - G.marginBottom * S);
+      growth.rect.w = gw;
+      growth.rect.h = gh;
+      growth.layoutChildren();
     }
   }
 
