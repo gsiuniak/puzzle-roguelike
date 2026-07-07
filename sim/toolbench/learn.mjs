@@ -83,7 +83,19 @@ export function previewAction(battle, c, action) {
 
 const sigmoid = (z) => 1 / (1 + Math.exp(-z));
 
+/** V(state) for either model type: 'mlp' (1 tanh hidden layer) or logistic. */
 export function predict(model, x) {
+  if (model.type === 'mlp') {
+    const { W1, b1, W2, h } = model;
+    let z2 = model.b2;
+    for (let j = 0; j < h; j++) {
+      let z1 = b1[j];
+      const row = W1[j];
+      for (let i = 0; i < x.length; i++) z1 += row[i] * x[i];
+      z2 += W2[j] * Math.tanh(z1);
+    }
+    return sigmoid(z2);
+  }
   let z = model.b;
   for (let i = 0; i < x.length; i++) z += model.w[i] * x[i];
   return sigmoid(z);
@@ -121,8 +133,9 @@ export function makeLearnedPolicy(model, { epsilon = 0 } = {}) {
 
 export function loadModel(file) {
   const m = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (!Array.isArray(m.w) || m.w.length !== FEATURE_NAMES.length) {
-    throw new Error(`model/featurizer mismatch: model has ${m.w && m.w.length} weights, featurizer ${FEATURE_NAMES.length}`);
+  const inDim = m.type === 'mlp' ? (m.W1 && m.W1[0] && m.W1[0].length) : (m.w && m.w.length);
+  if (inDim !== FEATURE_NAMES.length) {
+    throw new Error(`model/featurizer mismatch: model input dim ${inDim}, featurizer ${FEATURE_NAMES.length}`);
   }
   return m;
 }
@@ -163,7 +176,7 @@ function cmdCollect(args, mixExtra = []) {
   const dir = path.join(DIR, 'reports');
   fs.mkdirSync(dir, { recursive: true });
   const file = args.out ? String(args.out) : path.join(dir, 'learn-states.jsonl');
-  const out = fs.createWriteStream(file);
+  const out = fs.createWriteStream(file, { flags: args.append ? 'a' : 'w' });
   const t0 = Date.now();
   let samples = 0;
   for (let i = 0; i < battles; i++) {
@@ -219,7 +232,8 @@ function cmdCollect(args, mixExtra = []) {
 async function cmdFit(args) {
   const file = args.data ? String(args.data) : path.join(DIR, 'reports', 'learn-states.jsonl');
   const epochs = parseInt(args.epochs, 10) || 6;
-  const lr0 = args.lr != null ? Number(args.lr) : 0.05;
+  const hidden = args.hidden != null ? parseInt(args.hidden, 10) : 24; // 0 → plain logistic
+  const lr0 = args.lr != null ? Number(args.lr) : (hidden ? 0.03 : 0.05);
   const l2 = args.l2 != null ? Number(args.l2) : 1e-4;
   const X = [], Y = [];
   const rl = readline.createInterface({ input: fs.createReadStream(file), crlfDelay: Infinity });
@@ -230,39 +244,97 @@ async function cmdFit(args) {
   }
   if (X.length < 200) { line(`fit: only ${X.length} samples — collect more`); process.exitCode = 1; return null; }
   const d = FEATURE_NAMES.length;
-  const w = new Array(d).fill(0);
-  let b = 0;
   const idx = X.map((_, i) => i);
-  for (let e = 0; e < epochs; e++) {
-    // shuffle (plain Math.random — fitting needn't be seeded)
-    for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
-    const lr = lr0 / (1 + e);
-    let loss = 0;
-    for (const i of idx) {
-      const x = X[i];
-      let z = b;
-      for (let k = 0; k < d; k++) z += w[k] * x[k];
-      const p = sigmoid(z);
-      const g = p - Y[i];
-      loss += Y[i] ? -Math.log(Math.max(1e-9, p)) : -Math.log(Math.max(1e-9, 1 - p));
-      for (let k = 0; k < d; k++) w[k] -= lr * (g * x[k] + l2 * w[k]);
-      b -= lr * g;
+  const shuffle = () => { for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; } };
+  let model;
+  if (hidden > 0) {
+    // 1-hidden-layer MLP (tanh), SGD backprop. Still trained ONLY on outcomes;
+    // the nonlinearity is what lets V rank ACTIONS (small state deltas) sharply.
+    const h = hidden;
+    const r = () => (Math.random() - 0.5) * 0.3;
+    const W1 = Array.from({ length: h }, () => Array.from({ length: d }, r));
+    const b1 = new Array(h).fill(0);
+    const W2 = Array.from({ length: h }, r);
+    let b2 = 0;
+    const a = new Array(h);
+    for (let e = 0; e < epochs; e++) {
+      shuffle();
+      const lr = lr0 / (1 + e * 0.5);
+      let loss = 0;
+      for (const i of idx) {
+        const x = X[i];
+        let z2 = b2;
+        for (let j = 0; j < h; j++) {
+          let z1 = b1[j];
+          const row = W1[j];
+          for (let k = 0; k < d; k++) z1 += row[k] * x[k];
+          a[j] = Math.tanh(z1);
+          z2 += W2[j] * a[j];
+        }
+        const p = sigmoid(z2);
+        const g2 = p - Y[i];
+        loss += Y[i] ? -Math.log(Math.max(1e-9, p)) : -Math.log(Math.max(1e-9, 1 - p));
+        for (let j = 0; j < h; j++) {
+          const g1 = g2 * W2[j] * (1 - a[j] * a[j]);
+          W2[j] -= lr * (g2 * a[j] + l2 * W2[j]);
+          const row = W1[j];
+          for (let k = 0; k < d; k++) row[k] -= lr * (g1 * x[k] + l2 * row[k]);
+          b1[j] -= lr * g1;
+        }
+        b2 -= lr * g2;
+      }
+      line(`  fit epoch ${e + 1}/${epochs}: logloss=${(loss / X.length).toFixed(4)}`);
     }
-    line(`  fit epoch ${e + 1}/${epochs}: logloss=${(loss / X.length).toFixed(4)}`);
+    model = { type: 'mlp', h, featureNames: FEATURE_NAMES, W1, b1, W2, b2, samples: X.length, date: new Date().toISOString() };
+  } else {
+    const w = new Array(d).fill(0);
+    let b = 0;
+    for (let e = 0; e < epochs; e++) {
+      shuffle();
+      const lr = lr0 / (1 + e);
+      let loss = 0;
+      for (const i of idx) {
+        const x = X[i];
+        let z = b;
+        for (let k = 0; k < d; k++) z += w[k] * x[k];
+        const p = sigmoid(z);
+        const g = p - Y[i];
+        loss += Y[i] ? -Math.log(Math.max(1e-9, p)) : -Math.log(Math.max(1e-9, 1 - p));
+        for (let k = 0; k < d; k++) w[k] -= lr * (g * x[k] + l2 * w[k]);
+        b -= lr * g;
+      }
+      line(`  fit epoch ${e + 1}/${epochs}: logloss=${(loss / X.length).toFixed(4)}`);
+    }
+    model = { featureNames: FEATURE_NAMES, w, b, samples: X.length, date: new Date().toISOString() };
   }
   // train accuracy (optimistic but a sanity floor)
   let correct = 0;
   for (let i = 0; i < X.length; i++) {
-    let z = b; for (let k = 0; k < d; k++) z += w[k] * X[i][k];
-    if ((sigmoid(z) >= 0.5 ? 1 : 0) === Y[i]) correct++;
+    if ((predict(model, X[i]) >= 0.5 ? 1 : 0) === Y[i]) correct++;
   }
-  const model = { featureNames: FEATURE_NAMES, w, b, acc: correct / X.length, samples: X.length, date: new Date().toISOString() };
+  model.acc = correct / X.length;
   const out = args.out ? String(args.out) : path.join(DIR, 'reports', 'learned-value.json');
   fs.writeFileSync(out, JSON.stringify(model, null, 2));
-  line(`fit: acc=${pct(model.acc)} on ${X.length} samples → ${path.relative(process.cwd(), out)}`);
-  // top learned weights — the machine's own "what matters" table
-  const ranked = FEATURE_NAMES.map((name, i) => ({ name, w: w[i] })).sort((a, z) => Math.abs(z.w) - Math.abs(a.w)).slice(0, 12);
-  line('  top weights: ' + ranked.map((r) => `${r.name}=${r.w.toFixed(2)}`).join('  '));
+  line(`fit: ${hidden ? `mlp(h=${hidden})` : 'logistic'} acc=${pct(model.acc)} on ${X.length} samples → ${path.relative(process.cwd(), out)}`);
+  // "what matters" table: mean |∂V/∂x_k| over a sample (works for both types)
+  const sens = new Array(d).fill(0);
+  const nS = Math.min(400, X.length);
+  for (let s = 0; s < nS; s++) {
+    const x = X[Math.floor((s / nS) * X.length)];
+    if (model.type === 'mlp') {
+      for (let j = 0; j < model.h; j++) {
+        let z1 = model.b1[j];
+        for (let k = 0; k < d; k++) z1 += model.W1[j][k] * x[k];
+        const t = Math.tanh(z1);
+        const gj = model.W2[j] * (1 - t * t);
+        for (let k = 0; k < d; k++) sens[k] += Math.abs(gj * model.W1[j][k]) / nS;
+      }
+    } else {
+      for (let k = 0; k < d; k++) sens[k] += Math.abs(model.w[k]) / nS;
+    }
+  }
+  const ranked = FEATURE_NAMES.map((name, i) => ({ name, s: sens[i] })).sort((a, z) => z.s - a.s).slice(0, 12);
+  line('  most influential: ' + ranked.map((r) => `${r.name}=${r.s.toFixed(2)}`).join('  '));
   return out;
 }
 
@@ -310,18 +382,28 @@ async function cmdEval(args) {
 async function cmdIterate(args) {
   const rounds = parseInt(args.rounds, 10) || 3;
   const modelOut = args.out ? String(args.out) : path.join(DIR, 'reports', 'learned-value.json');
+  const roundModel = path.join(DIR, 'reports', 'learned-value-round.json');
+  const dataFile = path.join(DIR, 'reports', 'learn-states.jsonl');
   let mixExtra = [];
+  let best = { win: -1, round: 0 };
   for (let r = 0; r < rounds; r++) {
     line(`\n== learn round ${r + 1}/${rounds} ==`);
-    const dataFile = await cmdCollect({ ...args, out: path.join(DIR, 'reports', 'learn-states.jsonl') }, mixExtra);
-    const fitted = await cmdFit({ ...args, data: dataFile, out: modelOut });
+    // data ACCUMULATES across rounds (fit on everything so far)
+    await cmdCollect({ ...args, out: dataFile, append: r > 0 }, mixExtra);
+    const fitted = await cmdFit({ ...args, data: dataFile, out: roundModel });
     if (!fitted) return;
-    const model = loadModel(modelOut);
-    // feed the improved policy back into the next round's collection mix
+    const model = loadModel(roundModel);
+    // feed the current policy back into the next round's collection mix
     mixExtra = [makeLearnedPolicy(model, { epsilon: 0.05 })];
-    await cmdEval({ ...args, model: modelOut });
+    const results = await cmdEval({ ...args, model: roundModel });
+    // keep the BEST round's model as the final output (rounds can regress)
+    if (results.learned > best.win) {
+      best = { win: results.learned, round: r + 1 };
+      fs.copyFileSync(roundModel, modelOut);
+      line(`  ↑ new best (round ${r + 1}, ${pct(results.learned)}) → ${path.relative(process.cwd(), modelOut)}`);
+    }
   }
-  line(`\nfinal model → ${path.relative(process.cwd(), modelOut)}`);
+  line(`\nbest model: round ${best.round} at ${pct(best.win)} → ${path.relative(process.cwd(), modelOut)}`);
 }
 
 /* ═══════════════════════════════════ main ══════════════════════════════════ */

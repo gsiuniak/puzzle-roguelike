@@ -22,7 +22,8 @@
  *
  * Usage (node, repo root):
  *   node sim/toolbench/runs.mjs simulate [--n 1000] [--chars a,b|all]
- *     [--policy greedy|value] [--weights <trained.json>] [--fightChance 0.75]
+ *     [--policy greedy|value] [--weights <trained.json>]
+ *     [--learned <learned-value.json>] [--fightChance 0.75]
  *     [--weaves 2] [--out <file.jsonl>]
  *   (--weaves N = training floors per run, design target ~2 weaves/act; a
  *    training node replaces that floor's fight)
@@ -39,8 +40,9 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import {
-  simulateRun, CHARACTERS_BY_ID, SKILL_CATALOG, FLOOR_COUNT,
+  simulateRun, CHARACTERS_BY_ID, SKILL_CATALOG, RELIC_CATALOG, FLOOR_COUNT,
 } from './engine.mjs';
+import { MANA_COLORS } from '../../src/js/game/TileTypes.js';
 import { makeValuePolicy, loadWeights } from './policy.mjs';
 import { hashSeed, withSeededRandom } from './rng.mjs';
 import { drawTagsForRound } from '../../src/js/data/skillWeaveTags.js';
@@ -116,7 +118,13 @@ async function cmdSimulate(args) {
   // (a training node replaces that floor's fight, like a real map path)
   const weaveFloors = args.weaves != null ? parseInt(args.weaves, 10) : 2;
   let policyTag = 'greedy', playerPolicy = null;
-  if (args.policy === 'value' || args.weights) {
+  if (args.learned) {
+    // dynamic import — learn.mjs imports runs.mjs (makeRandomWovenSkill), so a
+    // static import here would be a module cycle
+    const { makeLearnedPolicy, loadModel } = await import('./learn.mjs');
+    playerPolicy = makeLearnedPolicy(loadModel(String(args.learned)));
+    policyTag = `learned:${path.basename(String(args.learned))}`;
+  } else if (args.policy === 'value' || args.weights) {
     let weights = {};
     if (args.weights) {
       weights = loadWeights(JSON.parse(fs.readFileSync(String(args.weights), 'utf8')));
@@ -173,6 +181,44 @@ function rctDelta(pickN, pickWins, ctlN, ctlWins) {
 
 function bucket() { return { pickN: 0, pickSurv: 0, pickProg: 0, pickNext: 0, pickNextN: 0, ctlN: 0, ctlSurv: 0, ctlProg: 0, ctlNext: 0, ctlNextN: 0 }; }
 
+function addToBucket(b, picked, fw) {
+  if (picked) {
+    b.pickN++; b.pickSurv += fw.surv; b.pickProg += fw.prog;
+    if (fw.next != null) { b.pickNext += fw.next; b.pickNextN++; }
+  } else {
+    b.ctlN++; b.ctlSurv += fw.surv; b.ctlProg += fw.prog;
+    if (fw.next != null) { b.ctlNext += fw.next; b.ctlNextN++; }
+  }
+}
+
+/** The mana color a relic is mechanically tied to (spawn boost, mana gain,
+ *  starting mana, attack-per-unspent, gain-mana reactor) — or null. */
+function relicColorOf(relic) {
+  for (const ef of relic.effects || []) {
+    const c = (ef.spawnRate && ef.spawnRate.tile)
+      || (ef.manaGain && ef.manaGain.color)
+      || (ef.startingMana && ef.startingMana.color)
+      || (ef.attackPerMana && ef.attackPerMana.color)
+      || (ef.gainMana && ef.gainMana.color)
+      || (ef.condition && ef.condition.color);
+    if (c && MANA_COLORS.includes(c)) return c;
+  }
+  return null;
+}
+
+const kitColorsCache = new Map();
+function kitColorsOf(characterId) {
+  if (!kitColorsCache.has(characterId)) {
+    const colors = new Set();
+    for (const id of (CHARACTERS_BY_ID[characterId] || {}).skills || []) {
+      const skill = SKILL_CATALOG[id];
+      for (const col of Object.keys((skill && skill.cost) || {})) colors.add(col);
+    }
+    kitColorsCache.set(characterId, colors);
+  }
+  return kitColorsCache.get(characterId);
+}
+
 async function cmdAnalyze(args) {
   const dir = path.join(DIR, 'reports');
   let file = args.log ? String(args.log) : null;
@@ -187,9 +233,12 @@ async function cmdAnalyze(args) {
   let meta = null;
   const perChar = {}; // characterId → { runs, survived, victories, deaths: {floor: n} }
   const floorFights = {}; // floor|type → { n, wins }
-  const relicStats = new Map(); // id → bucket
-  const tagStats = new Map();   // tag → bucket
-  const runsForPairs = [];      // { relics:Set, reachedF6, survived } for the exploratory pair scan
+  const relicStats = new Map();     // id → bucket
+  const relicCharStats = new Map(); // `id|characterId` → bucket
+  const relicCondStats = new Map(); // `id|synergy` / `id|off` → bucket (color-linked relics)
+  const tagStats = new Map();       // tag → bucket
+  const runsForPairs = [];          // { relics:Set, reachedF6, survived } for the exploratory pair scan
+  const relicColor = new Map(Object.values(RELIC_CATALOG).map((r) => [r.id, relicColorOf(r)]));
 
   const rl = readline.createInterface({ input: fs.createReadStream(file), crlfDelay: Infinity });
   for await (const raw of rl) {
@@ -214,33 +263,32 @@ async function cmdAnalyze(args) {
       const next = fightsByFloor.find((f) => f.floor > fl);
       return { surv: rec.survived ? 1 : 0, prog: Math.max(0, endFloor - fl), next: next ? (next.won ? 1 : 0) : null };
     };
+    // colors present in the player's BUILD before floor f: kit skill costs +
+    // any weave recipe (color tags) acquired at an earlier training floor
+    const kitColors = kitColorsOf(rec.characterId);
+    const trainings = rec.floors.filter((f) => f.type === 'training' && f.weave && f.weave.recipe);
+    const buildHasColor = (color, fl) => kitColors.has(color)
+      || trainings.some((t) => t.floor < fl && t.weave.recipe.includes(color));
+    const bucketOf = (map, key) => {
+      if (!map.has(key)) map.set(key, bucket());
+      return map.get(key);
+    };
     for (const ev of rec.rewards || []) {
       const fw = forward(ev.floor);
       for (const id of ev.offered) {
-        if (!relicStats.has(id)) relicStats.set(id, bucket());
-        const b = relicStats.get(id);
         const picked = id === ev.picked;
-        if (picked) {
-          b.pickN++; b.pickSurv += fw.surv; b.pickProg += fw.prog;
-          if (fw.next != null) { b.pickNext += fw.next; b.pickNextN++; }
-        } else {
-          b.ctlN++; b.ctlSurv += fw.surv; b.ctlProg += fw.prog;
-          if (fw.next != null) { b.ctlNext += fw.next; b.ctlNextN++; }
+        addToBucket(bucketOf(relicStats, id), picked, fw);
+        addToBucket(bucketOf(relicCharStats, `${id}|${rec.characterId}`), picked, fw);
+        const color = relicColor.get(id);
+        if (color) {
+          addToBucket(bucketOf(relicCondStats, `${id}|${buildHasColor(color, ev.floor) ? 'synergy' : 'off'}`), picked, fw);
         }
       }
     }
     for (const ev of rec.weaveEvents || []) {
       const fw = forward(ev.floor);
       for (const tag of ev.offered) {
-        if (!tagStats.has(tag)) tagStats.set(tag, bucket());
-        const b = tagStats.get(tag);
-        if (tag === ev.picked) {
-          b.pickN++; b.pickSurv += fw.surv; b.pickProg += fw.prog;
-          if (fw.next != null) { b.pickNext += fw.next; b.pickNextN++; }
-        } else {
-          b.ctlN++; b.ctlSurv += fw.surv; b.ctlProg += fw.prog;
-          if (fw.next != null) { b.ctlNext += fw.next; b.ctlNextN++; }
-        }
+        addToBucket(bucketOf(tagStats, tag), tag === ev.picked, fw);
       }
     }
     const reachedF6 = rec.survived || rec.deathFloor > 6;
@@ -279,6 +327,45 @@ async function cmdAnalyze(args) {
   const relicRows = table('relic power (run-context RCT)', relicStats);
   const tagRows = table('weave-tag power (run-context RCT)', tagStats);
 
+  /* ── per-character divergence (is a relic char-specific?) ── */
+  line('\n== relic power BY CHARACTER (only relics whose per-char ΔSurv spread > 10pp) ==');
+  const charRows = [];
+  const charIds = Object.keys(perChar);
+  for (const [id] of relicStats.entries()) {
+    const per = {};
+    for (const charId of charIds) {
+      const b = relicCharStats.get(`${id}|${charId}`);
+      if (!b || b.pickN < minN || b.ctlN < minN) continue;
+      per[charId] = rctDelta(b.pickN, b.pickSurv, b.ctlN, b.ctlSurv);
+    }
+    const ds = Object.values(per).map((r) => r.d);
+    if (ds.length >= 2 && Math.max(...ds) - Math.min(...ds) > 0.10) {
+      charRows.push({ id, per: Object.fromEntries(Object.entries(per).map(([c, r]) => [c, +r.d.toFixed(3)])) });
+      line(`    ${id.padEnd(22)} ` + Object.entries(per).map(([c, r]) => `${c}=${pp(r.d)}±${(r.se * 100).toFixed(0)}`).join('  '));
+    }
+  }
+  if (!charRows.length) line('    (none exceed the spread threshold at this sample size)');
+
+  /* ── color-synergy conditional (the "flint question"): a color-linked
+     relic's value GIVEN the build already uses that color vs not ── */
+  line('\n== color-linked relics: ΔSurv WITH color in build (kit/wovens) vs WITHOUT ==');
+  const condRows = [];
+  for (const [id, color] of relicColor.entries()) {
+    if (!color) continue;
+    const syn = relicCondStats.get(`${id}|synergy`);
+    const off = relicCondStats.get(`${id}|off`);
+    const dSyn = syn && syn.pickN >= minN && syn.ctlN >= minN ? rctDelta(syn.pickN, syn.pickSurv, syn.ctlN, syn.ctlSurv) : null;
+    const dOff = off && off.pickN >= minN && off.ctlN >= minN ? rctDelta(off.pickN, off.pickSurv, off.ctlN, off.ctlSurv) : null;
+    if (!dSyn && !dOff) continue;
+    condRows.push({
+      id, color,
+      withColor: dSyn ? { d: +dSyn.d.toFixed(3), n: syn.pickN } : null,
+      without: dOff ? { d: +dOff.d.toFixed(3), n: off.pickN } : null,
+    });
+    line(`    ${id.padEnd(18)} (${color.padEnd(6)}) with=${dSyn ? `${pp(dSyn.d)}±${(dSyn.se * 100).toFixed(0)} (n=${syn.pickN})` : '   n/a'}  without=${dOff ? `${pp(dOff.d)}±${(dOff.se * 100).toFixed(0)} (n=${off.pickN})` : '   n/a'}`);
+  }
+  if (!condRows.length) line('    (insufficient events per arm — raise --n)');
+
   /* ── exploratory pair interactions (top relics, reached-floor-6 cohort) ── */
   line('\n== relic pair interactions (EXPLORATORY — reached-f6 cohort, survivorship-prone) ==');
   const cohort = runsForPairs.filter((r) => r.reachedF6);
@@ -308,7 +395,12 @@ async function cmdAnalyze(args) {
   if (!pairRows.length) line('    (not enough co-occurrence data — raise --n)');
 
   const outFile = file.replace(/\.jsonl$/, '-analysis.json');
-  fs.writeFileSync(outFile, JSON.stringify({ meta, perChar, floorFights, relics: relicRows, weaveTags: tagRows, pairs: pairRows.slice(0, 50) }, null, 2));
+  fs.writeFileSync(outFile, JSON.stringify({
+    meta, perChar, floorFights,
+    relics: relicRows, weaveTags: tagRows,
+    relicByCharacter: charRows, colorSynergy: condRows,
+    pairs: pairRows.slice(0, 50),
+  }, null, 2));
   line(`\nanalysis → ${path.relative(process.cwd(), outFile)}`);
 }
 

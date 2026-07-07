@@ -528,6 +528,12 @@ hooks) in which the player starts with ONLY the character kit and acquires every
   policy cannot represent both audiences; the two bracket the human range.
 - Every JSONL line carries its seed — any interesting death is exactly replayable.
 
+**Analyzer conditionals:** `analyze` also reports a per-CHARACTER relic split and a
+COLOR-SYNERGY conditional (a color-linked relic's ΔSurv with vs without that color in the
+build — kit skills + weaves acquired before the event). Average RCT deltas are
+average-treatment effects over random builds; the conditional views are how build-dependent
+items (flint) get their fair reading.
+
 **The learned-value layer (`learn.mjs` + `features.mjs`) — "plays without knowing why".**
 The hand-value policy encodes MY judgments; the learned one encodes none: `features.mjs`
 describes states with rules-derived facts only (HP, mana, board composition, affordability
@@ -541,6 +547,13 @@ tempo value (`selfToMove` as a top weight) from outcomes alone. Caveat: linear V
 characters, so correlates can confound (an early fit priced `magic` negative because
 mage/witch-doctor lose more) — check weights before trusting subtle calls, and prefer more
 rounds/data over hand-fixes.
+STATUS (2026-07-06): both linear and MLP heads (`--hidden`) fit outcomes well (~82% acc)
+but the resulting POLICY plateaus at ~44% on the eval pool — below hand-value (~58%) and
+trained-CEM (~67-70%). Predicting winners ≠ ranking actions: candidate actions move the
+coarse features too little for outcome-labeled regression to resolve (fixing this properly
+means TD/afterstate RL — not currently worth it). **The trained-CEM policy is therefore the
+measurement "expert"**; the learned-V stays as a bias cross-check (its sensitivity table
+independently confirms the CEM feature set's top factors — tempo, attack, HP).
 
 | Tab | What it answers | Method |
 |---|---|---|
