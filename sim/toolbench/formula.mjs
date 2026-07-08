@@ -44,6 +44,11 @@ export const DEFAULT_FORMULA_WEIGHTS = {
   statusTurn: 3.0, weakStatusTurn: 1.2,
   createTile: 0.5, skullTile: 0.9, lockTurn: 2.0, markPoint: 4.0, shuffleValue: 1.0,
   manaSpent: 0.55, castTempo: 1.5,
+  /* banking / foresight (2026-07-07): */
+  manaCloseness: 2.0,   // convex progress toward the best nearly-affordable skill
+                        // (the last mana toward a cast is worth more than the first)
+  lookaheadSelf: 0.4,   // × my best follow-up value on the settled board (root only)
+  lookaheadOpp: 0.4,    // × opponent's best reply value on the settled board (penalty)
 };
 export const FORMULA_WEIGHT_KEYS = Object.keys(DEFAULT_FORMULA_WEIGHTS);
 
@@ -94,6 +99,51 @@ function manaValue(gained, myColors, oppColors, w) {
     if (oppColors[col]) v += n * w.denial;
   }
   return v;
+}
+
+/**
+ * BANKING #2 — convex affordability progress: 1 − (missing/total), squared, for
+ * the BEST-funded not-yet-affordable skill (max, not sum — rewards committing
+ * to one plan over spreading). The last mana toward a cast is worth more than
+ * the first, so the policy visibly saves toward specific skills.
+ */
+function bestCloseness(c, mana) {
+  let best = 0;
+  for (const skill of c.skills || []) {
+    const cost = skill.cost || {};
+    let missing = 0, total = 0;
+    for (const [col, amt] of Object.entries(cost)) {
+      total += amt;
+      missing += Math.max(0, amt - (mana[col] || 0));
+    }
+    if (total > 0 && missing > 0) {
+      const closeness = 1 - missing / total;
+      if (closeness * closeness > best) best = closeness * closeness;
+    }
+  }
+  return best;
+}
+
+/** Mana map after applying a delta ({color: ±n}) to c's pool. */
+function manaAfter(c, delta) {
+  const m = { ...c.mana };
+  for (const [col, n] of Object.entries(delta || {})) m[col] = Math.max(0, (m[col] || 0) + n);
+  return m;
+}
+
+/**
+ * BANKING #3 — dynamic-attack (Cestus family) delta from a mana change:
+ * spending banked mana of a rule color LOSES attack; gaining it earns attack.
+ */
+function dynAtkDelta(c, delta) {
+  if (!c.dynAtkRules || !c.dynAtkRules.length) return 0;
+  let d = 0;
+  for (const r of c.dynAtkRules) {
+    const before = Math.floor((c.mana[r.color] || 0) / r.per) * r.amount;
+    const after = Math.floor(Math.max(0, (c.mana[r.color] || 0) + ((delta || {})[r.color] || 0)) / r.per) * r.amount;
+    d += after - before;
+  }
+  return d;
 }
 
 function enablesNewCast(c, gained) {
@@ -154,6 +204,9 @@ export function evaluateSwapFormula(battle, c, sw, w, myColors, oppColors, depth
   const s = settleBoard(clone, c);
   if (s.tiles === 0) return -Infinity;
   let v = settleValue(s, c, opp, w, myColors, oppColors);
+  // banking: convex progress toward the best nearly-affordable skill + Cestus-family attack delta
+  v += w.manaCloseness * (bestCloseness(c, manaAfter(c, s.mana)) - bestCloseness(c, c.mana));
+  v += dynAtkDelta(c, s.mana) * w.gainAttack;
   if (s.extraTurn) {
     const cb = chainValue(battle, c, clone, s.mana, null, w, depth);
     if (cb != null) v += Math.max(0, cb - w.extraTurn); // upside-only: settle is a lower bound, the flat weight the trained average
@@ -359,13 +412,25 @@ export function evaluateCastFormula(battle, c, skill, w, myColors, oppColors, de
     if (cb != null) flat += Math.max(0, cb - w.extraTurn); // upside-only (see chainValue)
   }
   const costTotal = Object.values(skill.cost || {}).reduce((a, b) => a + b, 0);
-  const base = flat - costTotal * w.manaSpent - w.castTempo;
+  // banking: spending mana moves you AWAY from other casts (closeness delta is
+  // usually negative here — the hold-vs-spend tension) and sheds Cestus-family attack
+  const spendDelta = {};
+  for (const [col, amt] of Object.entries(skill.cost || {})) spendDelta[col] = -amt;
+  for (const ef of skill.effects || []) {
+    if (ef.effectType === 'gain_mana' && ef.gainMana && ef.gainMana.color) {
+      spendDelta[ef.gainMana.color] = (spendDelta[ef.gainMana.color] || 0) + (ef.gainMana.amount || 0);
+    }
+  }
+  let base = flat - costTotal * w.manaSpent - w.castTempo;
+  base += w.manaCloseness * (bestCloseness(c, manaAfter(c, spendDelta)) - bestCloseness(c, c.mana));
+  base += dynAtkDelta(c, spendDelta) * w.gainAttack;
   return best ? { value: base + best.value, target: best.target } : { value: base };
 }
 
-/** Best action + value for combatant c (shared by the policy and the chain
- *  recursion — the follow-up is scored by the same evaluation). */
-function bestActionValue(battle, c, w, depth) {
+/** Best action + value for combatant c (shared by the policy, the chain
+ *  recursion, and the lookahead). `collect` (optional array) receives every
+ *  scored candidate for root-level re-ranking. */
+function bestActionValue(battle, c, w, depth, collect = null) {
   const opp = battle.other(c);
   const myColors = costColorsOf(c);
   const oppColors = costColorsOf(opp);
@@ -374,19 +439,109 @@ function bestActionValue(battle, c, w, depth) {
     for (const skill of c.skills || []) {
       if (!battle.canAfford(c, skill)) continue;
       const r = evaluateCastFormula(battle, c, skill, w, myColors, oppColors, depth);
-      if (r.value > bestV) { bestV = r.value; best = { type: 'cast', skill, target: r.target || undefined }; }
+      const action = { type: 'cast', skill, target: r.target || undefined };
+      if (collect) collect.push({ action, value: r.value });
+      if (r.value > bestV) { bestV = r.value; best = action; }
     }
   }
   for (const sw of battle.board.getValidSwaps()) {
     const v = evaluateSwapFormula(battle, c, sw, w, myColors, oppColors, depth);
-    if (v > bestV) { bestV = v; best = { type: 'swap', swap: sw }; }
+    const action = { type: 'swap', swap: sw };
+    if (collect) collect.push({ action, value: v });
+    if (v > bestV) { bestV = v; best = action; }
   }
   return { action: best, value: bestV };
 }
 
-/** The deterministic formula policy (no previews, no randomness anywhere).
- *  chainDepth levels of extra-turn follow-up planning (default 1). */
-export function makeFormulaPolicy(weights = {}, { chainDepth = 1 } = {}) {
+const LOOKAHEAD_BEAM = 3;
+
+/**
+ * FORESIGHT #1 — deterministic shadow state after `action`: settled no-refill
+ * board + updated mana (cost spent, settle gains added). Reports whether the
+ * action retains the turn. Returns null on failure (holey-board edge cases).
+ */
+function shadowAfter(battle, c, action) {
+  try {
+    let board = battle.board.clone();
+    let gains = {};
+    let extraTurn = false;
+    if (action.type === 'swap') {
+      board.swap(action.swap.col1, action.swap.row1, action.swap.col2, action.swap.row2);
+      const s = settleBoard(board, c);
+      gains = s.mana;
+      extraTurn = s.extraTurn;
+    } else {
+      for (const ef of action.skill.effects || []) {
+        if (ef.effectType === 'extra_turn') extraTurn = true;
+        if (!action.target) continue;
+        if (ef.effectType === 'convert_tile') {
+          board.convertTilesToType([{ col: action.target.col, row: action.target.row }], (ef.convertTile && ef.convertTile.type) || 'red');
+          const s = settleBoard(board, c);
+          gains = s.mana;
+          if (s.extraTurn) extraTurn = true;
+          break;
+        }
+        if (ef.effectType === 'destroy_tiles_row' || ef.effectType === 'destroy_tiles_column' || ef.effectType === 'destroy_tiles') {
+          const kind = ef.effectType === 'destroy_tiles_row' ? 'row' : (ef.effectType === 'destroy_tiles_column' ? 'column' : 'area');
+          const r = (action.skill.area && action.skill.area.radius != null) ? action.skill.area.radius : 1;
+          const positions = targetPositions(board, kind, action.target, r);
+          const rw = resolver.resolveDestroyedTileRewards(board, positions, c);
+          board.removeTiles(positions);
+          board.applyGravity();
+          const s = settleBoard(board, c);
+          gains = { ...s.mana };
+          for (const [col, n] of Object.entries(rw.mana)) gains[col] = (gains[col] || 0) + n;
+          if (s.extraTurn) extraTurn = true;
+          break;
+        }
+      }
+      for (const [col, amt] of Object.entries(action.skill.cost || {})) gains[col] = (gains[col] || 0) - amt;
+    }
+    const c2 = { ...c, mana: manaAfter(c, gains) };
+    const shadow = Object.create(Object.getPrototypeOf(battle));
+    Object.assign(shadow, battle);
+    shadow.board = board;
+    if (c === battle.p) shadow.p = c2; else shadow.e = c2;
+    return { shadow, self2: c2, opp2: c === battle.p ? shadow.e : shadow.p, extraTurn };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The deterministic formula policy. chainDepth levels of extra-turn follow-up
+ * planning (default 1) + root-level 1.5-PLY LOOKAHEAD: the top LOOKAHEAD_BEAM
+ * candidates are re-ranked by my best FOLLOW-UP on the board they leave (this
+ * is where banking/setup emerges — a loaded board scores higher than a small
+ * cash-out) minus the OPPONENT's best reply on that same board. Both terms are
+ * exact deterministic evaluations; extra-turn candidates skip it (the chain
+ * bonus already covers their follow-up, and no opponent reply intervenes).
+ */
+export function makeFormulaPolicy(weights = {}, { chainDepth = 1, lookahead = true } = {}) {
   const w = { ...DEFAULT_FORMULA_WEIGHTS, ...weights };
-  return (battle, c) => bestActionValue(battle, c, w, chainDepth).action;
+  return (battle, c) => {
+    if (!lookahead || (w.lookaheadSelf === 0 && w.lookaheadOpp === 0)) {
+      return bestActionValue(battle, c, w, chainDepth).action;
+    }
+    const scored = [];
+    bestActionValue(battle, c, w, chainDepth, scored);
+    if (!scored.length) return null;
+    scored.sort((a, b) => b.value - a.value);
+    const K = Math.min(LOOKAHEAD_BEAM, scored.length);
+    let best = null, bestV = -Infinity;
+    for (let i = 0; i < scored.length; i++) {
+      let v = scored[i].value;
+      if (i < K && Number.isFinite(v)) {
+        const sh = shadowAfter(battle, c, scored[i].action);
+        if (sh && !sh.extraTurn) {
+          const mine = bestActionValue(sh.shadow, sh.self2, w, 0).value;
+          const theirs = bestActionValue(sh.shadow, sh.opp2, w, 0).value;
+          if (Number.isFinite(mine)) v += w.lookaheadSelf * Math.max(0, mine);
+          if (Number.isFinite(theirs)) v -= w.lookaheadOpp * Math.max(0, theirs);
+        }
+      }
+      if (v > bestV) { bestV = v; best = scored[i].action; }
+    }
+    return best;
+  };
 }
