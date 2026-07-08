@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gems Balance Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================== design tokens ==============================
+   Lifted from the legacy combat-balance-bench instrument (the look the bench
+   inherits): engine-viewport indigo, the six tile types as a muted DATA
+   palette, and a luminous cyan as the instrument's own voice — the player
+   side speaks cyan, the enemy speaks red, verdicts speak in chips.
+   (Fonts come from Google Fonts with system fallbacks; offline the bench
+   still works, just in the fallback faces.)
+*/
+:root{
+  --bg:#0E1119; --bg-2:#0B0E15;
+  --panel:#161A26; --panel-2:#1B2030;
+  --line:#272E40; --line-2:#333B52;
+  --ink:#E7EAF3; --ink-2:#9AA3BA; --ink-3:#697090;
+  --signal:#33D6E0; --signal-dim:#1c7c84;
+  --good:#3CB36B; --warn:#E0B040; --bad:#E5484D; --info:#7FA3D9;
+  --t-red:#E15A5E; --t-blue:#4E97E0; --t-green:#46B877; --t-yellow:#E0B24A;
+  --t-purple:#9F77D9; --t-skull:#8590A8;
+  --shadow:0 1px 0 rgba(255,255,255,.03), 0 8px 24px -12px rgba(0,0,0,.6);
+  --r:10px;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:"Space Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{
+  background:
+    radial-gradient(900px 500px at 85% -8%, rgba(51,214,224,.06), transparent 60%),
+    radial-gradient(700px 600px at -5% 110%, rgba(159,119,217,.05), transparent 55%),
+    var(--bg);
+  color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+a{color:var(--signal)}
+
+/* ── shell: nav rail + main ── */
+.app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
+nav{background:var(--bg-2);border-right:1px solid var(--line);padding:16px 10px;position:sticky;top:0;height:100vh}
+nav .brand{font-weight:700;font-size:15px;letter-spacing:-.01em;margin:2px 6px 4px;color:var(--ink);display:flex;align-items:center}
+nav .brand svg{color:var(--signal)}
+nav .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin:0 6px 16px}
+nav button{display:flex;width:100%;appearance:none;border:0;background:transparent;color:var(--ink-2);
+  font:600 12.5px var(--sans);padding:9px 10px;border-radius:7px;cursor:pointer;text-align:left;gap:8px;align-items:center;margin-bottom:2px;transition:.13s}
+nav button:hover{background:var(--panel);color:var(--ink)}
+nav button.active{background:var(--panel-2);color:var(--signal);box-shadow:inset 2px 0 0 var(--signal)}
+nav .foot{position:absolute;bottom:12px;left:12px;right:12px;font-size:10px;color:var(--ink-3);font-family:var(--mono);line-height:1.6}
+main{padding:18px 24px 60px;max-width:1420px}
+h2{font-size:17px;margin:2px 0 4px;letter-spacing:-.01em}
+h3{font-size:13px;margin:0 0 8px;color:var(--signal)}
+.desc{color:var(--ink-2);font-size:12px;margin:0 0 14px;max-width:960px;line-height:1.5}
+.desc code,.note code{font-family:var(--mono);color:var(--ink-2);background:var(--bg-2);padding:0 4px;border-radius:4px;font-size:10.5px}
+
+/* ── layout ── */
+.grid{display:grid;gap:14px} .g2{grid-template-columns:1fr 1fr} .g32{grid-template-columns:380px 1fr}
+@media(max-width:1100px){.g2,.g32{grid-template-columns:1fr}}
+.col-gap>*{margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);
+  margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:9px}
+.eyebrow .ix{color:var(--signal);opacity:.85}
+.eyebrow.enemy .ix{color:var(--t-red)}
+.eyebrow .right{margin-left:auto;font-weight:400;letter-spacing:0;text-transform:none}
+
+/* ── forms ── */
+label.f{display:block;font-size:11px;color:var(--ink-2);margin:8px 0 3px}
+label.f .hint{color:var(--ink-3);font-size:10px;font-family:var(--mono)}
+input[type=number],input[type=text],select,textarea{width:100%;background:var(--bg-2);border:1px solid var(--line);
+  color:var(--ink);font:500 12.5px var(--mono);padding:7px 8px;border-radius:7px;transition:border-color .14s, box-shadow .14s}
+textarea{min-height:120px;resize:vertical;line-height:1.5;font-size:11.5px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--signal-dim);box-shadow:0 0 0 3px rgba(51,214,224,.10)}
+input[type=range]{accent-color:var(--signal)}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 14px,calc(100% - 9px) 14px;background-size:5px 5px;background-repeat:no-repeat;padding-right:26px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap} .row>*{flex:1} .row .fix{flex:0 0 auto}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2);
+  font:600 12px var(--sans);padding:8px 14px;border-radius:7px;cursor:pointer;transition:.13s}
+.btn:hover{border-color:var(--line-2);color:var(--ink)}
+.btn.primary{background:var(--signal);border-color:var(--signal);color:#06222a}
+.btn.primary:hover{filter:brightness(1.1);color:#06222a}
+.btn.small{padding:4px 9px;font-size:11px}
+.btn:disabled{opacity:.45;cursor:default}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;max-height:190px;overflow:auto;
+  border:1px solid var(--line);border-radius:7px;padding:6px 8px;background:var(--bg-2)}
+.checks label{display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.checks input{accent-color:var(--signal)}
+.tog{display:inline-flex;align-items:center;gap:7px;background:var(--bg-2);border:1px solid var(--line);border-radius:7px;
+  padding:7px 10px;cursor:pointer;font-size:12px;color:var(--ink-2);user-select:none}
+.tog input{accent-color:var(--signal)}
+.tog:has(input:checked){border-color:var(--signal-dim);color:var(--ink)}
+.ai-select{min-width:230px;max-width:280px}
+.ai-select .hint{font-size:9.5px;line-height:1.4;display:block;margin-top:3px;max-width:280px;overflow:hidden}
+
+/* ── tables / tags / stats ── */
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);
+  text-align:left;padding:5px 8px;border-bottom:1px solid var(--line-2);position:sticky;top:0;background:var(--panel);z-index:1}
+td{padding:5px 8px;border-bottom:1px solid rgba(39,46,64,.55);vertical-align:top}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr:hover td{background:rgba(51,214,224,.035)}
+.tag{display:inline-block;font:600 10px var(--mono);letter-spacing:.05em;padding:2px 7px;border-radius:5px;border:1px solid var(--line-2);color:var(--ink-2);white-space:nowrap}
+.tag.good{color:var(--good);border-color:rgba(60,179,107,.5);background:rgba(60,179,107,.07)}
+.tag.warn{color:var(--warn);border-color:rgba(224,176,64,.5);background:rgba(224,176,64,.07)}
+.tag.bad{color:var(--bad);border-color:rgba(229,72,77,.5);background:rgba(229,72,77,.07)}
+.tag.info{color:var(--info);border-color:rgba(127,163,217,.5);background:rgba(127,163,217,.07)}
+.kv{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px dotted var(--line);gap:8px}
+.kv .k{color:var(--ink-2)} .kv .v{font-family:var(--mono);font-weight:600;text-align:right}
+.stat{background:var(--bg-2);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+.stat .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.stat .v{font:700 19px var(--mono);margin-top:2px} .stat .v small{font-size:10.5px;color:var(--ink-3);font-weight:400}
+.stat .hint{font-size:10px;color:var(--ink-3);margin-top:2px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px}
+.bar{height:8px;background:var(--bg-2);border:1px solid var(--line);border-radius:5px;overflow:hidden;display:inline-block}
+.bar i{display:block;height:100%}
+.note{font-size:11px;color:var(--ink-3);line-height:1.55}
+.hint{font-size:10.5px;color:var(--ink-3);font-family:var(--mono)}
+.progress{height:6px;background:var(--bg-2);border:1px solid var(--line);border-radius:4px;overflow:hidden;min-width:180px}
+.progress i{display:block;height:100%;background:var(--signal);width:0%;transition:width .15s}
+.verdict{display:flex;gap:10px;align-items:center;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:10px 13px;margin-top:10px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.verdict b{color:var(--ink)}
+.subtabs{display:flex;gap:4px;margin-bottom:12px}
+.subtabs button{appearance:none;border:1px solid var(--line);background:var(--bg-2);color:var(--ink-2);font:600 11.5px var(--sans);padding:6px 12px;border-radius:7px;cursor:pointer}
+.subtabs button.active{color:var(--signal);border-color:var(--signal-dim);background:var(--panel-2)}
+svg text{font-family:var(--mono);font-size:9px;fill:var(--ink-3)}
+pre.code{background:var(--bg-2);border:1px solid var(--line);border-radius:7px;padding:10px;font:11.5px var(--mono);
+  overflow:auto;white-space:pre;color:var(--ink-2);max-height:320px}
+.err{background:#2a1414;border:1px solid #5c2626;border-radius:10px;padding:18px;margin:40px auto;max-width:660px}
+.scroll{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:7px}
+
+/* ── weigh scale ── */
+.scale-panel{background:linear-gradient(180deg, var(--panel) 0%, #131722 100%)}
+.scale-wrap{padding:2px 0 0}
+.scale-svg{width:100%;display:block}
+.ttk-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:12px}
+.ttk{background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.ttk .k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-family:var(--mono)}
+.ttk .v{font-family:var(--mono);font-weight:700;font-size:18px}
+.ttk .v small{font-size:10.5px;font-weight:400;color:var(--ink-3)}
+
+/* ── compare columns / chips ── */
+.col-head{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;margin:0 0 8px;padding:6px 10px;border-radius:7px;border:1px solid var(--line)}
+.col-head.a{color:var(--signal);border-color:var(--signal-dim)}
+.col-head.b{color:var(--t-yellow);border-color:rgba(224,178,74,.4)}
+.chips-row{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:11.5px;color:var(--ink)}
+.chip .hint{font-size:9px}
+.tagopt{font-size:12px}
+.skill-card{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.skill-name{font-size:14.5px;font-weight:700;margin-bottom:6px}
+.skill-lines{margin:4px 0 6px;padding-left:18px;color:var(--ink-2);font-size:12.5px;line-height:1.55}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="./toolbench/ui/app.mjs"></script>
+</body>
+</html>

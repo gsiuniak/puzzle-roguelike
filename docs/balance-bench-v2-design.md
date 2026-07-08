@@ -1,6 +1,14 @@
 # Balance Bench v2 — Design (2026-07-08)
 
-> **Status: DESIGN ONLY — nothing implemented.**
+> **Status: IMPLEMENTED 2026-07-08** — `sim/balance-bench.html` + `sim/toolbench/ui/*`.
+> Phase 0 extraction: `weights-node.mjs`, `policies.mjs`, `run-core.mjs`,
+> `run-analyze.mjs`, `measure.mjs`, guarded by `browser-safe-check.mjs`; all
+> node smokes + an end-to-end champion `runs.mjs simulate --analyze` verified
+> unchanged. Deviations from the design: fonts stay on Google Fonts with
+> system fallbacks (not bundled); the parity check is a manual digest button
+> in Reference (not a committed fixture); scripted smoke = `?autorun=1` + a
+> POST beacon logged by serve.mjs. v1 `balance-toolbench.html` retained until
+> the user retires it.
 > Successor to `sim/balance-toolbench.html`, borrowing the instrument look/feel of the
 > legacy `sim/combat-balance-bench.html`, and — the core upgrade — putting the whole
 > MEASURED stack (formula champion policy, paired-seed A/B methodology, full-run RCT

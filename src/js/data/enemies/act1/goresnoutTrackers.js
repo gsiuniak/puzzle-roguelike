@@ -21,10 +21,10 @@ const goresnoutTrackers = {
   type: 'minion',
   floors: [4, 5, 6, 7, 8],
 
-  hp: 14, // floor-1-equivalent baseline (MapScene scales maxHp by depth); +armor 10
-  maxHp: 14,
-  attack: 2,
-  armor: 10,
+  hp: 20, // floor-1-equivalent baseline (MapScene scales maxHp by depth); +armor 10
+  maxHp: 20,
+  attack: 4,
+  armor: 0,
   // No starting mana — the AI builds red via swaps to afford Hound.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'goresnout_trackers', // maps to 'portrait_goresnout_trackers' asset key

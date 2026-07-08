@@ -62,14 +62,13 @@ import {
 import { skillSummary, relicDEVPerFight, effectDEV } from './analytic.mjs';
 import { hashSeed, withSeededRandom } from './rng.mjs';
 import { makeValuePolicy, loadWeights } from './policy.mjs';
+// paired-batch math shared with the browser bench (Balance Bench v2 Phase 0)
+import { pairedStats, eqHpFrom, HP_SLOPE_DELTA, WINS_PER_FLOOR } from './measure.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const line = (s) => process.stdout.write(s + '\n');
 const pct = (x, d = 1) => `${(x * 100).toFixed(d)}%`;
 const pp = (x, d = 1) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(d)}pp`;
-const HP_SLOPE_DELTA = 10;      // maxHp delta used to measure the local win/HP slope
-const MIN_SLOPE = 0.0015;       // below 0.15pp/HP the frame is saturated — eqHP unreliable
-const WINS_PER_FLOOR = 0.7;     // doc §6.1 reference progression
 
 /* ═════════════════════════ frames (reference gauntlet) ═════════════════════ */
 
@@ -112,29 +111,8 @@ function runArm(makePlayer, frame, n, battleOpts = {}) {
   return out;
 }
 
-/** Paired stats between two same-seed arms. */
-function pairedStats(base, varr) {
-  const n = base.length;
-  let dSum = 0, d2Sum = 0, wB = 0, wV = 0, tB = 0, tV = 0, casts = 0, castsB = 0;
-  for (let i = 0; i < n; i++) {
-    const b = base[i].playerWon ? 1 : 0;
-    const v = varr[i].playerWon ? 1 : 0;
-    const d = v - b;
-    dSum += d; d2Sum += d * d; wB += b; wV += v;
-    tB += base[i].turns; tV += varr[i].turns;
-    casts += varr[i].playerCasts; castsB += base[i].playerCasts;
-  }
-  const dWin = dSum / n;
-  const varD = n > 1 ? (d2Sum - n * dWin * dWin) / (n - 1) : 0;
-  const se = Math.sqrt(Math.max(0, varD) / n);
-  return {
-    n, winBase: wB / n, winVar: wV / n,
-    dWin, ci95: 1.96 * se,
-    dTurns: (tV - tB) / n,
-    castsPerFight: casts / n,
-    dCasts: (casts - castsB) / n,  // ≈0 → the added item never actually fired
-  };
-}
+/* Paired stats between two same-seed arms → measure.mjs pairedStats (shared
+   with the browser bench). */
 
 /* Baseline arms are shared across every item on the same (host, kit, frame, policy). */
 const armCache = new Map();
@@ -163,15 +141,7 @@ function hpSlopeFor(hostId, frame, cfg) {
   return slopeCache.get(key);
 }
 
-/** Combine per-frame ΔWin into an eqHP using frames whose slope is usable. */
-function eqHpFrom(frameResults, slopes) {
-  let dSum = 0, sSum = 0, used = 0;
-  for (let i = 0; i < frameResults.length; i++) {
-    if (slopes[i].slope >= MIN_SLOPE) { dSum += frameResults[i].dWin; sSum += slopes[i].slope; used++; }
-  }
-  if (!used) return null;
-  return (dSum / used) / (sSum / used);
-}
+/* Per-frame ΔWin → eqHP combination → measure.mjs eqHpFrom (shared). */
 
 /* ═══════════════════════════════ skills sweep ══════════════════════════════ */
 

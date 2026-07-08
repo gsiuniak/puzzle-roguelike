@@ -27,7 +27,6 @@
  * the search horizon. `makeFormulaPolicy(w, { chainDepth })`, default 1.
  */
 
-import { readFileSync } from 'node:fs';
 import MatchResolver, { calculateDestroyedSkullDamage } from '../../src/js/game/MatchResolver.js';
 import { MANA_COLORS, isSkull, BOARD_COLS, BOARD_ROWS } from '../../src/js/game/TileTypes.js';
 import { scaledBonus } from '../../src/js/data/scalingConfig.js';
@@ -60,11 +59,10 @@ export function loadFormulaWeights(json) {
 }
 
 /** The tracked WORKING champion weights (sim/toolbench/weights/) — the
- *  strongest verified player. `makeFormulaPolicy(loadChampionWeights())`. */
+ *  strongest verified player. Node: `loadChampionWeights()` (weights-node.mjs).
+ *  Browser: this URL resolves over http — fetch it and pass the JSON through
+ *  `loadFormulaWeights`. (This module stays BROWSER-SAFE: no node: imports.) */
 export const CHAMPION_WEIGHTS_PATH = new URL('./weights/formula-champion.json', import.meta.url);
-export function loadChampionWeights() {
-  return loadFormulaWeights(JSON.parse(readFileSync(CHAMPION_WEIGHTS_PATH, 'utf8')));
-}
 
 const STRONG_STATUS = new Set(['silenced', 'crippled', 'intangible', 'frozen']);
 const oppPool = (opp) => Math.max(1, opp.hp) + (opp.armor || 0) + (opp.barrier || 0) + (opp.block || 0);

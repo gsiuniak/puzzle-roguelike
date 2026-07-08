@@ -1,38 +1,17 @@
 /**
  * toolbench/pool-worker.mjs — worker side of pool.mjs. Resolves policy SPECS
- * (see pool.mjs) into live policies (cached per context), then executes fully
- * seeded tasks: 'battle' (one Battle), 'run' (one full run via runs.mjs
- * runOneRun), 'collect' (one recorded self-play battle via learn.mjs
- * collectOneBattle).
+ * (see pool.mjs) into live policies via the shared policies.mjs resolver
+ * (cached per context), then executes fully seeded tasks: 'battle' (one
+ * Battle), 'run' (one full run via run-core.mjs runOneRun), 'collect' (one
+ * recorded self-play battle via learn.mjs collectOneBattle).
  */
 
 import { parentPort } from 'node:worker_threads';
 import { Battle, makePlayerCombatant, makeEnemyCombatant } from './engine.mjs';
-import { makeValuePolicy } from './policy.mjs';
+import { makePolicyResolver } from './policies.mjs';
 import { withSeededRandom } from './rng.mjs';
 
-let policies = {};
-const cache = new Map();
-
-async function resolvePolicy(ref) {
-  if (ref == null) return null;
-  if (cache.has(ref)) return cache.get(ref);
-  const spec = policies[ref];
-  let pol = null;
-  if (spec && spec.kind === 'value') pol = makeValuePolicy(spec.weights || {}, spec.opts || {});
-  else if (spec && spec.kind === 'learned') {
-    const { makeLearnedPolicy } = await import('./learn.mjs');
-    pol = makeLearnedPolicy(spec.model, spec.opts || {});
-  } else if (spec && spec.kind === 'conv') {
-    const { makeConvPolicy, loadConvModel } = await import('./nn.mjs');
-    pol = makeConvPolicy(loadConvModel(spec.model), spec.opts || {});
-  } else if (spec && spec.kind === 'formula') {
-    const { makeFormulaPolicy } = await import('./formula.mjs');
-    pol = makeFormulaPolicy(spec.weights || {}, spec.opts || {});
-  }
-  cache.set(ref, pol);
-  return pol;
-}
+let resolvePolicy = makePolicyResolver({});
 
 async function handle(task) {
   switch (task.type) {
@@ -46,7 +25,7 @@ async function handle(task) {
       ).run());
     }
     case 'run': {
-      const { runOneRun } = await import('./runs.mjs');
+      const { runOneRun } = await import('./run-core.mjs');
       return runOneRun(task.opts, await resolvePolicy(task.playerPolicy));
     }
     case 'collect': {
@@ -60,8 +39,7 @@ async function handle(task) {
 parentPort.on('message', async (msg) => {
   try {
     if (msg.type === 'context') {
-      policies = (msg.context && msg.context.policies) || {};
-      cache.clear();
+      resolvePolicy = makePolicyResolver((msg.context && msg.context.policies) || {});
       parentPort.postMessage({ type: 'ready' });
     } else if (msg.type === 'task') {
       parentPort.postMessage({ type: 'result', id: msg.id, result: await handle(msg.task) });

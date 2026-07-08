@@ -20,6 +20,13 @@ const MIME = {
 createServer(async (req, res) => {
   try {
     const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    // scripted-check beacon: the bench's ?autorun=1 posts its result here
+    if (req.method === 'POST' && url === '/__bench') {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => { console.log(`[bench] ${body}`); res.writeHead(204); res.end(); });
+      return;
+    }
     let file = normalize(join(ROOT, url));
     if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
     if (url.endsWith('/')) file = join(file, 'index.html');

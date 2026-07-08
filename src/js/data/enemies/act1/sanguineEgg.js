@@ -39,8 +39,8 @@ const sanguineEgg = {
   type: 'elite',
   floors: [], // never spawns on its own — reached only via the Phoenix's transform
 
-  hp: 2, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 3→2 (the egg-check was failed too often — Phoenix measured 51-53% player win vs elite band 65-80%)
-  maxHp: 2, // the player must deal this much in ONE turn to slay the Egg
+  hp: 4, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 3→2 (the egg-check was failed too often — Phoenix measured 51-53% player win vs elite band 65-80%)
+  maxHp: 4, // the player must deal this much in ONE turn to slay the Egg
   attack: 1,
   attackScale: 0, // dormant — never attacks; opt out of the per-floor attack bonus
   armor: 0,

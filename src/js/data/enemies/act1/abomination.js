@@ -28,9 +28,9 @@ const abomination = {
   type: 'minion',
   floors: [7, 8, 9],
 
-  hp: 16, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 25→16 (a MINION measured at 63-70% player win — band 85-95%; less HP = fewer bites for its Disease/attack ramp)
-  maxHp: 16,
-  attack: 2,
+  hp: 20, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 25→16 (a MINION measured at 63-70% player win — band 85-95%; less HP = fewer bites for its Disease/attack ramp)
+  maxHp: 20,
+  attack: 6,
   armor: 0,
   // Starts with 1 Red so it can Infected Bite on turn one; builds Green via
   // board matches toward Cyst Burst's 10-green cost.
