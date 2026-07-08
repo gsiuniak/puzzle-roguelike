@@ -25,7 +25,9 @@
 // DPT). Back-loaded/aggressive: gentle early floors (onboarding) ramping hard late.
 // Previous curves, for reference:
 //   [1.15, 1.35, 1.7, 1.9, 2.35, 2.65, 3.2, 3.55, 4.25, 4.75]  (front-loaded, older)
+// export const ENEMY_HP_FLOOR_MULT = [1.15, 1.45, 1.8, 2.15, 2.7, 3.2, 4.0, 4.7, 5.8, 6.8];
 export const ENEMY_HP_FLOOR_MULT = [1.15, 1.45, 1.8, 2.15, 2.7, 3.2, 4.0, 4.7, 5.8, 6.8];
+
 
 // ── Per-floor enemy ATTACK scaling ───────────────────────
 // Attack is the lethality knob (it drives BOTH skill damage and skull-match damage,

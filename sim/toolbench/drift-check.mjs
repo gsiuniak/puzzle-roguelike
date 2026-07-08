@@ -22,7 +22,12 @@ import {
 import { DEBUFF_POWER_MULT } from '../../src/js/data/skillSynthesizer.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+// Strip line comments (`// …` to EOL) so a COMMENTED-OUT alternate value (e.g. a
+// prior curve kept for reference) can't be mistaken for the live definition —
+// the regex parsers below match the first `NAME = …` and would otherwise grab
+// it. These sources have no `//` inside the constant literals we parse, so this
+// is safe. (Block comments don't contain `NAME = [...]` patterns here.)
+const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8').replace(/\/\/[^\n]*/g, '');
 let failures = 0;
 
 function check(name, mirrored, parsed) {
