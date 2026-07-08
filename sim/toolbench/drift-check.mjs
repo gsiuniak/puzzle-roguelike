@@ -53,9 +53,12 @@ function parseObject(src, name) {
   return out;
 }
 
-const mapScene = read('src/js/scenes/MapScene.js');
-check('ENEMY_HP_FLOOR_MULT (MapScene)', ENEMY_HP_FLOOR_MULT, parseArray(mapScene, 'ENEMY_HP_FLOOR_MULT'));
-check('ENEMY_ATTACK_FLOOR_BONUS (MapScene)', ENEMY_ATTACK_FLOOR_BONUS, parseArray(mapScene, 'ENEMY_ATTACK_FLOOR_BONUS'));
+// ENEMY_HP_FLOOR_MULT / ENEMY_ATTACK_FLOOR_BONUS are now a SHARED module that BOTH
+// engine.mjs and MapScene.js import (src/js/data/enemyScaling.js) — structurally
+// undriftable. Checked here only to catch someone re-hardcoding engine's re-export.
+const enemyScaling = read('src/js/data/enemyScaling.js');
+check('ENEMY_HP_FLOOR_MULT (enemyScaling)', ENEMY_HP_FLOOR_MULT, parseArray(enemyScaling, 'ENEMY_HP_FLOOR_MULT'));
+check('ENEMY_ATTACK_FLOOR_BONUS (enemyScaling)', ENEMY_ATTACK_FLOOR_BONUS, parseArray(enemyScaling, 'ENEMY_ATTACK_FLOOR_BONUS'));
 
 const bc = read('src/js/game/BattleController.js');
 check('MAGIC_MANA_PER_POINT (BattleController)', MAGIC_MANA_PER_POINT, parseNumber(bc, 'MAGIC_MANA_PER_POINT'));

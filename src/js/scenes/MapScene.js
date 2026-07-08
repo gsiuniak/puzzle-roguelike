@@ -28,6 +28,7 @@ import MapRenderer from '../map/MapRenderer.js';
 import MapView from '../map/MapView.js';
 import AudioManager from '../audio/AudioManager.js';
 import BattleController from '../game/BattleController.js';
+import { enemyHpFloorMult, enemyAttackFloorBonus } from '../data/enemyScaling.js';
 import BattleScene from '../ui/BattleScene.js';
 import { selectEnemyForNode, markEnemySeen, getEnemyById } from '../data/enemies/index.js';
 import { createPlayerBattleState, syncBattleResultsToRunState, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
@@ -45,42 +46,13 @@ import { clearSpellIconCache } from '../icons/spellIcons.js';
  */
 const DEBUG_ALL_NODES_SKILL_WEAVE = false; // true;
 
-// ── Per-floor enemy HP scaling ───────────────────────────
-// Enemy `maxHp` in the data files is a FLOOR-1-EQUIVALENT baseline. At spawn it is
-// multiplied by this per-depth factor so a given enemy stays appropriately tough
-// as the player's power grows over the act. The curve is the measured player-DPT
-// ratio from the sim (sim/out/power.json: DPT[floor] / DPT[floor1]); enemy HP is
-// budgeted as playerDPT × targetTurns, so HP tracks DPT. Regenerate with
-// `node sim/run-power.mjs` if the growth/relic model changes.
-// Index = node.depth (0-indexed; depth 0 = floor 1).
-// Bumped slightly over the old curve (front-loaded — the early floors were the
-// most trivial vs the buffed player) so fights last a bit longer.
-const ENEMY_HP_FLOOR_MULT = [1.15, 1.35, 1.7, 1.9, 2.35, 2.65, 3.2, 3.55, 4.25, 4.75];
-
-/** Per-floor HP multiplier for a 0-indexed map depth (clamps past the last floor). */
-function enemyHpFloorMult(depth) {
-  const d = Math.max(0, depth | 0);
-  return ENEMY_HP_FLOOR_MULT[Math.min(d, ENEMY_HP_FLOOR_MULT.length - 1)];
-}
-
-// ── Per-floor enemy ATTACK scaling ───────────────────────
-// Attack is the lethality knob (it drives BOTH skill damage and skull-match
-// damage, and now also scales enemy skills via their `scaling` field). It's
-// sharp, so it ramps as a small ADDITIVE step bonus on top of the enemy's
-// authored base attack — preserving per-enemy identity (a base-3 brute always
-// stays +1 over a base-2 minion). Index = node.depth.
-// STEEPENED 2026-06-23 (≈ +1 every 2 floors, was +1 every 3, top +4 was +3):
-// player growth is now deterministic and ALWAYS includes Max HP (decision #36),
-// so enemy *damage* must scale faster to stay a real threat against a steadily
-// growing HP pool — otherwise flat HP out-paces the threat and tanking is free.
-// See docs/balance-combat-math.md §4.2 / §7.1.
-const ENEMY_ATTACK_FLOOR_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
-
-/** Per-floor additive attack bonus for a 0-indexed map depth (clamps). */
-function enemyAttackFloorBonus(depth) {
-  const d = Math.max(0, depth | 0);
-  return ENEMY_ATTACK_FLOOR_BONUS[Math.min(d, ENEMY_ATTACK_FLOOR_BONUS.length - 1)];
-}
+// ── Per-floor enemy HP + ATTACK scaling ──────────────────
+// The curves (ENEMY_HP_FLOOR_MULT / ENEMY_ATTACK_FLOOR_BONUS) + these depth-indexed
+// helpers now live in the shared, dependency-free source of truth
+// src/js/data/enemyScaling.js — imported ABOVE and also by sim/toolbench/engine.mjs,
+// so the game and the balance sim can never drift. Retune the curve in that ONE
+// file and testing/training picks it up automatically. (See that file for the
+// rationale + previous curves.)
 
 // ── Weave color affinity ─────────────────────────────────
 const AFFINITY_MANA_COLORS = ['red', 'blue', 'green', 'yellow', 'purple'];

@@ -48,8 +48,10 @@
  *   Policies are trusted harness code: they may call the battle's helpers
  *   (greedySkill/greedySwap/canAfford) and read board/combatants directly.
  *
+ * SHARED CONSTANTS (single source of truth — imported, CANNOT drift):
+ *   ENEMY_HP_FLOOR_MULT / ENEMY_ATTACK_FLOOR_BONUS   ← src/js/data/enemyScaling.js
+ *     (the SAME module MapScene.js imports — retune the curve there, both update)
  * MIRRORED CONSTANTS (not exported by their homes — keep in sync):
- *   ENEMY_HP_FLOOR_MULT / ENEMY_ATTACK_FLOOR_BONUS   ← src/js/scenes/MapScene.js
  *   MAGIC_MANA_PER_POINT (9)                          ← src/js/game/BattleController.js
  *   STATUS_DAMAGE_MODS, POISON_DECAY_DIVISOR (2)      ← src/js/game/BattleController.js
  */
@@ -67,13 +69,13 @@ import ENEMY_RELIC_CATALOG from '../../src/js/data/relics/enemyRelicCatalog.js';
 import CHARACTERS_BY_ID from '../../src/js/data/characters/index.js';
 import ENEMIES_BY_ID, { ALL_ENEMIES, selectEnemyForNode, FLOOR_COUNT } from '../../src/js/data/enemies/index.js';
 import { RELIC_RARITY_WEIGHTS, DEFAULT_RELIC_RARITY_WEIGHT } from '../../src/js/data/relics/relicRewards.js';
+import { ENEMY_HP_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS } from '../../src/js/data/enemyScaling.js';
 
 export { SKILL_CATALOG, RELIC_CATALOG, ENEMY_RELIC_CATALOG, CHARACTERS_BY_ID, ENEMIES_BY_ID, ALL_ENEMIES, FLOOR_COUNT };
 export { RELIC_RARITY_WEIGHTS, DEFAULT_RELIC_RARITY_WEIGHT };
 
-/* ── Mirrored MapScene floor curves [CODE mirror — MapScene.js] ─────────── */
-export const ENEMY_HP_FLOOR_MULT = [1.15, 1.35, 1.7, 1.9, 2.35, 2.65, 3.2, 3.55, 4.25, 4.75];
-export const ENEMY_ATTACK_FLOOR_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
+/* ── Per-floor enemy curves — SHARED source of truth (re-exported, no drift) ─ */
+export { ENEMY_HP_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS };
 /* ── Mirrored BattleController constants ────────────────────────────────── */
 export const MAGIC_MANA_PER_POINT = 9;
 export const POISON_DECAY_DIVISOR = 2;
