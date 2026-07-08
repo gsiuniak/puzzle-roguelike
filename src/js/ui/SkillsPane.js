@@ -1,6 +1,7 @@
 import UIPanel from './UIPanel.js';
 import {
   createCardModel, measureCardModel, drawCardModel,
+  measurePassiveCardModel, drawPassiveCardModel,
   CARD_BG_KEY, CARD_PAD, ICON_SIZE,
 } from './skillCard.js';
 
@@ -122,8 +123,19 @@ export default class SkillsPane extends UIPanel {
     /** @type {Function|null} () => void — opens the Manage Skills modal */
     this.onManageClick = null;
 
-    /** @type {Array<{skill:object|null, locked:boolean, model:object|null}>} */
+    /**
+     * Combined display rows (passives first, then skills, then ghost fillers).
+     * Row shapes: passive `{passive:true, model}`, skill `{skill, locked, model}`,
+     * ghost `{skill:null, locked:true, model:null}`.
+     * @type {Array<object>}
+     */
     this._rows = [];
+    /** Built from setSkills(); combined into _rows after any passive change. */
+    this._skillRows = [];
+    /** Built from setPassives() (enemy relics shown as passives, at the top). */
+    this._passiveRows = [];
+    /** Signature of the current passives (relic ids) — idempotency guard. */
+    this._passiveSig = '';
     /** Hovered card index, -1 = none. */
     this._hoverRow = -1;
     this._hoverManage = false;
@@ -161,10 +173,36 @@ export default class SkillsPane extends UIPanel {
 
   setSkills(skills) {
     const list = skills || [];
-    this._rows = [];
+    this._skillRows = [];
     for (const skill of list) {
-      this._rows.push({ skill, locked: false, model: createCardModel(skill) });
+      this._skillRows.push({ skill, locked: false, model: createCardModel(skill) });
     }
+    this._rebuildRows();
+  }
+
+  /**
+   * Set the "passives" shown at the TOP of the list (enemy relics rendered as
+   * passive cards — a purple banner, the relic icon/name/description, and an
+   * infinite badge in place of the mana cost). Idempotent — the models are only
+   * rebuilt when the relic set actually changes (safe to call every frame).
+   * @param {Array<object>} relics — resolved relic objects (id/name/description/icon/effects)
+   * @returns {boolean} true when the passive rows were rebuilt (relics changed)
+   */
+  setPassives(relics) {
+    const list = relics || [];
+    const sig = list.map(r => (r && r.id) || '').join('|');
+    if (sig === this._passiveSig) return false;
+    this._passiveSig = sig;
+    this._passiveRows = list.map(relic => ({
+      passive: true, locked: false, model: createCardModel(relic),
+    }));
+    this._rebuildRows();
+    return true;
+  }
+
+  /** Combine passive + skill rows, pad with ghost slots, reset transient state. */
+  _rebuildRows() {
+    this._rows = [...this._passiveRows, ...this._skillRows];
     while (this._rows.length < MIN_SLOTS) {
       this._rows.push({ skill: null, locked: true, model: null });
     }
@@ -296,7 +334,7 @@ export default class SkillsPane extends UIPanel {
     const i = this._rowAt(y);
     if (i === -1 || i !== this._pressRow || !this._insideInner(x, y)) return true;
     const row = this._rows[i];
-    if (row && !row.locked && this.onSkillClick && this._affordable(row.skill)) {
+    if (row && !row.locked && !row.passive && this.onSkillClick && this._affordable(row.skill)) {
       this.onSkillClick(row.skill);
     }
     return true;
@@ -377,7 +415,10 @@ export default class SkillsPane extends UIPanel {
     for (const row of this._rows) {
       let m = null;
       let h = GHOST_CARD_H;
-      if (!row.locked) {
+      if (row.passive) {
+        m = measurePassiveCardModel(ctx, row.model, cardW, { caster: this._ownerStats });
+        h = m.h;
+      } else if (!row.locked) {
         m = measureCardModel(ctx, row.model, cardW, { caster: this._ownerStats });
         h = m.h;
       }
@@ -399,7 +440,12 @@ export default class SkillsPane extends UIPanel {
       const { m, h } = measures[i];
       const visible = y + h >= inner.y && y <= inner.y + inner.h;
       if (visible) {
-        if (row.locked) {
+        if (row.passive) {
+          for (const kt of row.model.effectKTs) kt.visible = true;
+          drawPassiveCardModel(ctx, row.model, { x: inner.x, y, w: cardW, h }, m, {
+            assetManager: this._assetManager,
+          });
+        } else if (row.locked) {
           this._renderGhostCard(ctx, inner.x, y, cardW, h);
         } else {
           if (row.model) for (const kt of row.model.effectKTs) kt.visible = true;

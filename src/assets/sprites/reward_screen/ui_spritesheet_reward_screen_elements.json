@@ -2,17 +2,28 @@
   "meta": {
     "sheet_w": 1698,
     "sheet_h": 1589,
-    "sprite_count": 13,
+    "sprite_count": 14,
     "mode": "bin_pack",
     "padding": 4
   },
   "sprites": {
+    "relics_pane_panel_common": {
+      "x": 925,
+      "y": 4,
+      "w": 450,
+      "h": 784,
+      "index": 0,
+      "source_w": 1139,
+      "source_h": 810,
+      "trim_x": 13,
+      "trim_y": 13
+    },
     "relics_pane_panel_uncommon": {
       "x": 4,
       "y": 801,
       "w": 449,
       "h": 784,
-      "index": 0,
+      "index": 1,
       "source_w": 1139,
       "source_h": 810,
       "trim_x": 13,
@@ -23,7 +34,7 @@
       "y": 4,
       "w": 451,
       "h": 785,
-      "index": 1,
+      "index": 2,
       "source_w": 1139,
       "source_h": 810,
       "trim_x": 12,
@@ -34,22 +45,11 @@
       "y": 4,
       "w": 462,
       "h": 793,
-      "index": 2,
+      "index": 3,
       "source_w": 1139,
       "source_h": 810,
       "trim_x": 5,
       "trim_y": 8
-    },
-    "relics_pane_panel_common": {
-      "x": 925,
-      "y": 4,
-      "w": 450,
-      "h": 784,
-      "index": 3,
-      "source_w": 1139,
-      "source_h": 810,
-      "trim_x": 13,
-      "trim_y": 13
     },
     "rewards_title_panel": {
       "x": 457,
@@ -64,7 +64,7 @@
     },
     "reward_divider_rare": {
       "x": 457,
-      "y": 1057,
+      "y": 1219,
       "w": 749,
       "h": 63,
       "index": 5,
@@ -75,7 +75,7 @@
     },
     "reward_divider_legendary": {
       "x": 457,
-      "y": 1124,
+      "y": 1286,
       "w": 749,
       "h": 63,
       "index": 6,
@@ -86,7 +86,7 @@
     },
     "reward_divider_uncommon": {
       "x": 457,
-      "y": 1191,
+      "y": 1353,
       "w": 749,
       "h": 63,
       "index": 7,
@@ -97,7 +97,7 @@
     },
     "reward_divider_common": {
       "x": 457,
-      "y": 1258,
+      "y": 1420,
       "w": 749,
       "h": 63,
       "index": 8,
@@ -106,20 +106,20 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "rewards_button_skip_hover": {
-      "x": 1210,
-      "y": 1124,
-      "w": 144,
-      "h": 29,
+    "rewards_title_panel_old": {
+      "x": 457,
+      "y": 1057,
+      "w": 726,
+      "h": 158,
       "index": 9,
       "source_w": 1139,
       "source_h": 810,
       "trim_x": 0,
       "trim_y": 0
     },
-    "rewards_button_skip": {
-      "x": 1358,
-      "y": 1124,
+    "rewards_button_skip_hover": {
+      "x": 1210,
+      "y": 1286,
       "w": 144,
       "h": 29,
       "index": 10,
@@ -128,12 +128,23 @@
       "trim_x": 0,
       "trim_y": 0
     },
+    "rewards_button_skip": {
+      "x": 1358,
+      "y": 1286,
+      "w": 144,
+      "h": 29,
+      "index": 11,
+      "source_w": 1139,
+      "source_h": 810,
+      "trim_x": 0,
+      "trim_y": 0
+    },
     "rewards_button_confirm_hover": {
       "x": 1210,
-      "y": 1057,
+      "y": 1219,
       "w": 240,
       "h": 61,
-      "index": 11,
+      "index": 12,
       "source_w": 1139,
       "source_h": 810,
       "trim_x": 0,
@@ -141,10 +152,10 @@
     },
     "rewards_button_confirm": {
       "x": 1454,
-      "y": 1057,
+      "y": 1219,
       "w": 240,
       "h": 61,
-      "index": 12,
+      "index": 13,
       "source_w": 1139,
       "source_h": 810,
       "trim_x": 0,

@@ -1406,10 +1406,14 @@ export default class BattleScene extends UIPanel {
       this._relicBar.setRelics(state.playerState.relics || []);
       this._relicBar.setOwnerStats({ attack: state.playerState.attack, magic: state.playerState.magic });
     }
-    // Update enemy relic bar from enemy relics (no-op when unchanged)
-    if (this._enemyRelicBar && state.enemyState) {
-      this._enemyRelicBar.setRelics(state.enemyState.relics || []);
-      this._enemyRelicBar.setOwnerStats({ attack: state.enemyState.attack, magic: state.enemyState.magic });
+    // Enemies show their relics as "PASSIVES" at the top of the enemy skills
+    // pane (not in a relic bar — the enemy relic bar element is kept only as
+    // layout spacing to mirror the player bar). Idempotent — only rebuilds when
+    // the relic set changes; on change, re-register keyword tooltip sources.
+    if (this._enemySkillsPane && state.enemyState) {
+      if (this._enemySkillsPane.setPassives(state.enemyState.relics || [])) {
+        this._registerSkillTooltips();
+      }
     }
 
     // Update enemy pane from real state

@@ -75,6 +75,32 @@ const COST_BADGE_GLOW_ALPHA = 0.55;  // subtle gem-colored glow behind the pill
 
 const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
+// ── Passive card (enemy relics shown as "passives") ──
+// Same frame + circular icon + keyword description as a skill card, but a
+// distinct two-region layout: a HEADER row ([Passive banner] + relic name) on
+// top, then a BODY row (icon + description) beneath. The cost badge is replaced
+// by an "infinite" (∞) badge of the same pill size/shape.
+export const PASSIVE_BANNER_KEY = 'ui_skill_panel_passive_banner';
+const PASSIVE_BANNER_ASPECT = 866 / 285;   // trimmed sprite frame aspect
+const PASSIVE_BANNER_H = 26;
+const PASSIVE_BANNER_TEXT = 'Passive';
+const PASSIVE_BANNER_FONT_SIZE = 16;
+/** "Passive" label color — pale, muted gold. */
+const PASSIVE_BANNER_TEXT_COLOR = '#d8c48c';
+const PASSIVE_BANNER_FALLBACK = 'rgba(74, 42, 120, 0.92)';
+const PASSIVE_BANNER_FALLBACK_BORDER = 'rgba(180, 140, 230, 0.9)';
+const PASSIVE_HEADER_GAP = 8;               // banner ↔ DESCRIPTION (sets name↔desc spacing)
+const PASSIVE_ICON_GAP = 4;                 // banner ↔ ICON art (independent of the description)
+const PASSIVE_NAME_GAP = 12;                // banner ↔ name (also the description indent)
+const PASSIVE_ICON_SIZE = 72;
+const PASSIVE_NAME_FONT_SIZE = 21;
+const PASSIVE_NAME_MIN_FONT_SIZE = 14;
+const INFINITY_GLYPH = '∞';            // ∞
+/** Extra px added to the infinity badge width so it reads as an OVAL (wider
+ *  than the round cost pill), and its own tweakable border color. */
+const INFINITY_BADGE_EXTRA_W = 12;
+const INFINITY_BADGE_BORDER = 'rgba(212, 200, 165, 0.85)';
+
 const MANA_COLORS = {
   red:    '#cc3333',
   blue:   '#3366cc',
@@ -163,23 +189,29 @@ function wrapWords(ctx, text, maxW) {
  * @returns {{ h:number, textX:number, textW:number, nameLines:string[],
  *             effectHeights:number[], effectsH:number }}
  */
-export function measureCardModel(ctx, model, cardW, opts = {}) {
-  // Live-resolve `<<n>>` dynamic damage values from the caster's current stats
-  // (run every frame so the shown amount tracks Attack/Magic). With no caster
-  // the base amount is shown. A shared cursor pairs tokens → scalable effects
-  // (damage/heal) in order across all lines (resolveDynamicText filters).
-  if (model.lineTemplates) {
-    const caster = opts.caster || null;
-    const cursor = { i: 0 };
-    const effects = (model.skill && model.skill.effects) || [];
-    for (let k = 0; k < model.effectKTs.length; k++) {
-      const tmpl = model.lineTemplates[k];
-      if (tmpl == null) continue;
-      const resolved = resolveDynamicText(tmpl, effects, caster, cursor);
-      const kt = model.effectKTs[k];
-      if (kt.text !== resolved) kt.setStyle({ text: resolved });
-    }
+/**
+ * Live-resolve `<<n>>` dynamic damage values on a card model from the caster's
+ * current stats (run every frame so the shown amount tracks Attack/Magic). With
+ * no caster the base amount is shown. A shared cursor pairs tokens → scalable
+ * effects (damage/heal/…) in order across all lines (resolveDynamicText filters).
+ * Shared by skill cards AND passive cards.
+ */
+function resolveModelDynamics(model, opts) {
+  if (!model.lineTemplates) return;
+  const caster = opts.caster || null;
+  const cursor = { i: 0 };
+  const effects = (model.skill && model.skill.effects) || [];
+  for (let k = 0; k < model.effectKTs.length; k++) {
+    const tmpl = model.lineTemplates[k];
+    if (tmpl == null) continue;
+    const resolved = resolveDynamicText(tmpl, effects, caster, cursor);
+    const kt = model.effectKTs[k];
+    if (kt.text !== resolved) kt.setStyle({ text: resolved });
   }
+}
+
+export function measureCardModel(ctx, model, cardW, opts = {}) {
+  resolveModelDynamics(model, opts);
 
   const textX = CARD_PAD.left + ICON_SIZE + ICON_GAP; // relative to card x
   // The cost lives on the icon badge — text gets the whole right side.
@@ -378,6 +410,191 @@ export function drawCardModel(ctx, model, rect, m, opts = {}) {
 
   if (m.effectsH > 0) {
     let blockY = lineY + NAME_DESC_GAP;
+    for (let e = 0; e < model.effectKTs.length; e++) {
+      const kt = model.effectKTs[e];
+      const bh = m.effectHeights[e];
+      kt.rect.x = textX;
+      kt.rect.y = blockY;
+      kt.rect.w = m.textW;
+      kt.rect.h = bh;
+      kt.renderSelf(ctx);
+      blockY += bh + EFFECT_GAP;
+    }
+  }
+
+  ctx.restore();
+}
+
+// ── Passive card (relic → "passive") ─────────────────────────────
+// Reuses createCardModel(relic) — the relic's name/description/effects/icon map
+// straight onto the model's `skill` field (createCardModel only reads name,
+// descriptionLines|description, and later effects/icon).
+
+/**
+ * Measure a passive card. Layout: header row (banner + name) over a body row
+ * (icon + wrapped keyword description).
+ * @returns {{ h, textX, textW, effectHeights, descH, headerH, bodyH }}
+ */
+export function measurePassiveCardModel(ctx, model, cardW, opts = {}) {
+  resolveModelDynamics(model, opts);
+
+  // The banner sits top-left; the name AND the description both start just past
+  // it so the two text columns share a left edge (`textX`). Layout uses the
+  // constant banner aspect (= the sliced sprite's true w/h) so measure and draw
+  // agree on the alignment X.
+  const bannerW = Math.round(PASSIVE_BANNER_H * PASSIVE_BANNER_ASPECT);
+  const textX = CARD_PAD.left + bannerW + PASSIVE_NAME_GAP; // relative to card x
+  const textW = Math.max(20, cardW - CARD_PAD.right - textX);
+
+  const effectHeights = [];
+  let descH = 0;
+  for (const kt of model.effectKTs) {
+    kt.setStyle({ maxWidth: textW });
+    const bh = kt.measureText(ctx).height;
+    effectHeights.push(bh);
+    descH += bh;
+  }
+  if (model.effectKTs.length > 1) descH += (model.effectKTs.length - 1) * EFFECT_GAP;
+
+  // The icon and the description hang from the banner on SEPARATE gaps (the icon
+  // hugs the banner; the description keeps its name↔desc spacing), so the card
+  // fits whichever column is taller.
+  const headerH = PASSIVE_BANNER_H;
+  const bodyContentH = Math.max(PASSIVE_HEADER_GAP + descH, PASSIVE_ICON_GAP + PASSIVE_ICON_SIZE);
+  const h = CARD_PAD.top + headerH + bodyContentH + CARD_PAD.bottom;
+  return { h, textX, textW, bannerW, effectHeights, descH, headerH };
+}
+
+/**
+ * Draw a passive card (enemy relic). Same contract as drawCardModel.
+ * @param {object} opts — { assetManager }
+ */
+export function drawPassiveCardModel(ctx, model, rect, m, opts = {}) {
+  const { x, y, w, h } = rect;
+  const am = opts.assetManager || null;
+  const relic = model.skill; // createCardModel stores the source object here
+  const asset = (key) => {
+    if (!key || !am) return null;
+    const img = am.get(key);
+    return img && img.complete !== false ? img : null;
+  };
+
+  ctx.save();
+  if (opts.alpha != null && opts.alpha < 1) ctx.globalAlpha *= opts.alpha;
+
+  // ── Frame ──
+  const frame = asset(CARD_BG_KEY);
+  if (frame) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(frame, x, y, w, h);
+    ctx.restore();
+  } else {
+    roundRectPath(ctx, x, y, w, h, CARD_RADIUS);
+    ctx.fillStyle = CARD_FALLBACK_BG;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = CARD_FALLBACK_BORDER;
+    ctx.stroke();
+  }
+
+  // ── Header row: [Passive banner] + relic name ──
+  const headerY = y + CARD_PAD.top;
+  const bannerH = m.headerH;
+  const bannerW = m.bannerW;          // layout-derived (measure & draw agree)
+  const bannerX = x + CARD_PAD.left;
+  const bannerImg = asset(PASSIVE_BANNER_KEY);
+  if (bannerImg) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(bannerImg, bannerX, headerY, bannerW, bannerH);
+    ctx.restore();
+  } else {
+    roundRectPath(ctx, bannerX, headerY, bannerW, bannerH, bannerH / 2);
+    ctx.fillStyle = PASSIVE_BANNER_FALLBACK;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = PASSIVE_BANNER_FALLBACK_BORDER;
+    ctx.stroke();
+  }
+  // "Passive" label written into the banner.
+  ctx.save();
+  ctx.font = `${PASSIVE_BANNER_FONT_SIZE}px ${FONT_FAMILY}`;
+  ctx.fillStyle = PASSIVE_BANNER_TEXT_COLOR;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 3;
+  ctx.fillText(PASSIVE_BANNER_TEXT, bannerX + bannerW / 2, headerY + bannerH / 2 + 1);
+  ctx.restore();
+
+  // Relic name — shares the description's left edge (x + m.textX), auto-shrunk
+  // to fit one line.
+  const nameX = x + m.textX;
+  const nameMaxW = Math.max(20, x + w - CARD_PAD.right - nameX);
+  ctx.save();
+  let nameFont = PASSIVE_NAME_FONT_SIZE;
+  const name = relic.name || '';
+  ctx.font = `bold ${nameFont}px ${FONT_FAMILY}`;
+  while (nameFont > PASSIVE_NAME_MIN_FONT_SIZE && ctx.measureText(name).width > nameMaxW) {
+    nameFont -= 1;
+    ctx.font = `bold ${nameFont}px ${FONT_FAMILY}`;
+  }
+  ctx.fillStyle = NAME_COLOR;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
+  ctx.fillText(name, nameX, headerY + bannerH / 2 + 1);
+  ctx.restore();
+
+  // ── Body: icon (hugs the banner) + description (own anchor) ──
+  // Two independent vertical anchors so the ICON can sit close to the banner
+  // without changing the name↔description spacing.
+  const descTopY = headerY + m.headerH + PASSIVE_HEADER_GAP; // sets name↔desc gap
+  const iconTopY = headerY + m.headerH + PASSIVE_ICON_GAP;   // pulls the art up
+  const iconCX = x + CARD_PAD.left + PASSIVE_ICON_SIZE / 2;
+  const iconImg = asset(relic.icon) || asset('placeholder');
+  if (iconImg) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    const iw = iconImg.width || PASSIVE_ICON_SIZE;
+    const ih = iconImg.height || PASSIVE_ICON_SIZE;
+    // CONTAIN-fit the whole relic art (never cropped) — relic icons aren't
+    // square/circular like skill icons, so mirror how RelicBar draws them —
+    // and TOP-anchor it so the visible art hugs the banner.
+    const sc = Math.min(PASSIVE_ICON_SIZE / iw, PASSIVE_ICON_SIZE / ih);
+    ctx.drawImage(iconImg, iconCX - (iw * sc) / 2, iconTopY, iw * sc, ih * sc);
+    ctx.restore();
+  }
+
+  // ── "Infinite" badge — same pill size/shape as the cost badge, ∞ glyph. ──
+  {
+    ctx.save();
+    ctx.font = `bold ${COST_BADGE_FONT_SIZE}px ${FONT_FAMILY}`;
+    ctx.textBaseline = 'middle';
+    const glyphW = Math.max(ctx.measureText(INFINITY_GLYPH).width, COST_BADGE_GEM_R * 2);
+    // Forced a touch wider than a round cost pill → an oval badge.
+    const pillW = COST_BADGE_PAD_X + glyphW + COST_BADGE_PAD_X + INFINITY_BADGE_EXTRA_W;
+    const px = iconCX + PASSIVE_ICON_SIZE / 2 + COST_BADGE_OFFSET.x - pillW;
+    const py = iconTopY + PASSIVE_ICON_SIZE + COST_BADGE_OFFSET.y - COST_BADGE_H;
+    roundRectPath(ctx, px, py, pillW, COST_BADGE_H, COST_BADGE_H / 2);
+    ctx.fillStyle = COST_BADGE_BG;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = INFINITY_BADGE_BORDER;
+    ctx.stroke();
+    ctx.fillStyle = COST_BADGE_NUMBER;
+    ctx.textAlign = 'center';
+    ctx.fillText(INFINITY_GLYPH, px + pillW / 2, py + COST_BADGE_H / 2 + 1);
+    ctx.restore();
+  }
+
+  // Description keyword blocks — same left edge as the name, own top anchor.
+  if (m.descH > 0) {
+    const textX = x + m.textX;
+    let blockY = descTopY;
     for (let e = 0; e < model.effectKTs.length; e++) {
       const kt = model.effectKTs[e];
       const bh = m.effectHeights[e];
