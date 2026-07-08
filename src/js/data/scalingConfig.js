@@ -47,7 +47,8 @@ export const DAMAGE_SCALING_PRESETS = {
   _50: 1 / 2,
   _33: 1/3,
   _25: 1/4,
-  _20: 1/5
+  _20: 1/5,
+  _10: 1/10, // "+1 per 10 of the stat" — Soul Eater + the mana-gain reactor relics
 }
 
 /**
