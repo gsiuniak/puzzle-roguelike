@@ -1,0 +1,50 @@
+{
+  "name": "formula-champion",
+  "description": "WORKING champion weights for the deterministic formula policy (use with chains, the makeFormulaPolicy default). The strongest verified player: 45.1% avg run survival on the fresh-seed tournament (vs 2.5% shipped greedy AI).",
+  "evaluator": "formula",
+  "chainDepth": 1,
+  "provenance": {
+    "trained": "2026-07-07T08:37:35.939Z",
+    "method": "CEM, RUN-SURVIVAL objective, two-stage eval (screen 100 / confirm top-4 on 500 fresh runs), seeded from v1 weights",
+    "trainConfirmFitness": 0.514,
+    "freshSeedTournament": {
+      "survival": 0.451,
+      "seeds": "night-final ×800",
+      "date": "2026-07-07"
+    },
+    "baselines": {
+      "greedy": 0.028,
+      "formulaDefault": 0.268
+    },
+    "notes": "Deterministic evaluation pathway (see CLAUDE.md pathway-dominance verdict). Chain search added after training; upside-only, +~2pp."
+  },
+  "weights": {
+    "skullDamage": 0.9951125063325512,
+    "lethal": 36.67254604879156,
+    "manaNeeded": 0.0016588595572083736,
+    "manaOther": 0.10259630265251582,
+    "denial": 0.3734777868857066,
+    "extraTurn": 23.48487089086613,
+    "enablesCast": 2.0142031435430945,
+    "tilesCleared": 0.11078466637339397,
+    "dmg": 0.3977559103352541,
+    "heal": 1.564373357931909,
+    "armor": 1.6357091831826336,
+    "barrier": 0.6547430537132501,
+    "gainAttack": 5.069112365383824,
+    "gainMagic": -3.082919552072411,
+    "gainMaxHp": 1.35262439845301,
+    "poisonStack": 2.721568222402921,
+    "drainMana": 0.021119496279963366,
+    "gainMana": 1.5695503150746266,
+    "statusTurn": 4.093199093558438,
+    "weakStatusTurn": -0.8541211633712321,
+    "createTile": 0.568196059062923,
+    "skullTile": 0.3920065825522777,
+    "lockTurn": 3.1290333914376633,
+    "markPoint": 1.4528477681422192,
+    "shuffleValue": 1.3374062519280085,
+    "manaSpent": 0.09763295731469951,
+    "castTempo": 1.6890004943773789
+  }
+}
