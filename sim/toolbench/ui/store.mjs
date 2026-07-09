@@ -58,7 +58,7 @@ function loadCfg() {
 
 /* ── AI (policy spec) registry ── */
 export const AI_CHOICES = [
-  { key: 'hard', label: 'Hard — champion formula', desc: 'trained deterministic policy (weights/formula-champion.json)' },
+  { key: 'hard', label: 'Hard — champion formula', desc: 'trained deterministic policy (src/assets/data/formula-champion.json)' },
   { key: 'simple', label: 'Simple — shipped greedy', desc: 'the game\'s built-in AI (struggling-player bracket)' },
   { key: 'custom', label: 'Custom weights…', desc: 'paste/upload a weights JSON (formula or value keys, auto-detected)' },
   { key: 'value', label: 'Value-search (experimental)', desc: 'preview-search stack — measured ~2.5× weaker deployment; slow' },

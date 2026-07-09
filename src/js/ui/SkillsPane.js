@@ -349,6 +349,44 @@ export default class SkillsPane extends UIPanel {
     return -1;
   }
 
+  /**
+   * Absolute design-space rect of a skill's card (hint-system anchor — the
+   * gauntlet cursor points at it). Uses the last-rendered layout, so it's a
+   * frame stale at worst; returns null until the card has rendered once or
+   * when the skill isn't in the list. `clipTop`/`clipBottom` are the inner
+   * list bounds — callers clamp against them (the card may be scrolled
+   * partly out of view).
+   * @param {string} skillId
+   * @returns {{x,y,w,h,clipTop,clipBottom}|null}
+   */
+  getCardRect(skillId) {
+    if (!skillId) return null;
+    const inner = this._innerRect();
+    const n = Math.min(this._rows.length, this._rowLayout.length);
+    for (let i = 0; i < n; i++) {
+      const row = this._rows[i];
+      if (!row || row.locked || row.passive || !row.skill || row.skill.id !== skillId) continue;
+      const e = this._rowLayout[i];
+      if (!e) return null;
+      return {
+        x: inner.x, y: e.y, w: inner.w - SCROLLBAR_GUTTER, h: e.h,
+        clipTop: inner.y, clipBottom: inner.y + inner.h,
+      };
+    }
+    return null;
+  }
+
+  /** Scroll just enough to bring a skill's card fully into view (hint system). */
+  scrollToSkill(skillId) {
+    const r = this.getCardRect(skillId);
+    if (!r) return;
+    if (r.y < r.clipTop) {
+      this._setScroll(this._scrollY - (r.clipTop - r.y) - CARD_GAP);
+    } else if (r.y + r.h > r.clipBottom) {
+      this._setScroll(this._scrollY + (r.y + r.h - r.clipBottom) + CARD_GAP);
+    }
+  }
+
   /** Clicks are handled exclusively via handleMouseDown/Up — never the
    *  generic onClick dispatch (which is gated by turn state in BattleScene). */
   hitTest(_x, _y) {

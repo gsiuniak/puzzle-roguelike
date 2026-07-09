@@ -76,6 +76,10 @@ All in `sim/toolbench/`:
    from `formula.mjs` — `new URL('./weights/formula-champion.json', import.meta.url)`
    resolves to an http URL in the browser, so the browser loader is just
    `loadFormulaWeights(await (await fetch(CHAMPION_WEIGHTS_PATH)).json())`.
+   *(2026-07-08 update: formula.mjs was later promoted to
+   `src/js/game/ai/formulaPolicy.js` (sim file = re-export shim) and the champion
+   JSON moved to `src/assets/data/formula-champion.json` for the in-game hint
+   system — CHAMPION_WEIGHTS_PATH now points there; everything else holds.)*
    Update the ~4 CLI callers (`trainer.mjs`, `runs.mjs`, `train.mjs`, docs snippets).
 
 2. **`policies.mjs` (new, browser-safe)** — extract `resolvePolicySpec(spec)` from

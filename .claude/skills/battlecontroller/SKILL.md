@@ -24,8 +24,10 @@ change types. Read the relevant recipe BEFORE editing.
   (via delegating registry handlers) and the relic/passive path (PassiveSystem).
 - `src/js/game/BoardSimulator.js` / `MoveAdvisor.js` — pure headless board AI
   (cascade prediction + move ranking). Wired to `aiBehavior: 'smart_matcher'`
-  (no enemy uses it yet) and `controller.getSuggestedMove()` (UI: BattleScene's
-  "?" corner button → `_requestHint`/`_renderHintHighlight`).
+  (no enemy uses it yet). The HINT UI moved off MoveAdvisor (2026-07-08):
+  BattleScene's "?" button now uses `controller.getSuggestedAction()` — the
+  champion FORMULA POLICY (`src/js/game/ai/formulaPolicy.js`, promoted from
+  sim/toolbench) run through the `_makeHintFacade` seam. See CLAUDE.md #45.
 
 ## Invariants — violate these and you WILL reintroduce a shipped bug
 
@@ -96,7 +98,11 @@ Catalog entry in `data/statusEffects.js` + behavior checkpoints in the controlle
 Weights: `MoveAdvisor.DEFAULT_WEIGHTS` (every objective is a named relative weight).
 New scoring objective: add a term in `scoreOutcome` + a weight + a `breakdown` key.
 Give an enemy the smart matching: set `aiBehavior: 'smart_matcher'` on its def — no
-code change. Player hints: `controller.getSuggestedMove()/getRankedMoves()`.
+code change. Player hints: `controller.getSuggestedAction()` (champion formula
+policy via `_makeHintFacade` — keep the facade's field list in sync with the
+INPUT CONTRACT in `src/js/game/ai/formulaPolicy.js` if you add battle-state
+fields the policy should see); `getSuggestedMove()/getRankedMoves()` remain the
+older MoveAdvisor swap-only queries.
 BoardSimulator/MoveAdvisor must stay PURE (no controller/scene imports, operate on
 board clones only) and are on-demand — never call them per frame.
 

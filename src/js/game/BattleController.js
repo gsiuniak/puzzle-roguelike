@@ -20,6 +20,7 @@ import TRIGGER_TYPES from '../systems/TriggerTypes.js';
 import SKILL_EFFECT_HANDLERS, { LOCK_MIN_TURNS } from './battle/skillEffectHandlers.js';
 import { getBestMove, rankMoves } from './MoveAdvisor.js';
 import { resolveBoardInPlace } from './BoardSimulator.js';
+import { makeFormulaPolicy, settleBoard, targetPositions } from './ai/formulaPolicy.js';
 
 /** @enum {string} */
 export const BattleState = {
@@ -771,6 +772,159 @@ export default class BattleController {
       opponent: this.enemyState,
       ...options,
     });
+  }
+
+  /**
+   * Suggest the best ACTION for the player — cast a skill (with its best
+   * target for targeted board effects) OR swap — via the trained champion
+   * FORMULA POLICY (game/ai/formulaPolicy.js, the ~45%-run-survival player;
+   * pass its weights via options.weights — see game/ai/hintWeights.js). This
+   * supersedes getSuggestedMove for the hint UI: it considers the full action
+   * space, deterministic chain search, and 1.5-ply lookahead, all noise-free.
+   *
+   * On-demand only (dozens of no-refill board settles) — call on a hint
+   * request / once per turn, never per frame. Returns null outside
+   * PLAYER_TURN or when no action exists.
+   *
+   * @param {object} [options] — { weights?: object, chainDepth?: number }
+   * @returns {{type:'swap'|'cast', swap?:object, skillId?:string,
+   *   skillName?:string, target?:{col,row}|null, targetCells?:Array|null,
+   *   needsManualTarget?:boolean, description:string}|null}
+   */
+  getSuggestedAction(options = {}) {
+    if (this.state !== BattleState.PLAYER_TURN) return null;
+    const facade = this._makeHintFacade();
+    const policy = makeFormulaPolicy(options.weights || {}, {
+      chainDepth: options.chainDepth != null ? options.chainDepth : 1,
+    });
+    const action = policy(facade, facade.p);
+    if (!action) return null;
+    return this._describeSuggestedAction(facade, action);
+  }
+
+  /**
+   * The tiny "battle" facade the formula policy consumes (see the INPUT
+   * CONTRACT in game/ai/formulaPolicy.js): live board reference (the policy
+   * only reads + clones it) + per-side combatant snapshots. Snapshots (not
+   * the live states) so the policy's spread-clones can't alias live mana maps
+   * and so the sim-side field names (dynAtkRules) map cleanly onto the
+   * controller's (_attackPerManaRules).
+   */
+  _makeHintFacade() {
+    const wrap = (s) => ({
+      hp: s.hp, maxHp: s.maxHp,
+      attack: s.attack || 0, magic: s.magic || 0,
+      armor: s.armor || 0, barrier: s.barrier || 0, block: s.block || 0,
+      mana: { ...(s.mana || {}) },
+      skills: s.skills || [],
+      statuses: s.statuses || [],
+      dynAtkRules: s._attackPerManaRules || [],
+      _skullDamageBonus: s._skullDamageBonus || 0,
+    });
+    return {
+      board: this.board,
+      p: wrap(this.playerState),
+      e: wrap(this.enemyState),
+      other(c) { return c === this.p ? this.e : this.p; },
+      canAfford(c, skill) {
+        for (const [col, amt] of Object.entries(skill.cost || {})) {
+          if ((c.mana[col] || 0) < amt) return false;
+        }
+        return true;
+      },
+      _hasStatus(c, id) { return (c.statuses || []).some((st) => st.id === id); },
+    };
+  }
+
+  /**
+   * Turn a raw policy action into the hint payload the scene renders:
+   * stable ids/coords, the cells a targeted cast would hit (for the board
+   * ghost), and a short human description of the DETERMINISTIC outcome
+   * (refill-off settle — a guaranteed lower bound, so the text never
+   * over-promises).
+   */
+  _describeSuggestedAction(facade, action) {
+    if (action.type === 'swap') {
+      const sw = action.swap;
+      const clone = this.board.clone();
+      clone.swap(sw.col1, sw.row1, sw.col2, sw.row2);
+      const s = settleBoard(clone, facade.p);
+      const outcome = BattleController._hintOutcomeText(s.skullDamage, s.mana, s.extraTurn);
+      return {
+        type: 'swap',
+        swap: { col1: sw.col1, row1: sw.row1, col2: sw.col2, row2: sw.row2 },
+        description: outcome ? `Swap the marked tiles to ${outcome}` : 'Swap the marked tiles',
+      };
+    }
+
+    const skill = action.skill;
+    const target = action.target ? { col: action.target.col, row: action.target.row } : null;
+    let targetCells = null;
+    let placeText = '';
+    let outcome = '';
+
+    if (target) {
+      // Mirror the policy's own deterministic simulation of the targeted
+      // board effect so the description matches what it valued.
+      for (const ef of skill.effects || []) {
+        if (ef.effectType === SKILL_EFFECT_TYPES.CONVERT_TILE) {
+          targetCells = [target];
+          placeText = ' on the marked tile';
+          const clone = this.board.clone();
+          clone.convertTilesToType([target], (ef.convertTile && ef.convertTile.type) || 'red');
+          const s = settleBoard(clone, facade.p);
+          outcome = BattleController._hintOutcomeText(s.skullDamage, s.mana, s.extraTurn);
+          break;
+        }
+        const kind = ef.effectType === SKILL_EFFECT_TYPES.DESTROY_TILES_ROW ? 'row'
+          : ef.effectType === SKILL_EFFECT_TYPES.DESTROY_TILES_COLUMN ? 'column'
+          : ef.effectType === SKILL_EFFECT_TYPES.DESTROY_TILES ? 'area' : null;
+        if (!kind) continue;
+        const radius = (skill.area && skill.area.radius != null) ? skill.area.radius : 1;
+        const clone = this.board.clone();
+        targetCells = targetPositions(clone, kind, target, radius);
+        placeText = kind === 'row' ? ' on the marked row'
+          : kind === 'column' ? ' on the marked column' : ' at the marked spot';
+        const rw = this.resolver.resolveDestroyedTileRewards(clone, targetCells, facade.p);
+        clone.removeTiles(targetCells);
+        clone.applyGravity();
+        const s = settleBoard(clone, facade.p);
+        const mana = { ...rw.mana };
+        for (const [col, n] of Object.entries(s.mana)) mana[col] = (mana[col] || 0) + n;
+        outcome = BattleController._hintOutcomeText(rw.skullDamage + s.skullDamage, mana, s.extraTurn);
+        break;
+      }
+    }
+
+    // A targeted skill the policy priced without enumerating a spot (e.g.
+    // lock_color values the lock flatly) still needs the player to aim it.
+    const needsManualTarget = !target && skill.targeting === 'board_tile';
+
+    let description = `Cast ${skill.name}${placeText}`;
+    if (outcome) description += ` to ${outcome}`;
+    else if (needsManualTarget) description += ' — pick a target tile';
+
+    return {
+      type: 'cast',
+      skillId: skill.id,
+      skillName: skill.name,
+      target,
+      targetCells,
+      needsManualTarget,
+      description,
+    };
+  }
+
+  /** "deal 6 damage, gain 4 mana and earn an extra turn" (or '' if nothing). */
+  static _hintOutcomeText(skullDamage, mana, extraTurn) {
+    const parts = [];
+    if (skullDamage > 0) parts.push(`deal ${skullDamage} damage`);
+    const manaTotal = Object.values(mana || {}).reduce((a, b) => a + b, 0);
+    if (manaTotal > 0) parts.push(`gain ${manaTotal} mana`);
+    if (extraTurn) parts.push('earn an extra turn');
+    if (!parts.length) return '';
+    if (parts.length === 1) return parts[0];
+    return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
   }
 
   getState() {

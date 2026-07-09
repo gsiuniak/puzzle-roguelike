@@ -15,12 +15,14 @@ import TileParticleEffect from './TileParticleEffect.js';
 import HarvestTendrilEffect from './HarvestTendrilEffect.js';
 import BloodSplashEffect from './BloodSplashEffect.js';
 import SpriteSheetAnimation from './SpriteSheetAnimation.js';
+import HintCursorEffect from './HintCursorEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
 import LevelUpOverlay from './LevelUpOverlay.js';
 import SkillLoadoutOverlay from './SkillLoadoutOverlay.js';
 import TooltipManager from '../systems/TooltipManager.js';
 import { BattleState } from '../game/BattleController.js';
+import { loadHintWeights } from '../game/ai/hintWeights.js';
 import { getTileType, isMana } from '../game/TileTypes.js';
 import { syncBattleResultsToRunState, applyRunModifier, getEffectivePlayerStats, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
 import { getCharacterById } from '../data/characters/index.js';
@@ -223,10 +225,12 @@ const CORNER_BUTTON_MARGIN = 12;   // inset from the physical top-right corner
 
 // ── Hint button + highlight (BattleController.getSuggestedMove) ──
 const HINT_BUTTON_SIZE = 44;       // the small "?" button under the map button
-const HINT_DURATION_MS = 3000;     // how long the suggested-swap highlight shows
+const HINT_DURATION_MS = 3000;     // how long a suggested-SWAP hint shows
+const HINT_CAST_DURATION_MS = 5000; // cast hints show longer (read the banner + two-stop cursor)
 const HINT_FADE_MS = 400;          // fade-out tail at the end of the highlight
 const HINT_PULSE_HZ = 1.4;         // highlight pulse speed
 const HINT_COLOR = '255, 214, 110'; // gold RGB for the hint outline/arrow
+const HINT_TARGET_FILL_ALPHA = 0.16; // translucent gold fill on a cast hint's target cells
 
 // Targeting Confirm/Cancel controls — shown only during TARGETING, anchored
 // below the board. The button art comes from the character-pane spritesheet
@@ -399,25 +403,36 @@ export default class BattleScene extends UIPanel {
     this._screenShake = new ScreenShake();
 
     /**
-     * Hint highlight state (the "?" corner button → BattleController.
-     * getSuggestedMove). `_hintCells` = the two cells of the suggested swap;
-     * the highlight pulses for HINT_DURATION_MS and clears early the moment
-     * the player acts (state leaves PLAYER_TURN).
+     * Hint state (the "?" corner button → BattleController.getSuggestedAction,
+     * the champion FORMULA POLICY). `_hintCells` = the two cells of a
+     * suggested SWAP; `_hintAction` = the full suggested action (swap or
+     * cast + target); the highlight/cursor/banner show for HINT_DURATION_MS
+     * (HINT_CAST_DURATION_MS for casts) and clear early the moment the player
+     * acts (state leaves PLAYER_TURN).
      * @type {Array<{col:number,row:number}>|null}
      */
     this._hintCells = null;
+    /** The displayed suggested action payload (see getSuggestedAction). */
+    this._hintAction = null;
+    /** Cells a suggested targeted cast would hit (board ghost). */
+    this._hintTargetCells = null;
+    /** The animated gauntlet pointer (created per hint request). */
+    this._hintCursor = null;
     /** Remaining highlight time (ms); 0 = no hint showing. */
     this._hintTimeLeft = 0;
     /** Elapsed highlight time (ms) — drives the pulse. */
     this._hintTime = 0;
     /**
-     * The advisor's best move for the CURRENT player turn, computed at most
-     * once per turn and shared by the "?" button and the idle hint glint.
-     * `undefined` = not yet computed; `null` = computed, no move available.
+     * The champion policy's best ACTION for the CURRENT player turn, computed
+     * at most once per turn and shared by the "?" button and the idle hint
+     * glint. `undefined` = not yet computed; `null` = computed, none exists.
      * Invalidated whenever the state leaves PLAYER_TURN, on skill casts, and
      * on loadout changes (see _invalidateSuggestedMove call sites).
      */
-    this._suggestedMove = undefined;
+    this._suggestedAction = undefined;
+    /** Champion formula weights (fetched async in onEnter; null until then —
+     *  getSuggestedAction falls back to DEFAULT_FORMULA_WEIGHTS). */
+    this._hintWeights = null;
     /** Alternates which of the suggested swap's two cells the idle glint shows. */
     this._hintGlintFlip = false;
 
@@ -544,14 +559,16 @@ export default class BattleScene extends UIPanel {
       minHeight: 280,
     });
     // Idle "sleeping glint" → HINT nudge: after a pause on the player's turn,
-    // the board glints ONE tile of the advisor's suggested swap instead of
-    // random tiles (alternating between the swap's two cells across bursts —
-    // a nudge, not a full giveaway). Returns null outside PLAYER_TURN, which
-    // suppresses glinting entirely on other turns/states. The advisor result
-    // is cached per turn (_getSuggestedMoveCached), so the cost is paid once.
+    // the board glints ONE tile of the champion policy's suggested SWAP
+    // (alternating between the swap's two cells across bursts — a nudge, not
+    // a full giveaway). Returns null outside PLAYER_TURN, which suppresses
+    // glinting entirely on other turns/states — and also when the suggested
+    // action is a CAST (the affordable skill cards already glow gold; the
+    // board isn't where the value is). The policy result is cached per turn
+    // (_getSuggestedActionCached), so the cost is paid once.
     this._board.setIdleGlintProvider(() => {
-      const best = this._getSuggestedMoveCached();
-      if (!best || !best.swap) return null;
+      const best = this._getSuggestedActionCached();
+      if (!best || best.type !== 'swap' || !best.swap) return null;
       this._hintGlintFlip = !this._hintGlintFlip;
       return this._hintGlintFlip
         ? { col: best.swap.col1, row: best.swap.row1 }
@@ -655,6 +672,10 @@ export default class BattleScene extends UIPanel {
     // upload) so its FIRST play in combat doesn't hitch — paid here during the
     // scene fade-in instead of mid-fight. POC. See ATTACK_ANIMATIONS.
     this._preloadAttackAnim();
+
+    // Kick the champion-weights fetch (cached module-wide; resolves to {} on
+    // failure so hints fall back to DEFAULT_FORMULA_WEIGHTS gracefully).
+    loadHintWeights().then((w) => { this._hintWeights = w; });
 
     // ── Full-canvas background (covers letterbox/pillarbox bars) ──
     // Data-driven: enemy defs may specify a `background` asset key (passed
@@ -2007,11 +2028,11 @@ export default class BattleScene extends UIPanel {
     // changes invalidate explicitly at their call sites.
     if (this._battleController
         && this._battleController.state !== BattleState.PLAYER_TURN) {
-      this._suggestedMove = undefined;
+      this._suggestedAction = undefined;
     }
 
     // ── Hint highlight lifecycle ──
-    // Ticks down over HINT_DURATION_MS and clears EARLY the moment the player
+    // Ticks down over the hint duration and clears EARLY the moment the player
     // acts (any state change away from PLAYER_TURN — swap, cast, targeting),
     // so a stale hint never lingers over a resolving/changed board.
     if (this._hintTimeLeft > 0) {
@@ -2022,6 +2043,15 @@ export default class BattleScene extends UIPanel {
       if (this._hintTimeLeft <= 0 || !stillPlayerTurn) {
         this._hintTimeLeft = 0;
         this._hintCells = null;
+        this._hintAction = null;
+        this._hintTargetCells = null;
+        this._hintCursor = null;
+      } else if (this._hintCursor) {
+        // Refresh the cursor's anchor points every frame (the skills list can
+        // scroll, layout can reflow) and advance its glide/tap animation.
+        const wps = this._computeHintWaypoints();
+        if (wps) this._hintCursor.setWaypoints(wps);
+        this._hintCursor.update(dt);
       }
     }
 
@@ -2258,55 +2288,168 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * The "?" hint button: ask the controller's MoveAdvisor for the best swap
-   * and pulse-highlight its two cells on the board for a few seconds. Only
-   * meaningful during PLAYER_TURN (the button renders dimmed otherwise and a
-   * click is a no-op). The advisor call is a synchronous batch of board
-   * simulations — fine on a click, never per frame.
+   * The "?" hint button: ask the controller for the champion formula policy's
+   * best ACTION (cast — with target — or swap) and stage the full hint
+   * presentation: board highlight (swap cells or the cast's target-area
+   * ghost), the gauntlet cursor pointing at what to press, and a nameplate
+   * banner describing the action. Only meaningful during PLAYER_TURN (the
+   * button renders dimmed otherwise and a click is a no-op). The policy call
+   * is a synchronous batch of no-refill board settles — fine on a click,
+   * never per frame.
    */
   _requestHint() {
     const c = this._battleController;
     if (!c || c.state !== BattleState.PLAYER_TURN) return;
-    const best = this._getSuggestedMoveCached();
-    if (!best || !best.swap) return;
-    this._hintCells = [
-      { col: best.swap.col1, row: best.swap.row1 },
-      { col: best.swap.col2, row: best.swap.row2 },
-    ];
-    this._hintTimeLeft = HINT_DURATION_MS;
+    const action = this._getSuggestedActionCached();
+    if (!action) return;
+    this._hintAction = action;
+    this._hintCells = action.type === 'swap'
+      ? [
+        { col: action.swap.col1, row: action.swap.row1 },
+        { col: action.swap.col2, row: action.swap.row2 },
+      ]
+      : null;
+    this._hintTargetCells = (action.type === 'cast' && action.targetCells)
+      ? action.targetCells : null;
+    // Bring the suggested card into view so the cursor has something to tap.
+    if (action.type === 'cast' && this._playerSkillsPane
+        && this._playerSkillsPane.scrollToSkill) {
+      this._playerSkillsPane.scrollToSkill(action.skillId);
+    }
+    this._hintCursor = new HintCursorEffect(this._assetManager);
+    const wps = this._computeHintWaypoints();
+    if (wps) this._hintCursor.setWaypoints(wps);
+    this._hintTimeLeft = action.type === 'cast' ? HINT_CAST_DURATION_MS : HINT_DURATION_MS;
     this._hintTime = 0;
   }
 
   /**
-   * The advisor's best move for the current player turn — computed AT MOST
-   * once per turn (the "?" button and the idle hint glint share the cache).
-   * Returns null outside PLAYER_TURN or when no legal move exists.
-   * @returns {{swap, score, breakdown, outcome}|null}
+   * The champion policy's best action for the current player turn — computed
+   * AT MOST once per turn (the "?" button and the idle hint glint share the
+   * cache). Returns null outside PLAYER_TURN or when no action exists.
+   * Weights: the fetched champion JSON when it has arrived, otherwise the
+   * policy's built-in defaults (still a strong player).
+   * @returns {{type, swap?, skillId?, target?, targetCells?, description}|null}
    */
-  _getSuggestedMoveCached() {
+  _getSuggestedActionCached() {
     const c = this._battleController;
     if (!c || c.state !== BattleState.PLAYER_TURN) return null;
-    if (this._suggestedMove === undefined) {
-      // samples: 2 (vs the simulator default 4) — this runs SYNCHRONOUSLY on
-      // the main thread the first time a hint/glint is wanted each turn, and
-      // on mobile the full-fat run is a visible one-frame hitch. Fewer
-      // Monte-Carlo refill samples only soften the expected-value estimate;
-      // the deterministic (guaranteed) ranking is unaffected — plenty for a
-      // hint.
-      this._suggestedMove = c.getSuggestedMove({ samples: 2 }) || null;
+    if (this._suggestedAction === undefined) {
+      this._suggestedAction = c.getSuggestedAction({
+        weights: this._hintWeights || undefined,
+      }) || null;
     }
-    return this._suggestedMove;
+    return this._suggestedAction;
   }
 
   /**
-   * Drop the cached advisor suggestion. Called whenever something changes
-   * what the advisor would say while PLAYER_TURN persists: a skill cast
+   * Drop the cached policy suggestion. Called whenever something changes
+   * what the policy would say while PLAYER_TURN persists: a skill cast
    * (mana spent, board mutated by shuffle/lock, enemy HP changed) or a
    * loadout change. State changes away from PLAYER_TURN invalidate in
    * update() (covers swaps, cascades, targeting, turn passes).
    */
   _invalidateSuggestedMove() {
-    this._suggestedMove = undefined;
+    this._suggestedAction = undefined;
+  }
+
+  /**
+   * The design-space points the gauntlet cursor's fingertip visits, from the
+   * CURRENT layout (recomputed every frame — the skills list scrolls, panes
+   * reflow): swap = the two cell centers ("drag this to that"); cast = the
+   * suggested card's center (clamped into the list's visible band), then the
+   * target cell center for targeted casts ("tap the card, then the tile").
+   * @returns {Array<{x:number,y:number}>|null}
+   */
+  _computeHintWaypoints() {
+    const action = this._hintAction;
+    if (!action) return null;
+    const pts = [];
+    const m = this._board && this._board.getCellMetrics
+      ? this._board.getCellMetrics() : null;
+    const cellCenter = (cell) => ({
+      x: m.offsetX + cell.col * m.cellSize + m.cellSize / 2,
+      y: m.offsetY + cell.row * m.cellSize + m.cellSize / 2,
+    });
+    if (action.type === 'swap') {
+      if (!m || !m.cellSize || !this._hintCells) return null;
+      for (const cell of this._hintCells) pts.push(cellCenter(cell));
+    } else {
+      const pane = this._playerSkillsPane;
+      const r = pane && pane.getCardRect ? pane.getCardRect(action.skillId) : null;
+      if (r) {
+        const cy = Math.max(r.clipTop + 24, Math.min(r.clipBottom - 24, r.y + r.h / 2));
+        pts.push({ x: r.x + r.w * 0.5, y: cy });
+      }
+      if (action.target && m && m.cellSize) {
+        pts.push(cellCenter(action.target));
+      }
+    }
+    return pts.length ? pts : null;
+  }
+
+  /**
+   * Hint banner + gauntlet cursor — drawn in design space above the battle
+   * UI (outside the shake transform), fading with the hint's tail. Hidden
+   * under modal overlays.
+   * @param {CanvasRenderingContext2D} ctx
+   */
+  _renderHintOverlay(ctx) {
+    if (this._hintTimeLeft <= 0 || !this._hintAction) return;
+    if (this._mapView && this._mapView.isOverlayActive()) return;
+    if (this._rewardOverlay && this._rewardOverlay.isActive()) return;
+    if (this._levelUpOverlay && this._levelUpOverlay.isActive()) return;
+    if (this._loadoutOverlay && this._loadoutOverlay.isActive()) return;
+    const fade = Math.min(1, this._hintTimeLeft / HINT_FADE_MS);
+    this._renderHintBanner(ctx, fade);
+    if (this._hintCursor) this._hintCursor.render(ctx, fade);
+  }
+
+  /**
+   * The suggested action's description on the `ui_skill_nameplate` banner,
+   * centered at the top of the screen (same idiom as the targeting prompt —
+   * targeting and hints are mutually exclusive states, so they never clash).
+   */
+  _renderHintBanner(ctx, alpha) {
+    const text = this._hintAction && this._hintAction.description;
+    if (!text || alpha <= 0) return;
+    const app = this._sceneManager && this._sceneManager._app;
+    if (!app) return;
+    const cx = app.width / 2;
+
+    const prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = prevAlpha * alpha;
+
+    const plate = this._assetManager && this._assetManager.get(TARGET_NAMEPLATE_SPRITE);
+    const plateAspect = (plate && plate.width && plate.height)
+      ? plate.width / plate.height : TARGET_NAMEPLATE_FALLBACK_ASPECT;
+    const plateH = TARGET_NAMEPLATE_W / plateAspect;
+    if (plate) {
+      const prevSmoothing = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(plate, cx - TARGET_NAMEPLATE_W / 2, TARGET_PROMPT_Y - plateH / 2,
+        TARGET_NAMEPLATE_W, plateH);
+      ctx.imageSmoothingEnabled = prevSmoothing;
+    }
+
+    ctx.save();
+    let size = TARGET_PROMPT_FONT_SIZE;
+    ctx.font = `${size}px "Marcellus SC", Georgia, serif`;
+    const usable = TARGET_NAMEPLATE_W * TARGET_PROMPT_MAX_WIDTH_FRAC;
+    const measured = ctx.measureText(text).width;
+    if (measured > usable) {
+      size = Math.max(14, Math.floor(size * (usable / measured)));
+      ctx.font = `${size}px "Marcellus SC", Georgia, serif`;
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = TARGET_PROMPT_COLOR;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+    ctx.shadowBlur = 8;
+    ctx.fillText(text, cx, TARGET_PROMPT_Y + TARGET_PROMPT_TEXT_Y_NUDGE);
+    ctx.restore();
+
+    ctx.globalAlpha = prevAlpha;
   }
 
   /** Draw the two stacked corner buttons. Hidden while an overlay is active. */
@@ -2366,7 +2509,8 @@ export default class BattleScene extends UIPanel {
    * @param {CanvasRenderingContext2D} ctx
    */
   _renderHintHighlight(ctx) {
-    if (!this._hintCells || this._hintTimeLeft <= 0 || !this._board) return;
+    if ((!this._hintCells && !this._hintTargetCells)
+      || this._hintTimeLeft <= 0 || !this._board) return;
     const metrics = this._board.getCellMetrics();
     if (!metrics || !metrics.cellSize) return;
 
@@ -2374,6 +2518,25 @@ export default class BattleScene extends UIPanel {
     const fade = Math.min(1, this._hintTimeLeft / HINT_FADE_MS);
     const alpha = pulse * fade;
     const inset = Math.max(2, metrics.cellSize * 0.06);
+
+    // Target-area ghost for a suggested TARGETED CAST: translucent gold fill
+    // + thin outline on every cell the cast would hit (row / column / area /
+    // convert spot), pulsing in step with the swap highlight.
+    if (this._hintTargetCells) {
+      ctx.save();
+      for (const cell of this._hintTargetCells) {
+        const x = metrics.offsetX + cell.col * metrics.cellSize + inset;
+        const y = metrics.offsetY + cell.row * metrics.cellSize + inset;
+        const s = metrics.cellSize - inset * 2;
+        ctx.fillStyle = `rgba(${HINT_COLOR}, ${(alpha * HINT_TARGET_FILL_ALPHA).toFixed(3)})`;
+        ctx.fillRect(x, y, s, s);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(${HINT_COLOR}, ${(alpha * 0.7).toFixed(3)})`;
+        ctx.strokeRect(x, y, s, s);
+      }
+      ctx.restore();
+    }
+    if (!this._hintCells) return;
 
     ctx.save();
     for (const cell of this._hintCells) {
@@ -2617,6 +2780,11 @@ export default class BattleScene extends UIPanel {
     if (shake.x !== 0 || shake.y !== 0) {
       ctx.restore();
     }
+
+    // Hint banner + gauntlet cursor (design space, above the panes — the
+    // cursor points at a skill card / board cell; the banner describes the
+    // suggested action on the nameplate).
+    this._renderHintOverlay(ctx);
 
     // Targeting Confirm/Cancel controls (design space, above the board).
     this._renderTargetingControls(ctx);

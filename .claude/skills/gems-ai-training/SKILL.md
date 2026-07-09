@@ -23,9 +23,14 @@ are seeded — parallelism never changes numbers.
    v2 exploited preview noise, v3 two matchups, v4 a mis-weighted distribution).
 4. **Fresh-seed tournament before crowning weights** (`reports/tournament.mjs` pattern,
    seeds never used in training/selection). Train-confirm numbers run ~5-7pp optimistic.
-5. **Promote keeper weights to `sim/toolbench/weights/`** (tracked) with provenance.
-   `reports/` is gitignored — never leave the only copy there.
-   Champion: `weights/formula-champion.json` (~45% avg run survival; greedy AI = 2.5%).
+5. **Promote keeper CHAMPION weights to `src/assets/data/formula-champion.json`** (tracked;
+   moved 2026-07-08 — it's a GAME asset now: the in-battle hint system fetches it and the
+   Vite build ships it, so promoting a new champion upgrades the game's hints automatically).
+   Use `reports/promote-champion.mjs` (stamps provenance, writes the new location). Other
+   keeper weights still go to `sim/toolbench/weights/`. `reports/` is gitignored — never
+   leave the only copy there. Champion: ~45% avg run survival; greedy AI = 2.5%.
+   (`formula.mjs` itself is a re-export shim of `src/js/game/ai/formulaPolicy.js` — edit the
+   src file; every toolbench import keeps working.)
 
 ## Command cookbook
 
@@ -34,7 +39,7 @@ node sim/toolbench/drift-check.mjs                        # ALWAYS first
 node sim/toolbench/smoke.mjs && node sim/toolbench/smoke-trainer.mjs   # after code edits
 
 # train (CEM, run-survival, two-stage; ~2min/gen on 32 threads)
-node sim/toolbench/train.mjs --evaluator formula --seedWeights sim/toolbench/weights/formula-champion.json \
+node sim/toolbench/train.mjs --evaluator formula --seedWeights src/assets/data/formula-champion.json \
   --pop 24 --gen 24 --runs 100 --confirmRuns 500 --out sim/toolbench/reports/formula-new.json
 
 # fresh-seed tournament (edit entries in reports/tournament.mjs; change seed ns per event)

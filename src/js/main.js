@@ -56,6 +56,7 @@ const ASSET_MAP = {
   battle_board_panel_overlay:           'assets/sprites/battle/board/battle_board_panel_overlay.png',
   battle_button_skip:                   'assets/sprites/temp/skip_button.png',
   battle_button_map:                    'assets/sprites/temp/map_button.png',
+  ui_hint_cursor:                       'assets/sprites/battle/etc/ui_hint_cursor.png',
   // ── Skill Weave (background + default tag icon; UI elements are in a sheet) ──
   skill_weave_background:               'assets/sprites/skill_weave/skill_weave_background.png',
   skill_weave_tag_test:                 'assets/sprites/skill_weave/ui_skill_weave_tag_test.png',

@@ -28,6 +28,9 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const BROWSER_SAFE = [
   'engine.mjs',
   'formula.mjs',
+  // formula.mjs is a shim since 2026-07-08 — also grep the real module it
+  // re-exports (promoted into the game source for the in-battle hint system).
+  '../../src/js/game/ai/formulaPolicy.js',
   'policy.mjs',
   'policies.mjs',
   'run-core.mjs',
