@@ -1,0 +1,61 @@
+{
+  "name": "formula-champion",
+  "description": "WORKING champion weights for the deterministic formula policy (makeFormulaPolicy default: chain search + 1.5-ply lookahead + banking features). Strongest verified player.",
+  "evaluator": "formula",
+  "chainDepth": 1,
+  "provenance": {
+    "trained": "2026-07-08T07:31:55.508Z",
+    "method": "CEM, RUN-SURVIVAL objective, two-stage eval, seeded from the prior champion. Adds the FORESIGHT package: 1.5-ply lookahead (best self follow-up − opponent reply), convex mana-affordability gradient (banking), Cestus-family hoard-aware spending.",
+    "trainConfirmFitness": 0.5066666666666667,
+    "promoteCheck": {
+      "note": "3 independent fresh-seed sets vs prior champion (features-zeroed), all positive",
+      "deltas_pp": [
+        2.8,
+        6,
+        1.9
+      ],
+      "pooledDelta_pp": 3.5,
+      "pooled2SE_pp": 2.7,
+      "date": "2026-07-08",
+      "curve": "post enemy-HP-curve steepening; champion ~40% / candidate ~43.5% avg run survival"
+    },
+    "supersedes": "formula-champion (2026-07-07 night-trained, pre-foresight)",
+    "baselines": {
+      "greedy": 0.0044444444444444444,
+      "formulaDefault": 0.23555555555555555
+    },
+    "notes": "Deterministic evaluation pathway (CLAUDE.md pathway-dominance verdict). New weights: manaCloseness/lookaheadSelf/lookaheadOpp."
+  },
+  "weights": {
+    "skullDamage": 1.3055522743094445,
+    "lethal": 23.2283468195682,
+    "manaNeeded": 0.13876364057666069,
+    "manaOther": 0.040996542189894875,
+    "denial": 0.5174939667804989,
+    "extraTurn": 25.776952686218113,
+    "enablesCast": 1.2800483635490147,
+    "tilesCleared": 0.16788362023937062,
+    "dmg": 0.3796961279883694,
+    "heal": 1.6675586680347005,
+    "armor": 2.0435423355518285,
+    "barrier": 0.8170222919052988,
+    "gainAttack": 3.7293325184287083,
+    "gainMagic": -4.083300509810938,
+    "gainMaxHp": 0.8954990693843656,
+    "poisonStack": 2.3204681694093807,
+    "drainMana": -0.05905382118842606,
+    "gainMana": 1.5190842527109056,
+    "statusTurn": 4.9583122565961775,
+    "weakStatusTurn": -0.7653002182284856,
+    "createTile": 0.6531904353704973,
+    "skullTile": 0.19137253956712175,
+    "lockTurn": 3.585068758222849,
+    "markPoint": 3.40798423023082,
+    "shuffleValue": 1.097403820314345,
+    "manaSpent": 0.05011717702569448,
+    "castTempo": 1.7988496728210115,
+    "manaCloseness": 1.832846060885987,
+    "lookaheadSelf": 0.3689304713506091,
+    "lookaheadOpp": 0.4479592606356682
+  }
+}
