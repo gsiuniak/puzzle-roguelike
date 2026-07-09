@@ -423,13 +423,21 @@ export default class BattleScene extends UIPanel {
     /** Elapsed highlight time (ms) — drives the pulse. */
     this._hintTime = 0;
     /**
-     * The champion policy's best ACTION for the CURRENT player turn, computed
-     * at most once per turn and shared by the "?" button and the idle hint
-     * glint. `undefined` = not yet computed; `null` = computed, none exists.
-     * Invalidated whenever the state leaves PLAYER_TURN, on skill casts, and
-     * on loadout changes (see _invalidateSuggestedMove call sites).
+     * The champion policy's best ACTION for the CURRENT player turn ("?"/'h'
+     * hint), computed at most once per turn. `undefined` = not yet computed;
+     * `null` = computed, none exists. Invalidated whenever the state leaves
+     * PLAYER_TURN, on skill casts, and on loadout changes (see
+     * _invalidateSuggestedMove call sites).
      */
     this._suggestedAction = undefined;
+    /**
+     * The SIMPLE MoveAdvisor best swap for the CURRENT player turn — drives
+     * the idle board glint only (kept separate from _suggestedAction so the
+     * periodic glint always has a swap to nudge toward, even when the
+     * champion policy would rather cast). Same undefined/null semantics and
+     * invalidation sites.
+     */
+    this._suggestedMove = undefined;
     /** Champion formula weights (fetched async in onEnter; null until then —
      *  getSuggestedAction falls back to DEFAULT_FORMULA_WEIGHTS). */
     this._hintWeights = null;
@@ -559,16 +567,17 @@ export default class BattleScene extends UIPanel {
       minHeight: 280,
     });
     // Idle "sleeping glint" → HINT nudge: after a pause on the player's turn,
-    // the board glints ONE tile of the champion policy's suggested SWAP
+    // the board glints ONE tile of the SIMPLE MoveAdvisor suggested swap
     // (alternating between the swap's two cells across bursts — a nudge, not
-    // a full giveaway). Returns null outside PLAYER_TURN, which suppresses
-    // glinting entirely on other turns/states — and also when the suggested
-    // action is a CAST (the affordable skill cards already glow gold; the
-    // board isn't where the value is). The policy result is cached per turn
-    // (_getSuggestedActionCached), so the cost is paid once.
+    // a full giveaway). Deliberately NOT the champion-policy suggestion the
+    // "?"/'h' hint uses: MoveAdvisor always has a swap to nudge toward, so
+    // the periodic glint never goes dark just because the champion would
+    // rather cast a skill. Returns null outside PLAYER_TURN, which suppresses
+    // glinting entirely on other turns/states. Cached per turn
+    // (_getSuggestedMoveCached), so the cost is paid once.
     this._board.setIdleGlintProvider(() => {
-      const best = this._getSuggestedActionCached();
-      if (!best || best.type !== 'swap' || !best.swap) return null;
+      const best = this._getSuggestedMoveCached();
+      if (!best || !best.swap) return null;
       this._hintGlintFlip = !this._hintGlintFlip;
       return this._hintGlintFlip
         ? { col: best.swap.col1, row: best.swap.row1 }
@@ -2037,6 +2046,7 @@ export default class BattleScene extends UIPanel {
     if (this._battleController
         && this._battleController.state !== BattleState.PLAYER_TURN) {
       this._suggestedAction = undefined;
+      this._suggestedMove = undefined;
     }
 
     // ── Hint highlight lifecycle ──
@@ -2351,14 +2361,37 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
-   * Drop the cached policy suggestion. Called whenever something changes
-   * what the policy would say while PLAYER_TURN persists: a skill cast
-   * (mana spent, board mutated by shuffle/lock, enemy HP changed) or a
-   * loadout change. State changes away from PLAYER_TURN invalidate in
-   * update() (covers swaps, cascades, targeting, turn passes).
+   * The SIMPLE MoveAdvisor best swap for the current player turn — the idle
+   * board glint's source (deliberately not the champion policy: a swap
+   * always exists to nudge toward). Computed AT MOST once per turn.
+   * @returns {{swap, score, breakdown, outcome}|null}
+   */
+  _getSuggestedMoveCached() {
+    const c = this._battleController;
+    if (!c || c.state !== BattleState.PLAYER_TURN) return null;
+    if (this._suggestedMove === undefined) {
+      // samples: 2 (vs the simulator default 4) — this runs SYNCHRONOUSLY on
+      // the main thread the first time a glint is wanted each turn, and on
+      // mobile the full-fat run is a visible one-frame hitch. Fewer
+      // Monte-Carlo refill samples only soften the expected-value estimate;
+      // the deterministic (guaranteed) ranking is unaffected — plenty for a
+      // nudge.
+      this._suggestedMove = c.getSuggestedMove({ samples: 2 }) || null;
+    }
+    return this._suggestedMove;
+  }
+
+  /**
+   * Drop the cached suggestions (champion action + glint swap). Called
+   * whenever something changes what they would say while PLAYER_TURN
+   * persists: a skill cast (mana spent, board mutated by shuffle/lock,
+   * enemy HP changed) or a loadout change. State changes away from
+   * PLAYER_TURN invalidate in update() (covers swaps, cascades, targeting,
+   * turn passes).
    */
   _invalidateSuggestedMove() {
     this._suggestedAction = undefined;
+    this._suggestedMove = undefined;
   }
 
   /**

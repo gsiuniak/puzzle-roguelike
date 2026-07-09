@@ -59,9 +59,9 @@ const goblin = {
   // Act 1 minions are added, split these floors between them.
   floors: [1, 2],
 
-  hp: 17, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 14→17 (measured 100% player win — band 85-95%)
-  maxHp: 17,
-  attack: 2, // 2026-07-06: 1→2 — at attack 1 it couldn't threaten at all (HP buffs alone left player win at 100%)
+  hp: 18, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 14→17 (measured 100% player win — band 85-95%)
+  maxHp: 18,
+  attack: 4, // 2026-07-06: 1→2 — at attack 1 it couldn't threaten at all (HP buffs alone left player win at 100%)
   armor: 0,
   mana: {
     red: 0,

@@ -21,11 +21,11 @@ const thrall = {
   type: 'minion',
 
   // ── Spawn placement ──
-  floors: [2, 3, 4, 5],
+  floors: [2, 4, 5],
 
-  hp: 26, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 20→22 (measured 95-99% player win — band 85-95%)
-  maxHp: 26,
-  attack: 6,
+  hp: 15, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 20→22 (measured 95-99% player win — band 85-95%)
+  maxHp: 15,
+  attack: 5,
   armor: 0,
   // No starting mana — the AI builds red via swaps to afford Claw.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
