@@ -14,9 +14,9 @@ const cyclops = {
   type: 'minion',
   floors: [5, 6, 7, 8, 9],
 
-  hp: 18, // floor-1-equivalent baseline (MapScene scales maxHp by depth); brute (tough normal)
-  maxHp: 18,
-  attack: 3,
+  hp: 15, // floor-1-equivalent baseline (MapScene scales maxHp by depth); brute (tough normal)
+  maxHp: 15,
+  attack: 1,
   armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 }, // starting red toward Smash
   portrait: 'cyclops', // maps to 'portrait_cyclops' asset key

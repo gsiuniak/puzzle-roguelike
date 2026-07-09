@@ -14,9 +14,9 @@ const acolyte = {
   type: 'minion',
   floors: [1, 2],
 
-  hp: 21, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 18→21 (measured 97-99% player win — band 85-95%)
-  maxHp: 21,
-  attack: 2, // 2026-07-06: 1→2 — threat, not HP, was the gap (player win stuck at 97-99%)
+  hp: 15, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 18→21 (measured 97-99% player win — band 85-95%)
+  maxHp: 15,
+  attack: 1, // 2026-07-06: 1→2 — threat, not HP, was the gap (player win stuck at 97-99%)
   armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 3 }, // starting purple so it can summon (doomsong)
   portrait: 'acolyte', // maps to 'portrait_acolyte' asset key

@@ -19,9 +19,9 @@ const chokeweed = {
   type: 'minion',
   floors: [3, 4, 5, 7, 8, 9],
 
-  hp: 16, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 16→20 (measured 99-100% player win — band 85-95%; more HP = more turns for its Encroach ramp to matter)
-  maxHp: 16,
-  attack: 5,
+  hp: 15, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 16→20 (measured 99-100% player win — band 85-95%; more HP = more turns for its Encroach ramp to matter)
+  maxHp: 15,
+  attack: 1,
   armor: 0,
   // No starting mana — Encroach is free, so it never needs any.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },

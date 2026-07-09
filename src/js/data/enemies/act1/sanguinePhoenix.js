@@ -41,14 +41,14 @@ const sanguinePhoenix = {
   // type: 'minion',
   // floors: [1, 2, 3, 4, 5, 6],
   type: 'elite',
-  floors: [4, 5, 6, 7, 8, 9],
+  floors: [5, 6, 7, 8, 9],
 
-  hp: 15, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 12→10 (each phase cycles the full pool — see egg hp 3→2 in sanguineEgg.js)
-  maxHp: 15,
-  attack: 3, // 2026-07-06: 3→2 (measured 51% player win — elite band 65-80%; the two-phase revert already doubles effective HP, so attack is the right lever)
+  hp: 12, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 12→10 (each phase cycles the full pool — see egg hp 3→2 in sanguineEgg.js)
+  maxHp: 12,
+  attack: 2, // 2026-07-06: 3→2 (measured 51% player win — elite band 65-80%; the two-phase revert already doubles effective HP, so attack is the right lever)
   armor: 0,
   // No starting mana — it must match the board to fuel Blood Gorge / Anemic Feast.
-  mana: { red: 3, blue: 0, green: 0, yellow: 0, purple: 3 },
+  mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'sanguine_phoenix', // → portrait_sanguine_phoenix (enemy-portraits sheet)
   music: {
     trackKey: 'battle_theme',

@@ -37,7 +37,8 @@ export const ENEMY_HP_FLOOR_MULT = [1.15, 1.45, 1.8, 2.15, 2.7, 3.1, 3.8, 4.6, 5
 // STEEPENED 2026-06-23 (≈ +1 every 2 floors): player growth is deterministic and
 // always includes Max HP (decision #36), so enemy DAMAGE must scale to stay a threat
 // against a steadily growing HP pool. See docs/balance-combat-math.md §4.2 / §7.1.
-export const ENEMY_ATTACK_FLOOR_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
+// export const ENEMY_ATTACK_FLOOR_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4];
+export const ENEMY_ATTACK_FLOOR_BONUS = [0, 1, 1, 2, 2, 3, 4, 5, 5, 6];
 
 /** Per-floor HP multiplier for a 0-indexed map depth (clamps past the last floor). */
 export function enemyHpFloorMult(depth) {
