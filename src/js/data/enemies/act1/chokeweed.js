@@ -19,9 +19,9 @@ const chokeweed = {
   type: 'minion',
   floors: [3, 4, 5, 7, 8, 9],
 
-  hp: 26, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 16→20 (measured 99-100% player win — band 85-95%; more HP = more turns for its Encroach ramp to matter)
-  maxHp: 6,
-  attack: 6, // 2026-07-06: 2→3 — measured 97-98% player win (band 85-95%); a higher ramp START makes Briarthorn bite sooner
+  hp: 16, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 16→20 (measured 99-100% player win — band 85-95%; more HP = more turns for its Encroach ramp to matter)
+  maxHp: 16,
+  attack: 7, // 2026-07-06: 2→3 — measured 97-98% player win (band 85-95%); a higher ramp START makes Briarthorn bite sooner
   armor: 0,
   // No starting mana — Encroach is free, so it never needs any.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
