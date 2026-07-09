@@ -1172,6 +1172,14 @@ export default class BattleScene extends UIPanel {
       return;
     }
 
+    // ── Hint ('h') — same as clicking the "?" corner button ──
+    if (e.key === 'h' || e.key === 'H') {
+      if (!this._mapView || !this._mapView.isOverlayActive()) {
+        this._requestHint(); // self-gates on PLAYER_TURN
+      }
+      return;
+    }
+
     // ── Map overlay toggle ('m') ──
     if (e.key === 'm' || e.key === 'M') {
       if (this._mapView) {
