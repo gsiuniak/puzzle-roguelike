@@ -209,6 +209,10 @@ const SOUNDS = {
   skill_cyst_burst:    { sprite: 'sfx_skill_cyst_burst',    category: AudioCategory.SFX },
   skill_frenzy:        { sprite: 'sfx_skill_frenzy',        category: AudioCategory.SFX },
   skill_charge:        { sprite: 'sfx_skill_charge',        category: AudioCategory.SFX },
+  skill_blighted_growth: { sprite: 'sfx_skill_blighted_growth', category: AudioCategory.SFX },
+  // Fungal-tile explosion (Blight Warden), played when expired blight bursts
+  // into Skulls at the enemy's turn start (decision #46).
+  sfx_fungal_explode:  { sprite: 'sfx_relic_fungal_explode', category: AudioCategory.SFX },
 
   // Lord Malakor (Act 1 boss). NOTE: the Desecrate clip is misspelled
   // "descecrate" in the sprite sheet — the sprite name matches it; the key stays clean.

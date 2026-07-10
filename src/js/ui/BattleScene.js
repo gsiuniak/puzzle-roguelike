@@ -1343,6 +1343,12 @@ export default class BattleScene extends UIPanel {
       this._audioManager.playSfx('sfx_thrall_summon');
     }
 
+    // ── Fungal-explosion SFX (Blight Warden) ──
+    // Fires once per tick regardless of how many tiles burst together.
+    if (state.fungalExploded && this._audioManager) {
+      this._audioManager.playSfx('sfx_fungal_explode');
+    }
+
     // ── Match-4+ flourish SFX (TEMP audition asset) ──
     // Fires once per flourish, the frame the freeze beat begins.
     if (state.match4Flourish && state.match4Flourish !== this._lastMatch4Flourish) {

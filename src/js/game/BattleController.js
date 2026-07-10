@@ -320,6 +320,14 @@ export default class BattleController {
     this._thrallSummoned = false;
 
     /**
+     * One-shot flag: expired Fungal tiles exploded this tick (Blight Warden —
+     * see _tickFungalTiles), so the scene plays the burst SFX once. Read &
+     * cleared by getState().
+     * @type {boolean}
+     */
+    this._fungalExploded = false;
+
+    /**
      * One-shot flag: set when a SHUFFLE effect reshuffles the board so
      * BattleScene plays the board-shuffle animation exactly once. Read &
      * cleared by getState().
@@ -994,6 +1002,10 @@ export default class BattleController {
     const thrallSummoned = this._thrallSummoned;
     this._thrallSummoned = false;
 
+    // One-shot fungal-explosion SFX flag (Blight Warden), cleared on read.
+    const fungalExploded = this._fungalExploded;
+    this._fungalExploded = false;
+
     // One-shot board-shuffle animation flag (SHUFFLE effect), cleared on read.
     const boardShuffled = this._boardShuffled;
     this._boardShuffled = false;
@@ -1029,6 +1041,7 @@ export default class BattleController {
       relicTriggers,
       harvestEvents,
       thrallSummoned,
+      fungalExploded,
       boardShuffled,
       reflectTriggered,
       enemyTransformed,
@@ -3333,6 +3346,8 @@ export default class BattleController {
         `${exploding.length} Fungal tile(s) burst into Skulls` +
         (spread > 0 ? `, spreading ${spread} more!` : `!`)
       );
+      // One-shot: the scene plays the burst SFX (sfx_fungal_explode).
+      this._fungalExploded = true;
     }
 
     // Surface every transformation for the conversion shimmer.

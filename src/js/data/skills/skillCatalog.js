@@ -474,16 +474,16 @@ const SKILL_CATALOG = {
   // Skulls + spread more blight if left unchecked; see TILE_TYPES + decision
   // #46). avoidMatches keeps the fresh blight from instantly self-resolving
   // into free green matches (which would heal the Warden via Vampiric Roots).
-  // Sound reuses the generic green-create clip (no dedicated SFX authored yet).
   blighted_growth: {
     id: 'blighted_growth',
     name: 'Blighted Growth',
-    description: 'Create 6 [[Fungal Tiles]].\nGain an [[extra turn]].',
+    description: 'Create 3 [[Fungal Tiles]].\nDeal <<7>> [[damage]].\nGain an [[extra turn]].',
     icon: 'skill_blighted_growth',
-    sound: 'sfx_generic_create_green_1',
-    cost: { green: 6 },
+    sound: 'skill_blighted_growth',
+    cost: { green: 8 },
     effects: [
-      { effectType: 'create_tiles', createTiles: { type: 'fungal_2', amount: 6, avoidMatches: true } },
+      { effectType: 'damage', damage: { amount: 7, scaling: { attack: DAMAGE_SCALING_PRESETS._100 } } },
+      { effectType: 'create_tiles', createTiles: { type: 'fungal_2', amount: 3, avoidMatches: true } },
       { effectType: 'extra_turn' },
     ],
   },
