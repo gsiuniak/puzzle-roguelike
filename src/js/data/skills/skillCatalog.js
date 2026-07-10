@@ -410,14 +410,14 @@ const SKILL_CATALOG = {
   blood_gorge: {
     id: 'blood_gorge',
     name: 'Blood Gorge',
-    description: 'Drain 5 of all [[mana]] from the enemy.\nGain 3 Attack.\n[[Create]] 8 Skulls',
+    description: 'Drain 5 of all [[mana]] from the enemy.\nGain 3 Attack.\n[[Create]] 6 Skulls',
     icon: 'skill_blood_gorge',  // dedicated icon (enemy-skills sheet)
     sound: 'skill_blood_gorge', // dedicated SFX
     cost: { purple: 6 },
     effects: [
       { effectType: 'drain_mana', drainMana: { amount: 5 } },
       { effectType: 'gain_attack', gainAttack: { amount: 3 } },
-      { effectType: 'create_tiles', createTiles: { amount: 8, type: 'skull' } },
+      { effectType: 'create_tiles', createTiles: { amount: 6, type: 'skull' } },
       // // Raises the ceiling first, then the heal fills into the new space.
       // { effectType: 'gain_max_hp', gainMaxHp: { amount: 10 } },
       // { effectType: 'heal', heal: { amount: 10 } },

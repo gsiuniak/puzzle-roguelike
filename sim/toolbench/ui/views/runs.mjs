@@ -105,6 +105,21 @@ export function runsView() {
     const floorKeys = Object.keys(res.floorFights).sort((a, b) => Number(a.split('|')[0]) - Number(b.split('|')[0]));
     const winPts = floorKeys.map((k) => ({ x: Number(k.split('|')[0]), y: res.floorFights[k].wins / res.floorFights[k].n }));
 
+    const killed = res.enemies.filter((e) => e.deaths > 0);
+    const fmtFloors = (df) => Object.entries(df).sort((a, b) => Number(a[0]) - Number(b[0]))
+      .map(([f, k]) => `f${f}×${k}`).join(' · ');
+    const enemyTable = killed.length ? `<table>
+      <tr><th>Enemy</th><th class="num">deaths</th><th class="num">% of deaths</th><th>death floors</th>
+      <th class="num">avg turns (fatal)</th><th class="num">fights</th><th class="num">win %</th></tr>
+      ${killed.map((e) => `<tr><td>${esc(e.name)}</td>
+        <td class="num" style="color:var(--bad)">${e.deaths}</td>
+        <td class="num">${pct1(e.deathShare)}</td>
+        <td>${fmtFloors(e.deathFloors)}</td>
+        <td class="num">${f1(e.avgDeathTurns)}</td>
+        <td class="num">${e.n}</td>
+        <td class="num" style="color:${e.winRate >= 0.85 ? 'var(--good)' : 'var(--warn)'}">${pct1(e.winRate)}</td></tr>`).join('')}</table>`
+      : '<div class="note">no deaths in this dataset</div>';
+
     const rctTable = (rows, kind) => rows.length ? `<table><tr><th>${kind}</th><th class="num">n</th><th class="num">ΔSurv</th><th class="num">±SE</th><th class="num">ΔFloors</th><th class="num">ΔNextWin</th><th></th></tr>
       ${rows.map((r) => `<tr><td>${esc(r.id)}</td><td class="num">${r.n}</td>
         <td class="num" style="color:${r.dSurv >= 0 ? 'var(--good)' : 'var(--bad)'}">${pp(r.dSurv)}</td>
@@ -127,6 +142,11 @@ export function runsView() {
           ${lineChart([{ name: 'win %', color: 'var(--good)', points: winPts, min: 0, max: 1, fmt: (x) => pct(x) }], { xLabel: 'floor', w: 520, h: 200 })}
           <div class="hint" style="margin-top:6px">${floorKeys.map((k) => `${k.replace('|', ' ')}=${pct(res.floorFights[k].wins / res.floorFights[k].n)}`).join('  ')}</div>
         </div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <div class="eyebrow">Deaths by enemy — which fights end runs</div>
+        <div class="scroll" style="max-height:340px">${enemyTable}</div>
+        <div class="hint" style="margin-top:6px">avg turns = player actions in the FATAL fight only; win % / fights = all encounters vs that enemy</div>
       </div>
       <div class="grid g2" style="margin-top:14px">
         <div class="panel"><div class="eyebrow">Relic power — run-context RCT (picked vs offered-not-picked)</div>

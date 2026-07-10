@@ -65,7 +65,7 @@ export function kitColorsOf(characterId) {
 /**
  * Full analysis over run records. Returns the structured result (the same
  * object runs.mjs writes as *-analysis.json):
- * { meta, perChar, floorFights, relics, weaveTags, relicByCharacter,
+ * { meta, perChar, floorFights, enemies, relics, weaveTags, relicByCharacter,
  *   colorSynergy, pairs } — rows carry full (unrounded) values + SEs so any
  * frontend can format/round for display.
  */
@@ -73,6 +73,7 @@ export function analyzeRuns(records, { minN = 25 } = {}) {
   let meta = null;
   const perChar = {}; // characterId → { runs, survived, victories, deaths: {floor: n} }
   const floorFights = {}; // floor|type → { n, wins }
+  const enemyStats = new Map(); // enemyId → { name, n, wins, turnsSum, deaths, deathTurnsSum, deathFloors: {floor: n} }
   const relicStats = new Map();     // id → bucket
   const relicCharStats = new Map(); // `id|characterId` → bucket
   const relicCondStats = new Map(); // `id|synergy` / `id|off` → bucket (color-linked relics)
@@ -94,6 +95,17 @@ export function analyzeRuns(records, { minN = 25 } = {}) {
       (floorFights[key] = floorFights[key] || { n: 0, wins: 0 }).n++;
       if (f.won) floorFights[key].wins++;
       fightsByFloor.push(f);
+      const eid = f.enemyId || '?';
+      let es = enemyStats.get(eid);
+      if (!es) enemyStats.set(eid, es = { id: eid, name: f.enemyName || eid, n: 0, wins: 0, turnsSum: 0, deaths: 0, deathTurnsSum: 0, deathFloors: {} });
+      es.n++; if (f.won) es.wins++; es.turnsSum += f.turns || 0;
+    }
+    // a dead run's LAST fight is the killer (the run stops on the first loss)
+    const fatal = fightsByFloor[fightsByFloor.length - 1];
+    if (!rec.survived && fatal && !fatal.won) {
+      const es = enemyStats.get(fatal.enemyId || '?');
+      es.deaths++; es.deathTurnsSum += fatal.turns || 0;
+      es.deathFloors[fatal.floor] = (es.deathFloors[fatal.floor] || 0) + 1;
     }
     // forward outcomes for an event at floor `fl`: survival, floors progressed, next-fight result
     const forward = (fl) => {
@@ -131,6 +143,18 @@ export function analyzeRuns(records, { minN = 25 } = {}) {
     const reachedF6 = rec.survived || rec.deathFloor > 6;
     runsForPairs.push({ relics: rec.relics || [], reachedF6, survived: rec.survived ? 1 : 0 });
   }
+
+  /* ── deaths by enemy (which fights end runs, where, and how fast) ── */
+  const totalDeaths = [...enemyStats.values()].reduce((a, es) => a + es.deaths, 0);
+  const enemyRows = [...enemyStats.values()].map((es) => ({
+    id: es.id, name: es.name, n: es.n,
+    winRate: es.n ? es.wins / es.n : 0,
+    avgTurns: es.n ? es.turnsSum / es.n : 0,           // all fights vs this enemy
+    deaths: es.deaths,
+    deathShare: totalDeaths ? es.deaths / totalDeaths : 0,
+    avgDeathTurns: es.deaths ? es.deathTurnsSum / es.deaths : null, // fatal fights only
+    deathFloors: es.deathFloors,                        // {floor: count}
+  })).sort((a, b) => b.deaths - a.deaths || a.winRate - b.winRate);
 
   /* ── per-item RCT rows ── */
   const tableRows = (stats) => {
@@ -204,7 +228,7 @@ export function analyzeRuns(records, { minN = 25 } = {}) {
   pairRows.sort((x, y) => Math.abs(y.synergy) - Math.abs(x.synergy));
 
   return {
-    meta, perChar, floorFights,
+    meta, perChar, floorFights, enemies: enemyRows,
     relics: relicRows, weaveTags: tagRows,
     relicByCharacter: charRows, colorSynergy: condRows,
     pairs: pairRows,

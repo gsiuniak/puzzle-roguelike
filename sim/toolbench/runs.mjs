@@ -158,6 +158,12 @@ async function cmdAnalyze(args) {
   line('  per-floor fight win rates:');
   const floorKeys = Object.keys(res.floorFights).sort((a, b) => Number(a.split('|')[0]) - Number(b.split('|')[0]));
   line('    ' + floorKeys.map((k) => `${k.replace('|', ' ')}=${pct(res.floorFights[k].wins / res.floorFights[k].n, 0)}`).join('  '));
+  line('  deaths by enemy (fatal-fight avg turns; win rate over ALL encounters):');
+  for (const e of res.enemies.filter((x) => x.deaths > 0)) {
+    const floors = Object.entries(e.deathFloors).sort((a, b) => Number(a[0]) - Number(b[0])).map(([f, k]) => `f${f}:${k}`).join(' ');
+    line(`    ${e.id.padEnd(22)} deaths=${String(e.deaths).padStart(4)} (${pct(e.deathShare, 0).padStart(4)} of deaths) avgTurns=${e.avgDeathTurns.toFixed(1).padStart(5)} fights=${String(e.n).padStart(5)} win=${pct(e.winRate, 0).padStart(4)} [ ${floors} ]`);
+  }
+  if (!res.enemies.some((x) => x.deaths > 0)) line('    (no deaths in this dataset)');
 
   /* ── per-item RCT tables ── */
   const table = (name, rows) => {
@@ -193,7 +199,7 @@ async function cmdAnalyze(args) {
 
   const outFile = file.replace(/\.jsonl$/, '-analysis.json');
   fs.writeFileSync(outFile, JSON.stringify({
-    meta: res.meta, perChar: res.perChar, floorFights: res.floorFights,
+    meta: res.meta, perChar: res.perChar, floorFights: res.floorFights, enemies: res.enemies,
     relics: res.relics, weaveTags: res.weaveTags,
     relicByCharacter: res.relicByCharacter, colorSynergy: res.colorSynergy,
     pairs: res.pairs.slice(0, 50),
