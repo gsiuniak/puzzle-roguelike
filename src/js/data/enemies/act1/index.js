@@ -17,6 +17,35 @@ import sanguinePhoenix from './sanguinePhoenix.js';
 import sanguineEgg from './sanguineEgg.js';
 import lordMalakor from './lordMalakor.js';
 
+/**
+ * Act 1 spawn placement — floor → eligible enemy ids (THE authoritative
+ * placement table). This is the AUTHORING surface for "what can appear on
+ * floor N": edit a floor's array here to add/remove an encounter. Floors are
+ * 1-indexed (floor 1 = first encounter, floor 10 = the boss).
+ *
+ * Each def's `floors` array is DERIVED from this table at module load in
+ * enemies/index.js — every consumer (game + toolbench) still reads `def.floors`
+ * unchanged; this map is just where placement is edited.
+ *
+ * Enemies intentionally absent (never spawn as an encounter): `goblin`
+ * (disabled) and `sanguineEgg` (a transform-only form). Enemy `type`
+ * (minion/elite/boss) still lives on each def and is matched at selection —
+ * listing an elite here (e.g. sanguinePhoenix) just makes it part of that
+ * floor's roster; selectEnemyForNode splits by the node's required type.
+ */
+const ACT1_FLOOR_SPAWNS = {
+  1:  ['acolyte', 'thrall'],
+  2:  ['acolyte', 'thrall'],
+  3:  ['thrall', 'chokeweed'],
+  4:  ['chokeweed', 'cyclops'],
+  5:  ['chokeweed', 'goresnout_trackers', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
+  6:  ['goresnout_trackers', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
+  7:  ['goresnout_trackers', 'abomination', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
+  8:  [ 'orc_taskmaster', 'sanguinePhoenix'],
+  9:  ['goresnout_trackers', 'abomination', 'orc_taskmaster', 'sanguinePhoenix'],
+  10: ['lordMalakor'],
+};
+
 /** All Act 1 enemy definitions. */
 const ACT1_ENEMIES = [
   goblin,
@@ -36,6 +65,7 @@ const ACT1_ENEMIES = [
   lordMalakor,
 ];
 
+export { ACT1_FLOOR_SPAWNS };
 export {
   goblin,
   // orc,

@@ -1,10 +1,11 @@
 /**
  * Sanguine Egg — the dormant form of the Sanguine Phoenix (act1/sanguinePhoenix.js).
  *
- * This is NOT a stand-alone encounter: its `floors` is empty so the spawn
- * selector never picks it. It exists only as a TRANSFORM target — the Phoenix's
- * Sanguine Egg relic swaps into it on death. MapScene still registers it so the
- * id resolves when pre-building the Phoenix's transform forms.
+ * This is NOT a stand-alone encounter: it is absent from act1/index.js
+ * FLOOR_SPAWNS, so its derived `floors` is empty and the spawn selector never
+ * picks it. It exists only as a TRANSFORM target — the Phoenix's Sanguine Egg
+ * relic swaps into it on death. MapScene still registers it so the id resolves
+ * when pre-building the Phoenix's transform forms.
  *
  * The egg minigame is TURN-BASED and DAMAGE-BASED (BattleController egg phase):
  * when the Phoenix is "killed" it becomes this Egg — a NORMAL, killable low-HP
@@ -37,7 +38,8 @@ const sanguineEgg = {
   act: 1,
   rarity: 'rare',
   type: 'elite',
-  floors: [], // never spawns on its own — reached only via the Phoenix's transform
+  // floors: absent from act1/index.js FLOOR_SPAWNS → derived [] (never spawns on
+  // its own; reached only via the Phoenix's transform)
 
   hp: 2, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 3→2 (the egg-check was failed too often — Phoenix measured 51-53% player win vs elite band 65-80%)
   maxHp: 2, // the player must deal this much in ONE turn to slay the Egg

@@ -12,7 +12,7 @@ const orcTaskmaster = {
   act: 1,
   rarity: 'rare',
   type: 'elite',
-  floors: [5, 6, 7, 8, 9], // elite nodes never appear before depth 4 (floor 5)
+  // floors: derived from act1/index.js FLOOR_SPAWNS (placement is edited there)
 
   hp: 15, // floor-1-equivalent elite baseline (MapScene scales maxHp by depth); 2026-07-06: 28→23 (measured 59% player win at f5 — elite band 65-80%; f9 was in band and stays so)
   maxHp: 15,

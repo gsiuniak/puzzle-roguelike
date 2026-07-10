@@ -11,13 +11,13 @@
  *   type   — 'minion' | 'elite' | 'boss'      matched against the map node type
  *
  * === floors (spawn placement) ===
- *   floors — number[]   the map floors this enemy is eligible to appear on.
- *            Floors are 1-indexed: floor 1 = the first encounter, floor 10 =
- *            the boss (the map's 10 depths, 0-indexed internally, map to floors
- *            depth+1). selectEnemyForNode() filters candidates by
- *            `floors.includes(floor)` AND matching `type`, then rarity-weighted
- *            picks one. This is the authoritative control for WHERE an enemy
- *            shows up — `act` is just a label.
+ *   Placement is NOT authored on the def — it lives in the per-act floor→ids
+ *   table act1/index.js FLOOR_SPAWNS (floor 1 = first encounter, floor 10 =
+ *   the boss). Each def's `floors` array is DERIVED from that table at load
+ *   (enemies/index.js). selectEnemyForNode() filters candidates by
+ *   `floors.includes(floor)` AND matching `type`, then rarity-weighted picks
+ *   one — so to place an enemy, add its id to the floor(s) in FLOOR_SPAWNS.
+ *   `act` is just a label and does not affect spawning.
  *
  * === relics ===
  * Enemy relic IDs are drawn from the ENEMY-ONLY pool in
@@ -55,9 +55,11 @@ const goblin = {
   type: 'minion',
 
   // ── Spawn placement ──
-  // Sole Act 1 minion for now, so it covers every battle floor. When more
-  // Act 1 minions are added, split these floors between them.
-  floors: [1, 2],
+  // DISABLED 2026-07-10 — not listed in any floor of act1/index.js FLOOR_SPAWNS,
+  // so its derived `floors` is [] and it never spawns as an encounter. The def +
+  // named export are kept alive: CharacterSelectScene clones `goblin` for its
+  // aura preview, and it was the selectEnemyForNode fallback (now reassigned to
+  // thrall in enemies/index.js). Restore by adding its id to FLOOR_SPAWNS.
 
   hp: 18, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 14→17 (measured 100% player win — band 85-95%)
   maxHp: 18,

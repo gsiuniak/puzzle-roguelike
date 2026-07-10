@@ -39,9 +39,8 @@ const sanguinePhoenix = {
   act: 1,
   rarity: 'common',
   // type: 'minion',
-  // floors: [1, 2, 3, 4, 5, 6],
   type: 'elite',
-  floors: [5, 6, 7, 8, 9],
+  // floors: derived from act1/index.js FLOOR_SPAWNS (placement is edited there)
 
   hp: 8, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 12→10 (each phase cycles the full pool — see egg hp 3→2 in sanguineEgg.js)
   maxHp: 8,

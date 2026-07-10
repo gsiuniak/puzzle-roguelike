@@ -460,13 +460,13 @@ const SKILL_CATALOG = {
   claw: {
     id: 'claw',
     name: 'Claw',
-    description: 'Deal <<5>> [[damage]].\nGain +2 [[Attack]].',
+    description: 'Deal <<7>> [[damage]].\nGain +5 [[Attack]].',
     icon: 'skill_claw',
     sound: 'skill_claw',
     cost: { red: 3 },
     effects: [
-      { effectType: 'damage', damage: { amount: 5, scaling: { attack: DAMAGE_SCALING_PRESETS._50 } } },
-      { effectType: 'gain_attack', gainAttack: { amount: 2 } },
+      { effectType: 'damage', damage: { amount: 7, scaling: { attack: DAMAGE_SCALING_PRESETS._100 } } },
+      { effectType: 'gain_attack', gainAttack: { amount: 5 } },
     ],
   },
 };

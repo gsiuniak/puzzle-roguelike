@@ -19,11 +19,11 @@ const goresnoutTrackers = {
   act: 1,
   rarity: 'uncommon',
   type: 'minion',
-  floors: [4, 5, 6, 7, 8],
+  // floors: derived from act1/index.js FLOOR_SPAWNS (placement is edited there)
 
-  hp: 15, // floor-1-equivalent baseline (MapScene scales maxHp by depth); +armor 10
-  maxHp: 15,
-  attack: 1,
+  hp: 14, // floor-1-equivalent baseline (MapScene scales maxHp by depth); +armor 10
+  maxHp: 14,
+  attack: 2,
   armor: 0,
   // No starting mana — the AI builds red via swaps to afford Hound.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },

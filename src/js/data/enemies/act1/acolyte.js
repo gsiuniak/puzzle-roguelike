@@ -12,10 +12,10 @@ const acolyte = {
   act: 1,
   rarity: 'common',
   type: 'minion',
-  floors: [1, 2],
+  // floors: derived from act1/index.js FLOOR_SPAWNS (placement is edited there)
 
-  hp: 10, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 18→21 (measured 97-99% player win — band 85-95%)
-  maxHp: 10,
+  hp: 9, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 18→21 (measured 97-99% player win — band 85-95%)
+  maxHp: 9,
   attack: 2, // 2026-07-06: 1→2 — threat, not HP, was the gap (player win stuck at 97-99%)
   armor: 0,
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 5 }, // starting purple so it can summon (doomsong)

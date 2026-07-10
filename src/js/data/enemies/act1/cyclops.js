@@ -6,13 +6,13 @@ const cyclops = {
   id: 'cyclops',
   name: 'Cyclops',
   aiBehavior: null,
-  className: 'Elite',
+  className: 'Minion',
   level: 3,
 
   act: 1,
   rarity: 'uncommon',
   type: 'minion',
-  floors: [5, 6, 7, 8, 9],
+  // floors: derived from act1/index.js FLOOR_SPAWNS (placement is edited there)
 
   hp: 15, // floor-1-equivalent baseline (MapScene scales maxHp by depth); brute (tough normal)
   maxHp: 15,

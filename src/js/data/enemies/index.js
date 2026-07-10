@@ -13,22 +13,28 @@
  *   act    — 1 | 2 | 3   thematic grouping ONLY (does not affect spawning)
  *   rarity — 'common' | 'uncommon' | 'rare'
  *   type   — 'minion' | 'elite' | 'boss'
- *   floors — number[]    1-indexed map floors the enemy may spawn on (THE
- *                        authoritative placement control). Floor 1 = the first
- *                        encounter (depth 0); floor 10 = the boss (depth 9).
+ *   floors — number[]    1-indexed map floors the enemy may spawn on. Floor 1 =
+ *                        the first encounter (depth 0); floor 10 = the boss
+ *                        (depth 9). NOTE: `floors` is DERIVED (not authored on
+ *                        the def) — the authoritative placement table is the
+ *                        per-act floor→ids map (act1/index.js FLOOR_SPAWNS),
+ *                        transposed onto each def's `floors` at load below.
+ *                        Every consumer still reads `def.floors` unchanged.
  *
  * Spawning is driven by `floors` + `type`, NOT by act. See selectEnemyForNode.
  *
  * Adding a new enemy:
  *   1. Create a file in the appropriate actN/ folder that `export default`s
- *      the enemy definition (with act/rarity/type/floors/relics fields).
+ *      the enemy definition (with act/rarity/type/relics fields — NOT floors).
  *   2. Import + add it to that act's actN/index.js array.
- *   3. Register portrait/skill assets in main.js ASSET_MAP.
- *   4. Enemy relics are referenced by ID from the ENEMY-ONLY pool
+ *   3. List its id under the floor(s) it should appear on in that act's
+ *      FLOOR_SPAWNS map (act1/index.js).
+ *   4. Register portrait/skill assets in main.js ASSET_MAP.
+ *   5. Enemy relics are referenced by ID from the ENEMY-ONLY pool
  *      (data/relics/enemyRelicCatalog.js) and resolved via resolveEnemyRelicIds.
  */
 
-import ACT1_ENEMIES, { goblin } from './act1/index.js';
+import ACT1_ENEMIES, { goblin, thrall, ACT1_FLOOR_SPAWNS } from './act1/index.js';
 
 /** Number of map depths (mirrors MapGenerator.DEPTH_COUNT). Floors are 1..FLOOR_COUNT. */
 const FLOOR_COUNT = 10;
@@ -46,6 +52,35 @@ const ENEMIES_BY_ID = ALL_ENEMIES.reduce((acc, def) => {
   acc[def.id] = def;
   return acc;
 }, {});
+
+/**
+ * Placement table: floor (1-indexed) → eligible enemy ids. The AUTHORING
+ * surface for spawn placement, aggregated across acts. (Only Act 1 exists;
+ * merge additional acts' maps here as they land. Floors are per-act runs, so a
+ * future act's map that reuses floor numbers would need act-aware routing —
+ * the same limitation as today's act-agnostic selection.)
+ */
+export const FLOOR_SPAWNS = { ...ACT1_FLOOR_SPAWNS };
+
+/**
+ * Derive each registered def's `floors` array (the per-enemy mirror every
+ * consumer reads) by transposing FLOOR_SPAWNS. Reset first so the map is the
+ * single source of truth — a def not listed anywhere gets `[]` (e.g. `goblin`,
+ * `sanguineEgg`), never `undefined`, so `.floors`-reading consumers stay safe.
+ */
+for (const def of ALL_ENEMIES) def.floors = [];
+for (const [floorStr, ids] of Object.entries(FLOOR_SPAWNS)) {
+  const floor = Number(floorStr);
+  for (const id of ids) {
+    const def = ENEMIES_BY_ID[id];
+    if (!def) {
+      console.warn(`[enemies] FLOOR_SPAWNS floor ${floor} lists unknown enemy id "${id}".`);
+      continue;
+    }
+    if (!def.floors.includes(floor)) def.floors.push(floor);
+  }
+}
+for (const def of ALL_ENEMIES) def.floors.sort((a, b) => a - b);
 
 /**
  * Relative likelihood weights per rarity for the weighted spawn pick. Higher
@@ -175,7 +210,9 @@ function weightedPick(pool, rng) {
  *      matches the node's required type;
  *   2. fall back to any minion eligible for this floor (covers debug-routed
  *      non-combat nodes / floors lacking the exact type);
- *   3. fall back to the goblin (always-present default).
+ *   3. fall back to the thrall (always-present default; goblin held this role
+ *      until it was disabled 2026-07-10 — thrall is a common minion that always
+ *      resolves).
  * The final choice within a non-empty pool is rarity-weighted.
  *
  * Pass either `depth` (0-indexed, as MapScene has it) or `floor` (1-indexed);
@@ -221,7 +258,7 @@ export function selectEnemyForNode({ depth = 0, floor = null, nodeType = 'battle
   const unseen = pool.filter((e) => !isSeen(e));
   const finalPool = unseen.length ? unseen : pool;
 
-  return weightedPick(finalPool, rng) || goblin;
+  return weightedPick(finalPool, rng) || thrall;
 }
 
 /**

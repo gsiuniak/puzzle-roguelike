@@ -26,7 +26,7 @@ const abomination = {
   act: 1,
   rarity: 'uncommon',
   type: 'minion',
-  floors: [7, 8, 9],
+  // floors: derived from act1/index.js FLOOR_SPAWNS (placement is edited there)
 
   hp: 15, // floor-1-equivalent baseline (MapScene scales maxHp by depth); 2026-07-06: 25→16 (a MINION measured at 63-70% player win — band 85-95%; less HP = fewer bites for its Disease/attack ramp)
   maxHp: 15,
