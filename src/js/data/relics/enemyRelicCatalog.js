@@ -245,6 +245,29 @@ const ENEMY_RELIC_CATALOG = {
     effects: [],
   },
 
+  // Cross-side green-match lifesteal (Blight Warden) — heals the OWNER 1 HP per
+  // tile whenever ANYONE (either side) matches Green. `anySide: true` makes the
+  // PassiveSystem's second dispatch pass consult this relic for the opponent's
+  // matches too; `heal.perCount` multiplies the heal by the match's tile count.
+  // Fungal tiles count as Green in match detection (see TileTypes/BoardModel),
+  // so clearing the Warden's blight feeds it — the fight's core tension.
+  vampiric_roots: {
+    id: 'vampiric_roots',
+    name: 'Vampiric Roots',
+    description: 'Whenever ANYONE matches Green [[tiles]], [[Heal]] <<1>> life for each tile matched.',
+    icon: 'relic_vampiric_roots',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      {
+        trigger: 'onTileMatchType',
+        anySide: true,
+        condition: { typeId: 'green' },
+        effectType: 'heal',
+        heal: { amount: 1, perCount: true },
+      },
+    ],
+  },
+
   // Turn-start board control — converts up to 2 random Skull tiles into Green
   // in place (no cascade). Board-touching, so it's handled by
   // BattleController._handlePassiveBoardEffect via the onBoardEffect path.

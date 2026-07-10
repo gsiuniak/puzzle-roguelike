@@ -100,6 +100,11 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Harvest',
     description: 'Consume all [[Thrall]] [[tiles]] on the board for their effect.',
   },
+  'fungal tiles': {
+    id: 'fungal tiles',
+    label: 'Fungal Tiles',
+    description: 'Timed blight [[tiles]] that [[Match]] only with Green or other Fungal tiles. When the timer runs out, each explodes into a [[Skull]] and spreads 2 more Fungal tiles.',
+  },
   destroying: {
     id: 'destroying',
     label: 'Destroying',
@@ -277,6 +282,8 @@ export const KEYWORD_ALIASES = {
   healing: 'heal',
   'extra-turn': 'extra turn',
   'extra turns': 'extra turn',
+  fungal: 'fungal tiles',
+  'fungal tile': 'fungal tiles',
   // Damage-type alternate spellings.
   physical: 'phys',
   'physical damage': 'phys',

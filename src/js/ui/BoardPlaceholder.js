@@ -1,5 +1,5 @@
 import UIElement from './UIElement.js';
-import { isWild, isMana } from '../game/TileTypes.js';
+import { isWild, isMana, isFungal, fungalTimer } from '../game/TileTypes.js';
 
 /**
  * Wild-tile (Thrall) animated rainbow border.
@@ -916,6 +916,15 @@ export default class BoardPlaceholder extends UIElement {
           this._drawLockedTileOverlay(ctx, drawX, drawY, drawCs, this._boardModel.getLockTurns(colorKey));
           if (tileAlpha < 1) ctx.globalAlpha = prevA;
         }
+
+        // Fungal blight tiles (Blight Warden): remaining-turns badge, derived
+        // straight from the type id (fungal_2 / fungal_1) — no side state.
+        if (isFungal(colorKey)) {
+          const prevA = ctx.globalAlpha;
+          if (tileAlpha < 1) ctx.globalAlpha = prevA * tileAlpha;
+          this._drawFungalTimerBadge(ctx, drawX, drawY, drawCs, fungalTimer(colorKey));
+          if (tileAlpha < 1) ctx.globalAlpha = prevA;
+        }
       }
     }
 
@@ -1040,6 +1049,8 @@ export default class BoardPlaceholder extends UIElement {
         ctx.strokeRect(x, y, cs, cs);
         // Keep the wild tile border on Thrall tiles while they swap.
         if (isWild(typeKey)) this._drawWildTileBorder(ctx, x, y, cs);
+        // Keep the fungal timer badge on blight tiles while they swap.
+        if (isFungal(typeKey)) this._drawFungalTimerBadge(ctx, x, y, cs, fungalTimer(typeKey));
       };
 
       // No drop shadow on the moving tiles — shadowBlur on drawImage forces
@@ -1094,6 +1105,36 @@ export default class BoardPlaceholder extends UIElement {
       ctx.fillText(String(turns), cx, cy);
       ctx.restore();
     }
+  }
+
+  /**
+   * Draw the FUNGAL tile "turns remaining" badge — a small white number with a
+   * dark outline in the tile's top-right corner (corner rather than center so
+   * the blight art stays readable; the same number-on-tile language as the
+   * lock badge). The timer is derived from the type id, so this needs no
+   * side-band state and follows fall/swap/shuffle for free. See decision #46.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x @param {number} y @param {number} size
+   * @param {number} turns - remaining enemy-turn starts before it explodes
+   */
+  _drawFungalTimerBadge(ctx, x, y, size, turns = 0) {
+    if (size <= 0 || !(turns > 0)) return;
+    const fs = Math.max(9, Math.round(size * 0.30));
+    const cx = x + size * 0.78;
+    const cy = y + size * 0.24;
+    ctx.save();
+    ctx.font = `bold ${fs}px "MarcellusSC", serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, fs * 0.22);
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillStyle = '#eaffda';
+    // Thick dark strokeText supplies the legibility halo — no shadowBlur
+    // (drawn per fungal tile per frame, same budget rule as the lock badge).
+    ctx.strokeText(String(turns), cx, cy);
+    ctx.fillText(String(turns), cx, cy);
+    ctx.restore();
   }
 
   // ── Wild (Thrall) tile border overlay ─────────────────

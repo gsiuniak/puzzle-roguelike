@@ -212,6 +212,11 @@ const ASSET_ALIASES = {
   // Sanguine Egg tiles (the Sanguine Phoenix's wild tile) — dedicated art lives
   // in the tiles sheet as `phoenix_egg_tile`; the board requests `tile_<type>`.
   tile_sanguine_egg: 'phoenix_egg_tile',
+  // Fungal blight tiles (Blight Warden) — BOTH timer stages share one art
+  // (`green_blight_tile` in the tiles sheet); the remaining-turns badge is
+  // drawn by BoardPlaceholder from the type id (fungal_2 / fungal_1).
+  tile_fungal_2: 'green_blight_tile',
+  tile_fungal_1: 'green_blight_tile',
   // ── Battle portraits ──
   // The player/enemy portrait sheets now name their sprites `<id>_portrait_floating`
   // (was `portrait_<id>`). The battle panes still request the stable `portrait_<id>`
@@ -233,6 +238,7 @@ const ASSET_ALIASES = {
   portrait_acolyte:           'acolyte_portrait_floating',
   portrait_abomination:       'abomination_portrait_floating',
   portrait_thrall:            'thrall_portrait_floating',
+  portrait_blight_warden:     'blight_warden_portrait_floating',
   // NOTE: orc / shadow_weaver / stone_gargoyle have no portrait in the new sheets,
   // so their panes fall back to the `placeholder` asset until art is added.
 };

@@ -63,21 +63,40 @@ export default class PassiveSystem {
 
   /**
    * Emit a passive trigger event. Resolves every matching relic effect
-   * on the combatant indicated by `payload.side`.
+   * on the combatant indicated by `payload.side` — then a second pass lets
+   * the OTHER side's relics react to the same event if an effect opts in
+   * with `anySide: true` (e.g. Vampiric Roots: heal whenever ANYONE matches
+   * Green). anySide effects should be ATOMIC (EffectResolver) — board-touching
+   * handlers read payload.side as "the acting side", which for an anySide
+   * firing is the opponent, not the relic owner.
    *
    * @param {string} triggerName — TRIGGER_TYPES value (e.g. 'onTakeDamage')
    * @param {object} payload — { side: 'player'|'enemy', ...event-specific data }
    */
   dispatch(triggerName, payload) {
     if (!triggerName || !payload || !payload.side) return;
+    // Normal pass: the event side's own relics (every matching effect).
+    this._dispatchToOwner(payload.side, triggerName, payload, false);
+    // anySide pass: the opposite side's relics, `anySide: true` effects only.
+    const other = payload.side === 'player' ? 'enemy' : 'player';
+    this._dispatchToOwner(other, triggerName, payload, true);
+  }
 
-    const owner = this._getSideState(payload.side);
+  /**
+   * Resolve `ownerSide`'s relic effects for a trigger. When `anySideOnly` is
+   * set, only effects flagged `anySide: true` fire (the cross-side pass).
+   * ctx.caster is always the RELIC OWNER (heals/armor land on them) — the
+   * trigger payload keeps its original `side` (the acting side) for conditions.
+   * @private
+   */
+  _dispatchToOwner(ownerSide, triggerName, payload, anySideOnly) {
+    const owner = this._getSideState(ownerSide);
     if (!owner) return;
 
     const relics = owner.relics || [];
     if (relics.length === 0) return;
 
-    const opponent = this._getSideState(payload.side === 'player' ? 'enemy' : 'player');
+    const opponent = this._getSideState(ownerSide === 'player' ? 'enemy' : 'player');
     const ctx = {
       caster: owner,
       target: opponent,
@@ -98,6 +117,7 @@ export default class PassiveSystem {
       let relicFired = false;
       for (const effect of effects) {
         if (effect.trigger !== triggerName) continue;
+        if (anySideOnly && !effect.anySide) continue;
         // Optional payload gate — lets a relic react only to specific match
         // types / sizes (e.g. Scythe: only skull matches of 3+).
         if (effect.condition && !this._passesCondition(effect.condition, payload)) continue;
@@ -119,7 +139,7 @@ export default class PassiveSystem {
       }
       // Animate the relic icon once if any of its effects fired this dispatch.
       if (relicFired && this.onRelicTrigger) {
-        this.onRelicTrigger(relic.id, payload.side);
+        this.onRelicTrigger(relic.id, ownerSide);
       }
     }
   }

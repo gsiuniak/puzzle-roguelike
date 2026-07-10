@@ -10,6 +10,7 @@ import cyclops from './cyclops.js';
 // import stoneGargoyle from './stoneGargoyle.js'; // disabled — no portrait in the new sheet
 import orcTaskmaster from './orcTaskmaster.js';
 import chokeweed from './chokeweed.js';
+import blightWarden from './blightWarden.js';
 import goresnoutTrackers from './goresnoutTrackers.js';
 import abomination from './abomination.js';
 import thrall from './thrall.js';
@@ -34,13 +35,13 @@ import lordMalakor from './lordMalakor.js';
  * floor's roster; selectEnemyForNode splits by the node's required type.
  */
 const ACT1_FLOOR_SPAWNS = {
-  1:  ['acolyte', 'thrall'],
-  2:  ['acolyte', 'thrall'],
+  1:  [ 'blight_warden'],
+  2:  ['blight_warden'],
   3:  ['thrall', 'chokeweed'],
   4:  ['chokeweed', 'cyclops'],
-  5:  ['chokeweed', 'goresnout_trackers', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
-  6:  ['goresnout_trackers', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
-  7:  ['goresnout_trackers', 'abomination', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
+  5:  ['chokeweed', 'goresnout_trackers', 'blight_warden', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
+  6:  ['goresnout_trackers', 'blight_warden', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
+  7:  ['goresnout_trackers', 'abomination', 'blight_warden', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
   8:  [ 'orc_taskmaster', 'sanguinePhoenix'],
   9:  ['goresnout_trackers', 'abomination', 'orc_taskmaster', 'sanguinePhoenix'],
   10: ['lordMalakor'],
@@ -57,6 +58,7 @@ const ACT1_ENEMIES = [
   // stoneGargoyle,
   orcTaskmaster,
   chokeweed,
+  blightWarden,
   goresnoutTrackers,
   abomination,
   thrall,
@@ -76,6 +78,7 @@ export {
   // stoneGargoyle,
   orcTaskmaster,
   chokeweed,
+  blightWarden,
   goresnoutTrackers,
   abomination,
   thrall,

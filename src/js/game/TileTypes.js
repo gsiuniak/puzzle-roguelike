@@ -43,6 +43,18 @@ export const TILE_TYPES = {
   // the player WANTS to clear them: clearing all eggs within one turn wins, while
   // any egg left at the deadline destroys them and revives the boss.
   SANGUINE_EGG: { id: 'sanguine_egg', isSkull: false, isWild: true, color: '#a01a2a', particleColor: '#e23a4a', spawnWeight: 0 },
+  // FUNGAL tiles (the Blight Warden's Blighted Growth) — effect-only (weight 0),
+  // GREEN-AFFINE: in match detection they count as Green (matchable with Green
+  // tiles or other Fungal tiles — see BoardModel._scanLineRuns; a match that
+  // contains them resolves as a GREEN match, awarding green mana per tile).
+  // The remaining turn timer is encoded in the TYPE ID (fungal_2 → fungal_1 →
+  // explode) so it rides gravity/swap/clone for free; BattleController
+  // ._tickFungalTiles ages them at each ENEMY turn start and EXPLODES expired
+  // ones into a Skull + 2 fresh fungal_2 tiles. `isInert` keeps a raw
+  // (non-match) destroy from awarding anything — the green-class matching above
+  // bypasses inert semantics because 'fungal_*' is never its own scan class.
+  FUNGAL_2: { id: 'fungal_2', isSkull: false, isInert: true, isFungal: true, fungalTimer: 2, color: '#5a8a3a', particleColor: '#7ec850', spawnWeight: 0 },
+  FUNGAL_1: { id: 'fungal_1', isSkull: false, isInert: true, isFungal: true, fungalTimer: 1, color: '#5a8a3a', particleColor: '#7ec850', spawnWeight: 0 },
 };
 
 /** Quick array of mana color IDs (non-skull) */
@@ -101,7 +113,28 @@ export function isWild(typeId) {
 }
 
 /**
+ * Check if a tile type is a Fungal blight tile (fungal_2 / fungal_1) — the
+ * Blight Warden's timed tiles. Green-affine for matching; see TILE_TYPES doc.
+ * @param {string} typeId
+ * @returns {boolean}
+ */
+export function isFungal(typeId) {
+  return TILE_TYPES[typeId?.toUpperCase()]?.isFungal ?? false;
+}
+
+/**
+ * Remaining turn timer of a Fungal tile type (0 for non-fungal types).
+ * @param {string} typeId
+ * @returns {number}
+ */
+export function fungalTimer(typeId) {
+  return TILE_TYPES[typeId?.toUpperCase()]?.fungalTimer ?? 0;
+}
+
+/**
  * Check if a tile type is a mana color (not a skull, not inert, not wild).
+ * Fungal tiles are inert here (a raw destroy awards nothing) — their green
+ * mana comes only through green-class MATCHES.
  * @param {string} typeId
  * @returns {boolean}
  */

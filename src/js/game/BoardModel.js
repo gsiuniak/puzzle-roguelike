@@ -13,7 +13,7 @@
  *   - fall animation data generation
  */
 
-import { getRandomTileType, getDefaultSpawnWeights, isSkull, isInert, isWild, BOARD_COLS, BOARD_ROWS } from './TileTypes.js';
+import { getRandomTileType, getDefaultSpawnWeights, isSkull, isInert, isWild, isFungal, BOARD_COLS, BOARD_ROWS } from './TileTypes.js';
 
 export default class BoardModel {
   /**
@@ -330,6 +330,14 @@ export default class BoardModel {
    * a line) so existing clutter-clearing behavior is preserved, but wilds do
    * NOT substitute for inert tiles — a Thrall never completes a Disease match.
    *
+   * FUNGAL tiles (fungal_2 / fungal_1, the Blight Warden) are GREEN-AFFINE:
+   * they never form their own scan class (both timer variants must intermatch,
+   * and a raw fungal "class" would double-report runs) — instead every fungal
+   * cell joins the GREEN class: it extends green runs like a green tile, and a
+   * pure-fungal run of 3+ is itself a GREEN match (fungal cells count as
+   * concrete, so no green host tile is required). The emitted typeId is
+   * 'green', so downstream mana/reactor logic sees a normal green match.
+   *
    * @private
    * @param {Array<string|null>} line - tile ids along the line (null = empty)
    * @returns {Array<{ typeId: string, idxs: number[] }>} runs by line index
@@ -342,22 +350,29 @@ export default class BoardModel {
     // are included but only ever match as themselves — see allowWild below).
     // LOCKED colors are skipped entirely so they can't form a run (denial). A
     // wild also can't complete a locked color's run, since the color is absent
-    // from `colors`.
+    // from `colors`. Fungal tiles join the GREEN class instead of forming
+    // their own (a locked green also locks fungal matching — consistent).
     const colors = new Set();
+    let hasFungal = false;
     for (const t of line) {
-      if (t && !isWild(t) && !this.isColorLocked(t)) colors.add(t);
+      if (!t) continue;
+      if (isFungal(t)) { hasFungal = true; continue; }
+      if (!isWild(t) && !this.isColorLocked(t)) colors.add(t);
     }
+    if (hasFungal && !this.isColorLocked('green')) colors.add('green');
 
     for (const c of colors) {
       const allowWild = !isInert(c); // wilds never substitute for inert tiles
+      const allowFungal = c === 'green'; // fungal counts as (concrete) green
       let i = 0;
       while (i < L) {
         const cell = line[i];
-        if (cell === c || (allowWild && isWild(cell))) {
+        if (cell === c || (allowWild && isWild(cell)) || (allowFungal && isFungal(cell))) {
           let j = i;
           let hasConcrete = false;
-          while (j < L && (line[j] === c || (allowWild && isWild(line[j])))) {
-            if (line[j] === c) hasConcrete = true;
+          while (j < L && (line[j] === c || (allowWild && isWild(line[j]))
+                           || (allowFungal && isFungal(line[j])))) {
+            if (line[j] === c || (allowFungal && isFungal(line[j]))) hasConcrete = true;
             j++;
           }
           if (j - i >= 3 && hasConcrete) {

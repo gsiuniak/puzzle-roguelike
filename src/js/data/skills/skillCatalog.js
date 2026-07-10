@@ -469,6 +469,24 @@ const SKILL_CATALOG = {
       { effectType: 'gain_attack', gainAttack: { amount: 5 } },
     ],
   },
+
+  // Blight Warden — floods the board with timed Fungal tiles (they explode into
+  // Skulls + spread more blight if left unchecked; see TILE_TYPES + decision
+  // #46). avoidMatches keeps the fresh blight from instantly self-resolving
+  // into free green matches (which would heal the Warden via Vampiric Roots).
+  // Sound reuses the generic green-create clip (no dedicated SFX authored yet).
+  blighted_growth: {
+    id: 'blighted_growth',
+    name: 'Blighted Growth',
+    description: 'Create 6 [[Fungal Tiles]].\nGain an [[extra turn]].',
+    icon: 'skill_blighted_growth',
+    sound: 'sfx_generic_create_green_1',
+    cost: { green: 6 },
+    effects: [
+      { effectType: 'create_tiles', createTiles: { type: 'fungal_2', amount: 6, avoidMatches: true } },
+      { effectType: 'extra_turn' },
+    ],
+  },
 };
 
 /**

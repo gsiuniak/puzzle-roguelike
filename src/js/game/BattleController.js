@@ -13,7 +13,7 @@ import MatchResolver, { SKILL_EFFECT_TYPES } from './MatchResolver.js';
 import CombatLog from './CombatLog.js';
 import EnemyAI from './EnemyAI.js';
 import { chooseEnemyAction } from './customEnemyAi.js';
-import { TILE_TYPES, isSkull, MANA_COLORS } from './TileTypes.js';
+import { TILE_TYPES, isSkull, isFungal, MANA_COLORS } from './TileTypes.js';
 import { getStatusDef } from '../data/statusEffects.js';
 import PassiveSystem from '../systems/PassiveSystem.js';
 import TRIGGER_TYPES from '../systems/TriggerTypes.js';
@@ -83,6 +83,12 @@ const STATUS_DAMAGE_MODS = {
 };
 /** Poison stacks divide by this after each tick (decision #39). */
 const POISON_DECAY_DIVISOR = 2;
+/**
+ * Fungal tiles spread this many fresh fungal_2 tiles per exploded fungal_1
+ * (Blight Warden — see _tickFungalTiles). The growth is intentionally
+ * exponential if left unchecked; the board size is the natural cap.
+ */
+const FUNGAL_SPREAD_PER_TILE = 2;
 /** Screen shake reaches full intensity at this fraction of the target's max HP. */
 const SHAKE_FULL_AT_HP_FRACTION = 0.20;
 
@@ -1618,7 +1624,13 @@ export default class BattleController {
    * Execute a CREATE_TILES effect: convert random non-target tiles into
    * the requested type. Does NOT award mana or deal damage.
    * After conversion, checks for matches and enters RESOLVING if any found.
-   * @param {object} effect - effect definition with createTiles: { amount, type }
+   *
+   * `createTiles.avoidMatches` (opt-in, e.g. Blighted Growth's Fungal tiles):
+   * tiles are placed one at a time, each preferring a position that would NOT
+   * immediately form a match — same safe-spawn semantics as the passive path
+   * (_applyPassiveCreateTiles). Falls back to any replaceable tile per step.
+   *
+   * @param {object} effect - effect definition with createTiles: { amount, type, avoidMatches? }
    * @param {string} side - 'player' or 'enemy'
    * @param {string} skillName - skill name for log messages
    */
@@ -1638,19 +1650,42 @@ export default class BattleController {
       return;
     }
 
-    // 1. Find tiles NOT already of the target type
-    const candidates = this.board.getTilesNotOfType(targetType);
+    let selected;
+    let convertedCount;
+    if (createTiles.avoidMatches) {
+      // Safe-spawn path: one at a time so each check sees prior placements.
+      selected = [];
+      for (let i = 0; i < amount; i++) {
+        let candidates = this._createTileCandidates(targetType);
+        if (candidates.length === 0) break;
+        const safe = candidates.filter(
+          (p) => !this.board.positionCreatesMatch(p.col, p.row, targetType)
+        );
+        if (safe.length > 0) candidates = safe;
+        const [chosen] = BoardModel.pickRandomTiles(candidates, 1);
+        if (!chosen) break;
+        if (this.board.convertTilesToType([chosen], targetType) > 0) selected.push(chosen);
+      }
+      convertedCount = selected.length;
+      if (convertedCount === 0) {
+        this.log.add(`No tiles to convert for ${skillName} — board is all ${targetType}.`);
+        return;
+      }
+    } else {
+      // 1. Find tiles NOT already of the target type
+      const candidates = this._createTileCandidates(targetType);
 
-    if (candidates.length === 0) {
-      this.log.add(`No tiles to convert for ${skillName} — board is all ${targetType}.`);
-      return;
+      if (candidates.length === 0) {
+        this.log.add(`No tiles to convert for ${skillName} — board is all ${targetType}.`);
+        return;
+      }
+
+      // 2. Randomly select up to `amount`
+      selected = BoardModel.pickRandomTiles(candidates, amount);
+
+      // 3. Convert the selected tiles
+      convertedCount = this.board.convertTilesToType(selected, targetType);
     }
-
-    // 2. Randomly select up to `amount`
-    const selected = BoardModel.pickRandomTiles(candidates, amount);
-
-    // 3. Convert the selected tiles
-    const convertedCount = this.board.convertTilesToType(selected, targetType);
     this.log.add(`${skillName} converts ${convertedCount} tiles to ${targetType}.`);
 
     // 4. Capture converted positions for visual feedback (BEFORE _beginResolving clears highlightCells)
@@ -1667,6 +1702,23 @@ export default class BattleController {
       this._swapTriggerPos = null;
       this._beginResolving(side, analysis);
     }
+  }
+
+  /**
+   * Candidate positions for creating `targetType` tiles: any tile not already
+   * of that type — and never a FUNGAL tile when creating fungal (fungal_2 /
+   * fungal_1 are the same logical tile at different timer stages, so a new
+   * fungal must not overwrite an aging one). Shared by the skill create path,
+   * the passive create path, and the fungal explosion spread.
+   * @param {string} targetType
+   * @returns {Array<{col:number, row:number}>}
+   */
+  _createTileCandidates(targetType) {
+    let candidates = this.board.getTilesNotOfType(targetType);
+    if (isFungal(targetType)) {
+      candidates = candidates.filter((p) => !isFungal(this.board.get(p.col, p.row)));
+    }
+    return candidates;
   }
 
   /**
@@ -2216,6 +2268,14 @@ export default class BattleController {
     // Dispatch onTurnStart AFTER state is set so relic effects can
     // observe the active side correctly.
     this.passives.dispatch(TRIGGER_TYPES.ON_TURN_START, { side });
+
+    // Fungal blight timers (Blight Warden) age at the START of the ENEMY's
+    // turn: fungal_2 → fungal_1, and expired fungal_1 tiles EXPLODE (Skull in
+    // place + 2 fresh fungal_2 each). Runs AFTER the onTurnStart dispatch so a
+    // turn-start passive cascade can't be clobbered mid-flight (_tickFungalTiles
+    // no-ops unless the state is still a plain turn). The explosion happens on
+    // the enemy's turn, so freshly-formed skull lines are the ENEMY's to use.
+    if (side === 'enemy') this._tickFungalTiles();
 
     // If the player's turn begins with no possible move and no castable skill
     // (e.g. the board is fully locked), auto-pass so the turn cycles and locks
@@ -3207,6 +3267,91 @@ export default class BattleController {
   }
 
   /**
+   * Age every FUNGAL tile's timer at the start of the ENEMY's turn (called from
+   * _completeTurnIntro): fungal_2 → fungal_1, and every EXPIRED fungal_1
+   * EXPLODES — it is replaced by a Skull in place and spreads 2 fresh fungal_2
+   * tiles elsewhere (safe-spawn placement, never overwriting other fungal or
+   * the just-created skulls). See TILE_TYPES (the timer is encoded in the type
+   * id, so it rides gravity/swap/clone for free) and decision #46.
+   *
+   * If the new Skulls line up a match, the cascade resolves as TURN SETUP via
+   * the _resumeTurnAfterResolve flag (same machinery as Chokeweed Sap): the
+   * enemy is the active side, so skull damage hits the player, then the enemy
+   * still takes its normal action — and no extra turn can be granted by it.
+   *
+   * Mutations are surfaced through _convertedTilePositions (conversion shimmer)
+   * — the skulls + spread tiles read as transformations, not destructions.
+   */
+  _tickFungalTiles() {
+    // Only tick on a plain turn — if a turn-start passive already kicked off a
+    // resolution, hold the timers this turn rather than mutate mid-cascade.
+    const atTurnStart = this.state === BattleState.PLAYER_TURN ||
+                        this.state === BattleState.ENEMY_TURN;
+    if (!atTurnStart) return;
+
+    // Snapshot BOTH stages first — aging must never make a tile explode in the
+    // same tick it was demoted.
+    const aging = this.board.getTilesOfType('fungal_2');
+    const exploding = this.board.getTilesOfType('fungal_1');
+    if (aging.length === 0 && exploding.length === 0) return;
+
+    const converted = [];
+
+    // 1) Age: fungal_2 → fungal_1.
+    if (aging.length > 0) {
+      this.board.convertTilesToType(aging, 'fungal_1');
+      for (const p of aging) converted.push({ col: p.col, row: p.row, typeId: 'fungal_1' });
+    }
+
+    // 2) Explode: each expired fungal becomes a Skull in place...
+    if (exploding.length > 0) {
+      this.board.convertTilesToType(exploding, 'skull');
+      for (const p of exploding) converted.push({ col: p.col, row: p.row, typeId: 'skull' });
+
+      // ...and spreads 2 fresh fungal_2 tiles. Safe-spawn placement (prefer
+      // no-match spots, re-checked per placement); never overwrites other
+      // fungal (_createTileCandidates) or the skulls just created.
+      const skullKeys = new Set(exploding.map((p) => `${p.col},${p.row}`));
+      const spreadCount = exploding.length * FUNGAL_SPREAD_PER_TILE;
+      let spread = 0;
+      for (let i = 0; i < spreadCount; i++) {
+        let candidates = this._createTileCandidates('fungal_2')
+          .filter((p) => !skullKeys.has(`${p.col},${p.row}`));
+        if (candidates.length === 0) break;
+        const safe = candidates.filter(
+          (p) => !this.board.positionCreatesMatch(p.col, p.row, 'fungal_2')
+        );
+        if (safe.length > 0) candidates = safe;
+        const [chosen] = BoardModel.pickRandomTiles(candidates, 1);
+        if (!chosen) break;
+        if (this.board.convertTilesToType([chosen], 'fungal_2') > 0) {
+          converted.push({ col: chosen.col, row: chosen.row, typeId: 'fungal_2' });
+          spread++;
+        }
+      }
+      this.log.add(
+        `${exploding.length} Fungal tile(s) burst into Skulls` +
+        (spread > 0 ? `, spreading ${spread} more!` : `!`)
+      );
+    }
+
+    // Surface every transformation for the conversion shimmer.
+    this._convertedTilePositions = (this._convertedTilePositions || []).concat(converted);
+
+    // The new Skulls may line up a match — resolve it as turn setup (the
+    // active side is the enemy: skull damage hits the player), then resume
+    // the enemy's normal action. Same flow as _applyPassiveConvertRandomTiles.
+    if (exploding.length > 0) {
+      const analysis = this.resolver.analyzeMatches(this.board, this._activeState());
+      if (analysis) {
+        this._swapTriggerPos = null;
+        this._resumeTurnAfterResolve = true;
+        this._beginResolving(this.activeSide, analysis);
+      }
+    }
+  }
+
+  /**
    * Create N tiles of a type by converting random non-matching tiles in place
    * (Infected Tooth: "create a Disease tile after dealing damage", on
    * onDealDamage). Unlike the CREATE_TILES skill, this does NOT analyze for
@@ -3240,7 +3385,7 @@ export default class BattleController {
     // Place tiles one at a time so safe-spawn checks see prior placements.
     const placed = [];
     for (let i = 0; i < amount; i++) {
-      let candidates = this.board.getTilesNotOfType(type);
+      let candidates = this._createTileCandidates(type);
       if (candidates.length === 0) break;
       if (avoidMatches) {
         const safe = candidates.filter(

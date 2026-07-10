@@ -118,7 +118,14 @@ export function applyEffect(effect, ctx) {
         : 0;
       // Opt-in stat scaling (effect.heal.scaling): + floored Magic/Attack bonus
       // from the healer. No `scaling` field → flat (unchanged).
-      const amount = scaledAmount(base, effect.heal && effect.heal.scaling, caster);
+      let amount = scaledAmount(base, effect.heal && effect.heal.scaling, caster);
+      // Opt-in per-count scaling (effect.heal.perCount): multiply by the
+      // trigger payload's `count` — "heal N per tile matched" relics
+      // (Vampiric Roots on onTileMatchType). No payload count → ×1.
+      if (effect.heal && effect.heal.perCount
+          && ctx.payload && typeof ctx.payload.count === 'number') {
+        amount *= Math.max(0, ctx.payload.count);
+      }
       if (amount <= 0) return true;
       const before = caster.hp;
       caster.hp = Math.min(caster.maxHp, caster.hp + amount);
