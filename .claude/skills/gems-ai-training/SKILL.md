@@ -28,7 +28,11 @@ are seeded — parallelism never changes numbers.
    Vite build ships it, so promoting a new champion upgrades the game's hints automatically).
    Use `reports/promote-champion.mjs` (stamps provenance, writes the new location). Other
    keeper weights still go to `sim/toolbench/weights/`. `reports/` is gitignored — never
-   leave the only copy there. Champion: ~45% avg run survival; greedy AI = 2.5%.
+   leave the only copy there. Champion (2026-07-10 fungal-trained, genome 30→32 with
+   fungalClear/oppMatchHeal): 40.0%±1.7 fresh-seed run survival vs incumbent 33.3% /
+   defaults 25.6% / greedy 0.6% — absolute numbers dropped vs the pre-Blight-Warden era
+   because the WORLD got harder, not the policy. train.mjs now CHECKPOINTS
+   `<out>.ckpt.json` after every generation, so a killed run keeps its bestEver.
    (`formula.mjs` itself is a re-export shim of `src/js/game/ai/formulaPolicy.js` — edit the
    src file; every toolbench import keeps working.)
 

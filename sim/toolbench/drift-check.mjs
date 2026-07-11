@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ENEMY_HP_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS,
   MAGIC_MANA_PER_POINT, STATUS_DAMAGE_MODS, POISON_DECAY_DIVISOR, DEFAULT_GROWTH_PLAN,
+  FUNGAL_SPREAD_PER_TILE,
 } from './engine.mjs';
 import { DEBUFF_POWER_MULT } from '../../src/js/data/skillSynthesizer.js';
 
@@ -69,6 +70,7 @@ const bc = read('src/js/game/BattleController.js');
 check('MAGIC_MANA_PER_POINT (BattleController)', MAGIC_MANA_PER_POINT, parseNumber(bc, 'MAGIC_MANA_PER_POINT'));
 check('POISON_DECAY_DIVISOR (BattleController)', POISON_DECAY_DIVISOR, parseNumber(bc, 'POISON_DECAY_DIVISOR'));
 check('STATUS_DAMAGE_MODS (BattleController)', STATUS_DAMAGE_MODS, parseObject(bc, 'STATUS_DAMAGE_MODS'));
+check('FUNGAL_SPREAD_PER_TILE (BattleController)', FUNGAL_SPREAD_PER_TILE, parseNumber(bc, 'FUNGAL_SPREAD_PER_TILE'));
 
 const bs = read('src/js/ui/BattleScene.js');
 check('DEFAULT_GROWTH_PLAN (BattleScene)', DEFAULT_GROWTH_PLAN, parseObject(bs, 'DEFAULT_GROWTH_PLAN'));

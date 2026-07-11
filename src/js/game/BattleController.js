@@ -833,6 +833,9 @@ export default class BattleController {
       skills: s.skills || [],
       statuses: s.statuses || [],
       dynAtkRules: s._attackPerManaRules || [],
+      // Read-only: the policy prices opponent match-heal relics (Vampiric
+      // Roots' anySide heal — decision #46) off these.
+      relics: s.relics || [],
       _skullDamageBonus: s._skullDamageBonus || 0,
     });
     return {

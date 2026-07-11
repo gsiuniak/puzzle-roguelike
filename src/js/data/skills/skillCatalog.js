@@ -477,13 +477,13 @@ const SKILL_CATALOG = {
   blighted_growth: {
     id: 'blighted_growth',
     name: 'Blighted Growth',
-    description: 'Create 3 [[Fungal Tiles]].\nDeal <<7>> [[damage]].\nGain an [[extra turn]].',
+    description: 'Create 2 [[Fungal Tiles]].\nDeal <<7>> [[damage]].\nGain an [[extra turn]].',
     icon: 'skill_blighted_growth',
     sound: 'skill_blighted_growth',
     cost: { green: 8 },
     effects: [
       { effectType: 'damage', damage: { amount: 7, scaling: { attack: DAMAGE_SCALING_PRESETS._100 } } },
-      { effectType: 'create_tiles', createTiles: { type: 'fungal_2', amount: 3, avoidMatches: true } },
+      { effectType: 'create_tiles', createTiles: { type: 'fungal_2', amount: 2, avoidMatches: true } },
       { effectType: 'extra_turn' },
     ],
   },

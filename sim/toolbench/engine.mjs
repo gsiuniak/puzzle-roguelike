@@ -54,6 +54,7 @@
  * MIRRORED CONSTANTS (not exported by their homes — keep in sync):
  *   MAGIC_MANA_PER_POINT (9)                          ← src/js/game/BattleController.js
  *   STATUS_DAMAGE_MODS, POISON_DECAY_DIVISOR (2)      ← src/js/game/BattleController.js
+ *   FUNGAL_SPREAD_PER_TILE (2)                        ← src/js/game/BattleController.js
  */
 
 import BoardModel from '../../src/js/game/BoardModel.js';
@@ -61,7 +62,7 @@ import MatchResolver, {
   calculateMatchedSkullDamage,
   calculateDestroyedSkullDamage,
 } from '../../src/js/game/MatchResolver.js';
-import { MANA_COLORS, isSkull, BOARD_COLS, BOARD_ROWS } from '../../src/js/game/TileTypes.js';
+import { MANA_COLORS, isSkull, isFungal, BOARD_COLS, BOARD_ROWS } from '../../src/js/game/TileTypes.js';
 import { scaledBonus } from '../../src/js/data/scalingConfig.js';
 import SKILL_CATALOG from '../../src/js/data/skills/skillCatalog.js';
 import RELIC_CATALOG from '../../src/js/data/relics/relicCatalog.js';
@@ -81,6 +82,8 @@ export const MAGIC_MANA_PER_POINT = 9;
 export const POISON_DECAY_DIVISOR = 2;
 export const STATUS_DAMAGE_MODS = { brittleMult: 1.5, intangibleCap: 1, berserkMult: 2 };
 export const DEFAULT_GROWTH_PLAN = { maxHp: 4, startingAttack: 1 };
+// Fungal explosion spread (Blight Warden) — mirrors BattleController (decision #46).
+export const FUNGAL_SPREAD_PER_TILE = 2;
 
 const resolver = new MatchResolver();
 const clampFloor = (f) => Math.max(1, Math.min(FLOOR_COUNT, f | 0));
@@ -307,15 +310,25 @@ export class Battle {
 
   /* ── passive dispatch (subset used by shipped relics) ── */
   _passives(c, trigger, payload = {}) {
-    for (const relic of c.relics) for (const ef of relic.effects || []) {
+    // Normal pass: the acting side's own relics. Then the anySide pass: the
+    // OPPOSITE side's relics may opt in (effect.anySide) to react to this
+    // side's events — Vampiric Roots heals whenever ANYONE matches green.
+    // Mirrors PassiveSystem._dispatchToOwner (decision #46).
+    this._passivesFor(c, trigger, payload, false);
+    this._passivesFor(this.other(c), trigger, payload, true);
+  }
+
+  _passivesFor(owner, trigger, payload, anySideOnly) {
+    for (const relic of owner.relics) for (const ef of relic.effects || []) {
       if (ef.trigger !== trigger) continue;
+      if (anySideOnly && !ef.anySide) continue;
       const cond = ef.condition || null;
       if (cond) {
         if (cond.typeId && payload.typeId !== cond.typeId) continue;
         if (cond.minCount && (payload.count || 0) < cond.minCount) continue;
         if (cond.color && payload.color !== cond.color) continue;
       }
-      this._resolvePassive(c, ef, payload);
+      this._resolvePassive(owner, ef, payload);
     }
   }
 
@@ -341,7 +354,11 @@ export class Battle {
       }
       case 'heal': {
         const h = ef.heal || {};
-        c.hp = Math.min(c.maxHp, c.hp + (h.amount || 0) + scaledBonus(h.scaling, c));
+        let amt = (h.amount || 0) + scaledBonus(h.scaling, c);
+        // perCount: multiply by the trigger payload's count — "heal N per tile
+        // matched" (Vampiric Roots). Mirrors EffectResolver (decision #46).
+        if (h.perCount && typeof payload.count === 'number') amt *= Math.max(0, payload.count);
+        c.hp = Math.min(c.maxHp, c.hp + amt);
         break;
       }
       case 'gain_attack': c.attack += ((ef.gainAttack && ef.gainAttack.amount) || 1); break;
@@ -432,27 +449,58 @@ export class Battle {
     }
   }
 
+  /**
+   * Place `amount` tiles of `type` by converting random tiles in place —
+   * mirrors BattleController's placement rules (decision #46): one at a time
+   * (safe-spawn checks see prior placements when avoidMatches), and creating
+   * FUNGAL never overwrites existing fungal (fungal_2/fungal_1 are the same
+   * logical tile at different timer stages — _createTileCandidates).
+   * @returns {Array<{col,row}>} the positions actually converted
+   */
+  _placeTiles(type, amount, avoidMatches = false, excludeKeys = null) {
+    const placed = [];
+    for (let i = 0; i < amount; i++) {
+      let candidates = this.board.getTilesNotOfType(type);
+      if (isFungal(type)) candidates = candidates.filter((p) => !isFungal(this.board.get(p.col, p.row)));
+      if (excludeKeys) candidates = candidates.filter((p) => !excludeKeys.has(`${p.col},${p.row}`));
+      if (candidates.length === 0) break;
+      if (avoidMatches) {
+        const safe = candidates.filter((p) => !this.board.positionCreatesMatch(p.col, p.row, type));
+        if (safe.length > 0) candidates = safe;
+      }
+      const [chosen] = BoardModel.pickRandomTiles(candidates, 1);
+      if (!chosen) break;
+      this.board.convertTilesToType([chosen], type);
+      placed.push(chosen);
+    }
+    return placed;
+  }
+
   _passiveCreateTiles(c, ct) {
     const type = ct.type || 'skull';
-    const amount = ct.amount || 1;
-    const candidates = this.board.getTilesNotOfType(type);
-    const chosen = [];
-    if (ct.avoidMatches) {
-      const shuffled = BoardModel.pickRandomTiles(candidates, candidates.length);
-      for (const pos of shuffled) {
-        if (chosen.length >= amount) break;
-        if (!this.board.positionCreatesMatch(pos.col, pos.row, type)) chosen.push(pos);
-      }
-      while (chosen.length < amount && shuffled.length > chosen.length) {
-        const extra = shuffled.find((p) => !chosen.includes(p));
-        if (!extra) break; chosen.push(extra);
-      }
-    } else {
-      chosen.push(...BoardModel.pickRandomTiles(candidates, amount));
-    }
-    this.board.convertTilesToType(chosen, type);
+    const chosen = this._placeTiles(type, ct.amount || 1, !!ct.avoidMatches);
     // onTileCreated (Severed Maxilla)
     for (let i = 0; i < chosen.length; i++) this._passives(c, 'onTileCreated', { typeId: type, count: 1 });
+  }
+
+  /**
+   * Fungal blight timer tick — mirrors BattleController._tickFungalTiles
+   * (decision #46): at the ENEMY's turn start, fungal_2 → fungal_1, and each
+   * expired fungal_1 EXPLODES into a Skull in place + spreads
+   * FUNGAL_SPREAD_PER_TILE fresh fungal_2 (safe-spawn; never onto other fungal
+   * or the just-created skulls). New skull lines resolve as turn setup (enemy
+   * is active — skull damage hits the player; no extra turn).
+   */
+  _tickFungal() {
+    const aging = this.board.getTilesOfType('fungal_2');
+    const exploding = this.board.getTilesOfType('fungal_1');
+    if (aging.length === 0 && exploding.length === 0) return;
+    this.board.convertTilesToType(aging, 'fungal_1');
+    if (exploding.length === 0) return;
+    this.board.convertTilesToType(exploding, 'skull');
+    const skullKeys = new Set(exploding.map((p) => `${p.col},${p.row}`));
+    this._placeTiles('fungal_2', exploding.length * FUNGAL_SPREAD_PER_TILE, true, skullKeys);
+    this._resolveCascade(this.e, { suppressExtraTurn: true });
   }
 
   _onGainMana(c, color, amount) {
@@ -693,10 +741,11 @@ export class Battle {
         }
         case 'shuffle': this.board.shuffle(); break;
         case 'create_tiles': {
+          // avoidMatches (Blighted Growth's fungal) mirrors the game's skill-path
+          // safe spawn; note skill creates do NOT dispatch onTileCreated (parity
+          // with BattleController._executeCreateTiles — only the PASSIVE path does).
           const ct = ef.createTiles || {};
-          const candidates = this.board.getTilesNotOfType(ct.type || 'red');
-          const chosen = BoardModel.pickRandomTiles(candidates, ct.amount || 1);
-          this.board.convertTilesToType(chosen, ct.type || 'red');
+          this._placeTiles(ct.type || 'red', ct.amount || 1, !!ct.avoidMatches);
           needCascade = true;
           break;
         }
@@ -959,6 +1008,9 @@ export class Battle {
     this._tickStatuses(c);
     if (this.p.hp <= 0 || (this.e.hp <= 0 && !this.e.isEgg)) return;
     this._passives(c, 'onTurnStart', {});
+    // Fungal timers age at the ENEMY's turn start, AFTER onTurnStart passives
+    // (mirrors BattleController._completeTurnIntro — decision #46).
+    if (c === this.e) this._tickFungal();
     this._recomputeDynAtk(c);
   }
 

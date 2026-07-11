@@ -37,9 +37,12 @@
  * SEAM): the policy is `(battle, c) => action | null` where `battle` needs
  * only { board, p, e, other(c), canAfford(c, skill), _hasStatus(c, id) } and
  * a combatant needs { hp, maxHp, attack, magic, armor, barrier, block, mana,
- * skills, statuses, dynAtkRules }. The sim's Battle satisfies it natively;
- * the live game builds a tiny facade (BattleController._makeHintFacade).
- * The board is only ever READ + clone()d — never mutated.
+ * skills, statuses, dynAtkRules, relics? }. `relics` is OPTIONAL (resolved
+ * relic defs) — used only to price opponent match-heal relics (Vampiric
+ * Roots' anySide heal); absent → that term is 0. The sim's Battle satisfies
+ * it natively; the live game builds a tiny facade
+ * (BattleController._makeHintFacade). The board is only ever READ + clone()d
+ * — never mutated.
  */
 
 import MatchResolver, { calculateDestroyedSkullDamage } from '../MatchResolver.js';
@@ -63,6 +66,11 @@ export const DEFAULT_FORMULA_WEIGHTS = {
                         // (the last mana toward a cast is worth more than the first)
   lookaheadSelf: 0.4,   // × my best follow-up value on the settled board (root only)
   lookaheadOpp: 0.4,    // × opponent's best reply value on the settled board (penalty)
+  /* fungal blight (Blight Warden, decision #46 — 2026-07-10): */
+  fungalClear: 1.2,     // per fungal tile this action removes (matched OR destroyed) —
+                        // left blight explodes into skulls on the enemy's turn + spreads
+  oppMatchHeal: 0.8,    // penalty × HP the OPPONENT heals from MY matches (anySide
+                        // match-heal relics — Vampiric Roots; raw destroys don't trigger it)
 };
 export const FORMULA_WEIGHT_KEYS = Object.keys(DEFAULT_FORMULA_WEIGHTS);
 
@@ -89,9 +97,15 @@ const costColorsOf = (c) => {
   return m;
 };
 
-/** Deterministic cascade settle on a caller-owned clone — refill OFF. */
+/** Fast fungal check for the settle hot path (isFungal does toUpperCase). */
+const isFungalId = (t) => t === 'fungal_2' || t === 'fungal_1';
+
+/** Deterministic cascade settle on a caller-owned clone — refill OFF.
+ *  Also reports per-typeId matched tile counts (`matchedByType`, feeds the
+ *  opponent match-heal penalty) and how many FUNGAL tiles the cascade cleared
+ *  (`fungalCleared` — fungal cells ride green matches; decision #46). */
 export function settleBoard(board, attacker, maxSteps = 12) {
-  const out = { mana: {}, skullDamage: 0, extraTurn: false, tiles: 0 };
+  const out = { mana: {}, skullDamage: 0, extraTurn: false, tiles: 0, fungalCleared: 0, matchedByType: {} };
   for (let step = 0; step < maxSteps; step++) {
     const a = resolver.analyzeMatches(board, attacker);
     if (!a) break;
@@ -99,6 +113,8 @@ export function settleBoard(board, attacker, maxSteps = 12) {
     out.skullDamage += a.skullDamage;
     if (a.extraTurnTrigger) out.extraTurn = true;
     out.tiles += a.positions.length;
+    for (const m of a.matches) out.matchedByType[m.typeId] = (out.matchedByType[m.typeId] || 0) + m.count;
+    for (const p of a.positions) if (isFungalId(board.get(p.col, p.row))) out.fungalCleared++;
     board.removeTiles(a.positions);
     board.applyGravity();
   }
@@ -174,12 +190,40 @@ function enablesNewCast(c, gained) {
   return false;
 }
 
+/**
+ * HP the OPPONENT would heal from MY matches this settle — anySide match-heal
+ * relics (Vampiric Roots: heal per tile whenever ANYONE matches its condition
+ * type; fungal cells count as green, so clearing blight by MATCHING feeds the
+ * owner — raw destroys don't trigger it). Derived from opp.relics when the
+ * seam provides them (sim Battle + hint facade both do); clamped to the
+ * opponent's missing HP. See decision #46.
+ */
+function oppMatchHealAmount(s, opp) {
+  if (!opp || !opp.relics || !opp.relics.length || !s.matchedByType) return 0;
+  let heal = 0;
+  for (const relic of opp.relics) {
+    for (const ef of relic.effects || []) {
+      if (!ef.anySide || ef.trigger !== 'onTileMatchType' || ef.effectType !== 'heal') continue;
+      const t = ef.condition && ef.condition.typeId;
+      const perTile = ef.heal && ef.heal.perCount ? (ef.heal.amount || 0) : 0;
+      if (t && perTile > 0) heal += (s.matchedByType[t] || 0) * perTile;
+    }
+  }
+  if (heal <= 0) return 0;
+  return Math.min(heal, Math.max(0, (opp.maxHp || 0) - Math.max(0, opp.hp || 0)));
+}
+
 /** Value of a settle outcome for combatant c (shared by swaps + board casts). */
 function settleValue(s, c, opp, w, myColors, oppColors) {
   let v = s.skullDamage * w.skullDamage + manaValue(s.mana, myColors, oppColors, w) + s.tiles * w.tilesCleared;
   if (s.extraTurn) v += w.extraTurn;
   if (s.skullDamage >= oppPool(opp)) v += w.lethal;
   if (enablesNewCast(c, s.mana)) v += w.enablesCast;
+  // Fungal blight (decision #46): clearing timed fungal is defensive value;
+  // matches that heal the opponent (Vampiric Roots) carry a hidden cost.
+  if (s.fungalCleared) v += s.fungalCleared * w.fungalClear;
+  const oppHeal = oppMatchHealAmount(s, opp);
+  if (oppHeal) v -= oppHeal * w.oppMatchHeal;
   return v;
 }
 
@@ -253,13 +297,19 @@ function destroyValue(battle, c, positions, w, myColors, oppColors, depth = 0, c
   const opp = battle.other(c);
   const clone = battle.board.clone();
   const rw = resolver.resolveDestroyedTileRewards(clone, positions, c);
+  // Fungal cleared by the DIRECT destroy (before removal) — destroys clear
+  // blight WITHOUT triggering match-heal relics, the clean counterplay.
+  let fungalDirect = 0;
+  for (const p of positions) if (isFungalId(battle.board.get(p.col, p.row))) fungalDirect++;
   clone.removeTiles(positions);
   clone.applyGravity();
   const s = settleBoard(clone, c);
   let v = (rw.skullDamage + s.skullDamage) * w.skullDamage
     + manaValue(rw.mana, myColors, oppColors, w)
     + manaValue(s.mana, myColors, oppColors, w)
-    + (positions.length + s.tiles) * w.tilesCleared;
+    + (positions.length + s.tiles) * w.tilesCleared
+    + (fungalDirect + (s.fungalCleared || 0)) * w.fungalClear
+    - oppMatchHealAmount(s, opp) * w.oppMatchHeal;
   if (s.extraTurn) {
     v += w.extraTurn;
     const gains = { ...s.mana };

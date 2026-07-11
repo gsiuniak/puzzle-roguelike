@@ -256,6 +256,15 @@ async function main() {
     const meanFit = scored.reduce((a, s) => a + s.fitness, 0) / scored.length;
     history.push({ gen, best: scored[0].fitness, mean: meanFit, bestEver: best.fitness });
     line(`  gen ${String(gen + 1).padStart(2)}/${gens}: screenBest=${(scored[0].fitness * 100).toFixed(1)}% mean=${(meanFit * 100).toFixed(1)}%${confirmNote} bestEver=${(best.fitness * 100).toFixed(1)}% (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+    // CHECKPOINT every generation (2026-07-10): killing a long run mid-flight
+    // used to lose bestEver entirely (the file was only written after the final
+    // gen). `<out>.ckpt.json` always holds the latest confirmed best.
+    const ckptFile = (args.out ? String(args.out) : path.join(DIR, 'reports', 'trained-weights.json')) + '.ckpt.json';
+    fs.writeFileSync(ckptFile, JSON.stringify({
+      evaluator, weights: toW(best.vec), fitness: best.fitness, gen: gen + 1, history,
+      config: { pop, gens, objective, evaluator, hosts, seedWeights: args.seedWeights || null },
+      date: new Date().toISOString(),
+    }, null, 2));
   }
 
   const outDir = path.join(DIR, 'reports');
