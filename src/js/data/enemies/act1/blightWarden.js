@@ -17,12 +17,12 @@ const blightWarden = {
 
   act: 1,
   rarity: 'common',
-  type: 'minion',
+  type: 'elite',
   // floors: derived from act1/index.js FLOOR_SPAWNS (placement is edited there)
 
   hp: 12, // floor-1-equivalent baseline (MapScene scales maxHp by depth) — low on purpose; Vampiric Roots is its real HP pool
   maxHp: 12,
-  attack: 1,
+  attack: 0,
   armor: 0,
   // No starting mana — it builds Green from board matches to fund Blighted Growth.
   mana: { red: 0, blue: 0, green: 8, yellow: 0, purple: 0 },

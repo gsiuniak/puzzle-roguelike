@@ -39,11 +39,11 @@ const ACT1_FLOOR_SPAWNS = {
   2:  ['acolyte', 'thrall'],
   3:  ['thrall', 'chokeweed'],
   4:  ['chokeweed', 'cyclops'],
-  5:  ['chokeweed', 'goresnout_trackers', 'blight_warden', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
-  6:  ['goresnout_trackers', 'blight_warden', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
-  7:  ['goresnout_trackers', 'abomination', 'blight_warden', 'cyclops', 'orc_taskmaster', 'sanguinePhoenix'],
-  8:  [ 'orc_taskmaster', 'sanguinePhoenix', 'blight_warden'],
-  9:  ['goresnout_trackers', 'abomination', 'orc_taskmaster', 'sanguinePhoenix'],
+  5:  ['chokeweed', 'goresnout_trackers', 'blight_warden', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
+  6:  ['goresnout_trackers', 'blight_warden', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
+  7:  ['goresnout_trackers', 'abomination', 'blight_warden', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
+  8:  [  'sanguinePhoenix', 'blight_warden'],
+  9:  ['goresnout_trackers', 'abomination', 'blight_warden', 'sanguinePhoenix'],
   10: ['lordMalakor'],
 };
 
