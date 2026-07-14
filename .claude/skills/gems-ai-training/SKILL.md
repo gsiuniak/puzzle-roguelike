@@ -9,6 +9,12 @@ All commands run from repo root in WSL: `wsl -e bash -lic "cd ~/test/game/gems &
 Everything fans out over a worker pool (cpus−1; `GEMS_POOL_WORKERS` overrides). All tasks
 are seeded — parallelism never changes numbers.
 
+> **Reference vs. procedure.** This skill is the *procedure* — the training/measurement
+> workflow, weights lifecycle, and how to read results. The *reference* (module map, the
+> policy stack and its measured pathway-dominance verdict, the browser-safe contract, the
+> sim-engine mirroring contract) lives in
+> [docs/guides/toolbench.md](../../../docs/guides/toolbench.md).
+
 ## Hard-won invariants (violate = wasted compute)
 
 1. **Run `node sim/toolbench/drift-check.mjs` FIRST.** Exit 1 = mirrored constants drifted

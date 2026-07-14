@@ -13,7 +13,16 @@
  *      data they can react to.
  *
  * Payload conventions (all triggers receive a `side` field — 'player'
- * or 'enemy' — indicating which combatant's relics should be considered):
+ * or 'enemy' — the ACTOR: the combatant whose event this is):
+ *
+ * SCOPE — whose events an effect sees (see PassiveSystem._passesCondition):
+ *   • default            only its OWNER's events.
+ *   • `anySide: true`    ALSO the opponent's events — i.e. ANYONE's (it is a
+ *                        superset: the owner's own events still fire). Vampiric
+ *                        Roots = "whenever ANYONE matches Green".
+ *   • + `condition: { side }`  narrows an anySide effect back to exactly one
+ *                        actor — "only when the PLAYER matches" (decision #47).
+ *   `condition.side` matches the ACTOR (payload.side), NOT the relic's owner.
  *
  *   onBattleStart        payload: { side }
  *                        Conceptually fires once when the battle is set up.

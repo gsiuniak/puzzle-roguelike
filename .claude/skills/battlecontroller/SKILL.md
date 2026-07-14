@@ -5,11 +5,17 @@ description: Rules, recipes, and verification steps for safely amending BattleCo
 
 # Amending BattleController
 
-The battle core was reworked 2026-07 (CLAUDE.md decision #43; full detail in
+The battle core was reworked 2026-07 ([decision #43](../../../docs/decisions/43-battlecontroller-rework-one-cast-pipeline-an-effect.md); full detail in
 [docs/reviews/battlecontroller-rework-2026-07.md](../../../docs/reviews/battlecontroller-rework-2026-07.md);
 design rationale in [docs/reviews/battlescene-battlecontroller-architecture-review.md](../../../docs/reviews/battlescene-battlecontroller-architecture-review.md)).
 This skill encodes the invariants that keep it correct and the recipes for the common
 change types. Read the relevant recipe BEFORE editing.
+
+> **Reference vs. procedure.** This skill is the *procedure* — invariants, recipes,
+> verification. The *reference* (component ownership, the state machine, every
+> `SKILL_EFFECT_TYPES` payload shape, the flow diagrams) lives in
+> [docs/guides/battle-system.md](../../../docs/guides/battle-system.md). Load that guide
+> for "what exists and where"; use this skill for "how to change it safely."
 
 ## Architecture in 30 seconds
 
@@ -27,7 +33,7 @@ change types. Read the relevant recipe BEFORE editing.
   (no enemy uses it yet). The HINT UI moved off MoveAdvisor (2026-07-08):
   BattleScene's "?" button now uses `controller.getSuggestedAction()` — the
   champion FORMULA POLICY (`src/js/game/ai/formulaPolicy.js`, promoted from
-  sim/toolbench) run through the `_makeHintFacade` seam. See CLAUDE.md #45.
+  sim/toolbench) run through the `_makeHintFacade` seam. See [decision #45](../../../docs/decisions/45-the-in-game-hint-system-plays-the.md).
 
 ## Invariants — violate these and you WILL reintroduce a shipped bug
 
@@ -76,7 +82,8 @@ change types. Read the relevant recipe BEFORE editing.
    `BattleController._dispatchTargetedEffect` and give the skill `targeting: 'board_tile'`
    + an `area` in its catalog entry.
 4. If the weave synthesizer should emit it, wire `skillSynthesizer.js` separately.
-5. Update CLAUDE.md §11's SKILL_EFFECT_TYPES row.
+5. Document the payload shape in the `SKILL_EFFECT_TYPES` section of
+   [docs/guides/battle-system.md](../../../docs/guides/battle-system.md).
 
 ### Add a new one-shot visual/SFX event (controller → scene)
 Follow invariant #7 (4 places). Keep the field name and the getState snapshot key
@@ -92,7 +99,7 @@ expire, the stale-flag scrub doesn't run) — that's by design.
 ### Add a status effect
 Catalog entry in `data/statusEffects.js` + behavior checkpoints in the controller
 (`_hasStatus` query at the relevant chokepoint; per-turn effects in
-`_applyStatusTurnStartEffect`; damage mods via `STATUS_DAMAGE_MODS`). See decision #32.
+`_applyStatusTurnStartEffect`; damage mods via `STATUS_DAMAGE_MODS`). See [decision #32](../../../docs/decisions/32-status-effects-are-a-general-data-driven.md).
 
 ### Tune / extend the board AI
 Weights: `MoveAdvisor.DEFAULT_WEIGHTS` (every objective is a named relative weight).
@@ -139,7 +146,14 @@ cascade, an instant skill, AND a targeted destroy.
 
 ## After you edit
 
-Update CLAUDE.md (the §4.3 rows you touched, decision #43 if the architecture moved)
-and, if you implemented another review recommendation, tick it off in the
-IMPLEMENTATION STATUS block of
-`docs/reviews/battlescene-battlecontroller-architecture-review.md`.
+Follow the doc update contract in [CLAUDE.md](../../../CLAUDE.md) §6 — **do not append to
+CLAUDE.md**:
+- Changed how something WORKS (a new effect type, a new condition gate, a new tuning knob)
+  → update [docs/guides/battle-system.md](../../../docs/guides/battle-system.md).
+- Made a DESIGN choice with rationale/tradeoffs → add a new record in
+  [docs/decisions/](../../../docs/decisions/) + a row in its README. Don't rewrite an
+  existing decision; they are history. (Example: #47 extends #46 rather than editing it.)
+- A file now OWNS a behavior it didn't → one line in the CLAUDE.md §4 routing table.
+
+If you implemented another review recommendation, tick it off in the IMPLEMENTATION STATUS
+block of `docs/reviews/battlescene-battlecontroller-architecture-review.md`.

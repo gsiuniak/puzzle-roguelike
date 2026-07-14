@@ -314,11 +314,14 @@ export class Battle {
     // OPPOSITE side's relics may opt in (effect.anySide) to react to this
     // side's events — Vampiric Roots heals whenever ANYONE matches green.
     // Mirrors PassiveSystem._dispatchToOwner (decision #46).
-    this._passivesFor(c, trigger, payload, false);
-    this._passivesFor(this.other(c), trigger, payload, true);
+    // `c` is the ACTOR — the side whose event this is. The game passes it on the
+    // payload as `side`; here it lives on the combatant, so thread it through for
+    // the `condition.side` gate.
+    this._passivesFor(c, trigger, payload, false, c.side);
+    this._passivesFor(this.other(c), trigger, payload, true, c.side);
   }
 
-  _passivesFor(owner, trigger, payload, anySideOnly) {
+  _passivesFor(owner, trigger, payload, anySideOnly, actorSide) {
     for (const relic of owner.relics) for (const ef of relic.effects || []) {
       if (ef.trigger !== trigger) continue;
       if (anySideOnly && !ef.anySide) continue;
@@ -327,6 +330,7 @@ export class Battle {
         if (cond.typeId && payload.typeId !== cond.typeId) continue;
         if (cond.minCount && (payload.count || 0) < cond.minCount) continue;
         if (cond.color && payload.color !== cond.color) continue;
+        if (cond.side && actorSide !== cond.side) continue;
       }
       this._resolvePassive(owner, ef, payload);
     }

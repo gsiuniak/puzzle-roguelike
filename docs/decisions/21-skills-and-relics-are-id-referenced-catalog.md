@@ -1,0 +1,5 @@
+# Decision #21 — Skills and relics are id-referenced + catalog-resolved.
+
+> Extracted verbatim from CLAUDE.md §7 (2026-07-14 split). Historical record — reflects the design at time of writing.
+
+**Skills and relics are id-referenced + catalog-resolved.** Character/enemy definitions store `skills: string[]` and `relics: string[]`. Resolution happens once at battle-state creation: [`createPlayerBattleState`](../../src/js/data/playerStats.js) for players, [`MapScene._transitionToBattle`](../../src/js/scenes/MapScene.js) for enemies (calls `resolveSkillIds` / `resolveRelicIds`). [`BattleController._cloneState`](../../src/js/game/BattleController.js) deep-clones the resolved relics + effect arrays so per-battle mutation cannot leak back to catalogs or runState; it is FIELD-EXPLICIT, so any new battle-state field must be added there or it silently drops (this bit `allSkills` once — the loadout modal's pool — turning unequip into a trash can). Exception: woven skills are catalog-less full objects on `runState.skills`, deep-cloned into the battle state by `createPlayerBattleState` (see rule #16).

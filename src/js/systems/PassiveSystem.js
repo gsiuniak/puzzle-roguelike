@@ -156,6 +156,12 @@ export default class PassiveSystem {
    *   typeId   — payload.typeId must equal this (e.g. 'skull')
    *   minCount — payload.count must be >= this (e.g. 3)
    *   color    — payload.color must equal this (e.g. 'red' for onGainMana)
+   *   side     — payload.side must equal this ('player' | 'enemy'): the side whose
+   *              EVENT this is (the actor), NOT the relic's owner. Only meaningful
+   *              alongside `anySide: true`, which widens an effect to fire on BOTH
+   *              sides' events — pair them to narrow it back to exactly one side
+   *              ("heal when the PLAYER matches skulls" = anySide + side:'player').
+   *              Without `anySide`, an effect already only sees its owner's events.
    * @param {object} condition
    * @param {object} payload
    * @returns {boolean}
@@ -164,6 +170,7 @@ export default class PassiveSystem {
     if (!condition) return true;
     if (condition.typeId != null && payload.typeId !== condition.typeId) return false;
     if (condition.color != null && payload.color !== condition.color) return false;
+    if (condition.side != null && payload.side !== condition.side) return false;
     if (condition.minCount != null &&
         !(typeof payload.count === 'number' && payload.count >= condition.minCount)) {
       return false;
