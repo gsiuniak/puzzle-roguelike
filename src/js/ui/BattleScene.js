@@ -1802,7 +1802,7 @@ export default class BattleScene extends UIPanel {
     const existing = this._smackAnims[side];
     if (existing && !existing.done) return; // don't restart mid-smack
     const rect = pane.getPortraitRect();
-    const reach = rect ? Math.max(30, Math.min(85, rect.w * 0.18)) : 55;
+    const reach = rect ? Math.max(48, Math.min(140, rect.w * 0.30)) : 90;
     const dir = side === 'player' ? 1 : -1; // toward the board / opponent
     this._smackAnims[side] = new PortraitSmackEffect({ dir, reach });
   }

@@ -22,18 +22,18 @@
  * effect contract: construct, call update(dt) each frame, read `done`.
  */
 
-const WINDUP_MS = 140;  // the lift + coil (anticipation)
-const SMACK_MS = 65;    // the drive down/forward — fast
-const RETURN_MS = 300;  // springy settle back
+const WINDUP_MS = 125;  // the lift + coil (anticipation)
+const SMACK_MS = 55;    // the drive down/forward — fast + violent
+const RETURN_MS = 230;  // springy settle back
 
-const WINDUP_BACK_FRAC = 0.15; // coil-back distance as a fraction of `reach`
-const LIFT_FRAC = 0.40;        // how high it rises in windup (fraction of reach)
-const SMACK_OVERSHOOT = 1.12;  // forward drive travels past `reach` by this factor
-const SMACK_DOWN_FRAC = 0.16;  // how far it slams BELOW rest at impact (of reach)
-const SCALE_WINDUP = 1.06;     // scale at the top of the lift
-const SCALE_PEAK = 1.32;       // scale at the moment of impact
-const ROT_PEAK = 0.05;         // small forward-lean accent at impact (radians)
-const RETURN_OVERSHOOT = 1.7;  // ease-out-back springiness on the settle
+const WINDUP_BACK_FRAC = 0.20; // coil-back distance as a fraction of `reach`
+const LIFT_FRAC = 0.60;        // how high it rises in windup (fraction of reach)
+const SMACK_OVERSHOOT = 1.22;  // forward drive travels past `reach` by this factor
+const SMACK_DOWN_FRAC = 0.24;  // how far it slams BELOW rest at impact (of reach)
+const SCALE_WINDUP = 1.08;     // scale at the top of the lift
+const SCALE_PEAK = 1.46;       // scale at the moment of impact
+const ROT_PEAK = 0.07;         // forward-lean accent at impact (radians)
+const RETURN_OVERSHOOT = 2.1;  // ease-out-back springiness on the settle
 
 // Ease-out-back: overshoots 1 then settles. Higher `s` = more spring.
 function easeOutBack(p, s = RETURN_OVERSHOOT) {
