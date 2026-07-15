@@ -1,37 +1,39 @@
 /**
- * PortraitSmackEffect — a punchy "attack lunge" for a combatant portrait.
+ * PortraitSmackEffect — a "lift and smack" attack lunge for a combatant portrait.
  *
  * When a character deals direct damage (skull match or a damaging skill) the
  * BattleScene drives one of these per side. It's a pure transform generator:
  * it owns no drawing. Each frame `update(dt)` (dt in MILLISECONDS, matching the
  * rest of BattleScene's effects) advances a three-beat timeline —
  *
- *   1. windup  — a coiled pull BACK away from the opponent, a slight lean-back
- *      tilt, and a touch of grow (anticipation),
- *   2. strike  — a fast lunge TOWARD the opponent that OVERSHOOTS the reach,
- *      peaking in scale, leaning forward into the hit with a small upward hop,
- *   3. return  — a springy settle back to rest (ease-out-back, a subtle
- *      overshoot past neutral before landing).
+ *   1. windup  — the portrait LIFTS up and coils back away from the opponent,
+ *      growing (anticipation, like raising a hammer),
+ *   2. smack   — a fast drive TOWARD the opponent that also slams DOWN through
+ *      its resting line (overshooting both reach and the floor), peaking in
+ *      scale — the impact,
+ *   3. return  — a springy settle back to rest (ease-out-back, a subtle bounce
+ *      back up past neutral before landing).
  *
  * — exposing the current {scale, dx, dy, rot} via `getTransform()`, which the
- * pane applies about its portrait's center (see CharacterInfoPane
+ * pane applies about its portrait's lower-center (see CharacterInfoPane
  * .setPortraitTransform). `dir` is +1 to lunge RIGHT (the player pane, opponent
- * to its right) or −1 to lunge LEFT (the enemy pane). Externally-managed effect
- * contract: construct, call update(dt) each frame, read `done`.
+ * to its right) or −1 to lunge LEFT (the enemy pane). Vertical motion (the lift
+ * + slam) is the star; rotation is only a small accent. Externally-managed
+ * effect contract: construct, call update(dt) each frame, read `done`.
  */
 
-const WINDUP_MS = 120;  // coiled anticipation
-const STRIKE_MS = 70;   // the lunge — fast + overshoots
+const WINDUP_MS = 140;  // the lift + coil (anticipation)
+const SMACK_MS = 65;    // the drive down/forward — fast
 const RETURN_MS = 300;  // springy settle back
 
-const WINDUP_BACK_FRAC = 0.22; // pull-back distance as a fraction of `reach`
-const STRIKE_OVERSHOOT = 1.12; // strike travels past `reach` by this factor
-const SCALE_WINDUP = 1.05;     // scale at the top of the windup
-const SCALE_PEAK = 1.30;       // scale at the moment of impact
-const HOP_FRAC = 0.10;         // upward hop at impact, as a fraction of `reach`
-const ROT_WINDUP = 0.05;       // lean-BACK tilt during windup (radians)
-const ROT_PEAK = 0.14;         // lean-INTO-the-hit tilt at impact (radians)
-const RETURN_OVERSHOOT = 1.6;  // ease-out-back springiness on the settle
+const WINDUP_BACK_FRAC = 0.15; // coil-back distance as a fraction of `reach`
+const LIFT_FRAC = 0.40;        // how high it rises in windup (fraction of reach)
+const SMACK_OVERSHOOT = 1.12;  // forward drive travels past `reach` by this factor
+const SMACK_DOWN_FRAC = 0.16;  // how far it slams BELOW rest at impact (of reach)
+const SCALE_WINDUP = 1.06;     // scale at the top of the lift
+const SCALE_PEAK = 1.32;       // scale at the moment of impact
+const ROT_PEAK = 0.05;         // small forward-lean accent at impact (radians)
+const RETURN_OVERSHOOT = 1.7;  // ease-out-back springiness on the settle
 
 // Ease-out-back: overshoots 1 then settles. Higher `s` = more spring.
 function easeOutBack(p, s = RETURN_OVERSHOOT) {
@@ -62,30 +64,33 @@ export class PortraitSmackEffect {
     this._t += dt;
     const t = this._t;
     const back = this.reach * WINDUP_BACK_FRAC;
-    const peakDx = this.reach * STRIKE_OVERSHOOT;
+    const lift = this.reach * LIFT_FRAC;
+    const peakDx = this.reach * SMACK_OVERSHOOT;
+    const slam = this.reach * SMACK_DOWN_FRAC;
 
     if (t < WINDUP_MS) {
       const p = t / WINDUP_MS;
-      const e = p * p; // ease-in — coils slowly, snaps at the end
+      const e = 1 - (1 - p) * (1 - p); // ease-out — lifts promptly, hangs at the top
       this.dx = -this.dir * back * e;
+      this.dy = -lift * e;            // rise up
       this.scale = 1 + (SCALE_WINDUP - 1) * e;
-      this.rot = -this.dir * ROT_WINDUP * e; // lean back
-      this.dy = 0;
-    } else if (t < WINDUP_MS + STRIKE_MS) {
-      const p = (t - WINDUP_MS) / STRIKE_MS;
-      const e = 1 - (1 - p) * (1 - p); // ease-out — explosive then eases into impact
-      // Sweep from the windup's −back through to the overshot reach.
+      this.rot = 0;
+    } else if (t < WINDUP_MS + SMACK_MS) {
+      const p = (t - WINDUP_MS) / SMACK_MS;
+      const e = p * p; // ease-in — accelerates into the impact
+      // Forward: sweep from the coiled −back through to the overshot reach.
       this.dx = this.dir * ((peakDx + back) * e - back);
+      // Vertical: drop from the lifted height, overshooting DOWN past rest.
+      this.dy = -lift + (lift + slam) * e;
       this.scale = SCALE_WINDUP + (SCALE_PEAK - SCALE_WINDUP) * e;
-      this.rot = -this.dir * ROT_WINDUP + this.dir * (ROT_PEAK + ROT_WINDUP) * e; // whip forward
-      this.dy = -this.reach * HOP_FRAC * Math.sin(p * Math.PI); // rise + fall hop
-    } else if (t < WINDUP_MS + STRIKE_MS + RETURN_MS) {
-      const p = (t - WINDUP_MS - STRIKE_MS) / RETURN_MS;
+      this.rot = this.dir * ROT_PEAK * e; // slight lean into the hit
+    } else if (t < WINDUP_MS + SMACK_MS + RETURN_MS) {
+      const p = (t - WINDUP_MS - SMACK_MS) / RETURN_MS;
       const e = easeOutBack(p); // springs slightly past neutral, then lands
       this.dx = this.dir * peakDx * (1 - e);
+      this.dy = slam * (1 - e);
       this.scale = SCALE_PEAK + (1 - SCALE_PEAK) * e;
       this.rot = this.dir * ROT_PEAK * (1 - e);
-      this.dy = 0;
     } else {
       this.dx = 0;
       this.dy = 0;
