@@ -272,6 +272,9 @@ export default class CharacterInfoPane extends UIPanel {
     // Refs for fast update
     this._portrait = null;
     this._portraitSlot = null;
+    // External portrait transform (attack "smack" lunge): {scale, dx, dy}
+    // applied about the portrait center in _renderPortrait. Null = identity.
+    this._portraitTransform = null;
     this._infoCol = null;
     this._nameText = null;
     this._tagText = null;
@@ -636,14 +639,39 @@ export default class CharacterInfoPane extends UIPanel {
     // computed above so getPortraitRect()/overlays keep working while hidden.
     const alpha = this._portraitAlpha != null ? this._portraitAlpha : 1;
     if (alpha <= 0) return;
-    if (alpha >= 1) {
+
+    // External transform override (attack "smack" lunge — grow + shove toward
+    // the opponent then settle back). Applied about the portrait center so it
+    // grows/lunges in place; orthogonal to alpha (they can run together).
+    const t = this._portraitTransform;
+    const hasTransform = t && (t.scale !== 1 || t.dx || t.dy || t.rot);
+    if (alpha >= 1 && !hasTransform) {
       this._portrait.renderSelf(ctx);
       return;
     }
     ctx.save();
-    ctx.globalAlpha = (ctx.globalAlpha ?? 1) * alpha;
+    if (alpha < 1) ctx.globalAlpha = (ctx.globalAlpha ?? 1) * alpha;
+    if (hasTransform) {
+      // Pivot about the portrait's lower-center so a grow/tilt plants the feet
+      // and throws the head/shoulders toward the opponent (reads as a lunge).
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h * 0.8;
+      ctx.translate(cx + (t.dx || 0), cy + (t.dy || 0));
+      if (t.rot) ctx.rotate(t.rot);
+      ctx.scale(t.scale || 1, t.scale || 1);
+      ctx.translate(-cx, -cy);
+    }
     this._portrait.renderSelf(ctx);
     ctx.restore();
+  }
+
+  /**
+   * Set the portrait's transform override — {scale, dx, dy} applied about the
+   * portrait center in _renderPortrait. Used by BattleScene to drive the
+   * attack "smack" lunge (see PortraitSmackEffect). Null clears it (identity).
+   */
+  setPortraitTransform(t) {
+    this._portraitTransform = t || null;
   }
 
   /**

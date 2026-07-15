@@ -15,6 +15,7 @@ import TileParticleEffect from './TileParticleEffect.js';
 import HarvestTendrilEffect from './HarvestTendrilEffect.js';
 import BloodSplashEffect from './BloodSplashEffect.js';
 import SpriteSheetAnimation from './SpriteSheetAnimation.js';
+import { PortraitSmackEffect } from './PortraitSmackEffect.js';
 import HintCursorEffect from './HintCursorEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
@@ -375,6 +376,10 @@ export default class BattleScene extends UIPanel {
     this._attackAnim = null;
     /** @type {Object<string,{scale:number,offset:{x:number,y:number}}>|null} */
     this._attackAnimTuning = null;
+    // Portrait "smack" lunge on direct damage — one per side (see
+    // PortraitSmackEffect). Driven in update(); feeds pane.setPortraitTransform.
+    /** @type {{player:PortraitSmackEffect|null, enemy:PortraitSmackEffect|null}} */
+    this._smackAnims = { player: null, enemy: null };
 
     // ── Accumulating damage counters (one per side, over the portrait) ──
     // Each is a DamageCounterEffect that accumulates all damage to that side
@@ -1282,6 +1287,15 @@ export default class BattleScene extends UIPanel {
       this._maybePlayAttackAnim();
     }
 
+    // ── Portrait "smack" lunge ──
+    // On direct damage, the attacking side's portrait grows slightly and shoves
+    // toward the opponent, then settles back. Fires for BOTH sides (the flash
+    // POC above is player-only); the two are orthogonal (transform vs. sprite).
+    if (state.directDamageBySide) {
+      if (state.directDamageBySide.player) this._maybePlaySmack('player');
+      if (state.directDamageBySide.enemy) this._maybePlaySmack('enemy');
+    }
+
     // ── Play skull damage SFX ──
     if (state.skullDamageDealt && this._audioManager) {
       this._audioManager.playSfx('sfx_skull_damage');
@@ -1775,6 +1789,25 @@ export default class BattleScene extends UIPanel {
   }
 
   /**
+   * Start a portrait "smack" lunge for `side` ('player'|'enemy') when it deals
+   * direct damage. The portrait grows + shoves toward the opponent (player
+   * lunges right, enemy lunges left — both toward the board) then settles back.
+   * Guarded so a multi-skull cascade doesn't restart mid-lunge. The reach
+   * scales with the portrait so it reads the same on any character.
+   * @private
+   */
+  _maybePlaySmack(side) {
+    const pane = side === 'player' ? this._playerPane : this._enemyPane;
+    if (!pane || typeof pane.getPortraitRect !== 'function') return;
+    const existing = this._smackAnims[side];
+    if (existing && !existing.done) return; // don't restart mid-smack
+    const rect = pane.getPortraitRect();
+    const reach = rect ? Math.max(30, Math.min(85, rect.w * 0.18)) : 55;
+    const dir = side === 'player' ? 1 : -1; // toward the board / opponent
+    this._smackAnims[side] = new PortraitSmackEffect({ dir, reach });
+  }
+
+  /**
    * Spawn the current character's attack animation over the player portrait,
    * using its live-tuned scale/offset. `debug` makes it loop + hold so it stays
    * on screen for tuning. POC. @private
@@ -2149,6 +2182,19 @@ export default class BattleScene extends UIPanel {
     // fadeOutFrames tail — the two cross-fade at the same rate. No anim → 1.
     if (this._playerPane && this._playerPane.setPortraitAlpha) {
       this._playerPane.setPortraitAlpha(this._attackAnim ? 1 - this._attackAnim.fadeAlpha : 1);
+    }
+
+    // Portrait "smack" lunge (both sides): advance each active effect and push
+    // its transform onto the pane; clear the transform when it finishes.
+    for (const side of ['player', 'enemy']) {
+      const smack = this._smackAnims[side];
+      if (!smack) continue;
+      const pane = side === 'player' ? this._playerPane : this._enemyPane;
+      smack.update(dt);
+      if (pane && pane.setPortraitTransform) {
+        pane.setPortraitTransform(smack.done ? null : smack.getTransform());
+      }
+      if (smack.done) this._smackAnims[side] = null;
     }
 
     // Update particle effects, remove completed ones
