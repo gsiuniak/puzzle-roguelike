@@ -715,6 +715,50 @@ const RELIC_CATALOG = {
       { trigger: 'onTileMatchType', condition: { minCount: 4 }, effectType: 'destroy_random_skulls', destroySkulls: { amount: 1 } },
     ],
   },
+
+  // ── Food relics (damage reduction / flat Max HP) ──────────────────────────
+  beer: {
+    id: 'beer',
+    name: 'Beer',
+    description: 'Reduce all [[damage]] taken by 1.',
+    icon: 'relic_beer',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      // Same effect as Evil Eye — fires before damage is applied and mutates
+      // the trigger payload's `amount` via EffectResolver's reduce_damage.
+      {
+        trigger: 'onIncomingDamage',
+        effectType: 'reduce_damage',
+        reduceDamage: { amount: 1 },
+      },
+    ],
+  },
+
+  // Max HP relics raise `maxHp` AND `hp` together: battle HP starts at full
+  // maxHp, so both must move for the bonus to be usable immediately.
+  ham: {
+    id: 'ham',
+    name: 'Ham',
+    description: 'Gain 10 Max HP.',
+    icon: 'relic_ham',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'modify_stat', modifyStat: { stat: 'maxHp', amount: 10 } },
+      { trigger: 'onBattleStart', effectType: 'modify_stat', modifyStat: { stat: 'hp', amount: 10 } },
+    ],
+  },
+
+  bread: {
+    id: 'bread',
+    name: 'Bread',
+    description: 'Gain 6 Max HP.',
+    icon: 'relic_bread',
+    rarity: RELIC_RARITY.COMMON,
+    effects: [
+      { trigger: 'onBattleStart', effectType: 'modify_stat', modifyStat: { stat: 'maxHp', amount: 6 } },
+      { trigger: 'onBattleStart', effectType: 'modify_stat', modifyStat: { stat: 'hp', amount: 6 } },
+    ],
+  },
 };
 
 /**

@@ -34,7 +34,7 @@ const abomination = {
   armor: 0,
   // Starts with 1 Red so it can Infected Bite on turn one; builds Green via
   // board matches toward Cyst Burst's 10-green cost.
-  mana: { red: 2, blue: 0, green: 0, yellow: 0, purple: 0 },
+  mana: { red: 3, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'abomination', // maps to 'portrait_abomination' asset key
   music: {
     trackKey: 'battle_theme',

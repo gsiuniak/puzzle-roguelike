@@ -281,11 +281,11 @@ const ENEMY_RELIC_CATALOG = {
   bone_armor: {
     id: 'bone_armor',
     name: 'Bone Armor',
-    description: 'Deal <<1>> [[damage]] whenever receiving damage.\nGain <<1>> [[Armor]] at the start of turn.',
+    description: 'Deal <<1>> [[damage]] whenever receiving damage.\nGain <<2>> [[Armor]] at the start of turn.',
     icon: 'relic_bone_armor',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._20 } } },
       { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._66 } } },
     ],
   },
