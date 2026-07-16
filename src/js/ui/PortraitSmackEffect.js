@@ -22,17 +22,17 @@
  * effect contract: construct, call update(dt) each frame, read `done`.
  */
 
-const WINDUP_MS = 125;  // the lift + coil (anticipation)
-const SMACK_MS = 55;    // the drive down/forward — fast + violent
-const RETURN_MS = 230;  // springy settle back
+const BASE_WINDUP_MS = 125;  // the lift + coil (anticipation)
+const BASE_SMACK_MS = 55;    // the drive down/forward — fast + violent
+const BASE_RETURN_MS = 230;  // springy settle back
 
 const WINDUP_BACK_FRAC = 0.20; // coil-back distance as a fraction of `reach`
 const LIFT_FRAC = 0.60;        // how high it rises in windup (fraction of reach)
-const SMACK_OVERSHOOT = 1.22;  // forward drive travels past `reach` by this factor
+const BASE_SMACK_OVERSHOOT = 1.22;  // forward drive travels past `reach` by this factor
 const SMACK_DOWN_FRAC = 0.24;  // how far it slams BELOW rest at impact (of reach)
 const SCALE_WINDUP = 1.08;     // scale at the top of the lift
-const SCALE_PEAK = 1.46;       // scale at the moment of impact
-const ROT_PEAK = 0.07;         // forward-lean accent at impact (radians)
+const BASE_SCALE_PEAK = 1.46;       // scale at the moment of impact
+const BASE_ROT_PEAK = 0.07;         // forward-lean accent at impact (radians)
 const RETURN_OVERSHOOT = 2.1;  // ease-out-back springiness on the settle
 
 // Ease-out-back: overshoots 1 then settles. Higher `s` = more spring.
@@ -47,10 +47,12 @@ export class PortraitSmackEffect {
    * @param {object} opts
    * @param {number} [opts.dir=1] +1 lunges right (player), −1 lunges left (enemy).
    * @param {number} [opts.reach=55] Forward lunge distance in design-space px.
+   * @param {number} [opts.drama=1.0] Escalation multiplier for chain 4+ matches.
    */
-  constructor({ dir = 1, reach = 55 } = {}) {
+  constructor({ dir = 1, reach = 55, drama = 1.0 } = {}) {
     this.dir = dir >= 0 ? 1 : -1;
     this.reach = reach;
+    this.drama = drama;
     this._t = 0;
     this.scale = 1;
     this.dx = 0;
@@ -63,34 +65,41 @@ export class PortraitSmackEffect {
     if (this.done) return;
     this._t += dt;
     const t = this._t;
+    const d = this.drama;
+    const windup = BASE_WINDUP_MS * d;
+    const smack = BASE_SMACK_MS * d;
+    const ret = BASE_RETURN_MS * d;
+    const peakScale = BASE_SCALE_PEAK * d;
+    const peakDx = this.reach * BASE_SMACK_OVERSHOOT * d;
+    const rotP = BASE_ROT_PEAK * d;
+
     const back = this.reach * WINDUP_BACK_FRAC;
     const lift = this.reach * LIFT_FRAC;
-    const peakDx = this.reach * SMACK_OVERSHOOT;
     const slam = this.reach * SMACK_DOWN_FRAC;
 
-    if (t < WINDUP_MS) {
-      const p = t / WINDUP_MS;
+    if (t < windup) {
+      const p = t / windup;
       const e = 1 - (1 - p) * (1 - p); // ease-out — lifts promptly, hangs at the top
       this.dx = -this.dir * back * e;
       this.dy = -lift * e;            // rise up
       this.scale = 1 + (SCALE_WINDUP - 1) * e;
       this.rot = 0;
-    } else if (t < WINDUP_MS + SMACK_MS) {
-      const p = (t - WINDUP_MS) / SMACK_MS;
+    } else if (t < windup + smack) {
+      const p = (t - windup) / smack;
       const e = p * p; // ease-in — accelerates into the impact
       // Forward: sweep from the coiled −back through to the overshot reach.
       this.dx = this.dir * ((peakDx + back) * e - back);
       // Vertical: drop from the lifted height, overshooting DOWN past rest.
       this.dy = -lift + (lift + slam) * e;
-      this.scale = SCALE_WINDUP + (SCALE_PEAK - SCALE_WINDUP) * e;
-      this.rot = this.dir * ROT_PEAK * e; // slight lean into the hit
-    } else if (t < WINDUP_MS + SMACK_MS + RETURN_MS) {
-      const p = (t - WINDUP_MS - SMACK_MS) / RETURN_MS;
+      this.scale = SCALE_WINDUP + (peakScale - SCALE_WINDUP) * e;
+      this.rot = this.dir * rotP * e; // slight lean into the hit
+    } else if (t < windup + smack + ret) {
+      const p = (t - windup - smack) / ret;
       const e = easeOutBack(p); // springs slightly past neutral, then lands
       this.dx = this.dir * peakDx * (1 - e);
       this.dy = slam * (1 - e);
-      this.scale = SCALE_PEAK + (1 - SCALE_PEAK) * e;
-      this.rot = this.dir * ROT_PEAK * (1 - e);
+      this.scale = peakScale + (1 - peakScale) * e;
+      this.rot = this.dir * rotP * (1 - e);
     } else {
       this.dx = 0;
       this.dy = 0;

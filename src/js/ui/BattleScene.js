@@ -1365,12 +1365,16 @@ export default class BattleScene extends UIPanel {
 
     // ── Match-4+ flourish SFX (TEMP audition asset) ──
     // Fires once per flourish, the frame the freeze beat begins.
+    // Pitch-shifts upward based on cascade chain depth.
     if (state.match4Flourish && state.match4Flourish !== this._lastMatch4Flourish) {
       this._lastMatch4Flourish = state.match4Flourish;
       if (this._audioManager) {
+        const chainDepth = state.match4ChainDepth || 1;
+        const rate = 1.0 + (chainDepth - 1) * 0.08;
         this._audioManager.playSfx(state.match4Flourish.side === 'enemy'
           ? 'sfx_match4_flourish_enemy'
-          : 'sfx_match4_flourish');
+          : 'sfx_match4_flourish',
+        { rate });
       }
     }
 
@@ -1801,10 +1805,12 @@ export default class BattleScene extends UIPanel {
     if (!pane || typeof pane.getPortraitRect !== 'function') return;
     const existing = this._smackAnims[side];
     if (existing && !existing.done) return; // don't restart mid-smack
+    const chainDepth = this._battleController?.match4ChainDepth || 1;
+    const drama = 1.0 + (chainDepth - 1) * 0.15;
     const rect = pane.getPortraitRect();
     const reach = rect ? Math.max(48, Math.min(140, rect.w * 0.30)) : 90;
     const dir = side === 'player' ? 1 : -1; // toward the board / opponent
-    this._smackAnims[side] = new PortraitSmackEffect({ dir, reach });
+    this._smackAnims[side] = new PortraitSmackEffect({ dir, reach, drama });
   }
 
   /**

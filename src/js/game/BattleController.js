@@ -254,6 +254,8 @@ export default class BattleController {
     this._match4FreezeMs = 0;
     /** @type {{cells:Array<{col:number,row:number}>, color:string, side:string, durationMs:number}|null} */
     this._match4Flourish = null;
+    /** How many 4+ flourish matches have occurred in the current cascade (1 = first). */
+    this._flourishChainDepth = 0;
 
     /**
      * Positions that were empty (removed) in the previous cascade step.
@@ -1055,6 +1057,7 @@ export default class BattleController {
       emptyCells: this.emptyCells,
       fallCells: this.fallCells,
       match4Flourish: this._match4Flourish,
+      match4ChainDepth: this._flourishChainDepth,
       cascadePhase: this._cascadePhase,
       swapAnim: this.swapAnim,
       targetingActive: this.state === BattleState.TARGETING,
@@ -1803,6 +1806,7 @@ export default class BattleController {
     this.fallCells = [];
     this._match4Flourish = null;
     this._match4FreezeMs = 0;
+    this._flourishChainDepth = 0;
     this._matchTextTriggers = [];
     this._previousEmptyCells = null;
 
@@ -1872,13 +1876,16 @@ export default class BattleController {
         }
       }
       if (flourishCells.length > 0) {
-        const freeze = MATCH4_FREEZE_MS[this.activeSide] || 0;
-        this._match4FreezeMs = freeze;
+        this._flourishChainDepth++;
+        const freezeBase = MATCH4_FREEZE_MS[this.activeSide] || 0;
+        const freezeMult = 1.0 + (this._flourishChainDepth - 1) * 0.25;
+        this._match4FreezeMs = Math.round(freezeBase * freezeMult);
         this._match4Flourish = {
           cells: flourishCells,
           color: flourishColor,
           side: this.activeSide,
-          durationMs: freeze,
+          durationMs: Math.round(freezeBase * freezeMult),
+          chainDepth: this._flourishChainDepth,
         };
       }
     }
@@ -2095,6 +2102,7 @@ export default class BattleController {
     this.emptyCells = [];
     this.fallCells = [];
     this._previousEmptyCells = null;
+    this._flourishChainDepth = 0;
 
     // Check game over BEFORE converting the extra-turn flag below. A damage
     // EFFECT resolved as part of this action (e.g. Fracture's direct damage
