@@ -51,6 +51,10 @@ const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
  * so their own big matches read as the bigger moment.
  */
 const MATCH4_FREEZE_MS = { player: 350, enemy: 300 };
+/** Freeze-beat growth per additional 4+ flourish within one cascade (+25% each). */
+const MATCH4_CHAIN_FREEZE_STEP = 0.25;
+/** Flourish chain counter cap — freeze/pitch escalation stops growing past this. */
+const MATCH4_CHAIN_DEPTH_MAX = 5;
 const ENEMY_BASE_DELAY = 400;
 const SWAP_BASE_DURATION = 120;
 /**
@@ -1876,15 +1880,16 @@ export default class BattleController {
         }
       }
       if (flourishCells.length > 0) {
-        this._flourishChainDepth++;
+        this._flourishChainDepth = Math.min(this._flourishChainDepth + 1, MATCH4_CHAIN_DEPTH_MAX);
         const freezeBase = MATCH4_FREEZE_MS[this.activeSide] || 0;
-        const freezeMult = 1.0 + (this._flourishChainDepth - 1) * 0.25;
-        this._match4FreezeMs = Math.round(freezeBase * freezeMult);
+        const freezeMult = 1.0 + (this._flourishChainDepth - 1) * MATCH4_CHAIN_FREEZE_STEP;
+        const freeze = Math.round(freezeBase * freezeMult);
+        this._match4FreezeMs = freeze;
         this._match4Flourish = {
           cells: flourishCells,
           color: flourishColor,
           side: this.activeSide,
-          durationMs: Math.round(freezeBase * freezeMult),
+          durationMs: freeze,
           chainDepth: this._flourishChainDepth,
         };
       }

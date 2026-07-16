@@ -121,6 +121,9 @@ const ATTACK_GROWTH_EVERY_N_VICTORIES = 2;
 // back at the enemy is suppressed. Set false to restore the old behavior where
 // every damage instance (both sides) spawns its own counter.
 const ONLY_SHOW_ACTIVE_TURN_DAMAGE = true;
+/** Flourish SFX pitch-up per additional 4+ match in one cascade (+8% playback rate
+ *  each; the chain depth is capped controller-side, see MATCH4_CHAIN_DEPTH_MAX). */
+const MATCH4_CHAIN_PITCH_STEP = 0.08;
 
 // ── Tunable layout constants ─────────────────────────────
 // FALLBACK anchor lift for the accumulating damage counter (px above the health
@@ -1370,7 +1373,7 @@ export default class BattleScene extends UIPanel {
       this._lastMatch4Flourish = state.match4Flourish;
       if (this._audioManager) {
         const chainDepth = state.match4ChainDepth || 1;
-        const rate = 1.0 + (chainDepth - 1) * 0.08;
+        const rate = 1.0 + (chainDepth - 1) * MATCH4_CHAIN_PITCH_STEP;
         this._audioManager.playSfx(state.match4Flourish.side === 'enemy'
           ? 'sfx_match4_flourish_enemy'
           : 'sfx_match4_flourish',
@@ -1805,12 +1808,10 @@ export default class BattleScene extends UIPanel {
     if (!pane || typeof pane.getPortraitRect !== 'function') return;
     const existing = this._smackAnims[side];
     if (existing && !existing.done) return; // don't restart mid-smack
-    const chainDepth = this._battleController?.match4ChainDepth || 1;
-    const drama = 1.0 + (chainDepth - 1) * 0.15;
     const rect = pane.getPortraitRect();
     const reach = rect ? Math.max(48, Math.min(140, rect.w * 0.30)) : 90;
     const dir = side === 'player' ? 1 : -1; // toward the board / opponent
-    this._smackAnims[side] = new PortraitSmackEffect({ dir, reach, drama });
+    this._smackAnims[side] = new PortraitSmackEffect({ dir, reach });
   }
 
   /**
