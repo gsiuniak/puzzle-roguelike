@@ -1,13 +1,13 @@
 {
   "meta": {
     "sheet_w": 1264,
-    "sheet_h": 1020,
-    "sprite_count": 20,
+    "sheet_h": 1252,
+    "sprite_count": 21,
     "mode": "bin_pack",
     "padding": 4
   },
   "sprites": {
-    "skill_blighted_growth": {
+    "skill_deadstop": {
       "x": 4,
       "y": 4,
       "w": 248,
@@ -18,7 +18,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_claw": {
+    "skill_blighted_growth": {
       "x": 256,
       "y": 4,
       "w": 248,
@@ -29,7 +29,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_anemic_feast": {
+    "skill_claw": {
       "x": 508,
       "y": 4,
       "w": 248,
@@ -40,7 +40,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_blood_gorge": {
+    "skill_anemic_feast": {
       "x": 760,
       "y": 4,
       "w": 248,
@@ -51,7 +51,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_cyst_burst": {
+    "skill_blood_gorge": {
       "x": 1012,
       "y": 4,
       "w": 248,
@@ -62,7 +62,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_infected_bite": {
+    "skill_cyst_burst": {
       "x": 4,
       "y": 258,
       "w": 248,
@@ -73,7 +73,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_desecrate": {
+    "skill_infected_bite": {
       "x": 256,
       "y": 258,
       "w": 248,
@@ -84,7 +84,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_soul_burn": {
+    "skill_desecrate": {
       "x": 508,
       "y": 258,
       "w": 248,
@@ -95,7 +95,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_harvest": {
+    "skill_soul_burn": {
       "x": 760,
       "y": 258,
       "w": 248,
@@ -106,7 +106,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_exsanguinate": {
+    "skill_harvest": {
       "x": 1012,
       "y": 258,
       "w": 248,
@@ -117,7 +117,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_hound": {
+    "skill_exsanguinate": {
       "x": 4,
       "y": 512,
       "w": 248,
@@ -128,7 +128,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_encroach": {
+    "skill_hound": {
       "x": 256,
       "y": 512,
       "w": 248,
@@ -139,7 +139,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_frenzy": {
+    "skill_encroach": {
       "x": 508,
       "y": 512,
       "w": 248,
@@ -150,7 +150,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_ignition": {
+    "skill_frenzy": {
       "x": 760,
       "y": 512,
       "w": 248,
@@ -161,7 +161,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_boulder_throw": {
+    "skill_ignition": {
       "x": 1012,
       "y": 512,
       "w": 248,
@@ -172,7 +172,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_smash": {
+    "skill_boulder_throw": {
       "x": 4,
       "y": 766,
       "w": 248,
@@ -183,7 +183,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_charge": {
+    "skill_smash": {
       "x": 256,
       "y": 766,
       "w": 248,
@@ -194,7 +194,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_doomsong": {
+    "skill_charge": {
       "x": 508,
       "y": 766,
       "w": 248,
@@ -205,7 +205,7 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_boom_baby": {
+    "skill_doomsong": {
       "x": 760,
       "y": 766,
       "w": 248,
@@ -216,12 +216,23 @@
       "trim_x": 0,
       "trim_y": 0
     },
-    "skill_slash": {
+    "skill_boom_baby": {
       "x": 1012,
       "y": 766,
+      "w": 248,
+      "h": 250,
+      "index": 19,
+      "source_w": 248,
+      "source_h": 250,
+      "trim_x": 0,
+      "trim_y": 0
+    },
+    "skill_slash": {
+      "x": 4,
+      "y": 1020,
       "w": 217,
       "h": 228,
-      "index": 19,
+      "index": 20,
       "source_w": 248,
       "source_h": 250,
       "trim_x": 0,
