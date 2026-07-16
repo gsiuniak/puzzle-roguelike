@@ -278,6 +278,7 @@ export function enemyPanel(e, onChange, { title = 'Enemy', showFloor = true } = 
     <div class="row">
       <div><label class="f">HP override <span class="hint">baseline</span></label><input type="number" data-k="hpOverride" placeholder="def"></div>
       <div><label class="f">Atk override <span class="hint">baseline</span></label><input type="number" data-k="attackOverride" placeholder="def"></div>
+      <div><label class="f">Armor override <span class="hint">baseline</span></label><input type="number" data-k="armorOverride" placeholder="def"></div>
     </div>
     <div class="note" data-preview style="margin-top:8px"></div>
   </div>`);
@@ -286,8 +287,10 @@ export function enemyPanel(e, onChange, { title = 'Enemy', showFloor = true } = 
     e.id = $('[data-k=id]', el).value;
     if (showFloor) e.floor = Math.max(1, Math.min(10, Number($('[data-k=floor]', el).value) || 1));
     const hp = $('[data-k=hpOverride]', el).value, atk = $('[data-k=attackOverride]', el).value;
+    const arm = $('[data-k=armorOverride]', el).value;
     e.hpOverride = hp === '' ? null : Number(hp);
     e.attackOverride = atk === '' ? null : Number(atk);
+    e.armorOverride = arm === '' ? null : Number(arm);
     preview();
     onChange && onChange();
   }
@@ -309,6 +312,7 @@ export function enemyPanel(e, onChange, { title = 'Enemy', showFloor = true } = 
     if (showFloor) $('[data-k=floor]', el).value = e.floor;
     $('[data-k=hpOverride]', el).value = e.hpOverride == null ? '' : e.hpOverride;
     $('[data-k=attackOverride]', el).value = e.attackOverride == null ? '' : e.attackOverride;
+    $('[data-k=armorOverride]', el).value = e.armorOverride == null ? '' : e.armorOverride;
     preview();
   }
 

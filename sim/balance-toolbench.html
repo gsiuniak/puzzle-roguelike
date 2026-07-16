@@ -217,7 +217,7 @@ const customRelicById = (id) => customs.relics.find((r) => r.id === id);
 const cfg = {
   player: { characterId: 'warrior', victories: 2, relicIds: [], customSkillIds: [], customRelicIds: [],
     statDelta: { maxHp: 0, attack: 0, magic: 0, armor: 0 } },
-  enemy: { id: 'goblin', floor: 3, hpOverride: null, attackOverride: null },
+  enemy: { id: 'goblin', floor: 3, hpOverride: null, attackOverride: null, armorOverride: null },
   runs: 200,
 };
 function makePlayerFactory(over = {}) {
@@ -235,6 +235,8 @@ function makeEnemyFactory(over = {}) {
   const overrides = {};
   if (e.hpOverride != null) overrides.hp = e.hpOverride;
   if (e.attackOverride != null) overrides.attack = e.attackOverride;
+  // baseline, floor-scaled by makeEnemyCombatant like hp (decision #48)
+  if (e.armorOverride != null) overrides.armor = e.armorOverride;
   return () => E.makeEnemyCombatant(def, e.floor, overrides);
 }
 function enemyBandKey(def) { return (def && (def.type === 'boss' || def.type === 'elite')) ? def.type : 'minion'; }
@@ -333,6 +335,7 @@ function enemyPanel(onChange) {
     <div class="row">
       <div><label class="f">HP override (baseline)</label><input type="number" data-k="hpOverride" placeholder="def"></div>
       <div><label class="f">Attack override (baseline)</label><input type="number" data-k="attackOverride" placeholder="def"></div>
+      <div><label class="f">Armor override (baseline)</label><input type="number" data-k="armorOverride" placeholder="def"></div>
     </div>
     <div class="note" data-preview style="margin-top:8px"></div>
   </div>`);
@@ -340,8 +343,10 @@ function enemyPanel(onChange) {
     cfg.enemy.id = $('[data-k=id]', el).value;
     cfg.enemy.floor = Math.max(1, Math.min(10, Number($('[data-k=floor]', el).value) || 1));
     const hp = $('[data-k=hpOverride]', el).value, atk = $('[data-k=attackOverride]', el).value;
+    const arm = $('[data-k=armorOverride]', el).value;
     cfg.enemy.hpOverride = hp === '' ? null : Number(hp);
     cfg.enemy.attackOverride = atk === '' ? null : Number(atk);
+    cfg.enemy.armorOverride = arm === '' ? null : Number(arm);
     preview();
     onChange && onChange();
   }
@@ -530,6 +535,7 @@ views.sweep = (() => {
     'enemy.floor': { label: 'Enemy floor', min: 1, max: 10, step: 1, apply: (v) => ({ e: { floor: v } }) },
     'enemy.hp': { label: 'Enemy baseline HP', min: 8, max: 60, step: 4, apply: (v) => ({ e: { hpOverride: v } }) },
     'enemy.attack': { label: 'Enemy baseline Attack', min: 1, max: 10, step: 1, apply: (v) => ({ e: { attackOverride: v } }) },
+    'enemy.armor': { label: 'Enemy baseline Armor', min: 0, max: 40, step: 4, apply: (v) => ({ e: { armorOverride: v } }) },
   };
   const el = h(`<div>
     <h2>Sweep Lab</h2>

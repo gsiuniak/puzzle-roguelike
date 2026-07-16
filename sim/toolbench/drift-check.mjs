@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  ENEMY_HP_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS,
+  ENEMY_HP_FLOOR_MULT, ENEMY_ARMOR_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS,
   MAGIC_MANA_PER_POINT, STATUS_DAMAGE_MODS, POISON_DECAY_DIVISOR, DEFAULT_GROWTH_PLAN,
   FUNGAL_SPREAD_PER_TILE,
 } from './engine.mjs';
@@ -64,6 +64,7 @@ function parseObject(src, name) {
 // undriftable. Checked here only to catch someone re-hardcoding engine's re-export.
 const enemyScaling = read('src/js/data/enemyScaling.js');
 check('ENEMY_HP_FLOOR_MULT (enemyScaling)', ENEMY_HP_FLOOR_MULT, parseArray(enemyScaling, 'ENEMY_HP_FLOOR_MULT'));
+check('ENEMY_ARMOR_FLOOR_MULT (enemyScaling)', ENEMY_ARMOR_FLOOR_MULT, parseArray(enemyScaling, 'ENEMY_ARMOR_FLOOR_MULT'));
 check('ENEMY_ATTACK_FLOOR_BONUS (enemyScaling)', ENEMY_ATTACK_FLOOR_BONUS, parseArray(enemyScaling, 'ENEMY_ATTACK_FLOOR_BONUS'));
 
 const bc = read('src/js/game/BattleController.js');

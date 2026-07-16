@@ -32,7 +32,7 @@ const DEFAULT_CFG = {
     relicIds: [], customSkillIds: [], customRelicIds: [],
     wovenSkillIdx: [],           // indexes into store.wovenSkills
   },
-  enemy: { id: 'goblin', floor: 3, hpOverride: null, attackOverride: null },
+  enemy: { id: 'goblin', floor: 3, hpOverride: null, attackOverride: null, armorOverride: null },
   ai: { player: 'hard', enemy: 'builtin' },
   battles: 400,
   bothBrackets: true,
@@ -160,6 +160,8 @@ class Store {
     const overrides = {};
     if (e.hpOverride != null && e.hpOverride !== '') overrides.hp = Number(e.hpOverride);
     if (e.attackOverride != null && e.attackOverride !== '') overrides.attack = Number(e.attackOverride);
+    // baseline, floor-scaled by makeEnemyCombatant like hp (decision #48)
+    if (e.armorOverride != null && e.armorOverride !== '') overrides.armor = Number(e.armorOverride);
     // customs must travel as full defs (workers can't see localStorage)
     return def._custom
       ? { def, floor: e.floor, overrides }

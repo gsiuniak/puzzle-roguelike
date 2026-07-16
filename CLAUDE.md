@@ -110,7 +110,8 @@ reference), plus the other `docs/balance-*.md` files.
 
 ### Cross-cutting maintenance contracts
 
-- **Enemy floor-scaling curves** (`ENEMY_HP_FLOOR_MULT` / `ENEMY_ATTACK_FLOOR_BONUS`) live in
+- **Enemy floor-scaling curves** (`ENEMY_HP_FLOOR_MULT` / `ENEMY_ARMOR_FLOOR_MULT` /
+  `ENEMY_ATTACK_FLOOR_BONUS`) live in
   the shared [`src/js/data/enemyScaling.js`](src/js/data/enemyScaling.js), imported by BOTH
   the game and the sim engine — retuning there is picked up everywhere automatically.
 - **The champion AI policy** is one module,

@@ -458,9 +458,9 @@ export default class MapScene extends UIPanel {
    */
   /**
    * Deep-clone an enemy definition and turn it into floor-scaled, resolved
-   * battle data: maxHp AND armor scaled by depth (ENEMY_HP_FLOOR_MULT — armor
-   * follows the same curve via enemyArmorFloorMult), an additive per-floor
-   * attack bonus (ENEMY_ATTACK_FLOOR_BONUS × the enemy's attackScale),
+   * battle data: maxHp scaled by depth (ENEMY_HP_FLOOR_MULT), armor scaled by
+   * its own curve (ENEMY_ARMOR_FLOOR_MULT via enemyArmorFloorMult), an additive
+   * per-floor attack bonus (ENEMY_ATTACK_FLOOR_BONUS × the enemy's attackScale),
    * and skill/relic IDs resolved into full objects (enemy relics from the
    * ENEMY-ONLY pool). Shared by the primary enemy AND every transform form so
    * an enemy that swaps identity mid-battle scales consistently.

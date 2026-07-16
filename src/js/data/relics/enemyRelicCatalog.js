@@ -286,7 +286,7 @@ const ENEMY_RELIC_CATALOG = {
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
       { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
-      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._66 } } },
     ],
   },
 

@@ -26,8 +26,8 @@ const marrowSentry = {
 
   hp: 5, // floor-1-equivalent baseline — deliberately tiny; survivability comes from Bone Armor
   maxHp: 5,
-  attack: 2,
-  armor: 20, // baseline armor would floor-scale (enemyArmorFloorMult); the Sentry builds its own via Bone Armor
+  attack: 1,
+  armor: 15, // baseline armor would floor-scale (enemyArmorFloorMult); the Sentry builds its own via Bone Armor
   // No starting mana — it builds Blue via swaps to afford Deadstop.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
   portrait: 'marrow_sentry', // maps to 'portrait_marrow_sentry' asset key

@@ -51,7 +51,7 @@
  *   (greedySkill/greedySwap/canAfford) and read board/combatants directly.
  *
  * SHARED CONSTANTS (single source of truth — imported, CANNOT drift):
- *   ENEMY_HP_FLOOR_MULT / ENEMY_ATTACK_FLOOR_BONUS   ← src/js/data/enemyScaling.js
+ *   ENEMY_HP_FLOOR_MULT / ENEMY_ARMOR_FLOOR_MULT / ENEMY_ATTACK_FLOOR_BONUS ← src/js/data/enemyScaling.js
  *     (the SAME module MapScene.js imports — retune the curve there, both update)
  * MIRRORED CONSTANTS (not exported by their homes — keep in sync):
  *   MAGIC_MANA_PER_POINT (9)                          ← src/js/game/BattleController.js
@@ -72,13 +72,13 @@ import ENEMY_RELIC_CATALOG from '../../src/js/data/relics/enemyRelicCatalog.js';
 import CHARACTERS_BY_ID from '../../src/js/data/characters/index.js';
 import ENEMIES_BY_ID, { ALL_ENEMIES, selectEnemyForNode, FLOOR_COUNT } from '../../src/js/data/enemies/index.js';
 import { RELIC_RARITY_WEIGHTS, DEFAULT_RELIC_RARITY_WEIGHT } from '../../src/js/data/relics/relicRewards.js';
-import { ENEMY_HP_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS } from '../../src/js/data/enemyScaling.js';
+import { ENEMY_HP_FLOOR_MULT, ENEMY_ARMOR_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS } from '../../src/js/data/enemyScaling.js';
 
 export { SKILL_CATALOG, RELIC_CATALOG, ENEMY_RELIC_CATALOG, CHARACTERS_BY_ID, ENEMIES_BY_ID, ALL_ENEMIES, FLOOR_COUNT };
 export { RELIC_RARITY_WEIGHTS, DEFAULT_RELIC_RARITY_WEIGHT };
 
 /* ── Per-floor enemy curves — SHARED source of truth (re-exported, no drift) ─ */
-export { ENEMY_HP_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS };
+export { ENEMY_HP_FLOOR_MULT, ENEMY_ARMOR_FLOOR_MULT, ENEMY_ATTACK_FLOOR_BONUS };
 /* ── Mirrored BattleController constants ────────────────────────────────── */
 export const MAGIC_MANA_PER_POINT = 9;
 export const POISON_DECAY_DIVISOR = 2;
@@ -91,8 +91,8 @@ const resolver = new MatchResolver();
 const clampFloor = (f) => Math.max(1, Math.min(FLOOR_COUNT, f | 0));
 export const hpMultForFloor = (floor) => ENEMY_HP_FLOOR_MULT[clampFloor(floor) - 1];
 export const atkBonusForFloor = (floor) => ENEMY_ATTACK_FLOOR_BONUS[clampFloor(floor) - 1];
-// Armor scales with the SAME curve as HP (see enemyScaling.enemyArmorFloorMult).
-export const armorMultForFloor = hpMultForFloor;
+// Armor has its OWN curve (see enemyScaling.ENEMY_ARMOR_FLOOR_MULT).
+export const armorMultForFloor = (floor) => ENEMY_ARMOR_FLOOR_MULT[clampFloor(floor) - 1];
 
 const deep = (o) => JSON.parse(JSON.stringify(o));
 const sum = (a) => a.reduce((x, y) => x + y, 0);

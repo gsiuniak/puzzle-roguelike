@@ -59,14 +59,14 @@ The three layers are decisions [#14](../decisions/14-player-stat-architecture-us
 Each enemy's authored `maxHp` / `attack` / `armor` in [`src/js/data/enemies/`](../../src/js/data/enemies/) is a **floor-1-equivalent baseline**. [`MapScene._transitionToBattle`](../../src/js/scenes/MapScene.js) scales it at spawn:
 
 - **HP** is MULTIPLIED by `ENEMY_HP_FLOOR_MULT[node.depth]` (a player-DPT-ratio curve).
-- **Armor** is MULTIPLIED by the **same curve as HP** (`enemyArmorFloorMult`, 2026-07-16) — armor is a survivability budget like HP, so it follows the same measured player-DPT ratio. Deliberately the same array, not a copy: retuning the HP curve keeps armor in step; split it into its own array only when armor needs independent tuning. (In-battle armor GAINS — skills/relics like Bone Armor — are NOT floor-scaled; only the authored baseline is.)
+- **Armor** is MULTIPLIED by its **own curve** `ENEMY_ARMOR_FLOOR_MULT[node.depth]` (`enemyArmorFloorMult`) — armor is a survivability budget like HP, but is tuned independently (split from the HP array 2026-07-16, seeded with the HP values at the time; retuning HP no longer moves armor). (In-battle armor GAINS — skills/relics like Bone Armor — are NOT floor-scaled; only the authored baseline is.)
 - **Attack** gets an ADDITIVE per-floor step bonus `ENEMY_ATTACK_FLOOR_BONUS[node.depth]` (≈ +1 every 2 floors, top +4). Attack is the lethality knob (it drives skull-match damage AND enemy SKILLS, which carry `scaling`), so it ramps as small additive steps — preserving per-enemy identity — rather than a multiplier.
 - A per-enemy **`attackScale`** (default 1) scales that floor bonus for designed exceptions (`0` = opt out).
 - **Tiering is by base value + role** (minions authored ~12-18, elites ~24-28) plus floor-gating.
 
 ### ⚠ MAINTENANCE CONTRACT — the curves are SHARED
 
-`ENEMY_HP_FLOOR_MULT` / `ENEMY_ATTACK_FLOOR_BONUS` live in the shared, dependency-free [`src/js/data/enemyScaling.js`](../../src/js/data/enemyScaling.js), imported by BOTH:
+`ENEMY_HP_FLOOR_MULT` / `ENEMY_ARMOR_FLOOR_MULT` / `ENEMY_ATTACK_FLOOR_BONUS` live in the shared, dependency-free [`src/js/data/enemyScaling.js`](../../src/js/data/enemyScaling.js), imported by BOTH:
 
 - [`MapScene.js`](../../src/js/scenes/MapScene.js) (the game), and
 - `sim/toolbench/engine.mjs` (which feeds the whole toolbench — trainer / runs / learn / analytic).
