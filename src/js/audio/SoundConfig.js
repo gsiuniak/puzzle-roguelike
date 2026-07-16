@@ -210,6 +210,7 @@ const SOUNDS = {
   skill_frenzy:        { sprite: 'sfx_skill_frenzy',        category: AudioCategory.SFX },
   skill_charge:        { sprite: 'sfx_skill_charge',        category: AudioCategory.SFX },
   skill_blighted_growth: { sprite: 'sfx_skill_blighted_growth', category: AudioCategory.SFX },
+  skill_deadstop:      { sprite: 'sfx_skill_deadstop',      category: AudioCategory.SFX },
   // Fungal-tile explosion (Blight Warden), played when expired blight bursts
   // into Skulls at the enemy's turn start (decision #46).
   sfx_fungal_explode:  { sprite: 'sfx_relic_fungal_explode', category: AudioCategory.SFX },

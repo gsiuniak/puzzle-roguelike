@@ -29,6 +29,7 @@
  * triggers (onBattleStart, onTurnStart, onMatch4Plus, …) apply here.
  */
 
+import { DAMAGE_SCALE_PER_POINT, DAMAGE_SCALING_PRESETS } from '../scalingConfig.js';
 import { RELIC_RARITY } from './relicCatalog.js';
 
 const ENEMY_RELIC_CATALOG = {
@@ -265,6 +266,27 @@ const ENEMY_RELIC_CATALOG = {
         effectType: 'heal',
         heal: { amount: 1, perCount: true },
       },
+    ],
+  },
+
+  // Retaliation + turn-start armor engine (Marrow Sentry). The onTakeDamage
+  // hit fires on EVERY damage instance the owner receives — armor-absorbed
+  // hits included (applyDamage counts armor absorption as actualDamage; only
+  // full block negates) — so chipping at the Sentry always costs 3 HP. The
+  // turn-start armor feeds its Deadstop nuke (damage = current armor). The
+  // retaliation damage routes through _applyDamage via the passive resolver;
+  // no reentrancy guard is needed because it damages the OPPONENT (it can only
+  // loop if BOTH sides ever carry a thorns relic — enemy relics can't reach
+  // the player pool, see the header).
+  bone_armor: {
+    id: 'bone_armor',
+    name: 'Bone Armor',
+    description: 'Deal <<1>> [[damage]] whenever receiving damage.\nGain <<1>> [[Armor]] at the start of turn.',
+    icon: 'relic_bone_armor',
+    rarity: RELIC_RARITY.UNCOMMON,
+    effects: [
+      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
+      { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._33 } } },
     ],
   },
 

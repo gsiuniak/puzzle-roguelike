@@ -282,6 +282,25 @@ const enemyAiOverrides = {
     return bestSwap ? { action: 'swap', swap: bestSwap } : null;
   },
 
+  // ── Marrow Sentry ───────────────────────────────────────
+  // Standard behavior with ONE exception: never cast Deadstop (damage = its
+  // current armor) while it has 0 armor — the cast would deal nothing and
+  // waste the 5 Blue. With armor banked it casts like the standard skill-first
+  // AI would; without it, it swaps instead (standard AI's swap ranking). The
+  // no-swap fallback must NOT return null — the standard AI is skill-first and
+  // would cast the zero-damage Deadstop anyway — so it passes.
+  marrow_sentry: ({ enemy, board, standardAI }) => {
+    const deadstop = (enemy.skills || []).find((s) => s.id === 'deadstop');
+    const affordable = canAfford(deadstop, enemy.mana || {});
+    if (affordable && (enemy.armor || 0) > 0) {
+      return { action: 'skill', skill: deadstop };
+    }
+    if (!affordable) return null; // nothing castable → standard AI (it will swap)
+    // Affordable but 0 armor: hold Deadstop, swap instead.
+    const swap = standardAI.findBestSwap(board);
+    return swap ? { action: 'swap', swap } : { action: 'pass' };
+  },
+
   // ── Smart matcher (GENERAL — not enemy-specific) ────────
   // Simulation-based board matching via MoveAdvisor/BoardSimulator: ranks
   // every legal swap by cascade-aware expected value (mana toward own skills,

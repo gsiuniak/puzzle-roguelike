@@ -46,6 +46,17 @@ export function enemyHpFloorMult(depth) {
   return ENEMY_HP_FLOOR_MULT[Math.min(d, ENEMY_HP_FLOOR_MULT.length - 1)];
 }
 
+// ── Per-floor enemy ARMOR scaling ────────────────────────
+// Authored enemy `armor` is a floor-1-equivalent baseline, exactly like HP:
+// armor is a survivability budget, so it follows the same measured player-DPT
+// curve. Deliberately the SAME array as HP (not a copy) — retuning the HP
+// curve keeps armor in step. Split into its own array only when armor needs
+// independent tuning.
+/** Per-floor ARMOR multiplier for a 0-indexed map depth (clamps; same curve as HP). */
+export function enemyArmorFloorMult(depth) {
+  return enemyHpFloorMult(depth);
+}
+
 /** Per-floor additive attack bonus for a 0-indexed map depth (clamps). */
 export function enemyAttackFloorBonus(depth) {
   const d = Math.max(0, depth | 0);

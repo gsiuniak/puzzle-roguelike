@@ -239,6 +239,7 @@ const ASSET_ALIASES = {
   portrait_abomination:       'abomination_portrait_floating',
   portrait_thrall:            'thrall_portrait_floating',
   portrait_blight_warden:     'blight_warden_portrait_floating',
+  portrait_marrow_sentry:     'marrow_sentry_portrait_floating',
   // NOTE: orc / shadow_weaver / stone_gargoyle have no portrait in the new sheets,
   // so their panes fall back to the `placeholder` asset until art is added.
 };

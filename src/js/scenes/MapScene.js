@@ -28,7 +28,7 @@ import MapRenderer from '../map/MapRenderer.js';
 import MapView from '../map/MapView.js';
 import AudioManager from '../audio/AudioManager.js';
 import BattleController from '../game/BattleController.js';
-import { enemyHpFloorMult, enemyAttackFloorBonus } from '../data/enemyScaling.js';
+import { enemyHpFloorMult, enemyAttackFloorBonus, enemyArmorFloorMult } from '../data/enemyScaling.js';
 import BattleScene from '../ui/BattleScene.js';
 import { selectEnemyForNode, markEnemySeen, getEnemyById } from '../data/enemies/index.js';
 import { createPlayerBattleState, syncBattleResultsToRunState, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
@@ -458,8 +458,9 @@ export default class MapScene extends UIPanel {
    */
   /**
    * Deep-clone an enemy definition and turn it into floor-scaled, resolved
-   * battle data: maxHp scaled by depth (ENEMY_HP_FLOOR_MULT), an additive
-   * per-floor attack bonus (ENEMY_ATTACK_FLOOR_BONUS × the enemy's attackScale),
+   * battle data: maxHp AND armor scaled by depth (ENEMY_HP_FLOOR_MULT — armor
+   * follows the same curve via enemyArmorFloorMult), an additive per-floor
+   * attack bonus (ENEMY_ATTACK_FLOOR_BONUS × the enemy's attackScale),
    * and skill/relic IDs resolved into full objects (enemy relics from the
    * ENEMY-ONLY pool). Shared by the primary enemy AND every transform form so
    * an enemy that swaps identity mid-battle scales consistently.
@@ -475,6 +476,7 @@ export default class MapScene extends UIPanel {
     data.hp = data.maxHp;
     const attackScale = typeof data.attackScale === 'number' ? data.attackScale : 1;
     data.attack = (data.attack || 0) + Math.round(enemyAttackFloorBonus(depth) * attackScale);
+    data.armor = Math.round((data.armor || 0) * enemyArmorFloorMult(depth));
     data.skills = resolveSkillIds(data.skills || []);
     data.relics = resolveEnemyRelicIds(data.relics || []);
     return data;

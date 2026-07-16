@@ -13,6 +13,7 @@ import chokeweed from './chokeweed.js';
 import blightWarden from './blightWarden.js';
 import goresnoutTrackers from './goresnoutTrackers.js';
 import abomination from './abomination.js';
+import marrowSentry from './marrowSentry.js';
 import thrall from './thrall.js';
 import sanguinePhoenix from './sanguinePhoenix.js';
 import sanguineEgg from './sanguineEgg.js';
@@ -38,10 +39,10 @@ const ACT1_FLOOR_SPAWNS = {
   1:  ['acolyte', 'thrall'],
   2:  ['acolyte', 'thrall'],
   3:  ['thrall', 'chokeweed'],
-  4:  ['chokeweed', 'cyclops'],
-  5:  ['chokeweed', 'goresnout_trackers', 'blight_warden', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
-  6:  ['goresnout_trackers', 'blight_warden', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
-  7:  ['goresnout_trackers', 'abomination', 'blight_warden', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
+  4:  ['chokeweed', 'marrow_sentry', 'cyclops'],
+  5:  ['chokeweed', 'goresnout_trackers', 'blight_warden', 'marrow_sentry', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
+  6:  ['goresnout_trackers', 'blight_warden', 'marrow_sentry', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
+  7:  ['goresnout_trackers', 'abomination', 'blight_warden', 'marrow_sentry', 'cyclops', 'blight_warden', 'sanguinePhoenix'],
   8:  [  'sanguinePhoenix', 'blight_warden'],
   9:  ['goresnout_trackers', 'abomination', 'blight_warden', 'sanguinePhoenix'],
   10: ['lordMalakor'],
@@ -61,6 +62,7 @@ const ACT1_ENEMIES = [
   blightWarden,
   goresnoutTrackers,
   abomination,
+  marrowSentry,
   thrall,
   sanguinePhoenix,
   sanguineEgg, // never spawns (floors: []) — transform target for the Phoenix
@@ -81,6 +83,7 @@ export {
   blightWarden,
   goresnoutTrackers,
   abomination,
+  marrowSentry,
   thrall,
   sanguinePhoenix,
   sanguineEgg,

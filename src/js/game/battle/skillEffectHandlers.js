@@ -67,11 +67,15 @@ export const SKILL_EFFECT_HANDLERS = {
     const perSkull = (effect.damage && typeof effect.damage.perSkull === 'number')
       ? effect.damage.perSkull : 0;
     const skullCount = perSkull > 0 ? c.board.getTilesOfType('skull').length : 0;
+    // `perArmor` (Deadstop): + N damage per point of the CASTER's current
+    // armor, read at cast time. Armor is NOT consumed (contrast: consume).
+    const perArmor = (effect.damage && typeof effect.damage.perArmor === 'number')
+      ? effect.damage.perArmor : 0;
     // Opt-in stat scaling (effect.damage.scaling): + floored Attack/Magic
     // bonus from the caster. No `scaling` field → flat (unchanged). Both
     // character AND enemy skills carry it (bonus uses the caster's stats).
     const scaleBonus = scaledBonus(effect.damage && effect.damage.scaling, src);
-    const amount = base + perSkull * skullCount + scaleBonus;
+    const amount = base + perSkull * skullCount + perArmor * (src.armor || 0) + scaleBonus;
     const r = c._applyDamage(tgt, amount);
     c.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
     c._setShakeFromDamage(r.actualDamage, tgt.maxHp);

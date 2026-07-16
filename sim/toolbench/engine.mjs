@@ -25,7 +25,9 @@
  *
  * KNOWN SIMPLIFICATIONS (surfaced in the UI, keep this list honest):
  *   - AI is greedy 1-ply (like the shipped standard EnemyAI); no MoveAdvisor
- *     lookahead. Custom AIs (sapper/malakor) approximate to skill-first.
+ *     lookahead. Custom AIs (sapper/malakor) approximate to skill-first;
+ *     the marrow_sentry gate (hold Deadstop at 0 armor) IS mirrored
+ *     (perArmor-only skills are held in _chooseSkill).
  *   - Targeted skills auto-target: rows/areas pick the most-skull line/cluster,
  *     convert_tile picks the BEST match-making spot (4+/extra-turn preferred)
  *     and a convert-only skill (Arcane Inscription) is HELD — not cast —
@@ -89,6 +91,8 @@ const resolver = new MatchResolver();
 const clampFloor = (f) => Math.max(1, Math.min(FLOOR_COUNT, f | 0));
 export const hpMultForFloor = (floor) => ENEMY_HP_FLOOR_MULT[clampFloor(floor) - 1];
 export const atkBonusForFloor = (floor) => ENEMY_ATTACK_FLOOR_BONUS[clampFloor(floor) - 1];
+// Armor scales with the SAME curve as HP (see enemyScaling.enemyArmorFloorMult).
+export const armorMultForFloor = hpMultForFloor;
 
 const deep = (o) => JSON.parse(JSON.stringify(o));
 const sum = (a) => a.reduce((x, y) => x + y, 0);
@@ -172,7 +176,8 @@ export function makeEnemyCombatant(defOrId, floor = 1, overrides = {}) {
   c.hp = c.maxHp;
   c.attack = baseAtk + Math.round(atkBonusForFloor(floor) * atkScale);
   c.magic = def.magic || 0;
-  c.armor = overrides.armor != null ? overrides.armor : def.armor || 0;
+  const baseArmor = overrides.armor != null ? overrides.armor : def.armor || 0;
+  c.armor = Math.round(baseArmor * armorMultForFloor(floor));
   for (const col of MANA_COLORS) c.mana[col] = (def.mana && def.mana[col]) || 0;
   c.skills = [
     ...resolveIds(overrides.skillIds || def.skills || [], SKILL_CATALOG),
@@ -697,7 +702,8 @@ export class Battle {
         case 'damage': {
           const d = ef.damage || {};
           const skulls = d.perSkull ? this.board.getTilesOfType('skull').length : 0;
-          const amt = (d.amount == null ? c.attack : d.amount) + (d.perSkull || 0) * skulls + scaledBonus(d.scaling, c);
+          const amt = (d.amount == null ? c.attack : d.amount) + (d.perSkull || 0) * skulls
+            + (d.perArmor || 0) * (c.armor || 0) + scaledBonus(d.scaling, c);
           const actual = this._applyDamage(c, opp, amt, { tag: 'skill' });
           if (d.leech && actual > 0) c.hp = Math.min(c.maxHp, c.hp + Math.floor(actual * d.leech));
           break;
@@ -938,6 +944,11 @@ export class Battle {
         const spot = this._bestConvertSpot(c, type);
         if (!spot || !spot.extraTurn) continue;
       }
+      // perArmor-only nuke (Deadstop): damage = caster's current armor, so a
+      // 0-armor cast deals nothing — HOLD it (mirrors the marrow_sentry AI).
+      const armorNukeOnly = effects.length > 0 && effects.every((e) =>
+        e.effectType === 'damage' && e.damage && e.damage.perArmor && !e.damage.amount);
+      if (armorNukeOnly && (c.armor || 0) <= 0) continue;
       // player-side "don't waste it" heuristics
       if (c.side === 'player') {
         const healAmt = sum((skill.effects || []).filter((e) => e.effectType === 'heal')

@@ -21,6 +21,13 @@ import { isSkull, isInert, isMana } from './TileTypes.js';
  * @enum {string}
  */
 export const SKILL_EFFECT_TYPES = {
+  // Direct damage to the opponent. Payload damage: { amount?, perSkull?,
+  // perArmor?, scaling?, leech? } — `amount` omitted falls back to the
+  // caster's attack; `perSkull` adds N per Skull tile on the board at cast;
+  // `perArmor` adds N per point of the CASTER's current armor at cast
+  // (Deadstop — armor is read, not consumed; contrast CONSUME); `scaling`
+  // adds a floored Attack/Magic bonus; `leech` heals the caster a fraction
+  // of damage dealt (decision #40).
   DAMAGE: 'damage',
   ARMOR: 'armor',
   DESTROY_TILES: 'destroy_tiles',

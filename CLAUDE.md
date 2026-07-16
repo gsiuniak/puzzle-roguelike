@@ -102,7 +102,7 @@ Violate only when explicitly instructed.
 | Sprites, spritesheets, aliases, sounds, music, the Vite/PWA build | [docs/guides/assets-and-audio.md](docs/guides/assets-and-audio.md) |
 | Balance sims, AI training/measurement, anything under `sim/toolbench/` | [docs/guides/toolbench.md](docs/guides/toolbench.md) |
 
-**Why something is the way it is** → [docs/decisions/](docs/decisions/) (46 records, one per
+**Why something is the way it is** → [docs/decisions/](docs/decisions/) (48 records, one per
 decision, indexed in its [README](docs/decisions/README.md)). Guides link the relevant ones.
 
 **Balance research** → [docs/balance-power-model.md](docs/balance-power-model.md) (master

@@ -470,6 +470,21 @@ const SKILL_CATALOG = {
     ],
   },
 
+  // Marrow Sentry — cashes in its Bone Armor stockpile: damage equal to its
+  // CURRENT armor at cast (perArmor reads the caster's armor; it is NOT
+  // consumed, so the threat persists until the player shaves the armor down).
+  deadstop: {
+    id: 'deadstop',
+    name: 'Deadstop',
+    description: 'Deal [[damage]] equal to current [[armor]].',
+    icon: 'skill_deadstop',
+    sound: 'skill_deadstop',
+    cost: { blue: 5 },
+    effects: [
+      { effectType: 'damage', damage: { amount: 0, perArmor: 1 } },
+    ],
+  },
+
   // Blight Warden — floods the board with timed Fungal tiles (they explode into
   // Skulls + spread more blight if left unchecked; see TILE_TYPES + decision
   // #46). avoidMatches keeps the fresh blight from instantly self-resolving
