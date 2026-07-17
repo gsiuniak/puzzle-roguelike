@@ -145,6 +145,11 @@ export const KEYWORD_DEFINITIONS = {
     label: 'Matching',
     description: 'Line up 3 or more [[Tiles]] of the same type to clear them and gain rewards. A match of 4 or more grants an [[Extra Turn]].',
   },
+  matches: {
+    id: 'matches',
+    label: 'Matches',
+    description: 'Line up 3 or more [[Tiles]] of the same type to clear them and gain rewards. A match of 4 or more grants an [[Extra Turn]].',
+  },
   skulls: {
     id: 'skulls',
     label: 'Skulls',

@@ -3114,12 +3114,24 @@ export default class BattleController {
       tilesDestroyed: analysis.tilesDestroyed,
     });
     for (const m of analysis.matches) {
+      const hadExtraTurn = this._extraTurnEarned;
       this.passives.dispatch(TRIGGER_TYPES.ON_TILE_MATCH_TYPE, {
         side,
         typeId: m.typeId,
         count: m.count,
         isShape: !!m.isShape,
       });
+      // A passive granted an extra turn reacting to THIS match (e.g. the
+      // Hourglass every-10-matches counter). The 4+ path anchors the Extra
+      // Turn popup via causePos in _enterShowMatch, but a passive grant has
+      // no analysis trigger — anchor the popup to this match instead.
+      // Suppressed during turn-start setup cascades (_resumeTurnAfterResolve),
+      // matching the 4+ path — the epilogue discards the flag there too.
+      if (!hadExtraTurn && this._extraTurnEarned && !this.extraTurnTriggerPos
+          && !this._resumeTurnAfterResolve && m.positions && m.positions.length > 0) {
+        const p = m.positions[Math.floor(m.positions.length / 2)];
+        this.extraTurnTriggerPos = { col: p.col, row: p.row };
+      }
       if (m.count >= 4) {
         this.passives.dispatch(TRIGGER_TYPES.ON_MATCH_4_PLUS, {
           side,

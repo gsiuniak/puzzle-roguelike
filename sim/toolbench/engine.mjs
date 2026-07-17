@@ -213,6 +213,10 @@ export class Battle {
     this.log = opts.log ? [] : null;
     this.board = new BoardModel(BOARD_COLS, BOARD_ROWS);
     this._pendingSkullDestroy = 0;
+    // Passive-granted extra turn (relic `extra_turn` effect, e.g. Hourglass) —
+    // set by _resolvePassive, folded into _resolveCascade's return. Mirrors the
+    // game's PassiveSystem onExtraTurn → _extraTurnEarned path.
+    this._passiveExtraTurn = false;
     this._eggState = null;
     this._initStatics();
     this.board.initialize();
@@ -336,6 +340,14 @@ export class Battle {
         if (cond.minCount && (payload.count || 0) < cond.minCount) continue;
         if (cond.color && payload.color !== cond.color) continue;
         if (cond.side && actorSide !== cond.side) continue;
+        // Stateful counter gate (Hourglass): fire only on every Nth qualifying
+        // event, reset after firing. Counter lives on the per-combatant effect
+        // clone (resolveIds deep-clones). Mirrors PassiveSystem._dispatchToOwner.
+        if (cond.everyN > 0) {
+          const next = (ef._everyNCounter || 0) + 1;
+          if (next < cond.everyN) { ef._everyNCounter = next; continue; }
+          ef._everyNCounter = 0;
+        }
       }
       this._resolvePassive(owner, ef, payload);
     }
@@ -371,6 +383,10 @@ export class Battle {
         break;
       }
       case 'gain_attack': c.attack += ((ef.gainAttack && ef.gainAttack.amount) || 1); break;
+      // Extra turn from a relic (Hourglass). Like the game's onExtraTurn
+      // callback, it retains the ACTIVE side's turn — the flag is folded into
+      // _resolveCascade's return, where the frozen gate is checked on `active`.
+      case 'extra_turn': this._passiveExtraTurn = true; break;
       case 'gain_mana': {
         const g = ef.gainMana || {};
         if (g.color && this._canGainMana(c)) {
@@ -653,6 +669,13 @@ export class Battle {
       const skullTotal = a.skullDamage + extraSkullDmg;
       if (skullTotal > 0) this._applyDamage(active, opp, skullTotal, { isSkull: true, tag: 'skull' });
       if (a.extraTurnTrigger && !suppressExtraTurn && this._canGainExtraTurn(active)) extraTurn = true;
+      // Passive-granted extra turn (Hourglass's every-N counter fired during
+      // this step's onTileMatchType dispatches). Same suppression as the 4+
+      // path: turn-start setup cascades never grant extra turns.
+      if (this._passiveExtraTurn) {
+        this._passiveExtraTurn = false;
+        if (!suppressExtraTurn && this._canGainExtraTurn(active)) extraTurn = true;
+      }
       // remove / fall / refill
       this.board.removeTiles(a.positions);
       this.board.applyGravity();

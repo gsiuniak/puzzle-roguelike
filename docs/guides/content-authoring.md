@@ -152,6 +152,7 @@ It matches `payload.side` — the **actor** (whose event it is), *not* the relic
 | `color` | `payload.color` must equal it (e.g. `'red'` on `onGainMana`) |
 | `minCount` | `payload.count` must be ≥ it (e.g. `3`) |
 | `side` | `payload.side` (the **actor**) must equal it — see above ([decision #47](../decisions/47-condition-side-gate-for-anyside-passive-effects.md)) |
+| `everyN` | **Stateful counter gate** — the effect fires only on every Nth event that passes the other gates, then resets. The count lives on the per-battle effect clone (`_everyNCounter`, starts at 0 each battle) and RelicBar shows it live as an icon badge. Handled in the dispatch loop, not `_passesCondition` ([decision #49](../decisions/49-condition-everyn-is-a-stateful-counter-gate.md)). Hourglass: `{ trigger: 'onTileMatchType', condition: { everyN: 10 }, effectType: 'extra_turn' }` |
 
 `heal.perCount: true` multiplies the heal by `payload.count`, i.e. "N per tile matched."
 

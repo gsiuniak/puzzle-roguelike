@@ -121,6 +121,21 @@ export default class PassiveSystem {
         // Optional payload gate — lets a relic react only to specific match
         // types / sizes (e.g. Scythe: only skull matches of 3+).
         if (effect.condition && !this._passesCondition(effect.condition, payload)) continue;
+        // Optional STATEFUL gate — `condition.everyN`: each event that passes
+        // the payload gates above advances a counter; the effect fires only on
+        // the Nth event, then resets (Hourglass: extra turn every 10 matches).
+        // The count lives on the per-battle effect clone (resolveRelicIds
+        // clones effects at battle-state creation) so it starts at 0 each
+        // battle, and the UI (RelicBar's badge) reads it live. Non-firing
+        // increments don't count as "fired" (no icon jiggle, no warn).
+        if (effect.condition && effect.condition.everyN > 0) {
+          const next = (effect._everyNCounter || 0) + 1;
+          if (next < effect.condition.everyN) {
+            effect._everyNCounter = next;
+            continue;
+          }
+          effect._everyNCounter = 0;
+        }
         relicFired = true;
         let handled = applyEffect(effect, ctx);
         // Board-touching effects (destroy/create tiles, radius blasts, ...)
@@ -162,6 +177,10 @@ export default class PassiveSystem {
    *              sides' events — pair them to narrow it back to exactly one side
    *              ("heal when the PLAYER matches skulls" = anySide + side:'player').
    *              Without `anySide`, an effect already only sees its owner's events.
+   *
+   * `condition.everyN` is NOT checked here — it is a STATEFUL counter gate
+   * handled in the dispatch loop (_dispatchToOwner), after these pure payload
+   * gates pass. This method must stay side-effect-free.
    * @param {object} condition
    * @param {object} payload
    * @returns {boolean}

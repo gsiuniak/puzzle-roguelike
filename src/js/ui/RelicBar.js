@@ -1,6 +1,7 @@
 import UIContainer from './UIContainer.js';
 import UIImage from './UIImage.js';
 import { resolveDynamicText } from '../data/scalingConfig.js';
+import { roundRectPath } from './skillCard.js';
 
 // ── Tunable layout constants ─────────────────────────────
 // These are the per-bar internals; the BattleScene owns the bar's
@@ -56,6 +57,20 @@ const GRADIENT_DARK_ALPHA = 0.42;    // black alpha at the panel-side edge
 const GRADIENT_WIDTH = 20;          // px width of the fade band
 const GRADIENT_DARK_OVERHANG = 12;   // how far past the icons (toward panel) the dark edge sits
 const GRADIENT_V_PAD = 12;           // vertical padding above/below the icon stack
+
+// ── Counter badge (every-N relics, e.g. Hourglass) ───────────────────────
+// A relic whose effect carries a `condition.everyN` gate gets a small pill
+// badge on its icon's lower-right edge showing the live counter (0…N-1),
+// read each frame from the effect's `_everyNCounter`. Styled after the
+// skill-card mana cost pill (dark backing, thin gold trim, white number).
+const COUNTER_BADGE_H = Math.round(ICON_SIZE * 0.38);
+const COUNTER_BADGE_FONT_SIZE = Math.round(COUNTER_BADGE_H * 0.68);
+const COUNTER_BADGE_PAD_X = 7;           // pill end-cap padding
+const COUNTER_BADGE_OFFSET = { x: 4, y: 3 }; // past the icon's lower-right edge
+const COUNTER_BADGE_BG = 'rgba(10, 8, 5, 0.95)';
+const COUNTER_BADGE_BORDER = 'rgba(214, 188, 120, 0.85)';
+const COUNTER_BADGE_NUMBER = '#ffffff';
+const COUNTER_BADGE_FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
 // Tooltip layout for relic icons. Tweak here, not at call sites.
 const TOOLTIP_SCALE   = 1.0;
@@ -120,6 +135,9 @@ export default class RelicBar extends UIContainer {
     this._iconImages = [];
     /** @type {string[]} relic ids parallel to _iconImages (current page). */
     this._iconRelicIds = [];
+    /** @type {object[]} relic objects parallel to _iconImages — kept as live
+     * references so per-frame badges (everyN counters) read current values. */
+    this._iconRelics = [];
 
     /**
      * Active jiggle animations keyed by relic id → elapsed ms. Keyed by id
@@ -265,6 +283,7 @@ export default class RelicBar extends UIContainer {
     this.clearChildren();
     this._iconImages = [];
     this._iconRelicIds = [];
+    this._iconRelics = [];
 
     for (const relic of slice) {
       if (!relic) continue;
@@ -277,6 +296,7 @@ export default class RelicBar extends UIContainer {
       });
       this._iconImages.push(img);
       this._iconRelicIds.push(relic.id || '');
+      this._iconRelics.push(relic);
       this.addChild(img);
 
       if (this._tooltipManager && (relic.description || relic.name)) {
@@ -419,8 +439,52 @@ export default class RelicBar extends UIContainer {
     if (!this.visible) return;
     // this._renderBackdropGradient(ctx); // behind the icons
     super.render(ctx); // draws the icon children at their positioned rects
+    this._drawCounterBadges(ctx);
     if (this._upArrowRect)   this._drawArrow(ctx, this._upArrowRect, 'up');
     if (this._downArrowRect) this._drawArrow(ctx, this._downArrowRect, 'down');
+  }
+
+  /**
+   * Draw a counter badge on every visible relic that carries an everyN effect
+   * (e.g. Hourglass: extra turn every 10 matches). The badge shows the live
+   * `_everyNCounter` (0 when unset — the counter only exists on per-battle
+   * effect clones once PassiveSystem starts counting). Drawn per frame so the
+   * number updates the moment the counter advances, with no icon rebuild.
+   */
+  _drawCounterBadges(ctx) {
+    for (let i = 0; i < this._iconImages.length; i++) {
+      const relic = this._iconRelics[i];
+      if (!relic) continue;
+      const counterEffect = (relic.effects || []).find(
+        e => e && e.condition && e.condition.everyN > 0
+      );
+      if (!counterEffect) continue;
+
+      const r = this._iconImages[i].rect;
+      const label = String(counterEffect._everyNCounter || 0);
+
+      ctx.save();
+      ctx.font = `bold ${COUNTER_BADGE_FONT_SIZE}px ${COUNTER_BADGE_FONT_FAMILY}`;
+      ctx.textBaseline = 'middle';
+      const numW = ctx.measureText(label).width;
+      const pillW = Math.max(COUNTER_BADGE_H, COUNTER_BADGE_PAD_X * 2 + numW);
+      // Anchor: pill's bottom-right corner pokes just past the icon's edge
+      // (same anchoring as the skill-card mana cost badge).
+      const px = r.x + r.w + COUNTER_BADGE_OFFSET.x - pillW;
+      const py = r.y + r.h + COUNTER_BADGE_OFFSET.y - COUNTER_BADGE_H;
+
+      roundRectPath(ctx, px, py, pillW, COUNTER_BADGE_H, COUNTER_BADGE_H / 2);
+      ctx.fillStyle = COUNTER_BADGE_BG;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = COUNTER_BADGE_BORDER;
+      ctx.stroke();
+
+      ctx.fillStyle = COUNTER_BADGE_NUMBER;
+      ctx.textAlign = 'center';
+      ctx.fillText(label, px + pillW / 2, py + COUNTER_BADGE_H / 2 + 1);
+      ctx.restore();
+    }
   }
 
   /**

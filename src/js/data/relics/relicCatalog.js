@@ -759,6 +759,23 @@ const RELIC_CATALOG = {
       { trigger: 'onBattleStart', effectType: 'modify_stat', modifyStat: { stat: 'hp', amount: 6 } },
     ],
   },
+
+  // ── Hourglass — every-N-matches counter relic ─────────────────────────────
+  // `condition.everyN` is PassiveSystem's STATEFUL gate: each qualifying event
+  // (here: every individual match by the owner) advances a counter on the
+  // per-battle effect clone (`_everyNCounter`); the effect fires only on the
+  // Nth event, then the counter resets to 0. RelicBar reads the live counter
+  // and shows it as a badge on the relic icon.
+  hourglass: {
+    id: 'hourglass',
+    name: 'Hourglass',
+    description: 'Every 10 [[matches]], gain an [[Extra Turn]].',
+    icon: 'relic_hourglass',
+    rarity: RELIC_RARITY.RARE,
+    effects: [
+      { trigger: 'onTileMatchType', condition: { everyN: 10 }, effectType: 'extra_turn' },
+    ],
+  },
 };
 
 /**
