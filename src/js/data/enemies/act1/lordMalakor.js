@@ -29,9 +29,9 @@ const lordMalakor = {
   type: 'boss',
   // floors: derived from act1/index.js FLOOR_SPAWNS (listed on floor 10, the boss node)
 
-  hp: 34, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
-  maxHp: 34,
-  attack: 1,
+  hp: 35, // floor-1-equivalent baseline (MapScene scales maxHp by depth)
+  maxHp: 35,
+  attack: 2,
   armor: 0,
   // No starting mana — he must match to fuel his 7-cost skills.
   mana: { red: 0, blue: 0, green: 0, yellow: 0, purple: 0 },
