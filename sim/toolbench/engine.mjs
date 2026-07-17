@@ -340,6 +340,7 @@ export class Battle {
         if (cond.minCount && (payload.count || 0) < cond.minCount) continue;
         if (cond.color && payload.color !== cond.color) continue;
         if (cond.side && actorSide !== cond.side) continue;
+        if (cond.isSkull != null && !!payload.isSkull !== cond.isSkull) continue;
         // Stateful counter gate (Hourglass): fire only on every Nth qualifying
         // event, reset after firing. Counter lives on the per-combatant effect
         // clone (resolveIds deep-clones). Mirrors PassiveSystem._dispatchToOwner.
@@ -562,7 +563,7 @@ export class Battle {
       // onTakeDamage / onDealDamage reactive passives (guarded against loops)
       if (target._reactGuard < 3) {
         target._reactGuard++;
-        this._passives(target, 'onTakeDamage', { amount: actual });
+        this._passives(target, 'onTakeDamage', { amount: actual, isSkull });
         target._reactGuard--;
       }
       if (attacker && attacker._reactGuard < 3) {

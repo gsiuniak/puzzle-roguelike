@@ -190,6 +190,10 @@ export default class PassiveSystem {
     if (condition.typeId != null && payload.typeId !== condition.typeId) return false;
     if (condition.color != null && payload.color !== condition.color) return false;
     if (condition.side != null && payload.side !== condition.side) return false;
+    // isSkull — gate on whether the damage event was SKULL damage
+    // (onTakeDamage/onDealDamage payloads). `isSkull: true` = skull hits only
+    // (Bone Armor's retaliation); `isSkull: false` = non-skull hits only.
+    if (condition.isSkull != null && !!payload.isSkull !== condition.isSkull) return false;
     if (condition.minCount != null &&
         !(typeof payload.count === 'number' && payload.count >= condition.minCount)) {
       return false;

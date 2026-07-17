@@ -281,11 +281,16 @@ const ENEMY_RELIC_CATALOG = {
   bone_armor: {
     id: 'bone_armor',
     name: 'Bone Armor',
-    description: 'Deal <<1>> [[damage]] whenever receiving damage.\nGain <<2>> [[Armor]] at the start of turn.',
+    description: 'Deal <<2>> [[damage]] whenever receiving [[Skull]] damage.\nGain <<2>> [[Armor]] at the start of turn.',
     icon: 'relic_bone_armor',
     rarity: RELIC_RARITY.UNCOMMON,
     effects: [
-      { trigger: 'onTakeDamage', effectType: 'damage', damage: { amount: 1, scaling: { attack: DAMAGE_SCALING_PRESETS._20 } } },
+      // Retaliation gated to SKULL damage (condition.isSkull): relic/passive
+      // damage doesn't re-trigger it. Un-gated, facing it against a player
+      // retaliation relic (Thorned Rose, onTakeDamage → damage) was an
+      // unbounded mutual recursion — armor-absorbed hits count as
+      // actualDamage, so the ping-pong overflowed the stack (2026-07-16).
+      { trigger: 'onTakeDamage', condition: { isSkull: true }, effectType: 'damage', damage: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._100 } } },
       { trigger: 'onTurnStart', effectType: 'armor', armor: { amount: 2, scaling: { attack: DAMAGE_SCALING_PRESETS._66 } } },
     ],
   },

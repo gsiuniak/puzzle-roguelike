@@ -454,9 +454,11 @@ export default class BattleController {
         // Passive-applied damage (e.g. Briarthorn's onTurnStart hit) must fire
         // the SAME onTakeDamage / onDealDamage triggers that skill & match damage
         // do, so defensive reactors like Family Crest (gain mana when damaged)
-        // respond to every instance of damage regardless of its source. Damage-
-        // triggered passives invoked from here (echo, Deathbringer) carry their
-        // own reentrancy / once-per-action guards, so this can't loop.
+        // respond to every instance of damage regardless of its source. Board-
+        // touching reactors invoked from here (echo, Deathbringer) carry their
+        // own reentrancy / once-per-action guards; plain damage↔damage
+        // retaliation pairs (Thorned Rose vs Bone Armor) are capped by the
+        // per-side _reactDepth guard inside _dispatchDamageEvent.
         if (info.caster && info.target && info.actualDamage > 0) {
           const attackerSide = info.caster === this.playerState ? 'player' : 'enemy';
           const targetSide = info.target === this.playerState ? 'player' : 'enemy';
@@ -498,6 +500,14 @@ export default class BattleController {
     this._currentRelicTarget = null;
     /** Reentrancy depth for relic-triggered onGainMana dispatches. */
     this._manaGainDepth = 0;
+    /**
+     * Per-side reentrancy depth for reactive damage dispatches
+     * (onTakeDamage/onDealDamage in _dispatchDamageEvent) — caps mutual
+     * retaliation relic chains at 3 nested reactions per side, mirroring the
+     * sim engine's `_reactGuard`. Lives on the controller (not battle state)
+     * so a mid-chain enemy transform can't drop the count.
+     */
+    this._reactDepth = { player: 0, enemy: 0 };
 
     // ── Static passive modifiers (onBattleStart) ──
     // Aggregate persistent relic modifiers (attack, spawn rate, mana gain,
@@ -3051,20 +3061,37 @@ export default class BattleController {
   _dispatchDamageEvent(attackerSide, targetSide, result, opts = {}) {
     if (!result || result.actualDamage <= 0) return;
     this._currentRelicTarget = this._getStateBySide(targetSide);
-    this.passives.dispatch(TRIGGER_TYPES.ON_TAKE_DAMAGE, {
-      side: targetSide,
-      amount: result.actualDamage,
-      blocked: result.blocked,
-      armorDamage: result.armorDamage,
-    });
-    this.passives.dispatch(TRIGGER_TYPES.ON_DEAL_DAMAGE, {
-      side: attackerSide,
-      amount: result.actualDamage,
-      target: targetSide,
-      // Whether this was SKULL damage — lets onDealDamage relics gate on it
-      // (Poison Vial only poisons on skull damage). See decision #39.
-      isSkull: !!opts.isSkull,
-    });
+    // Reentrancy guard (mirrors the sim engine's `_reactGuard`): two facing
+    // onTakeDamage→damage retaliation relics (Thorned Rose vs Bone Armor)
+    // re-enter each other through this dispatch — and armor-absorbed hits
+    // count as actualDamage, so the ping-pong can spin without draining HP
+    // until the stack overflows. Each side's REACTIVE dispatches are capped
+    // at depth 3 (top-level damage always dispatches at depth 0).
+    if (this._reactDepth[targetSide] < 3) {
+      this._reactDepth[targetSide]++;
+      this.passives.dispatch(TRIGGER_TYPES.ON_TAKE_DAMAGE, {
+        side: targetSide,
+        amount: result.actualDamage,
+        blocked: result.blocked,
+        armorDamage: result.armorDamage,
+        // Whether this was SKULL damage — lets onTakeDamage relics gate on it
+        // via condition.isSkull (Bone Armor retaliates only on skull hits).
+        isSkull: !!opts.isSkull,
+      });
+      this._reactDepth[targetSide]--;
+    }
+    if (this._reactDepth[attackerSide] < 3) {
+      this._reactDepth[attackerSide]++;
+      this.passives.dispatch(TRIGGER_TYPES.ON_DEAL_DAMAGE, {
+        side: attackerSide,
+        amount: result.actualDamage,
+        target: targetSide,
+        // Whether this was SKULL damage — lets onDealDamage relics gate on it
+        // (Poison Vial only poisons on skull damage). See decision #39.
+        isSkull: !!opts.isSkull,
+      });
+      this._reactDepth[attackerSide]--;
+    }
     this._currentRelicTarget = null;
   }
 

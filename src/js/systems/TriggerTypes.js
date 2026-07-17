@@ -88,15 +88,22 @@
  *                        The final amount is clamped to >= 0 before being
  *                        passed to MatchResolver.applyDamage.
  *
- *   onTakeDamage         payload: { side, amount, blocked, armorDamage }
+ *   onTakeDamage         payload: { side, amount, blocked, armorDamage, isSkull }
  *                        Fires when a combatant takes damage that lands
- *                        on HP (i.e., actualDamage > 0). `side` is the
- *                        SIDE THAT TOOK damage.
+ *                        on HP (i.e., actualDamage > 0; armor-absorbed
+ *                        damage counts). `side` is the SIDE THAT TOOK
+ *                        damage. `isSkull` marks skull-sourced damage —
+ *                        gate with `condition: { isSkull: true }` (Bone
+ *                        Armor's retaliation). Reactive dispatches are
+ *                        depth-capped per side (BattleController
+ *                        `_reactDepth`, max 3) so facing retaliation
+ *                        relics can't recurse unboundedly.
  *
- *   onDealDamage         payload: { side, amount, target }
+ *   onDealDamage         payload: { side, amount, target, isSkull }
  *                        Fires when a combatant deals damage. `side` is
  *                        the SIDE THAT DEALT damage. Fires for the same
- *                        event as onTakeDamage but from the attacker's view.
+ *                        event as onTakeDamage but from the attacker's
+ *                        view. Same `isSkull` flag and per-side depth cap.
  *
  *   onDeath              payload: { side }
  *                        Fires when a combatant's HP reaches 0, BEFORE the

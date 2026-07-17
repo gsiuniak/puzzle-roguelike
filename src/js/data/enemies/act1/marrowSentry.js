@@ -1,10 +1,12 @@
 /**
  * Marrow Sentry — Act 1 minion. A fragile skeleton (tiny HP pool) hiding
- * behind an ever-growing shell of bone: its Bone Armor relic grants 2 Armor
- * at each of its turn starts AND deals 3 damage back on every hit it
- * receives (armor-absorbed hits included), and Deadstop cashes the shell in
- * for damage equal to its CURRENT armor. The fight is a race: burst it down
- * early, or keep the armor shaved before it banks 5 Blue.
+ * behind an ever-growing shell of bone: its Bone Armor relic grants Armor
+ * at each of its turn starts AND retaliates on every SKULL hit it receives
+ * (armor-absorbed hits included; gated to skull damage via
+ * condition.isSkull so it can't mutually recurse with player retaliation
+ * relics like Thorned Rose), and Deadstop cashes the shell in for damage
+ * equal to its CURRENT armor. The fight is a race: burst it down early, or
+ * keep the armor shaved before it banks 5 Blue.
  *
  * Custom AI (`marrow_sentry` in enemyAiOverrides.js): standard behavior,
  * except it never casts Deadstop while it has 0 armor (the cast would deal
