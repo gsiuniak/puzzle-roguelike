@@ -79,6 +79,14 @@ export default class InputManager {
     this.canvas.addEventListener('touchmove',   this._handleTouchMoveBound,   { passive: false });
     this.canvas.addEventListener('touchend',    this._handleTouchEndBound,    { passive: false });
     this.canvas.addEventListener('touchcancel', this._handleTouchCancelBound, { passive: false });
+
+    // getBoundingClientRect forces a layout read; unthrottled mousemove/touchmove
+    // call _getPos on EVERY event, so cache the rect and re-read only after
+    // something that can move the canvas (resize / scroll).
+    this._canvasRect = null;
+    this._invalidateRectBound = () => { this._canvasRect = null; };
+    window.addEventListener('resize', this._invalidateRectBound);
+    window.addEventListener('scroll', this._invalidateRectBound, { passive: true, capture: true });
   }
 
   /** Set the root UI element for hit testing */
@@ -110,7 +118,10 @@ export default class InputManager {
   }
 
   _getPos(e) {
-    const rect = this.canvas.getBoundingClientRect();
+    let rect = this._canvasRect;
+    if (!rect) {
+      rect = this._canvasRect = this.canvas.getBoundingClientRect();
+    }
     const cssX = e.clientX - rect.left;
     const cssY = e.clientY - rect.top;
     if (this._app) {
@@ -259,6 +270,8 @@ export default class InputManager {
     this.canvas.removeEventListener('touchmove',   this._handleTouchMoveBound);
     this.canvas.removeEventListener('touchend',    this._handleTouchEndBound);
     this.canvas.removeEventListener('touchcancel', this._handleTouchCancelBound);
+    window.removeEventListener('resize', this._invalidateRectBound);
+    window.removeEventListener('scroll', this._invalidateRectBound, { capture: true });
     this._listeners = {};
   }
 }

@@ -12,7 +12,7 @@ Owned by SceneManager, created once in [`main.js`](../../src/js/main.js).
 
 ### CanvasApp — [`src/js/engine/CanvasApp.js`](../../src/js/engine/CanvasApp.js)
 
-DPR-aware canvas, resize, clear, context access. **Per-scene wide viewport:** the design space is normally a fixed 1920×1080 contain-fit (pillar/letterbox bars), but `setSceneDesignWidth(w)` sets `designWidth` to a scene-requested FIXED width > 1920; the uniform contain-fit then does the rest — screens wider than `w:1080` absorb the extra width from the pillarbox bars at full size, narrower screens (e.g. exact 16:9) drop the scale so the full width still fits (the whole game renders slightly smaller, letterboxed/vertically centered). `designHeight` never changes. SceneManager applies it per scene from the scene's optional `preferredDesignWidth` field (null → classic fixed viewport). The viewport clip, input mapping (`cssToDesign`), and `onResize` all follow automatically.
+DPR-aware canvas, resize, clear, context access. **Per-scene wide viewport:** the design space is normally a fixed 1920×1080 contain-fit (pillar/letterbox bars), but `setSceneDesignWidth(w)` sets `designWidth` to a scene-requested FIXED width > 1920; the uniform contain-fit then does the rest — screens wider than `w:1080` absorb the extra width from the pillarbox bars at full size, narrower screens (e.g. exact 16:9) drop the scale so the full width still fits (the whole game renders slightly smaller, letterboxed/vertically centered). `designHeight` never changes. SceneManager applies it per scene from the scene's optional `preferredDesignWidth` field (null → classic fixed viewport). The viewport clip, input mapping (`cssToDesign`), and `onResize` all follow automatically. **Render DPR is capped** at `MAX_RENDER_DPR = 2` (main.js → `maxDpr` option; `?dprcap=N` URL override, `0` = uncapped) — never read raw `window.devicePixelRatio` in render code, use `app.dpr` or the live `ctx.getTransform()` (decision #51).
 
 ### GameLoop — [`src/js/engine/GameLoop.js`](../../src/js/engine/GameLoop.js)
 
@@ -32,7 +32,7 @@ AssetManager (spritesheets, aliases, runtime canvases) → see [assets-and-audio
 
 ### SceneManager — [`src/js/scenes/SceneManager.js`](../../src/js/scenes/SceneManager.js)
 
-Scene registry, switchTo/fadeToScene, game loop tick, layout. On every scene swap (both `switchTo` and the mid-fade `_executeSceneSwitch`), `_applySceneViewport` feeds the scene's optional **`preferredDesignWidth`** field to `CanvasApp.setSceneDesignWidth` BEFORE `onEnter` — scenes without the field get the classic fixed 1920×1080 viewport; a scene with it (today only BattleScene) gets the wider fixed viewport.
+Scene registry, switchTo/fadeToScene, game loop tick, layout. On every scene swap (both `switchTo` and the mid-fade `_executeSceneSwitch`), `_applySceneViewport` feeds the scene's optional **`preferredDesignWidth`** field to `CanvasApp.setSceneDesignWidth` BEFORE `onEnter` — scenes without the field get the classic fixed 1920×1080 viewport; a scene with it (today only BattleScene) gets the wider fixed viewport. **Frame-time HUD:** with the `?perf` URL flag, main.js attaches a [`PerfHud`](../../src/js/engine/PerfHud.js) via `setPerfHud`; `_tick` then times its update/layout/render phases and the HUD draws fps / avg / p95 + phase breakdown top-left over every scene.
 
 ### LoadingScene — [`src/js/scenes/LoadingScene.js`](../../src/js/scenes/LoadingScene.js)
 

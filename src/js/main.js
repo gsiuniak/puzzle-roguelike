@@ -11,6 +11,7 @@
 
 import CanvasApp from './engine/CanvasApp.js';
 import GameLoop from './engine/GameLoop.js';
+import PerfHud from './engine/PerfHud.js';
 import AssetManager from './engine/AssetManager.js';
 import InputManager from './engine/InputManager.js';
 import SceneManager from './scenes/SceneManager.js';
@@ -251,6 +252,13 @@ const ASSET_ALIASES = {
 const DESIGN_WIDTH  = 1920;
 const DESIGN_HEIGHT = 1080;
 
+// Cap the render devicePixelRatio. Fill cost scales with dpr², and dpr-3+ phones
+// pay ~2× the pixels of dpr 2 for little visible gain — while typical desktop
+// displays (dpr 1–2) sit at or below the cap and render EXACTLY as before, so
+// sharpness on those screens is untouched. Override for testing via the
+// `?dprcap=N` URL param (`?dprcap=0` = uncapped native).
+const MAX_RENDER_DPR = 2;
+
 // ── Initialize ─────────────────────────────────────────
 async function init() {
   // 0. Warm the custom display fonts so the first damage-counter draw isn't a
@@ -276,10 +284,14 @@ async function init() {
   }
 
   // 2. CanvasApp
+  const urlParams = new URLSearchParams(window.location.search);
+  const dprCapParam = urlParams.get('dprcap');
+  const maxDpr = dprCapParam !== null ? Number(dprCapParam) || 0 : MAX_RENDER_DPR;
   const app = new CanvasApp(null, {
     autoResize: true,
     designWidth: DESIGN_WIDTH,
     designHeight: DESIGN_HEIGHT,
+    maxDpr,
   });
 
   // 3. InputManager — receives `app` so pointer events convert to design space
@@ -291,6 +303,12 @@ async function init() {
   // 5. SceneManager — owns all shared services
   const sceneManager = new SceneManager(app, loop, input, assetManager);
   sceneManager.setAudioManager(AudioManager);
+
+  // Optional frame-time HUD (`?perf` URL flag): fps / avg / p95 frame time +
+  // update/layout/render phase breakdown, drawn top-left over every scene.
+  if (urlParams.has('perf')) {
+    sceneManager.setPerfHud(new PerfHud());
+  }
 
   // 6. LoadingScene — shown first, polls AssetManager progress, fades to Title
   const loadingScene = new LoadingScene();

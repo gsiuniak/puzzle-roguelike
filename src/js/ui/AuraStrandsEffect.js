@@ -41,6 +41,52 @@ const GLOW_PASSES = 3;
 /** Color lerp speed normalized for 60fps (0-1 per 16ms step) */
 const COLOR_LERP_SPEED = 0.035;
 
+// ── Baked particle sprites ─────────────────────────────
+// Creating radial gradients per particle per frame (2 gradients × up to 60
+// particles = ~120 allocations/frame) was the largest allocation churn in the
+// effect layer. Instead the glow + core gradients are baked ONCE per color into
+// offscreen sprites (same pattern as TileParticleEffect) and blitted with
+// per-particle globalAlpha — all gradient stops scale linearly with alpha, so
+// baking at alpha 1 and scaling via globalAlpha is visually identical.
+// Colors lerp continuously between characters, so the cache key quantizes each
+// channel to 32 steps (invisible at these low alphas, keeps the cache bounded).
+const GLOW_SPRITE_R = 32;
+const CORE_SPRITE_R = 16;
+const _particleSpriteCache = new Map();
+
+function _getParticleSprites(r255, g255, b255) {
+  const key = ((r255 >> 3) << 10) | ((g255 >> 3) << 5) | (b255 >> 3);
+  let entry = _particleSpriteCache.get(key);
+  if (entry) return entry;
+
+  const glow = document.createElement('canvas');
+  glow.width = glow.height = GLOW_SPRITE_R * 2;
+  const gctx = glow.getContext('2d');
+  const gGrad = gctx.createRadialGradient(
+    GLOW_SPRITE_R, GLOW_SPRITE_R, 0, GLOW_SPRITE_R, GLOW_SPRITE_R, GLOW_SPRITE_R
+  );
+  gGrad.addColorStop(0, `rgba(${r255}, ${g255}, ${b255}, 1)`);
+  gGrad.addColorStop(0.3, `rgba(${r255}, ${g255}, ${b255}, 0.5)`);
+  gGrad.addColorStop(1, `rgba(${r255}, ${g255}, ${b255}, 0)`);
+  gctx.fillStyle = gGrad;
+  gctx.fillRect(0, 0, glow.width, glow.height);
+
+  const core = document.createElement('canvas');
+  core.width = core.height = CORE_SPRITE_R * 2;
+  const cctx = core.getContext('2d');
+  const cGrad = cctx.createRadialGradient(
+    CORE_SPRITE_R, CORE_SPRITE_R, 0, CORE_SPRITE_R, CORE_SPRITE_R, CORE_SPRITE_R
+  );
+  cGrad.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+  cGrad.addColorStop(1, `rgba(${r255}, ${g255}, ${b255}, 0.2)`);
+  cctx.fillStyle = cGrad;
+  cctx.fillRect(0, 0, core.width, core.height);
+
+  entry = { glow, core };
+  _particleSpriteCache.set(key, entry);
+  return entry;
+}
+
 export default class AuraStrandsEffect {
   constructor() {
     /** @type {Array<Strand>} */
@@ -463,32 +509,25 @@ export default class AuraStrandsEffect {
     if (alpha <= 0.005) return;
 
     const { r, g, b } = this._color;
-
-    // Soft glow circle
-    const glowRadius = p.radius * 3;
-    const grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, glowRadius);
     const r255 = Math.floor(r * 255);
     const g255 = Math.floor(g * 255);
     const b255 = Math.floor(b * 255);
-    grad.addColorStop(0, `rgba(${r255}, ${g255}, ${b255}, ${alpha})`);
-    grad.addColorStop(0.3, `rgba(${r255}, ${g255}, ${b255}, ${alpha * 0.5})`);
-    grad.addColorStop(1, `rgba(${r255}, ${g255}, ${b255}, 0)`);
 
-    // Brighter core
-    const coreGrad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, p.radius);
-    coreGrad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.7})`);
-    coreGrad.addColorStop(1, `rgba(${r255}, ${g255}, ${b255}, ${alpha * 0.2})`);
+    // Baked glow + core sprites (see _getParticleSprites) blitted with the
+    // particle's alpha — no per-particle gradient allocation.
+    const sprites = _getParticleSprites(r255, g255, b255);
+    const glowRadius = p.radius * 3;
 
     ctx.save();
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, glowRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = coreGrad;
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, p.radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = Math.min(1, alpha);
+    ctx.drawImage(
+      sprites.glow,
+      pos.x - glowRadius, pos.y - glowRadius, glowRadius * 2, glowRadius * 2
+    );
+    ctx.drawImage(
+      sprites.core,
+      pos.x - p.radius, pos.y - p.radius, p.radius * 2, p.radius * 2
+    );
     ctx.restore();
   }
 }

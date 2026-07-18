@@ -70,17 +70,24 @@ export default class KeywordText extends UIElement {
 
   setStyle(props) {
     super.setStyle(props);
+    // Only invalidate when a value actually CHANGES — callers (measureCardModel)
+    // re-assert the same maxWidth every measure, and an unconditional invalidate
+    // here defeats the layout cache entirely (full re-tokenize + measureText per
+    // effect line per frame across both skill panes).
     let invalidate = false;
-    if (props.text !== undefined) { this.text = props.text == null ? '' : String(props.text); invalidate = true; }
-    if (props.fontSize !== undefined) { this.fontSize = props.fontSize; invalidate = true; }
-    if (props.fontFamily !== undefined) { this.fontFamily = props.fontFamily; invalidate = true; }
-    if (props.bold !== undefined) { this.bold = props.bold; invalidate = true; }
-    if (props.italic !== undefined) { this.italic = props.italic; invalidate = true; }
-    if (props.maxWidth !== undefined) { this.maxWidth = props.maxWidth; invalidate = true; }
-    if (props.maxLines !== undefined) { this.maxLines = props.maxLines; invalidate = true; }
-    if (props.lineHeight !== undefined) { this.lineHeight = props.lineHeight; invalidate = true; }
-    if (props.color !== undefined) { this.color = props.color; invalidate = true; }
-    if (props.missingColor !== undefined) { this._missingColor = props.missingColor; invalidate = true; }
+    if (props.text !== undefined) {
+      const t = props.text == null ? '' : String(props.text);
+      if (t !== this.text) { this.text = t; invalidate = true; }
+    }
+    if (props.fontSize !== undefined && props.fontSize !== this.fontSize) { this.fontSize = props.fontSize; invalidate = true; }
+    if (props.fontFamily !== undefined && props.fontFamily !== this.fontFamily) { this.fontFamily = props.fontFamily; invalidate = true; }
+    if (props.bold !== undefined && props.bold !== this.bold) { this.bold = props.bold; invalidate = true; }
+    if (props.italic !== undefined && props.italic !== this.italic) { this.italic = props.italic; invalidate = true; }
+    if (props.maxWidth !== undefined && props.maxWidth !== this.maxWidth) { this.maxWidth = props.maxWidth; invalidate = true; }
+    if (props.maxLines !== undefined && props.maxLines !== this.maxLines) { this.maxLines = props.maxLines; invalidate = true; }
+    if (props.lineHeight !== undefined && props.lineHeight !== this.lineHeight) { this.lineHeight = props.lineHeight; invalidate = true; }
+    if (props.color !== undefined && props.color !== this.color) { this.color = props.color; invalidate = true; }
+    if (props.missingColor !== undefined && props.missingColor !== this._missingColor) { this._missingColor = props.missingColor; invalidate = true; }
     if (props.alignH !== undefined) this.alignH = props.alignH;
     if (props.alignV !== undefined) this.alignV = props.alignV;
     if (props.shadowColor !== undefined) this.shadowColor = props.shadowColor;

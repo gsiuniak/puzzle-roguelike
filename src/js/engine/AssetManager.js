@@ -197,15 +197,18 @@ export default class AssetManager {
         return;
       }
 
-      // Make the full sheet retrievable under its own key too.
-      this._assets.set(sheetKey, { path: entry.imagePath, image: img });
-
       // slice:false sheets are consumed whole (SpriteSheetAnimation) — skip
-      // allocating a canvas per sprite that nothing would ever read.
+      // allocating a canvas per sprite that nothing would ever read, and keep
+      // the full sheet retrievable under its own key (its ONLY access path).
       if (entry.slice === false) {
+        this._assets.set(sheetKey, { path: entry.imagePath, image: img });
         console.log(`AssetManager: loaded spritesheet "${sheetKey}" (unsliced)`);
         return;
       }
+      // Sliced sheets are NOT retained under sheetKey: every consumer reads the
+      // per-sprite canvases, so keeping the full Image would only pin a second
+      // full copy of every sheet (~85 MB of PNGs / hundreds of MB decoded)
+      // for the page lifetime. The Image becomes garbage once slicing ends.
 
       const sprites = (data && data.sprites) || {};
       let sliced = 0;

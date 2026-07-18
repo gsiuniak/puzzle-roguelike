@@ -261,11 +261,19 @@ class _AudioManager {
 
     const { src, category, options = {} } = config;
 
+    // Music/ambient tracks decode to LARGE Web Audio PCM buffers (a full track
+    // is ~50–160 MB decoded); with preload:true every track decoded at boot,
+    // ~450–500 MB resident before gameplay. Load them on first play instead
+    // (playMusic queues fades/volume until the load lands) and unload on track
+    // switch (_teardownMusicHowl) so only the active track — plus the outgoing
+    // one mid-crossfade — is ever decoded. SFX stay preloaded (latency matters).
+    const lazyLoad = category === AudioCategory.MUSIC || category === AudioCategory.AMBIENT;
+
     // Merge category-specific defaults with per-sound options
     const howlOptions = {
       src: Array.isArray(src) ? src : [src],
       volume: 0, // Start at 0; actual volume applied on play via _applyCategoryVolume
-      preload: true,
+      preload: !lazyLoad,
       html5: false, // Use Web Audio API (default)
       ...options,
       // Ensure onloaderror doesn't throw; we warn gracefully
@@ -373,6 +381,7 @@ class _AudioManager {
     if (this._currentMusicHowl && this._currentMusicId !== null) {
       const oldHowl = this._currentMusicHowl;
       const oldId = this._currentMusicId;
+      const oldKey = this._currentMusicKey;
       // Detach the manual loop handler entirely so the outgoing track can never
       // restart itself mid/after fade and leave two songs playing.
       oldHowl.off('end');
@@ -382,10 +391,14 @@ class _AudioManager {
       this._currentMusicId = null;
       this._currentMusicKey = null;
 
+      // Both the 'fade' event and the wall-clock fallback can fire — run once.
+      let tornDown = false;
       const stopOld = () => {
         // Guard against a rapid switch back to this same track within the fade
         // window — only tear it down if it hasn't become current again.
-        if (this._currentMusicHowl !== oldHowl) oldHowl.stop();
+        if (tornDown || this._currentMusicHowl === oldHowl) return;
+        tornDown = true;
+        this._teardownMusicHowl(oldKey, oldHowl);
       };
 
       if (fadeOut > 0) {
@@ -403,6 +416,11 @@ class _AudioManager {
       console.warn(`[AudioManager] Music key "${key}" not found.`);
       return null;
     }
+
+    // Music howls are created lazy (preload:false, see loadSound) — kick the
+    // fetch+decode now. play()/volume()/fade() below queue internally until the
+    // load lands, so the rest of this method needs no special-casing.
+    if (howl.state() === 'unloaded') howl.load();
 
     const volume = opts.volume !== undefined ? opts.volume : 1.0;
     this._currentMusicBaseVolume = volume;
@@ -464,23 +482,50 @@ class _AudioManager {
     // (stop() never fires 'end', so an attached listener would be orphaned).
     this._currentMusicHowl.off('end');
 
-    if (fadeOut > 0) {
-      const howl = this._currentMusicHowl;
-      const id = this._currentMusicId;
-      const currentVol = howl.volume(id) || 0;
-
-      howl.fade(currentVol, 0, fadeOut, id);
-      // Stop after fade completes
-      setTimeout(() => {
-        howl.stop();
-      }, fadeOut + 50);
-    } else {
-      this._currentMusicHowl.stop();
-    }
+    const howl = this._currentMusicHowl;
+    const key = this._currentMusicKey;
+    const id = this._currentMusicId;
 
     this._currentMusicKey = null;
     this._currentMusicHowl = null;
     this._currentMusicId = null;
+
+    if (fadeOut > 0) {
+      const currentVol = howl.volume(id) || 0;
+
+      howl.fade(currentVol, 0, fadeOut, id);
+      // Tear down after the fade completes (stop + free the decoded buffer)
+      setTimeout(() => {
+        this._teardownMusicHowl(key, howl);
+      }, fadeOut + 50);
+    } else {
+      this._teardownMusicHowl(key, howl);
+    }
+  }
+
+  /**
+   * Stop a no-longer-current music howl and FREE its decoded PCM buffer
+   * (a full track is ~50–160 MB), then swap a fresh lazy (preload:false) Howl
+   * back into the registry so a later revisit of the track reloads cleanly.
+   * No-op if the howl has become the current track again (rapid switch-back).
+   *
+   * @param {string} key  — the sound key the howl was registered under
+   * @param {Howl}   howl — the outgoing music howl
+   */
+  _teardownMusicHowl(key, howl) {
+    if (!howl || this._currentMusicHowl === howl) return;
+    try {
+      howl.stop();
+      howl.unload();
+    } catch (err) {
+      // unload() on an already-unloaded howl is harmless; don't let audio
+      // teardown ever break a scene transition.
+    }
+    const def = key && this._config ? this._config[key] : null;
+    if (def && !def.sprite && this._sounds.get(key) === howl) {
+      this._sounds.delete(key);
+      this.loadSound(key, def);
+    }
   }
 
   /**
@@ -533,6 +578,11 @@ class _AudioManager {
       console.warn(`[AudioManager] Sound key "${key}" not found (category: ${category}).`);
       return null;
     }
+
+    // Lazy howls (music/ambient, preload:false — see loadSound) need an
+    // explicit load kick: Howler's play() only QUEUES on an unloaded howl,
+    // it never starts the load itself.
+    if (howl.state() === 'unloaded') howl.load();
 
     const baseVolume = opts.volume !== undefined ? opts.volume : 1.0;
     const effectiveVolume = this._muted

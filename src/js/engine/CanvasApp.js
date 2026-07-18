@@ -33,8 +33,20 @@ export default class CanvasApp {
     // Request opaque context for performance (no alpha blending with page)
     this.ctx = this.canvas.getContext('2d', { alpha: false });
 
-    /** Current device pixel ratio */
-    this.dpr = window.devicePixelRatio || 1;
+    /**
+     * Optional cap on the RENDER device pixel ratio (0 = uncapped). Canvas fill
+     * cost scales with dpr², so very-high-DPI phones (dpr 3+) pay ~2× the pixels
+     * of dpr 2 for little visible gain at game viewing distance. The cap only
+     * clamps the backing-store resolution — layout, input mapping, and design
+     * space are unaffected. Displays at or below the cap render identically.
+     */
+    this.maxDpr = opts.maxDpr || 0;
+
+    /** Raw (uncapped) devicePixelRatio — used for DPR-change detection */
+    this._rawDpr = window.devicePixelRatio || 1;
+
+    /** Current RENDER device pixel ratio (raw dpr clamped to maxDpr) */
+    this.dpr = this._clampDpr(this._rawDpr);
 
     this.autoResize = opts.autoResize !== false;
 
@@ -87,7 +99,7 @@ export default class CanvasApp {
       this._onResize = this._handleResize.bind(this);
       window.addEventListener('resize', this._onResize);
       // Re-check on DPR change (e.g. dragging window to a different-DPI monitor)
-      this._dprMql = window.matchMedia(`(resolution: ${this.dpr}dppx)`);
+      this._dprMql = window.matchMedia(`(resolution: ${this._rawDpr}dppx)`);
       this._onResizeOnDPR = this._handleResize.bind(this);
       this._dprMql.addEventListener('change', this._onResizeOnDPR);
       this._handleResize();
@@ -112,8 +124,14 @@ export default class CanvasApp {
   /** CSS-pixel Y offset from canvas top to design (0,0) */
   get offsetY() { return this._offsetY; }
 
+  /** Clamp a raw devicePixelRatio to the configured render cap (0 = uncapped). */
+  _clampDpr(raw) {
+    return this.maxDpr > 0 ? Math.min(raw, this.maxDpr) : raw;
+  }
+
   _handleResize() {
-    this.dpr = window.devicePixelRatio || 1;
+    this._rawDpr = window.devicePixelRatio || 1;
+    this.dpr = this._clampDpr(this._rawDpr);
     const winW = window.innerWidth;
     const winH = window.innerHeight;
 
@@ -280,11 +298,20 @@ export default class CanvasApp {
     const ctx = this.ctx;
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const grad = ctx.createLinearGradient(0, 0, this._cssWidth, 0);
-    for (const s of stops) {
-      grad.addColorStop(Math.max(0, Math.min(1, s.at)), s.color);
+    // Gradient creation is allocation + GPU-resource churn, and callers (the
+    // battle scrim) pass IDENTICAL stops every frame — cache the last gradient
+    // and rebuild only when the stops or canvas width actually change.
+    let key = this._cssWidth + '|';
+    for (const s of stops) key += s.at + ':' + s.color + ';';
+    if (key !== this._hGradKey) {
+      const grad = ctx.createLinearGradient(0, 0, this._cssWidth, 0);
+      for (const s of stops) {
+        grad.addColorStop(Math.max(0, Math.min(1, s.at)), s.color);
+      }
+      this._hGradKey = key;
+      this._hGrad = grad;
     }
-    ctx.fillStyle = grad;
+    ctx.fillStyle = this._hGrad;
     ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);
     ctx.restore();
   }

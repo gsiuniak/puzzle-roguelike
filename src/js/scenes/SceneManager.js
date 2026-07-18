@@ -79,6 +79,16 @@ export default class SceneManager {
     this._audioManager = am;
   }
 
+  /**
+   * Attach an optional frame-time HUD (enabled via the `?perf` URL flag in
+   * main.js). When set, _tick times its update/layout/render phases and the
+   * HUD draws on top of every frame.
+   * @param {import('../engine/PerfHud.js').default|null} hud
+   */
+  setPerfHud(hud) {
+    this._perfHud = hud || null;
+  }
+
   // ── Scene registry ────────────────────────────────────
 
   /**
@@ -291,11 +301,16 @@ export default class SceneManager {
 
     if (!this._currentScene) return;
 
+    const hud = this._perfHud;
+    const t0 = hud ? performance.now() : 0;
+
     // Update
     this._currentScene.update(dt);
+    const t1 = hud ? performance.now() : 0;
 
     // Layout (recalculate on every frame for responsiveness)
     this._layoutCurrentScene();
+    const t2 = hud ? performance.now() : 0;
 
     // Render
     this._app.clear();
@@ -304,6 +319,11 @@ export default class SceneManager {
     this._currentScene.render(this._app.ctx);
     this._app.endViewportClip();
     this._renderSceneForeground();
+
+    if (hud) {
+      hud.addFrame(dt, t1 - t0, t2 - t1, performance.now() - t2);
+      hud.render(this._app.ctx);
+    }
   }
 
   /**
