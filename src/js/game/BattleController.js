@@ -728,6 +728,16 @@ export default class BattleController {
   _setState(next) {
     if (this.state === next) return;
     this.state = next;
+    // GAME_OVER can arrive while a match-4 flourish freeze window is still
+    // open. Its phase timer only advances in RESOLVING, so the window would
+    // never close and isHitStopActive() would latch true forever — and the
+    // scene's hit-stop early-return runs BEFORE its game-over detection, so
+    // the battle would freeze on the kill frame. Clear the freeze here, at
+    // the single transition point, so every death path is covered.
+    if (next === BattleState.GAME_OVER) {
+      this._match4Flourish = null;
+      this._match4FreezeMs = 0;
+    }
     if (this.onStateChange) this.onStateChange();
   }
 

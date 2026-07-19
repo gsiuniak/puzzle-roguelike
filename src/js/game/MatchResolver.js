@@ -222,6 +222,7 @@ export default class MatchResolver {
     if (matches.length === 0) return null;
 
     const allPositions = new Set();
+    const creditedPositions = new Set();
     const mergedMana = {};
     let cascadeSkullDamage = 0;
     let cascadeExtraTurn = false;
@@ -236,17 +237,35 @@ export default class MatchResolver {
       // Inert tiles (Disease) are removed but award no mana and no skull
       // damage — matching them "does nothing except get rid of them". A 4+
       // match still grants an extra turn, like any other big match.
+      // (They also never claim a shared wild's credit below — they'd award
+      // nothing for it.)
       if (isInert(match.typeId)) {
         if (count >= 4) cascadeExtraTurn = true;
         continue;
       }
 
+      // A wild tile can sit in SEVERAL overlapping matches at once (it
+      // completes runs of different colors, or a color run AND a skull run).
+      // Each tile pays out exactly once, to the first match that contains it
+      // in scan order — otherwise a shared wild is credited per color and a
+      // big multi-wild board inflates mana/skull damage. The raw run size
+      // (`count`) still drives the 4+ extra-turn checks so overlap never
+      // costs a legitimately-long run its extra turn.
+      let creditCount = 0;
+      for (const pos of match.positions) {
+        const key = `${pos.col},${pos.row}`;
+        if (!creditedPositions.has(key)) {
+          creditedPositions.add(key);
+          creditCount++;
+        }
+      }
+
       if (isSkull(match.typeId)) {
-        const damage = calculateMatchedSkullDamage(attacker || { attack: 1 }, count);
+        const damage = calculateMatchedSkullDamage(attacker || { attack: 1 }, creditCount);
         cascadeSkullDamage += damage;
         if (count >= 4) cascadeExtraTurn = true;
       } else {
-        mergedMana[match.typeId] = (mergedMana[match.typeId] || 0) + count;
+        mergedMana[match.typeId] = (mergedMana[match.typeId] || 0) + creditCount;
         if (count >= 4) cascadeExtraTurn = true;
       }
 

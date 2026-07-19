@@ -14,6 +14,8 @@ import GameLoop from './engine/GameLoop.js';
 import PerfHud from './engine/PerfHud.js';
 import AssetManager from './engine/AssetManager.js';
 import InputManager from './engine/InputManager.js';
+import { warmVideoCache } from './engine/videoCacheWarmer.js';
+import { collectRuntimeVideoUrls } from './data/videoManifest.js';
 import SceneManager from './scenes/SceneManager.js';
 import LoadingScene from './scenes/LoadingScene.js';
 import TitleScreen from './scenes/TitleScreen.js';
@@ -382,6 +384,13 @@ async function init() {
         SpriteSheetAnimation.preload(key, paths.json, assetManager);
       }
     }
+
+    // Warm the service worker's video cache LAST (after all core assets) so
+    // the multi-MB cutscene .mp4s never compete with gameplay assets for
+    // bandwidth. This is what makes the character-select splash videos and
+    // boss intros play fully OFFLINE in the installed PWA; a no-op when
+    // serving raw (no SW). Fire-and-forget — nothing awaits it.
+    warmVideoCache(collectRuntimeVideoUrls());
   });
 
   // AudioManager initialization runs in parallel (Howler lazily streams audio).

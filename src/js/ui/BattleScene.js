@@ -2134,7 +2134,10 @@ export default class BattleScene extends UIPanel {
       else this._audioManager.resumeFrozenSfx();
       this._sfxHitStopFrozen = hitStop;
     }
-    if (hitStop) {
+    // Never hold during GAME_OVER: the victory/defeat detection below must
+    // run. The controller clears the freeze on death, but if hit-stop ever
+    // latched true in GAME_OVER this early-return would deadlock the scene.
+    if (hitStop && this._battleController.state !== BattleState.GAME_OVER) {
       if (this._board) this._board.update(dt);
       return;
     }

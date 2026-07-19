@@ -61,6 +61,7 @@ export default class BossIntroScene extends UIPanel {
     this._preloadedSrc = null;
     /** Bound element listeners, retained so they can be removed on teardown. */
     this._onLoadedMeta = null;
+    this._onBuildError = null;
     this._onCanPlay = null;
     this._onEnded = null;
     this._onError = null;
@@ -75,6 +76,10 @@ export default class BossIntroScene extends UIPanel {
 
     // Safety net: if the video never fires 'ended' (codec/loop issue), bail out.
     this._maxDuration = 20000; // ms
+    // Fail-fast: no paintable frame yet after this long (offline PWA — the
+    // .mp4 fetch fails) → skip the cutscene instead of holding a black screen
+    // for the full _maxDuration.
+    this._stallBailout = 4000; // ms
 
     // Short grace so the click/key that started the cutscene can't instantly skip it.
     this._skipGrace = 400; // ms
@@ -193,6 +198,12 @@ export default class BossIntroScene extends UIPanel {
       video.height = video.videoHeight;
     };
     video.addEventListener('loadedmetadata', this._onLoadedMeta);
+    // Remember a preload-time failure ON the element (offline PWA: the .mp4
+    // errors while the player still roams the map, before the playback
+    // listeners exist). Only mark it — never _requestFinish() from here: that
+    // would start the boss music mid-map. _startPlayback checks the flag.
+    this._onBuildError = () => { video._biFailed = true; };
+    video.addEventListener('error', this._onBuildError);
     return video;
   }
 
@@ -217,6 +228,14 @@ export default class BossIntroScene extends UIPanel {
     }
 
     const video = this._video;
+
+    // A preloaded element that already failed won't re-fire 'error' and its
+    // play() promise never settles — skip the cutscene instead of hanging on
+    // a black screen (the fail-fast in update() backstops later failures).
+    if (video._biFailed || video.error) {
+      this._requestFinish();
+      return;
+    }
 
     // Metadata may already have arrived during preload — mirror the size now in
     // case the loadedmetadata listener fired before this scene was entered.
@@ -248,10 +267,11 @@ export default class BossIntroScene extends UIPanel {
     const video = this._video;
     if (!video) return;
     if (this._onLoadedMeta) video.removeEventListener('loadedmetadata', this._onLoadedMeta);
+    if (this._onBuildError) video.removeEventListener('error', this._onBuildError);
     if (this._onCanPlay) video.removeEventListener('canplay', this._onCanPlay);
     if (this._onEnded) video.removeEventListener('ended', this._onEnded);
     if (this._onError) video.removeEventListener('error', this._onError);
-    this._onLoadedMeta = this._onCanPlay = this._onEnded = this._onError = null;
+    this._onLoadedMeta = this._onBuildError = this._onCanPlay = this._onEnded = this._onError = null;
     try { video.pause(); } catch (e) { /* ignore */ }
     video.removeAttribute('src');
     try { video.load(); } catch (e) { /* ignore */ }
@@ -306,6 +326,14 @@ export default class BossIntroScene extends UIPanel {
     // readyState gate renderBackground uses), so picture + music begin together.
     if (!this._musicStarted && this._video && this._video.readyState >= 2) {
       this._startMusic();
+    }
+
+    // Fail-fast: the video errored or never produced a paintable frame within
+    // the bailout window (offline / unreachable .mp4) — skip to the battle.
+    const vid = this._video;
+    if (!this._pendingFinish && this._elapsed >= this._stallBailout
+        && (!vid || vid._biFailed || vid.error || vid.readyState < 2)) {
+      this._requestFinish();
     }
 
     // Safety bail-out if the video never reports 'ended'.

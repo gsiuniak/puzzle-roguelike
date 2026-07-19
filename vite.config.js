@@ -159,9 +159,26 @@ export default defineConfig({
               cacheableResponse: { statuses: [200] },
             },
           },
-          // NOTE: cutscene videos (.mp4) are intentionally NOT cached — they're
-          // large and stream from the network; add a CacheFirst + RangeRequests
-          // rule here if full-offline cutscenes are needed.
+          {
+            // Cutscene/splash videos: CacheFirst, NOT SWR — the files are
+            // multi-MB and effectively immutable, so SWR's background refetch
+            // would re-download them on every play. rangeRequests lets the
+            // cached full-body 200 answer the <video> element's Range
+            // requests (Safari insists on 206s) — without it a cache hit
+            // won't play. The full bodies are stored by the boot-time
+            // videoCacheWarmer's plain fetch(); matching `.mp4` by pathname
+            // (not just destination === 'video') is what routes that warming
+            // fetch into this same cache.
+            urlPattern: ({ request, url }) =>
+              request.destination === 'video' || url.pathname.endsWith('.mp4'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'game-videos',
+              expiration: { maxEntries: 16 },
+              cacheableResponse: { statuses: [200] },
+              rangeRequests: true,
+            },
+          },
         ],
       },
       // Keep the SW out of `vite dev` so the optional dev server stays simple.

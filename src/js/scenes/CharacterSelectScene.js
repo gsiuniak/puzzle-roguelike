@@ -74,6 +74,16 @@ const CHOOSE_VIDEO_FADE_IN_MS = 0;
  */
 const CHOOSE_VIDEO_PLAY_FALLBACK_MS = 1000;
 
+/**
+ * Fail-fast: if the intro video is in an error state, never becomes
+ * paintable, or stops making playback progress for this long, abandon it and
+ * start the scene transition over the static splash. Offline PWA case: the
+ * .mp4 fetch fails during preload, and `play()` on an already-errored element
+ * neither re-fires 'error' nor settles its promise — without this watchdog
+ * the only exit is the 30s CHOOSE_VIDEO_MAX_DURATION cap. (ms)
+ */
+const CHOOSE_VIDEO_STALL_BAILOUT_MS = 4000;
+
 const MANA_ORDER = ['red', 'blue', 'green', 'yellow', 'purple'];
 
 /**
@@ -1498,8 +1508,12 @@ export default class CharacterSelectScene extends UIPanel {
     const video = this._ensurePooledVideo(def.splashVideo);
     this._video = video;
     this._videoSrc = def.splashVideo;
-    if (!video) {
-      // No video element (build/preload failed) — just transition.
+    this._videoStallMs = 0;
+    this._lastVideoTime = -1;
+    if (!video || video._csFailed || video.error) {
+      // No element, or its load already failed (offline PWA: the .mp4 never
+      // arrived) — skip the intro and transition over the static splash.
+      this._video = null;
       this._startChooseTransition();
       return;
     }
@@ -1638,7 +1652,15 @@ export default class CharacterSelectScene extends UIPanel {
     // The video ending / failing is a hard cue to finish (no-op until the intro
     // is actually active; _startChooseTransition guards on _choosingActive).
     const onEnded = () => this._startChooseTransition();
-    const onError = () => this._startChooseTransition();
+    const onError = () => {
+      // Remember the terminal failure on the element: an offline preload
+      // errors while no intro is active (the transition call below no-ops),
+      // and a later play() on the errored element neither re-fires 'error'
+      // nor settles its promise — _beginChooseIntro and the stall watchdog
+      // check this flag instead of waiting on events that will never come.
+      video._csFailed = true;
+      this._startChooseTransition();
+    };
     // Once the first frame is available, prime the decoder so playback starts
     // with zero stall when this hero is chosen.
     const onLoadedData = () => this._primeVideo(video);
@@ -1735,6 +1757,27 @@ export default class CharacterSelectScene extends UIPanel {
     if (this._chooseTransitionStarted) return;
 
     const v = this._video;
+
+    // Fail-fast watchdog: bail to the scene transition if the video errored,
+    // never produced a paintable frame, or stopped advancing (offline or a
+    // flaky-network stall) — don't sit on a frozen splash until the 30s cap.
+    if (v && (v._csFailed || v.error)) {
+      this._startChooseTransition();
+      return;
+    }
+    if (!v || v.readyState < 2) {
+      this._videoStallMs += dt; // still nothing paintable
+    } else if (this._videoPlayStarted && !v.ended && v.currentTime === this._lastVideoTime) {
+      this._videoStallMs += dt; // playing but the clock isn't moving
+    } else {
+      this._videoStallMs = 0;
+      this._lastVideoTime = v.currentTime;
+    }
+    if (this._videoStallMs >= CHOOSE_VIDEO_STALL_BAILOUT_MS) {
+      this._startChooseTransition();
+      return;
+    }
+
     let nearEnd = false;
     if (v && isFinite(v.duration) && v.duration > 0) {
       const remainingMs = (v.duration - v.currentTime) * 1000;

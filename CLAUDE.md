@@ -99,7 +99,7 @@ Violate only when explicitly instructed.
 | Adding/editing a character, enemy, skill, relic, status, tile, keyword, enemy AI | [docs/guides/content-authoring.md](docs/guides/content-authoring.md) |
 | Map, run state, player stats, floor scaling, rewards, character select | [docs/guides/run-and-progression.md](docs/guides/run-and-progression.md) |
 | Skill Weave — tag draft, synthesis rules, weave RNG, spell icons | [docs/guides/skill-weave.md](docs/guides/skill-weave.md) |
-| Sprites, spritesheets, aliases, sounds, music, the Vite/PWA build | [docs/guides/assets-and-audio.md](docs/guides/assets-and-audio.md) |
+| Sprites, spritesheets, aliases, sounds, music, videos/offline caching, the Vite/PWA build | [docs/guides/assets-and-audio.md](docs/guides/assets-and-audio.md) |
 | Balance sims, AI training/measurement, anything under `sim/toolbench/` | [docs/guides/toolbench.md](docs/guides/toolbench.md) |
 
 **Why something is the way it is** → [docs/decisions/](docs/decisions/) (50 records, one per
