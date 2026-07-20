@@ -1994,13 +1994,29 @@ export default class BattleScene extends UIPanel {
     // Base particle radius ~5% of cell size, clamped to 2-5px
     const baseSize = Math.max(2, Math.min(5, metrics.cellSize * 0.05));
 
+    // Graceful degradation for HUGE simultaneous clears (board-wide destroy
+    // skills, deep bottom-row cascades): once many bursts are already live,
+    // later bursts spawn fewer particles so the total stays bounded — the
+    // reduction is invisible in that much chaos, but the frame cost isn't.
+    // Ordinary 3-5 tile matches are never affected.
+    const liveBursts = this._particleEffects.length;
+    let particleCount = 12;
+    let sparkCount = 6;
+    if (liveBursts >= 24) {
+      particleCount = 4;
+      sparkCount = 2;
+    } else if (liveBursts >= 12) {
+      particleCount = 7;
+      sparkCount = 3;
+    }
+
     const effect = new TileParticleEffect(
       screen.x, screen.y,
       tileType.particleColor,
       baseSize,
       {
-        particleCount: 12,
-        sparkCount: 6,
+        particleCount,
+        sparkCount,
         minLife: 250,
         maxLife: 500,
         minSpeed: metrics.cellSize * 0.12,

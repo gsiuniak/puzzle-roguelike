@@ -305,6 +305,26 @@ rendering is not — the main thread isn't saturated by drawing.
 - [ ] Dead-asset cleanup — deliberately skipped: unreferenced files are never fetched
       (zero runtime impact) and the raw dirs may feed the art pipeline; owner's call.
 
+**Phase 0.5 — cascade effect pass — IMPLEMENTED 2026-07-19** (response to a reported
+mobile fps drop during cascades — addresses Risk #2's render-side half; all changes are
+the established bake-and-blit idiom, verified pixel-equivalent or imperceptible):
+- [x] `TileParticleEffect`: glow+core pre-summed into ONE baked `'burst'` sprite
+      (additive blending is linear → identical pixels), halving per-particle draws; and
+      a transform-free fast path for particles below `STRETCH_MIN_SPEED` — most of a
+      particle's life — removing the per-particle save/translate/rotate/scale/restore
+      churn (hundreds of particles live during a big cascade step).
+- [x] `BattleScene._spawnTileDestroyParticles`: particle/spark counts throttle once 12+
+      / 24+ bursts are already live, bounding board-wide destroys and deep bottom-row
+      cascades; ordinary 3-5 tile matches unaffected.
+- [x] `FloatingTextEffect`: the 3-pass text look (shadow/outline/fill) baked once per
+      string into a module-cached sprite at physical resolution — the animating font
+      size defeated the glyph cache, re-rasterizing 3 text passes per effect per frame.
+- [x] `FloatingImageEffect`: the ~700px animated-text art's `'high'`-quality resample
+      now happens once into a peak-size pre-scaled copy; per-frame draws are ≤1:1 blits.
+- [x] Match-4 flourish (`BoardPlaceholder`): bloom/core/parry-flare gradients baked into
+      module-cached sprites (2 gradients per matched tile per frame → ≤1 per frame, the
+      ring). Matters most on chained 4+ flourishes, whose freeze beats escalate.
+
 **Phase 1 — medium structural:** asset groups + title gating + Vite deploys (F3) ·
 re-pack/downscale relics + portrait sheets (F3/F4) · map static-layer bake + cached
 layout (F5) · `visibilitychange` pause/mute · `getState()` snapshot reuse.

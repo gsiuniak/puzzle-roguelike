@@ -183,6 +183,53 @@ const MATCH4_GLOW_COLORS = {
   purple: '197,107,255', skull: '220,220,220', thrall: '255,90,74', disease: '194,209,90',
 };
 
+// ── Baked flourish glow sprites ─────────────────────────────────────────────
+// The match-4 flourish used to build 2 radial gradients PER matched tile PER
+// FRAME (bloom + core, plus the parry flare) for the whole freeze beat —
+// gradient construction + gradient fills are slow on mobile Canvas2D. Each
+// look is instead baked ONCE (module cache, a handful of colors) and drawn as
+// a scaled additive blit with globalAlpha carrying the animated intensity
+// (all the gradients' alpha stops scale by one common factor, so this is
+// visually identical). Same idiom as TileParticleEffect/ManaStreamEffect.
+const FLOURISH_SPRITE_R = 96;
+const _flourishSpriteCache = new Map(); // `${kind}|${key}` → canvas
+
+/**
+ * kind: 'bloom' (key = 'r,g,b')            — warm tile bloom, stops 1 → 0.45 → 0
+ *       'core'  (key = '')                 — white-ish hot center, 1 → 0
+ *       'flare' (key = 'centerRGB|mainRGB') — parry-flash flare, 1 → 0.7 → 0
+ */
+function _getFlourishSprite(kind, key) {
+  const cacheKey = kind + '|' + key;
+  let cv = _flourishSpriteCache.get(cacheKey);
+  if (cv) return cv;
+  cv = document.createElement('canvas');
+  cv.width = cv.height = FLOURISH_SPRITE_R * 2;
+  const c = cv.getContext('2d');
+  const r = FLOURISH_SPRITE_R;
+  let g;
+  if (kind === 'bloom') {
+    g = c.createRadialGradient(r, r, r * 0.08, r, r, r);
+    g.addColorStop(0, `rgba(${key},1)`);
+    g.addColorStop(MATCH4_FLOURISH.bloomInnerFrac, `rgba(${key},0.45)`);
+    g.addColorStop(1, `rgba(${key},0)`);
+  } else if (kind === 'core') {
+    g = c.createRadialGradient(r, r, 0, r, r, r);
+    g.addColorStop(0, 'rgba(255,250,235,1)');
+    g.addColorStop(1, 'rgba(255,250,235,0)');
+  } else { // 'flare'
+    const [center, main] = key.split('|');
+    g = c.createRadialGradient(r, r, 0, r, r, r);
+    g.addColorStop(0, `rgba(${center},1)`);
+    g.addColorStop(0.35, `rgba(${main},0.7)`);
+    g.addColorStop(1, `rgba(${main},0)`);
+  }
+  c.fillStyle = g;
+  c.fillRect(0, 0, FLOURISH_SPRITE_R * 2, FLOURISH_SPRITE_R * 2);
+  _flourishSpriteCache.set(cacheKey, cv);
+  return cv;
+}
+
 /**
  * BoardRenderer — renders the 8×8 match-3 grid from a BoardModel.
  *
@@ -567,27 +614,25 @@ export default class BoardPlaceholder extends UIElement {
     }
 
     // 2. Additive warm BLOOM behind the tiles (grows in with env; overlapping
-    //    radials merge into one soft glow across the matched group).
+    //    radials merge into one soft glow across the matched group). Baked
+    //    sprites + globalAlpha — no per-frame gradient construction.
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    ctx.imageSmoothingEnabled = true;
+    const baseAlpha = ctx.globalAlpha;
     const bloomR = cs * cfg.bloomRadiusFrac * (cfg.bloomStartScale + (1 - cfg.bloomStartScale) * env);
+    ctx.globalAlpha = baseAlpha * cfg.bloomAlpha * env;
     for (const it of items) {
-      const g = ctx.createRadialGradient(it.dcx, it.dcy, cs * 0.08, it.dcx, it.dcy, bloomR);
-      g.addColorStop(0, `rgba(${it.rgb},${cfg.bloomAlpha * env})`);
-      g.addColorStop(cfg.bloomInnerFrac, `rgba(${it.rgb},${cfg.bloomAlpha * env * 0.45})`);
-      g.addColorStop(1, `rgba(${it.rgb},0)`);
-      ctx.fillStyle = g;
-      ctx.fillRect(it.dcx - bloomR, it.dcy - bloomR, bloomR * 2, bloomR * 2);
+      const sprite = _getFlourishSprite('bloom', it.rgb);
+      ctx.drawImage(sprite, it.dcx - bloomR, it.dcy - bloomR, bloomR * 2, bloomR * 2);
     }
     // Hot white-ish core for the "brightest frame" pop.
     const coreR = cs * cfg.coreRadiusFrac * env;
     if (coreR > 0) {
+      const coreSprite = _getFlourishSprite('core', '');
+      ctx.globalAlpha = baseAlpha * cfg.coreAlpha * env;
       for (const it of items) {
-        const g = ctx.createRadialGradient(it.dcx, it.dcy, 0, it.dcx, it.dcy, coreR);
-        g.addColorStop(0, `rgba(255,250,235,${cfg.coreAlpha * env})`);
-        g.addColorStop(1, 'rgba(255,250,235,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(it.dcx - coreR, it.dcy - coreR, coreR * 2, coreR * 2);
+        ctx.drawImage(coreSprite, it.dcx - coreR, it.dcy - coreR, coreR * 2, coreR * 2);
       }
     }
     ctx.restore();
@@ -653,20 +698,24 @@ export default class BoardPlaceholder extends UIElement {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
-    // Central flare — hot white core over the matched tiles.
+    // Central flare — hot white core over the matched tiles. Baked sprite
+    // (module cache) — the gradient's alpha stops all scale by decay, so a
+    // globalAlpha blit reproduces it without per-frame gradient construction.
     const flareR = cs * cfg.coreRadiusFrac * (0.35 + 0.65 * spread);
-    let g = ctx.createRadialGradient(gx, gy, 0, gx, gy, flareR);
-    g.addColorStop(0, `rgba(${cfg.centerColor},${cfg.coreAlpha * decay})`);
-    g.addColorStop(0.35, `rgba(${cfg.color},${cfg.coreAlpha * decay * 0.7})`);
-    g.addColorStop(1, `rgba(${cfg.color},0)`);
-    ctx.fillStyle = g;
-    ctx.fillRect(gx - flareR, gy - flareR, flareR * 2, flareR * 2);
+    const flareSprite = _getFlourishSprite('flare', `${cfg.centerColor}|${cfg.color}`);
+    const prevFlashAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = prevFlashAlpha * cfg.coreAlpha * decay;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(flareSprite, gx - flareR, gy - flareR, flareR * 2, flareR * 2);
+    ctx.globalAlpha = prevFlashAlpha;
 
-    // Expanding shockwave ring — thins as it travels outward.
+    // Expanding shockwave ring — thins as it travels outward. (Kept as a live
+    // gradient: its inner/outer radius RATIO changes every frame, so a scaled
+    // sprite can't represent it; it's one gradient per frame, not per tile.)
     const ringR = cs * cfg.ringEndFrac * spread;
     const ringW = Math.max(1, cs * cfg.ringWidthFrac * (1 - fp * 0.7));
     if (ringR > ringW) {
-      g = ctx.createRadialGradient(gx, gy, Math.max(0, ringR - ringW), gx, gy, ringR + ringW);
+      const g = ctx.createRadialGradient(gx, gy, Math.max(0, ringR - ringW), gx, gy, ringR + ringW);
       g.addColorStop(0, `rgba(${cfg.color},0)`);
       g.addColorStop(0.5, `rgba(${cfg.color},${cfg.ringAlpha * decay})`);
       g.addColorStop(1, `rgba(${cfg.color},0)`);

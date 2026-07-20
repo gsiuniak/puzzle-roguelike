@@ -29,8 +29,23 @@
 // plain scaled drawImage + globalAlpha. Alpha stops scale linearly, so
 // multiplying globalAlpha by the particle alpha reproduces the old gradients
 // exactly.
-const SPRITE_R = 32; // baked sprite radius in px (drawn scaled)
+const SPRITE_R = 48; // baked sprite radius in px (drawn scaled)
 const _spriteCache = new Map(); // `${kind}|${color}` → canvas
+
+// Core radius as a fraction of the glow radius — the two are always drawn
+// concentric with radii radius*0.55 and radius*3.5, so the pair can be baked
+// into ONE 'burst' sprite (additive blending is linear: pre-summing glow+core
+// in the bake produces the same pixels as two separate additive draws) and
+// blitted with a single drawImage per particle instead of two.
+const CORE_TO_GLOW = 0.55 / 3.5;
+
+// Below this speed (px/s) a particle's velocity stretch is under ~10% — not
+// visible on a soft additive dot — so it takes the transform-free fast path
+// (one absolute-coordinate blit, no save/translate/rotate/scale/restore).
+// Deceleration is fast (×0.90/frame), so most of every particle's life is
+// spent here; this removes the bulk of the per-particle canvas state churn
+// that made big cascades drop frames on mobile.
+const STRETCH_MIN_SPEED = 25;
 
 function _rgbaFromHex(hex, alpha) {
   let h = hex.replace('#', '');
@@ -42,8 +57,10 @@ function _rgbaFromHex(hex, alpha) {
 }
 
 /**
- * kind: 'glow'  — soft outer halo (color 0.65 → 0.25 → 0)
- *       'core'  — bright center (white 0.95 → color 0.8 → 0)
+ * kind: 'burst' — the combined per-particle sprite: soft outer halo
+ *                 (color 0.65 → 0.25 → 0, full radius) with the bright core
+ *                 (white 0.95 → color 0.8 → 0, CORE_TO_GLOW of the radius)
+ *                 summed additively on top — one blit draws both.
  *       'flash' — burst pop glow (white 0.9 → color 0.55 → 0)
  */
 function _getSprite(kind, color) {
@@ -55,24 +72,32 @@ function _getSprite(kind, color) {
   const c = cv.getContext('2d');
   const r = SPRITE_R;
   let g;
-  if (kind === 'glow') {
+  if (kind === 'burst') {
+    // Outer glow halo across the full sprite radius.
     g = c.createRadialGradient(r, r, r * 0.043, r, r, r);
     g.addColorStop(0, _rgbaFromHex(color, 0.65));
     g.addColorStop(0.3, _rgbaFromHex(color, 0.25));
     g.addColorStop(1, 'rgba(0,0,0,0)');
-  } else if (kind === 'core') {
-    g = c.createRadialGradient(r, r, 0, r, r, r);
+    c.fillStyle = g;
+    c.fillRect(0, 0, SPRITE_R * 2, SPRITE_R * 2);
+    // Bright core, additively summed so the pre-baked pair blits identically
+    // to the old two-draw (glow then core) additive composite.
+    const cr = r * CORE_TO_GLOW;
+    c.globalCompositeOperation = 'lighter';
+    g = c.createRadialGradient(r, r, 0, r, r, cr);
     g.addColorStop(0, 'rgba(255,255,255,0.95)');
     g.addColorStop(0.35, _rgbaFromHex(color, 0.8));
     g.addColorStop(1, _rgbaFromHex(color, 0));
+    c.fillStyle = g;
+    c.fillRect(0, 0, SPRITE_R * 2, SPRITE_R * 2);
   } else { // 'flash'
     g = c.createRadialGradient(r, r, 0, r, r, r);
     g.addColorStop(0, 'rgba(255,255,255,0.9)');
     g.addColorStop(0.25, _rgbaFromHex(color, 0.55));
     g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, SPRITE_R * 2, SPRITE_R * 2);
   }
-  c.fillStyle = g;
-  c.fillRect(0, 0, SPRITE_R * 2, SPRITE_R * 2);
   _spriteCache.set(key, cv);
   return cv;
 }
@@ -322,9 +347,10 @@ export default class TileParticleEffect {
       ctx.globalAlpha = prevAlpha;
     }
 
-    // ── Particles ── (baked sprites; no per-frame gradient construction)
-    const glowSprite = _getSprite('glow', this.color);
-    const coreSprite = _getSprite('core', this.color);
+    // ── Particles ── (ONE baked glow+core sprite per particle; slow particles
+    // skip the transform entirely — see STRETCH_MIN_SPEED)
+    const burstSprite = _getSprite('burst', this.color);
+    const baseAlpha = ctx.globalAlpha;
     for (const p of this.particles) {
       if (!p.active) continue;
       const alpha = this._particleAlpha(p);
@@ -332,38 +358,34 @@ export default class TileParticleEffect {
 
       const scale = this._particleScale(p);
       const radius = Math.max(0.4, p.size * scale);
+      const glowR = radius * 3.5;
 
-      // Compute velocity-based stretch
       const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-      let stretchX = 1.0;
-      let stretchY = 1.0;
-      let stretchAngle = 0;
-      if (speed > 5) {
-        const stretchAmount = 1.0 + Math.min(1.5, speed * 0.004);
-        stretchX = stretchAmount;
-        stretchY = 1.0 / Math.sqrt(stretchAmount); // preserve area
-        stretchAngle = Math.atan2(p.vy, p.vx);
-      }
-
       const x = Math.floor(p.x);
       const y = Math.floor(p.y);
 
+      if (speed <= STRETCH_MIN_SPEED) {
+        // FAST PATH — no save/translate/rotate/scale/restore, one blit.
+        ctx.globalAlpha = baseAlpha * alpha;
+        ctx.drawImage(burstSprite, x - glowR, y - glowR, glowR * 2, glowR * 2);
+        continue;
+      }
+
+      // Fast movers keep the velocity-based stretch (area-preserving).
+      const stretchAmount = 1.0 + Math.min(1.5, speed * 0.004);
+      const stretchX = stretchAmount;
+      const stretchY = 1.0 / Math.sqrt(stretchAmount);
+      const stretchAngle = Math.atan2(p.vy, p.vx);
+
       ctx.save();
       ctx.translate(x, y);
-      if (stretchAngle !== 0) ctx.rotate(stretchAngle);
+      ctx.rotate(stretchAngle);
       ctx.scale(stretchX, stretchY);
-      ctx.globalAlpha *= alpha;
-
-      // Soft outer glow
-      const glowR = radius * 3.5;
-      ctx.drawImage(glowSprite, -glowR, -glowR, glowR * 2, glowR * 2);
-
-      // Bright core
-      const coreR = radius * 0.55;
-      ctx.drawImage(coreSprite, -coreR, -coreR, coreR * 2, coreR * 2);
-
+      ctx.globalAlpha = baseAlpha * alpha;
+      ctx.drawImage(burstSprite, -glowR, -glowR, glowR * 2, glowR * 2);
       ctx.restore();
     }
+    ctx.globalAlpha = baseAlpha;
 
     ctx.restore();
   }

@@ -146,9 +146,51 @@ export default class FloatingImageEffect {
     // These are detailed, glow-heavy art scaled to a fractional size (and the
     // scale animates each frame), so they must be bilinearly smoothed — nearest
     // neighbour (imageSmoothingEnabled = false) aliases the text/glow edges.
+    // The expensive part — the big source art's 'high'-quality downscale —
+    // happens ONCE into a pre-scaled copy (see _getDrawImage); the per-frame
+    // draw is then a near-1:1 blit that default smoothing handles cleanly.
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(this.image, x, y, rw, rh);
+    ctx.drawImage(this._getDrawImage(ctx), x, y, rw, rh);
     ctx.restore();
+  }
+
+  /**
+   * The image to blit each frame: the raw source when it's already near the
+   * display size, else a one-time 'high'-quality downscale of it baked at the
+   * animation's PEAK physical size (so every per-frame draw is a ≤1:1 blit
+   * instead of a fresh multi-hundred-px 'high' downsample of the source art —
+   * a constant cost on mobile while a turn/extra-turn banner is up).
+   * @private
+   */
+  _getDrawImage(ctx) {
+    if (this._drawImage !== undefined) return this._drawImage || this.image;
+
+    // Physical px per design px (DPR × contain-fit) under the live transform.
+    let pxScale = 1;
+    if (typeof ctx.getTransform === 'function') {
+      const m = ctx.getTransform();
+      pxScale = Math.max(0.1, Math.hypot(m.a, m.b));
+    }
+    // Peak displayed size (+ headroom: the grow wobble can briefly exceed the
+    // overshoot by a few %), in physical pixels.
+    const peakW = Math.ceil(this.targetWidth * this.overshoot * 1.1 * pxScale);
+    const peakH = Math.ceil(this.targetHeight * this.overshoot * 1.1 * pxScale);
+
+    // Source already at/below display size (or no DOM) → draw it directly.
+    if (typeof document === 'undefined' || !this.image.width
+        || this.image.width <= peakW) {
+      this._drawImage = null;
+      return this.image;
+    }
+
+    const cv = document.createElement('canvas');
+    cv.width = peakW;
+    cv.height = peakH;
+    const c = cv.getContext('2d');
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(this.image, 0, 0, peakW, peakH);
+    this._drawImage = cv;
+    return cv;
   }
 }
