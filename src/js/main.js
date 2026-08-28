@@ -358,6 +358,11 @@ async function init() {
   sceneManager.registerScene('SkillWeaveScene', skillWeaveScene);
   // BattleScene is registered lazily by MapScene._transitionToBattle()
 
+  // Buffer both title movies NOW, in parallel with asset loading, so the intro
+  // starts frame-perfect the moment the LoadingScene fades to the title and a
+  // title click plays the transition with no stall (idempotent).
+  titleScreen.preloadVideos();
+
   // 11. Wire the fullscreen toggle button.
   // The Fullscreen API requires a user gesture, so we attach a tap/click
   // handler rather than auto-entering. On iOS Safari the API is unavailable

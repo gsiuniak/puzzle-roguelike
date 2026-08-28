@@ -133,7 +133,11 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: ({ request }) => request.destination === 'audio',
+            // Pathname fallbacks catch audio Howler fetches via XHR (Web Audio
+            // mode), whose request.destination is '' — e.g. the title
+            // transition .webm stinger living outside assets/audio/.
+            urlPattern: ({ request, url }) =>
+              request.destination === 'audio' || url.pathname.endsWith('.webm'),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'game-audio',

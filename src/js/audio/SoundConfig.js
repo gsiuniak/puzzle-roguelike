@@ -183,6 +183,13 @@ const SOUNDS = {
     src: ['assets/audio/sfx/damage_taken.mp3'],
     category: AudioCategory.SFX,
   },
+  // Title-screen transition stinger — played by TitleScreen simultaneously
+  // with the title_screen_movie_transition video on any title input.
+  // Standalone file (lives beside its video, not under assets/audio/).
+  sfx_title_transition: {
+    src: ['assets/sprites/title/title_screen_movie_transition_sfx.webm'],
+    category: AudioCategory.SFX,
+  },
 
   // ── Skill resolve sounds (played when skill effect resolves, NOT on button click) ──
   // All sprite-backed — clip names match the SFX_SPRITE_SHEET entries.

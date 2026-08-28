@@ -412,6 +412,21 @@ export default class CharacterSelectScene extends UIPanel {
     /** @type {boolean} true once play() has been issued for the intro video */
     this._videoPlayStarted = false;
 
+    // ── Title-transition entry overlay ─────────────────
+    // TitleScreen hands its still-playing transition <video> here (via
+    // setEntryVideoOverlay, immediately BEFORE an instant switchTo) so the
+    // movie's end cross-fades into this scene's UI: renderForeground draws it
+    // full-canvas over everything at an alpha decaying 1→0 over
+    // _entryOverlayFadeMs, then the element is released. This scene OWNS the
+    // element from the handoff on. Deliberately NOT reset in onEnter — the
+    // handoff sets it just before onEnter runs.
+    /** @type {HTMLVideoElement|null} */
+    this._entryOverlayVideo = null;
+    /** @type {number} ms over which the overlay fades out */
+    this._entryOverlayFadeMs = 1;
+    /** @type {number} ms since the handoff */
+    this._entryOverlayElapsed = 0;
+
     // ── UI fill scale ──────────────────────────────────
     // Multiplier applied to all UI sizes so the layout fills more of the
     // physical screen on aspect ratios that pillarbox/letterbox the design
@@ -1362,6 +1377,37 @@ export default class CharacterSelectScene extends UIPanel {
     // Release all preloaded intro videos (the transition to the next scene is
     // already underway by the time this fires).
     this._destroyVideoPool();
+
+    // Safety: release a title-transition overlay that hasn't finished fading
+    // (e.g. the player confirmed a hero within the overlay's first frames).
+    this._destroyEntryOverlay();
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Title-transition entry overlay (handed off by TitleScreen)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Take ownership of the still-playing title-transition <video> and fade it
+   * out over this scene's UI. Called by TitleScreen immediately before its
+   * instant switchTo here, so onEnter must not (and does not) reset it.
+   * @param {HTMLVideoElement} video — plays out and is released when the fade ends
+   * @param {number} fadeMs — fade-out duration
+   */
+  setEntryVideoOverlay(video, fadeMs) {
+    this._destroyEntryOverlay();
+    this._entryOverlayVideo = video || null;
+    this._entryOverlayFadeMs = Math.max(1, fadeMs || 600);
+    this._entryOverlayElapsed = 0;
+  }
+
+  _destroyEntryOverlay() {
+    const video = this._entryOverlayVideo;
+    if (!video) return;
+    try { video.pause(); } catch (e) { /* ignore */ }
+    video.removeAttribute('src');
+    try { video.load(); } catch (e) { /* ignore */ }
+    this._entryOverlayVideo = null;
   }
 
   /** Recursively set assetManager on all UIImage children */
@@ -1809,6 +1855,15 @@ export default class CharacterSelectScene extends UIPanel {
     // Advance the choose-hero video intro (UI fade-out + deferred transition)
     if (this._choosingActive) this._updateChooseIntro(dt);
 
+    // Advance the title-transition entry overlay fade; release the video the
+    // moment it is fully transparent.
+    if (this._entryOverlayVideo) {
+      this._entryOverlayElapsed += dt;
+      if (this._entryOverlayElapsed >= this._entryOverlayFadeMs) {
+        this._destroyEntryOverlay();
+      }
+    }
+
     super.update(dt);
   }
 
@@ -1866,6 +1921,21 @@ export default class CharacterSelectScene extends UIPanel {
 
   /** No in-viewport background — splashes are drawn full-canvas in renderBackground. */
   renderSelf(_ctx) {}
+
+  /**
+   * Draw the title-transition entry overlay ON TOP of all UI (full canvas,
+   * covering the bars): the handed-off transition movie finishes playing at a
+   * decaying alpha, cross-fading into this scene's layout beneath it.
+   */
+  renderForeground(_ctx) {
+    const video = this._entryOverlayVideo;
+    if (!video || video.error || video.readyState < 2) return;
+    const app = this._sceneManager && this._sceneManager._app;
+    if (!app) return;
+    const alpha = Math.max(0, 1 - this._entryOverlayElapsed / this._entryOverlayFadeMs);
+    if (alpha <= 0) return;
+    app.drawFullCanvasImage(video, alpha);
+  }
 
   /**
    * Draw the info panel background image. Called from render() after the
