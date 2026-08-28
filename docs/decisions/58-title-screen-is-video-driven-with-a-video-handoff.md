@@ -43,6 +43,12 @@ still-playing `<video>` element moves across the scene boundary:
   within 4s falls back (intro → static image, transition → the classic
   `fadeToScene`), and both movies are in `videoManifest` for PWA cache warming.
 
+**The same handoff shape now has a second use site (2026-08-28):** confirming a
+hero plays the shared map-transition movie in CharacterSelectScene and hands it
+to `MapScene.setEntryVideoOverlay` (which also arms MapView's fullscreen-splash
+entry reveal) — same ownership-transfer-before-`switchTo`, same deferral, same
+fail-fast fallbacks.
+
 The movie URLs live in `data/videoManifest.js` (`TITLE_SCREEN_VIDEOS`) so the
 scene and the cache warmer share one source of truth; `main.js` calls
 `titleScreen.preloadVideos()` at boot so both movies buffer during the loading

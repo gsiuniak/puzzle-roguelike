@@ -39,6 +39,14 @@ const OVERLAY_FADE_DURATION = 170;
 /** Fraction of canvas height the panel slides */
 const OVERLAY_SLIDE_FRACTION = 0.10;
 
+// ── Entry reveal constants (fresh-run map entry after the transition movie) ──
+/** Fullscreen splash hold while the handed-off movie's last frame dissolves over it (ms) */
+const ENTRY_HOLD_MS = 200;
+/** Fullscreen → container shrink duration (ms) */
+const ENTRY_SHRINK_MS = 700;
+/** Nodes/paths/labels fade-in after the splash lands in the container (ms) */
+const ENTRY_CONTENT_FADE_MS = 300;
+
 /**
  * Overlay animation state enum.
  * @readonly
@@ -77,6 +85,101 @@ export default class MapView {
     this._overlayState = OverlayState.CLOSED;
     /** @type {number} elapsed animation time in ms */
     this._overlayTimer = 0;
+
+    // ── Entry reveal state (fullscreen splash → container shrink) ──
+    /** @type {boolean} true while the entry reveal is animating */
+    this._entryActive = false;
+    /** @type {number} elapsed reveal time in ms (advanced in renderEntryRevealBackground) */
+    this._entryTimer = 0;
+    /** @type {number} contents fade-in alpha for the current frame (set by
+     *  renderEntryRevealBackground, consumed by renderFullscreen) */
+    this._entryContentAlpha = 0;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Entry reveal API (used by MapScene on fresh-run entry)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Begin the entry reveal: the parchment splash starts FULL-CANVAS (matching
+   * the map-transition movie's final frame, whose held last frame dissolves
+   * over it — decision #58 handoff), holds briefly, shrinks into the map
+   * container, then the map contents fade in. Armed by MapScene when the
+   * character-confirm cutscene hands off.
+   */
+  beginEntryReveal() {
+    this._entryActive = true;
+    this._entryTimer = 0;
+  }
+
+  /** @returns {boolean} true while the entry reveal is animating */
+  isEntryRevealActive() {
+    return this._entryActive;
+  }
+
+  /**
+   * Advance + draw the entry reveal SPLASH. Must be called from the scene's
+   * `renderBackground` hook — i.e. BEFORE the viewport clip — so the
+   * fullscreen phase covers the whole physical window (bars included) with
+   * EXACTLY the framing of the handed-off movie: the start rect is the full
+   * CSS window mapped into design coordinates via `app.cssToDesign`, and the
+   * splash art is authored at the movie's final frame, so the same centered
+   * cover-fit `drawFullCanvasImage` uses lands on identical pixels — no size
+   * jump at the dissolve. The rect then shrinks into the map container.
+   * Contents fade-in alpha is stashed for renderFullscreen (which runs inside
+   * the clip, in plain design space).
+   *
+   * @param {CanvasRenderingContext2D} ctx — design-space ctx (pre-clip)
+   * @param {number} canvasW — design width
+   * @param {number} canvasH — design height
+   * @param {number} dt
+   * @param {import('../engine/CanvasApp.js').default} app
+   * @returns {boolean} true while the reveal is active (splash drawn here)
+   */
+  renderEntryRevealBackground(ctx, canvasW, canvasH, dt, app) {
+    if (!this._entryActive) return false;
+
+    this._entryTimer += dt;
+    const t = this._entryTimer;
+    if (t >= ENTRY_HOLD_MS + ENTRY_SHRINK_MS + ENTRY_CONTENT_FADE_MS) {
+      this._entryActive = false; // settled — normal draws take over
+      this._entryContentAlpha = 1;
+      return false;
+    }
+
+    const cr = this.getContainerRect(canvasW, canvasH);
+
+    // Full physical window expressed in design coordinates (extends past the
+    // design viewport into the letterbox/pillarbox bars).
+    let full = { x: 0, y: 0, w: canvasW, h: canvasH };
+    if (app && typeof app.cssToDesign === 'function') {
+      const tl = app.cssToDesign(0, 0);
+      const br = app.cssToDesign(app.cssWidth, app.cssHeight);
+      full = { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+    }
+
+    let rect = full;
+    let radius = 0;
+    this._entryContentAlpha = 0;
+    if (t >= ENTRY_HOLD_MS) {
+      const p = Math.min(1, (t - ENTRY_HOLD_MS) / ENTRY_SHRINK_MS);
+      // ease-in-out cubic: gentle lift-off, gentle settle
+      const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+      rect = {
+        x: full.x + (cr.x - full.x) * e,
+        y: full.y + (cr.y - full.y) * e,
+        w: full.w + (cr.w - full.w) * e,
+        h: full.h + (cr.h - full.h) * e,
+      };
+      radius = CONTAINER_RADIUS * e;
+      if (p >= 1) {
+        this._entryContentAlpha =
+          Math.min(1, (t - ENTRY_HOLD_MS - ENTRY_SHRINK_MS) / ENTRY_CONTENT_FADE_MS);
+      }
+    }
+
+    this._drawSplashInsideContainer(ctx, rect, radius);
+    return true;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -211,22 +314,44 @@ export default class MapView {
     // (battle background + dark backdrop are painted full-canvas by
     //  MapScene.renderBackground before the viewport clip is applied)
 
+    // ── Entry reveal: the splash was already drawn (fullscreen → shrinking)
+    // by renderEntryRevealBackground, pre-clip — here only the contents fade
+    // in once the splash has landed in the container.
+    if (this._entryActive) {
+      if (this._entryContentAlpha > 0) {
+        this._drawContainerContents(ctx, cr, dt, this._entryContentAlpha);
+      }
+      return;
+    }
+
     // 2. Parchment splash background inside the container (clipped)
     this._drawSplashInsideContainer(ctx, cr);
 
-    // 3. Clip & translate to container interior
+    // 3-5. Container contents (nodes + paths + node info)
+    this._drawContainerContents(ctx, cr, dt, 1);
+  }
+
+  /**
+   * Clip to the container and draw the map contents — MapRenderer nodes/paths
+   * plus the node info line. `alpha` < 1 fades the whole layer as one (the
+   * entry reveal's content fade-in).
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{x:number,y:number,w:number,h:number}} cr
+   * @param {number} dt
+   * @param {number} [alpha=1]
+   */
+  _drawContainerContents(ctx, cr, dt, alpha = 1) {
     ctx.save();
+    if (alpha < 1) ctx.globalAlpha = alpha;
     ctx.beginPath();
     this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
     ctx.clip();
     ctx.translate(cr.x, cr.y);
 
-    // 4. MapRenderer — nodes + paths
     if (this._renderer) {
-      this._renderer.render(ctx, cr.w, cr.h, dt, 1);
+      this._renderer.render(ctx, cr.w, cr.h, dt, alpha);
     }
 
-    // 5. Node info at bottom
     this._drawNodeInfo(ctx, cr.w, cr.h);
 
     ctx.restore();
@@ -372,16 +497,17 @@ export default class MapView {
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Draw the map_splash image scaled to cover the container interior exactly.
-   * The container's rounded-rect clip path ensures the splash does not
-   * bleed outside the container bounds.
+   * Draw the map_splash image scaled to cover the given rect exactly.
+   * The rounded-rect clip path ensures the splash does not bleed outside the
+   * rect. `radius` overrides the corner rounding (the entry reveal animates
+   * it 0 → CONTAINER_RADIUS as the fullscreen splash shrinks into place).
    */
-  _drawSplashInsideContainer(ctx, cr) {
+  _drawSplashInsideContainer(ctx, cr, radius = CONTAINER_RADIUS) {
     const splashImg = this._assetManager ? this._assetManager.get('map_splash') : null;
 
     ctx.save();
     ctx.beginPath();
-    this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, CONTAINER_RADIUS);
+    this._roundRect(ctx, cr.x, cr.y, cr.w, cr.h, radius);
     ctx.clip();
 
     if (splashImg && splashImg.complete) {

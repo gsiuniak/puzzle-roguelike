@@ -124,6 +124,69 @@ export default class MapScene extends UIPanel {
     // ── Saved state for battle return ──────────────────
     /** @type {object|null} serialized traversal state to restore on return */
     this._savedTraversalState = null;
+
+    // ── Map-transition entry overlay + reveal ──────────
+    // CharacterSelectScene hands its still-playing map-transition <video>
+    // here (setEntryVideoOverlay, immediately BEFORE an instant switchTo —
+    // decision #58 idiom): renderForeground draws it full-canvas over
+    // everything at an alpha decaying 1→0 over _entryOverlayFadeMs, then the
+    // element is released. The handoff also ARMS the MapView entry reveal
+    // (fullscreen splash → container shrink), applied in onEnter once the
+    // MapView exists. Deliberately NOT reset in onEnter — the handoff sets
+    // these just before onEnter runs; this scene owns the element from the
+    // handoff on.
+    /** @type {HTMLVideoElement|null} */
+    this._entryOverlayVideo = null;
+    /** @type {number} ms over which the overlay fades out */
+    this._entryOverlayFadeMs = 1;
+    /** @type {number} ms since the handoff */
+    this._entryOverlayElapsed = 0;
+    /** @type {boolean} arm MapView.beginEntryReveal() on the next onEnter */
+    this._pendingEntryReveal = false;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Map-transition entry overlay (handed off by CharacterSelectScene)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Take ownership of the still-playing map-transition <video>, fade it out
+   * over this scene, and arm the fullscreen-splash entry reveal. Called by
+   * CharacterSelectScene immediately before its instant switchTo here, so
+   * onEnter must not (and does not) reset the overlay state.
+   * @param {HTMLVideoElement} video — plays out and is released when the fade ends
+   * @param {number} fadeMs — fade-out duration
+   */
+  setEntryVideoOverlay(video, fadeMs) {
+    this._destroyEntryOverlay();
+    this._entryOverlayVideo = video || null;
+    this._entryOverlayFadeMs = Math.max(1, fadeMs || 250);
+    this._entryOverlayElapsed = 0;
+    this._pendingEntryReveal = true;
+  }
+
+  _destroyEntryOverlay() {
+    const video = this._entryOverlayVideo;
+    if (!video) return;
+    try { video.pause(); } catch (e) { /* ignore */ }
+    video.removeAttribute('src');
+    try { video.load(); } catch (e) { /* ignore */ }
+    this._entryOverlayVideo = null;
+  }
+
+  /**
+   * Draw the map-transition entry overlay ON TOP of everything (full canvas,
+   * covering the bars): the handed-off movie's held last frame dissolves into
+   * the fullscreen map splash beneath it (the start of the entry reveal).
+   */
+  renderForeground(_ctx) {
+    const video = this._entryOverlayVideo;
+    if (!video || video.error || video.readyState < 2) return;
+    const app = this._sceneManager && this._sceneManager._app;
+    if (!app) return;
+    const alpha = Math.max(0, 1 - this._entryOverlayElapsed / this._entryOverlayFadeMs);
+    if (alpha <= 0) return;
+    app.drawFullCanvasImage(video, alpha);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -186,6 +249,14 @@ export default class MapScene extends UIPanel {
     // Cache canvas dimensions
     this._canvasW = sm._app.width;
     this._canvasH = sm._app.height;
+
+    // Armed by the character-confirm handoff (setEntryVideoOverlay): open with
+    // the fullscreen-splash reveal — the transition movie's last frame
+    // dissolves into the fullscreen splash, which then shrinks into place.
+    if (this._pendingEntryReveal) {
+      this._pendingEntryReveal = false;
+      if (this._mapView) this._mapView.beginEntryReveal();
+    }
 
     // ── Music ────────────────────────────────────────
     // MapScene does not start music — it keeps whatever
@@ -262,6 +333,9 @@ export default class MapScene extends UIPanel {
       input.canvas.removeEventListener('keydown', this._onKeyDown);
       this._onKeyDown = null;
     }
+
+    // Safety: release an entry overlay that hasn't finished fading.
+    this._destroyEntryOverlay();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -336,6 +410,8 @@ export default class MapScene extends UIPanel {
    */
   _handleMouseDown(x, y) {
     if (this._transitioning) return;
+    // Nodes are hidden/fading during the entry reveal — ignore clicks on them.
+    if (this._mapView && this._mapView.isEntryRevealActive()) return;
     if (!this._mapView || !this._traversal) return;
 
     // MapView.hitTest handles container-offset internally
@@ -733,6 +809,15 @@ export default class MapScene extends UIPanel {
     this._canvasW = sm._app.width;
     this._canvasH = sm._app.height;
 
+    // Advance the map-transition entry overlay fade; release the video the
+    // moment it is fully transparent.
+    if (this._entryOverlayVideo) {
+      this._entryOverlayElapsed += dt;
+      if (this._entryOverlayElapsed >= this._entryOverlayFadeMs) {
+        this._destroyEntryOverlay();
+      }
+    }
+
     super.update(dt);
   }
 
@@ -753,6 +838,16 @@ export default class MapScene extends UIPanel {
     const bgImg = am.get('battle_background_default');
     if (bgImg) sm._app.drawFullCanvasImage(bgImg, 1.0);
     sm._app.fillFullCanvas('rgba(0, 0, 0, 0.75)');
+
+    // Entry reveal splash (fullscreen → shrinking into the container) —
+    // drawn HERE, pre-viewport-clip, so its fullscreen phase covers the bars
+    // with exactly the handed-off movie's framing (no size jump at the
+    // dissolve). MapView stashes the contents fade-in alpha for render().
+    if (this._mapView) {
+      this._mapView.renderEntryRevealBackground(
+        sm._app.ctx, this._canvasW, this._canvasH, 16, sm._app
+      );
+    }
   }
 
   /**

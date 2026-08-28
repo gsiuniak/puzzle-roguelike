@@ -33,9 +33,30 @@ import { createPlayerBattleState } from '../data/playerStats.js';
 import { resolveSkillIds } from '../data/skills/skillCatalog.js';
 import { resolveRelicIds } from '../data/relics/relicCatalog.js';
 import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
+import { MAP_TRANSITION_VIDEO } from '../data/videoManifest.js';
 
 /** Duration of the cross-fade transition between splash backgrounds (ms) */
 const CROSS_FADE_DURATION = 400;
+
+/**
+ * What plays after "Choose Hero" is confirmed:
+ * false → the shared map-transition movie (MAP_TRANSITION_VIDEO) plays and
+ *         HANDS OFF to MapScene's fullscreen-splash entry reveal (no black
+ *         fade — decision #58 idiom);
+ * true  → the classic per-hero choose intro (`def.splashVideo` + fadeToScene).
+ * The per-hero machinery is kept intact behind this flag.
+ */
+const USE_CHOOSE_HERO_INTRO = false;
+
+/**
+ * Map-transition handoff: switch scenes this close to the movie's end (~2
+ * frames at 24fps) so only its held LAST frame carries into the dissolve…
+ */
+const MAP_TRANSITION_HANDOFF_LEAD_MS = 90;
+/** …and dissolve that held frame over MapScene's fullscreen splash this fast (ms).
+ *  Tiny by design — the splash IS the movie's final frame at identical framing,
+ *  so the dissolve only needs to mask compression-level differences. */
+const MAP_TRANSITION_CROSSFADE_MS = 150;
 
 /**
  * Brief fade-in of the splash background video (per-def `splashBackgroundVideo`,
@@ -406,6 +427,9 @@ export default class CharacterSelectScene extends UIPanel {
     this._videoSrc = null;
     /** @type {boolean} true while the choose-hero video intro is playing */
     this._choosingActive = false;
+    /** @type {boolean} true when the intro ends with the MapScene handoff
+     *  (map-transition mode) instead of the classic fadeToScene */
+    this._chooseHandoff = false;
     /** @type {object|null} the definition being transitioned into */
     this._chosenDef = null;
     /** @type {number} ms elapsed since the intro started */
@@ -1343,6 +1367,7 @@ export default class CharacterSelectScene extends UIPanel {
     // Reset the choose-hero video intro (the scene instance is reused across
     // runs, e.g. after a defeat returns here).
     this._choosingActive = false;
+    this._chooseHandoff = false;
     this._chosenDef = null;
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
@@ -1582,6 +1607,13 @@ export default class CharacterSelectScene extends UIPanel {
     // Play confirm sound
     AudioManager.playSfx('character_select_confirm');
 
+    // Map-transition mode (default): the shared movie plays and hands off to
+    // MapScene's fullscreen-splash reveal. The per-hero intro is disabled.
+    if (!USE_CHOOSE_HERO_INTRO) {
+      this._beginChooseIntro(def, MAP_TRANSITION_VIDEO);
+      return;
+    }
+
     // If this hero has a full-canvas intro video, fade the UI out and play it;
     // the scene transition is deferred until the video nears its end.
     if (def.splashVideo) {
@@ -1595,14 +1627,18 @@ export default class CharacterSelectScene extends UIPanel {
 
   /**
    * Begin the choose-hero intro: fade the UI out (driven in update) and play
-   * the hero's full-canvas video. The actual scene transition is started later
-   * by _maybeStartChooseTransition() once the video nears its end (or on
+   * a full-canvas video. The actual scene transition is started later by
+   * _startChooseTransition() once the video nears its end (or on
    * end/error/timeout).
    * @param {object} def
+   * @param {string|null} [overrideSrc] — play this shared movie instead of the
+   *   hero's `splashVideo`, and END with the MapScene HANDOFF (instant
+   *   switchTo + entry overlay) instead of the classic fadeToScene.
    */
-  _beginChooseIntro(def) {
+  _beginChooseIntro(def, overrideSrc = null) {
     this._choosingActive = true;
     this._chosenDef = def;
+    this._chooseHandoff = !!overrideSrc;
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
     this._videoFadeMs = 0;
@@ -1614,10 +1650,11 @@ export default class CharacterSelectScene extends UIPanel {
       try { this._splashBgVideo.pause(); } catch (e) { /* ignore */ }
     }
 
-    // Grab the (already preloaded + primed) pooled video for this hero.
-    const video = this._ensurePooledVideo(def.splashVideo);
+    // Grab the (already preloaded + primed) pooled video.
+    const src = overrideSrc || def.splashVideo;
+    const video = this._ensurePooledVideo(src);
     this._video = video;
-    this._videoSrc = def.splashVideo;
+    this._videoSrc = src;
     this._videoStallMs = 0;
     this._lastVideoTime = -1;
     if (!video || video._csFailed || video.error) {
@@ -1705,6 +1742,63 @@ export default class CharacterSelectScene extends UIPanel {
     }
   }
 
+  /**
+   * Map-transition variant of the scene exit: same run-state setup as
+   * _performSceneTransition, but the still-playing movie is HANDED OFF to
+   * MapScene (setEntryVideoOverlay + an instant switchTo — no black fade,
+   * decision #58 idiom): MapScene dissolves the movie's held last frame over
+   * its FULLSCREEN map splash, which then shrinks into the map container.
+   * Ownership of the element transfers — its pool listeners detach and it
+   * leaves `_videoPool` BEFORE switchTo, so onExit's pool teardown can't
+   * destroy it mid-dissolve. Falls back to the classic fade when the movie
+   * never became paintable (offline/error) or MapScene can't take it.
+   * @param {object} def
+   */
+  _performMapHandoff(def) {
+    const sm = this._sceneManager;
+    if (!sm) return;
+
+    // Mid-transition (e.g. still fading in from the title): retry next update.
+    if (sm.isTransitioning()) {
+      this._chooseTransitionStarted = false;
+      return;
+    }
+
+    const mapScene = sm._scenes['MapScene'];
+    if (!mapScene) {
+      this._performSceneTransition(def); // its fallback path handles this
+      return;
+    }
+
+    // Run-state setup (mirrors _performSceneTransition).
+    const runState = createRunState(def.characterData);
+    if (mapScene.resetForNewRun) mapScene.resetForNewRun();
+    mapScene.setSeed('run_' + Date.now());
+    mapScene.setRunState(runState, def.characterData);
+
+    const video = this._video;
+    const paintable = video && !video._csFailed && !video.error && video.readyState >= 2;
+    if (paintable && typeof mapScene.setEntryVideoOverlay === 'function') {
+      // Transfer ownership BEFORE switchTo (whose onExit tears the pool down).
+      const L = video._csListeners;
+      if (L) {
+        video.removeEventListener('loadedmetadata', L.onMeta);
+        video.removeEventListener('ended', L.onEnded);
+        video.removeEventListener('error', L.onError);
+        video.removeEventListener('loadeddata', L.onLoadedData);
+      }
+      video._csListeners = null;
+      this._videoPool.delete(this._videoSrc);
+      this._video = null;
+      this._videoSrc = null;
+      mapScene.setEntryVideoOverlay(video, MAP_TRANSITION_CROSSFADE_MS);
+      sm.switchTo('MapScene');
+    } else {
+      // Movie never played — classic fade into the normal (un-revealed) map.
+      sm.fadeToScene('MapScene', 500);
+    }
+  }
+
   // ═══════════════════════════════════════════════════════
   // Choose-hero intro video
   // ═══════════════════════════════════════════════════════
@@ -1715,9 +1809,16 @@ export default class CharacterSelectScene extends UIPanel {
    * called — no network buffering or first-frame decode stall. Idempotent.
    */
   _preloadAllVideos() {
-    for (const def of this._definitions) {
-      const src = def && def.splashVideo;
-      if (src) this._ensurePooledVideo(src);
+    if (USE_CHOOSE_HERO_INTRO) {
+      for (const def of this._definitions) {
+        const src = def && def.splashVideo;
+        if (src) this._ensurePooledVideo(src);
+      }
+    } else {
+      // Map-transition mode: only the shared confirm → map movie plays; it
+      // rides the same pool/prime machinery so it starts frame-perfect on
+      // confirm (the unused per-hero intros aren't buffered at all).
+      this._ensurePooledVideo(MAP_TRANSITION_VIDEO);
     }
   }
 
@@ -2006,7 +2107,8 @@ export default class CharacterSelectScene extends UIPanel {
   _startChooseTransition() {
     if (!this._choosingActive || this._chooseTransitionStarted) return;
     this._chooseTransitionStarted = true;
-    this._performSceneTransition(this._chosenDef);
+    if (this._chooseHandoff) this._performMapHandoff(this._chosenDef);
+    else this._performSceneTransition(this._chosenDef);
   }
 
   /**
@@ -2059,7 +2161,13 @@ export default class CharacterSelectScene extends UIPanel {
     let nearEnd = false;
     if (v && isFinite(v.duration) && v.duration > 0) {
       const remainingMs = (v.duration - v.currentTime) * 1000;
-      nearEnd = remainingMs <= CHOOSE_VIDEO_CROSSFADE_LEAD;
+      // The map handoff swaps scenes at the movie's very last frames (the
+      // held frame then dissolves); the classic intro leads by the whole
+      // fadeToScene duration.
+      const lead = this._chooseHandoff
+        ? MAP_TRANSITION_HANDOFF_LEAD_MS
+        : CHOOSE_VIDEO_CROSSFADE_LEAD;
+      nearEnd = remainingMs <= lead;
     }
 
     if (nearEnd || this._chooseElapsed >= CHOOSE_VIDEO_MAX_DURATION) {

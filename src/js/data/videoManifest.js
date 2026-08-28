@@ -28,6 +28,12 @@ export const TITLE_SCREEN_VIDEOS = {
 };
 
 /**
+ * Character-confirm → map transition movie (shared by all heroes), played by
+ * CharacterSelectScene and handed off to MapScene's fullscreen-splash reveal.
+ */
+export const MAP_TRANSITION_VIDEO = 'assets/sprites/map/title_map_transition.mp4';
+
+/**
  * Every video URL the game can play at runtime, deduplicated.
  * @returns {string[]} URLs relative to index.html
  */
@@ -36,6 +42,7 @@ export function collectRuntimeVideoUrls() {
   // Title movies first — they play before anything else after a cold install.
   urls.add(TITLE_SCREEN_VIDEOS.intro);
   urls.add(TITLE_SCREEN_VIDEOS.transition);
+  urls.add(MAP_TRANSITION_VIDEO);
   for (const def of characterSelectDefinitions) {
     if (def && def.splashVideo) urls.add(def.splashVideo);
     if (def && def.splashBackgroundVideo) urls.add(def.splashBackgroundVideo);
