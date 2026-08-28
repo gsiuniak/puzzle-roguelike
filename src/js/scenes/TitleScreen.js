@@ -30,11 +30,11 @@ import { TITLE_SCREEN_VIDEOS } from '../data/videoManifest.js';
  */
 
 // Static title image fades in over the intro movie's last stretch.
-const INTRO_CROSSFADE_MS = 800;
+const INTRO_CROSSFADE_MS = 1000;
 // The handoff fires this close to the transition movie's end (~1 frame at
 // 30fps): the movie is effectively over, so only its LAST frame carries into
 // the cross-fade — fading a still-moving picture reads as mush.
-const TRANSITION_HANDOFF_LEAD_MS = 40;
+const TRANSITION_HANDOFF_LEAD_MS = 800; // 40
 // The held last frame then dissolves over the character-select UI (whose
 // splash video is already playing beneath it).
 const TRANSITION_CROSSFADE_MS = 350;
