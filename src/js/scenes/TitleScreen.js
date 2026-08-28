@@ -11,12 +11,13 @@ import { TITLE_SCREEN_VIDEOS } from '../data/videoManifest.js';
  *                  top, so the movie settles into the classic title screen.
  *   'idle'       — the static title image (the pre-movie behavior).
  *   'transition' — on any input, the transition movie + its SFX start
- *                  together; when the movie is within TRANSITION_CROSSFADE_MS
- *                  of its end, the still-playing <video> is HANDED OFF to
- *                  CharacterSelectScene (setEntryVideoOverlay + an instant
- *                  switchTo — no black fade), which draws it on top of its UI
- *                  fading out, so the movie's end cross-fades into the
- *                  character select layout.
+ *                  together; when the movie is within
+ *                  TRANSITION_HANDOFF_LEAD_MS (~1 frame) of its end, the
+ *                  <video> is HANDED OFF to CharacterSelectScene
+ *                  (setEntryVideoOverlay + an instant switchTo — no black
+ *                  fade), which dissolves the movie's held LAST frame over its
+ *                  UI (TRANSITION_CROSSFADE_MS) while the hero splash video
+ *                  already plays beneath.
  *
  * Videos are off-DOM muted <video> elements drawn to the canvas each frame
  * (same approach as BossIntroScene — NOT AssetManager entries). Both movies
@@ -30,9 +31,13 @@ import { TITLE_SCREEN_VIDEOS } from '../data/videoManifest.js';
 
 // Static title image fades in over the intro movie's last stretch.
 const INTRO_CROSSFADE_MS = 800;
-// Transition movie fades out over the character-select UI after the handoff.
-// Also the lead time before the movie's end at which the handoff fires.
-const TRANSITION_CROSSFADE_MS = 600;
+// The handoff fires this close to the transition movie's end (~1 frame at
+// 30fps): the movie is effectively over, so only its LAST frame carries into
+// the cross-fade — fading a still-moving picture reads as mush.
+const TRANSITION_HANDOFF_LEAD_MS = 40;
+// The held last frame then dissolves over the character-select UI (whose
+// splash video is already playing beneath it).
+const TRANSITION_CROSSFADE_MS = 350;
 // SoundConfig key played simultaneously with the transition movie.
 const TRANSITION_SFX_KEY = 'sfx_title_transition';
 // Fail-fast: no paintable frame within this window → fall back (decision #53).
@@ -338,8 +343,8 @@ export default class TitleScreen extends UIPanel {
         // Safety net if 'ended' never fires.
         this._pendingHandoff = true;
       } else if (this._isPaintable(v) && isFinite(v.duration) && v.duration > 0
-          && (v.duration - v.currentTime) * 1000 <= TRANSITION_CROSSFADE_MS) {
-        // The movie is within the cross-fade lead of its end — hand off now.
+          && (v.duration - v.currentTime) * 1000 <= TRANSITION_HANDOFF_LEAD_MS) {
+        // The movie is a frame from its end — hand its last frame off now.
         this._pendingHandoff = true;
       }
     }

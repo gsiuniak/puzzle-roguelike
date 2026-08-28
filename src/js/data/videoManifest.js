@@ -38,6 +38,7 @@ export function collectRuntimeVideoUrls() {
   urls.add(TITLE_SCREEN_VIDEOS.transition);
   for (const def of characterSelectDefinitions) {
     if (def && def.splashVideo) urls.add(def.splashVideo);
+    if (def && def.splashBackgroundVideo) urls.add(def.splashBackgroundVideo);
   }
   for (const enemy of ALL_ENEMIES) {
     if (enemy && enemy.introVideo) urls.add(enemy.introVideo);

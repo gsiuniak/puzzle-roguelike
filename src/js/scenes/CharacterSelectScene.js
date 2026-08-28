@@ -38,6 +38,13 @@ import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
 const CROSS_FADE_DURATION = 400;
 
 /**
+ * Brief fade-in of the splash background video (per-def `splashBackgroundVideo`,
+ * looping) over the static splash once its first frame is paintable (masks the
+ * static→frame-0 pop). 0 = instant swap (ms).
+ */
+const SPLASH_BG_VIDEO_FADE_IN_MS = 250;
+
+/**
  * How quickly the UI (info panel, heroes, button, aura) fades out once a hero
  * with a `splashVideo` is confirmed, leaving only the full-canvas video (ms).
  */
@@ -411,6 +418,38 @@ export default class CharacterSelectScene extends UIPanel {
     this._videoFadeMs = 0;
     /** @type {boolean} true once play() has been issued for the intro video */
     this._videoPlayStarted = false;
+
+    // ── Splash background video ────────────────────────
+    // A hero with a `splashBackgroundVideo` plays it full-canvas in place of
+    // its static splash while SELECTED, looping for as long as the hero stays
+    // selected (the static art is only the buffering/failure fallback). The
+    // loop is DOUBLE-BUFFERED: native `loop=true` seeks flush + re-prime the
+    // decoder at every wrap (an intermittent visible stutter), so instead
+    // each wrap swaps to a primed standby twin of the same src parked on
+    // frame 0 (`_splashBgAltPool`), while the just-ended element's held last
+    // frame bridges the swap (`_splashBgHold`) and is then rewound to become
+    // the next standby. Elements live in their own small pools (NOT
+    // `_videoPool` — the choose-hero pool's ended/error listeners drive the
+    // choose transition and must never fire for a background video). See
+    // _startSplashBgVideo / _wrapSplashBg / renderBackground.
+    /** @type {Map<string, HTMLVideoElement>} splash bg videos keyed by src */
+    this._splashBgPool = new Map();
+    /** @type {Map<string, HTMLVideoElement>} standby twins for the loop wrap, keyed by src */
+    this._splashBgAltPool = new Map();
+    /** @type {HTMLVideoElement|null} the selected hero's active bg video */
+    this._splashBgVideo = null;
+    /** @type {string|null} src of the active bg video */
+    this._splashBgSrc = null;
+    /** @type {boolean} set by the active element's 'ended' listener; the wrap runs in update() */
+    this._splashBgWrapPending = false;
+    /** @type {HTMLVideoElement|null} just-ended element, drawn until the swapped-in
+     *  twin paints its first frame, then rewound to frame 0 as the next standby */
+    this._splashBgHold = null;
+    /** @type {number} ms the active bg video has been drawable — drives its fade-in */
+    this._splashBgFadeMs = 0;
+    /** @type {HTMLVideoElement|null} outgoing hero's paused bg video, drawn as
+     *  the prev layer during the selection cross-fade (instead of its static splash) */
+    this._prevSplashVideo = null;
 
     // ── Title-transition entry overlay ─────────────────
     // TitleScreen hands its still-playing transition <video> here (via
@@ -1258,6 +1297,17 @@ export default class CharacterSelectScene extends UIPanel {
     this._currSplashKey = newDef ? newDef.splashKey : null;
     this._crossFadeAlpha = 0;
 
+    // An outgoing hero's live bg video pauses in place and serves as the prev
+    // layer for the cross-fade (instead of popping to its static splash).
+    this._prevSplashVideo = this._isSplashBgLive() ? this._splashBgVideo : null;
+    if (this._prevSplashVideo) {
+      try { this._prevSplashVideo.pause(); } catch (e) { /* ignore */ }
+    }
+    this._startSplashBgVideo(newDef);
+    // Rapid A→B→A reselect: the restarted video IS the "outgoing" element —
+    // drop the prev layer rather than drawing the same frame twice.
+    if (this._prevSplashVideo === this._splashBgVideo) this._prevSplashVideo = null;
+
     // Transition aura color to new character
     if (newDef && newDef.auraColor) {
       const ac = newDef.auraColor;
@@ -1302,6 +1352,12 @@ export default class CharacterSelectScene extends UIPanel {
     // Preload + prime EVERY hero's intro video so whichever hero is confirmed
     // plays instantly with no buffering/decode stall.
     this._preloadAllVideos();
+
+    // Splash background videos: buffer them all, then start the selected
+    // hero's (the static splash shows until its first frame is paintable).
+    this._prevSplashVideo = null;
+    this._preloadAllSplashBgVideos();
+    this._startSplashBgVideo(def);
 
     // Initialize aura color to selected character
     if (def && def.auraColor) {
@@ -1377,6 +1433,7 @@ export default class CharacterSelectScene extends UIPanel {
     // Release all preloaded intro videos (the transition to the next scene is
     // already underway by the time this fires).
     this._destroyVideoPool();
+    this._destroySplashBgPool();
 
     // Safety: release a title-transition overlay that hasn't finished fading
     // (e.g. the player confirmed a hero within the overlay's first frames).
@@ -1549,6 +1606,13 @@ export default class CharacterSelectScene extends UIPanel {
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
     this._videoFadeMs = 0;
+
+    // Freeze the splash bg video where it is — the choose video covers it, so
+    // keeping it decoding would only burn frames (its paused frame remains the
+    // splash base until the choose video's first frame paints over it).
+    if (this._splashBgVideo) {
+      try { this._splashBgVideo.pause(); } catch (e) { /* ignore */ }
+    }
 
     // Grab the (already preloaded + primed) pooled video for this hero.
     const video = this._ensurePooledVideo(def.splashVideo);
@@ -1767,6 +1831,174 @@ export default class CharacterSelectScene extends UIPanel {
     this._videoSrc = null;
   }
 
+  // ═══════════════════════════════════════════════════════
+  // Splash background video (per-def `splashBackgroundVideo`)
+  // ═══════════════════════════════════════════════════════
+
+  /** Buffer every enabled hero's splash background video ahead of selection. Idempotent. */
+  _preloadAllSplashBgVideos() {
+    for (const def of this._definitions) {
+      const src = def && def.splashBackgroundVideo;
+      if (src) this._ensureSplashBgVideo(src);
+    }
+  }
+
+  /**
+   * Ensure the off-DOM <video> for a splash background `src` exists in its
+   * pool (building + kicking off its load on first request) and return it.
+   * @param {string} src
+   * @returns {HTMLVideoElement|null}
+   */
+  _ensureSplashBgVideo(src) {
+    if (!src) return null;
+    let video = this._splashBgPool.get(src);
+    if (!video) {
+      video = this._buildSplashBgElement(src);
+      this._splashBgPool.set(src, video);
+    }
+    return video;
+  }
+
+  /** Lazily build/get the standby twin used for seamless loop wraps of `src`. */
+  _ensureSplashBgAlt(src) {
+    if (!src) return null;
+    let video = this._splashBgAltPool.get(src);
+    if (!video) {
+      video = this._buildSplashBgElement(src);
+      this._splashBgAltPool.set(src, video);
+    }
+    return video;
+  }
+
+  /** Create + wire one off-DOM splash bg <video> (used by both pools). */
+  _buildSplashBgElement(src) {
+    const video = document.createElement('video');
+    video.src = src;
+    video.muted = true;        // required for autoplay without a fresh gesture
+    video.playsInline = true;
+    video.loop = false;        // wraps are double-buffered — see _wrapSplashBg
+    video.preload = 'auto';
+
+    const onMeta = () => {
+      // CanvasApp.drawFullCanvasImage reads img.width/height — mirror the
+      // intrinsic video size so the cover-fit math works for the <video>.
+      video.width = video.videoWidth;
+      video.height = video.videoHeight;
+    };
+    // Only the ACTIVE element's end wraps the loop (a standby twin never
+    // plays to its end; an outgoing prev-layer element is paused).
+    const onEnded = () => {
+      if (video === this._splashBgVideo) this._splashBgWrapPending = true;
+    };
+    // Remember terminal failures on the element (an errored element never
+    // re-fires 'error' and its play() promise never settles — decision #53);
+    // renderBackground then simply keeps the static splash.
+    const onError = () => { video._bgFailed = true; };
+
+    video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('ended', onEnded);
+    video.addEventListener('error', onError);
+    video._bgListeners = { onMeta, onEnded, onError };
+
+    try { video.load(); } catch (e) { /* ignore */ }
+    return video;
+  }
+
+  /**
+   * Make `def`'s splash background video the active one (restarted from frame
+   * 0), or clear the active video for a def without one. Called from onEnter
+   * and on every selection change.
+   * @param {object|null} def
+   */
+  _startSplashBgVideo(def) {
+    this._splashBgVideo = null;
+    this._splashBgSrc = null;
+    this._splashBgFadeMs = 0;
+    this._splashBgWrapPending = false;
+    this._splashBgHold = null;
+
+    const src = def && def.splashBackgroundVideo;
+    if (!src) return;
+    const video = this._ensureSplashBgVideo(src);
+    if (!video || video._bgFailed || video.error) return; // static splash stays
+
+    this._splashBgVideo = video;
+    this._splashBgSrc = src;
+    // Start the standby twin buffering now — it has a full loop's duration to
+    // decode its first frame before the first wrap needs it.
+    this._ensureSplashBgAlt(src);
+    try { video.currentTime = 0; } catch (e) { /* ignore */ }
+    const p = video.play();
+    if (p && typeof p.catch === 'function') {
+      // Autoplay blocked / load failure — fall back to the static splash
+      // (without the mark, a paintable-but-paused element would hold frame 0).
+      p.catch(() => { video._bgFailed = true; });
+    }
+  }
+
+  /**
+   * Loop wrap (the active element fired 'ended'): swap to the primed standby
+   * twin and play it from frame 0 — a fresh play on a parked element instead
+   * of a seek on the playing one, so there's no decoder-flush stutter. The
+   * ended element keeps rendering its held last frame until the twin paints
+   * (renderBackground), then is rewound as the next standby (update()). If
+   * the twin isn't ready (still buffering / failed), replay the ended element
+   * — its held last frame still bridges the seek.
+   */
+  _wrapSplashBg() {
+    const ended = this._splashBgVideo;
+    const src = this._splashBgSrc;
+    if (!ended || !src) return;
+
+    const alt = this._ensureSplashBgAlt(src);
+    const altReady = !!alt && !alt._bgFailed && !alt.error && alt.readyState >= 2;
+    const next = altReady ? alt : ended;
+
+    this._splashBgHold = ended;
+    this._splashBgVideo = next;
+    if (altReady) {
+      // Swap pool roles so src lookups stay consistent across wraps.
+      this._splashBgPool.set(src, alt);
+      this._splashBgAltPool.set(src, ended);
+    }
+    try { next.currentTime = 0; } catch (e) { /* ignore */ }
+    const p = next.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => { next._bgFailed = true; });
+    }
+  }
+
+  /** True while the active splash bg video should be drawn instead of the static splash. */
+  _isSplashBgLive() {
+    const v = this._splashBgVideo;
+    return !!v && !v._bgFailed && !v.error && v.readyState >= 2;
+  }
+
+  /** Release every pooled splash background video. */
+  _destroySplashBgPool() {
+    const release = (video) => {
+      const L = video._bgListeners;
+      if (L) {
+        video.removeEventListener('loadedmetadata', L.onMeta);
+        video.removeEventListener('ended', L.onEnded);
+        video.removeEventListener('error', L.onError);
+      }
+      video._bgListeners = null;
+      try { video.pause(); } catch (e) { /* ignore */ }
+      video.removeAttribute('src');
+      try { video.load(); } catch (e) { /* ignore */ }
+    };
+    for (const video of this._splashBgPool.values()) release(video);
+    for (const video of this._splashBgAltPool.values()) release(video);
+    this._splashBgPool.clear();
+    this._splashBgAltPool.clear();
+    this._splashBgVideo = null;
+    this._splashBgSrc = null;
+    this._splashBgHold = null;
+    this._splashBgWrapPending = false;
+    this._prevSplashVideo = null;
+  }
+
   /**
    * Start the deferred scene transition exactly once. Called when the intro
    * video nears its end, ends, errors, or the safety timeout elapses.
@@ -1852,6 +2084,30 @@ export default class CharacterSelectScene extends UIPanel {
     // Advance tooltip hold-timer / state
     if (this._tooltipManager) this._tooltipManager.update(dt);
 
+    // Splash bg loop wrap: swap to the primed standby twin the frame after
+    // the active element fires 'ended'. During the choose-hero intro the loop
+    // is left on its held last frame instead (it's covered by the choose
+    // video; _beginChooseIntro paused it).
+    if (this._splashBgWrapPending) {
+      this._splashBgWrapPending = false;
+      if (!this._choosingActive) this._wrapSplashBg();
+    }
+
+    // Advance the splash bg video's fade-in over the static splash. Once the
+    // swapped-in element is painting, rewind the held predecessor to frame 0
+    // so it sits primed as the standby for the next wrap.
+    if (this._isSplashBgLive()) {
+      this._splashBgFadeMs += dt;
+      const hold = this._splashBgHold;
+      if (hold) {
+        this._splashBgHold = null;
+        if (hold !== this._splashBgVideo) {
+          try { hold.pause(); } catch (e) { /* ignore */ }
+          try { hold.currentTime = 0; } catch (e) { /* ignore */ }
+        }
+      }
+    }
+
     // Advance the choose-hero video intro (UI fade-out + deferred transition)
     if (this._choosingActive) this._updateChooseIntro(dt);
 
@@ -1882,16 +2138,35 @@ export default class CharacterSelectScene extends UIPanel {
     const app = this._sceneManager && this._sceneManager._app;
     if (!am || !app) return;
 
-    // Previous splash (cross-fade out)
-    if (this._prevSplashKey && this._crossFadeAlpha < 1.0) {
-      const prevImg = am.get(this._prevSplashKey);
-      if (prevImg) app.drawFullCanvasImage(prevImg, 1.0 - this._crossFadeAlpha);
+    // Previous splash (cross-fade out) — the outgoing hero's paused bg video
+    // frame when one was live, else its static splash.
+    if (this._crossFadeAlpha < 1.0) {
+      const prevVideo = this._prevSplashVideo;
+      const prevVis = (prevVideo && !prevVideo.error && prevVideo.readyState >= 2)
+        ? prevVideo
+        : (this._prevSplashKey ? am.get(this._prevSplashKey) : null);
+      if (prevVis) app.drawFullCanvasImage(prevVis, 1.0 - this._crossFadeAlpha);
     }
 
-    // Current splash (cross-fade in)
+    // Current splash (cross-fade in): the static art — or, for a hero with a
+    // live `splashBackgroundVideo`, the looping video (fading in over the
+    // static once paintable; the static art remains only as the
+    // buffering/failure fallback beneath it). Across a loop wrap the
+    // just-ended element's held last frame stands in until the swapped-in
+    // twin paints — never a flash of the static art mid-loop.
     if (this._currSplashKey) {
+      const fadeIn = Math.min(1.0, this._crossFadeAlpha);
       const currImg = am.get(this._currSplashKey);
-      if (currImg) app.drawFullCanvasImage(currImg, Math.min(1.0, this._crossFadeAlpha));
+      const hold = this._splashBgHold;
+      const bgFrame = this._isSplashBgLive() ? this._splashBgVideo
+        : (hold && !hold.error && hold.readyState >= 2 ? hold : null);
+      const videoAlpha = !bgFrame ? 0
+        : SPLASH_BG_VIDEO_FADE_IN_MS > 0
+          ? Math.min(1.0, this._splashBgFadeMs / SPLASH_BG_VIDEO_FADE_IN_MS)
+          : 1.0;
+      // Static base — skipped once the video fully covers it.
+      if (currImg && videoAlpha < 1.0) app.drawFullCanvasImage(currImg, fadeIn);
+      if (bgFrame) app.drawFullCanvasImage(bgFrame, videoAlpha * fadeIn);
     }
 
     // Subtle dark scrim fading from the left edge to ~66% across, to lift the

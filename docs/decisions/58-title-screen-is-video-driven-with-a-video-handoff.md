@@ -13,11 +13,16 @@ scene's UI". Rebuilding SceneManager around a generic cross-fade transition was
 rejected as far too invasive for one use site. Instead the ownership of the
 still-playing `<video>` element moves across the scene boundary:
 
-1. When the transition movie is within `TRANSITION_CROSSFADE_MS` of its end,
-   TitleScreen calls `CharacterSelectScene.setEntryVideoOverlay(video, fadeMs)`
-   and then an **instant `switchTo`** (no black fade).
+1. When the transition movie is within `TRANSITION_HANDOFF_LEAD_MS` (~1 frame)
+   of its end, TitleScreen calls
+   `CharacterSelectScene.setEntryVideoOverlay(video, fadeMs)` and then an
+   **instant `switchTo`** (no black fade).
 2. CharacterSelectScene draws the video in `renderForeground` (over ALL its UI,
-   covering the bars) at an alpha decaying 1→0, then releases the element.
+   covering the bars) at an alpha decaying 1→0 over `TRANSITION_CROSSFADE_MS`,
+   then releases the element. The movie ends within a frame of the switch, so
+   what dissolves is its HELD LAST FRAME — fading a still-moving picture reads
+   as mush, which is why the handoff lead and the fade duration are separate
+   knobs.
 
 ## The bug classes this shape prevents
 

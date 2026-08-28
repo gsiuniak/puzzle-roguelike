@@ -32,6 +32,14 @@ const characterSelectDefinitions = [
      * NOT an AssetManager entry — played via an off-DOM <video>.
      */
     splashVideo: 'assets/sprites/character_select/character_select_splash_video_warrior.mp4',
+    /**
+     * Optional splash BACKGROUND video (URL relative to index.html). LOOPS
+     * full-canvas in place of the static splash whenever this hero is
+     * SELECTED (not confirmed); `splashKey` remains only the
+     * buffering/failure fallback. Omit for a static splash.
+     * NOT an AssetManager entry — played via an off-DOM <video>.
+     */
+    splashBackgroundVideo: 'assets/sprites/character_select/character_splash_warrior_vid.mp4',
     /** Aura color {r,g,b} in 0-1 range — red/orange ember */
     auraColor: { r: 1.0, g: 0.28, b: 0.08 },
     /** Reference to the gameplay character data (hp, mana, skills, etc.) */
@@ -49,6 +57,8 @@ const characterSelectDefinitions = [
     splashKey: 'character_select_splash_mage',
     /** Optional full-screen "choose hero" intro video (see warrior above). */
     splashVideo: 'assets/sprites/character_select/character_select_splash_video_mage.mp4',
+    /** Optional looping splash BACKGROUND video (see warrior above). */
+    splashBackgroundVideo: 'assets/sprites/character_select/character_splash_mage_vid.mp4',
     /** Aura color {r,g,b} in 0-1 range — purple/violet arcane */
     auraColor: { r: 0.55, g: 0.15, b: 0.85 },
     characterData: mage,
@@ -63,6 +73,8 @@ const characterSelectDefinitions = [
     splashKey: 'character_select_splash_witch_doctor',
     /** Optional full-screen "choose hero" intro video (see warrior above). */
     splashVideo: 'assets/sprites/character_select/character_select_splash_video_witch_doctor.mp4',
+    /** Optional looping splash BACKGROUND video (see warrior above). */
+    splashBackgroundVideo: 'assets/sprites/character_select/character_splash_witch_doctor_vid.mp4',
     /** Aura color {r,g,b} in 0-1 range — greyish to complement splash art */
     auraColor: { r: 0.35, g: 0.35, b: 0.35 },
     characterData: witchDoctor,
