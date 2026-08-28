@@ -61,6 +61,15 @@ const MAP_TRANSITION_CROSSFADE_MS = 150;
 const MAP_TRANSITION_SFX_KEY = 'sfx_map_transition';
 /** How fast the select-screen music fades out as the movie + stinger start (ms). */
 const MAP_TRANSITION_MUSIC_FADE_MS = 300;
+/** Click-to-skip is ignored this soon after confirm (the confirming click's
+ *  own event tail must not insta-skip the movie) (ms). */
+const MAP_TRANSITION_SKIP_GRACE_MS = 300;
+/** Skip cross-fade: the movie's CURRENT frame dissolves over the settled map
+ *  screen this fast (longer than the normal last-frame dissolve — an arbitrary
+ *  mid-movie frame won't match the splash) (ms). */
+const MAP_TRANSITION_SKIP_CROSSFADE_MS = 300;
+/** A skip fades the still-ringing transition stinger out this fast (ms). */
+const MAP_TRANSITION_SFX_STOP_FADE_MS = 150;
 
 /**
  * Brief fade-in of the splash background video (per-def `splashBackgroundVideo`,
@@ -434,6 +443,11 @@ export default class CharacterSelectScene extends UIPanel {
     /** @type {boolean} true when the intro ends with the MapScene handoff
      *  (map-transition mode) instead of the classic fadeToScene */
     this._chooseHandoff = false;
+    /** @type {boolean} the player clicked mid-movie — hand off NOW, straight
+     *  to the settled map (no fullscreen-splash reveal) */
+    this._chooseSkipReveal = false;
+    /** @type {number|null} play id of the transition stinger (so a skip can fade it out) */
+    this._mapTransitionSfxId = null;
     /** @type {object|null} the definition being transitioned into */
     this._chosenDef = null;
     /** @type {number} ms elapsed since the intro started */
@@ -1372,6 +1386,8 @@ export default class CharacterSelectScene extends UIPanel {
     // runs, e.g. after a defeat returns here).
     this._choosingActive = false;
     this._chooseHandoff = false;
+    this._chooseSkipReveal = false;
+    this._mapTransitionSfxId = null;
     this._chosenDef = null;
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
@@ -1512,8 +1528,22 @@ export default class CharacterSelectScene extends UIPanel {
 
   /** @param {number} x @param {number} y */
   _handleMouseDown(x, y) {
-    // Once a hero is confirmed and the intro video is playing, ignore input.
-    if (this._choosingActive) return;
+    // Once a hero is confirmed and the intro video is playing, input only
+    // skips: a click/tap during the map-transition movie (past a short grace)
+    // jumps straight to the settled map screen.
+    if (this._choosingActive) {
+      if (this._chooseHandoff && !this._chooseTransitionStarted
+          && this._chooseElapsed >= MAP_TRANSITION_SKIP_GRACE_MS) {
+        this._chooseSkipReveal = true;
+        // Cut the transition stinger with the movie it accompanies.
+        AudioManager.stopSfx(
+          MAP_TRANSITION_SFX_KEY, this._mapTransitionSfxId, MAP_TRANSITION_SFX_STOP_FADE_MS
+        );
+        this._mapTransitionSfxId = null;
+        this._startChooseTransition();
+      }
+      return;
+    }
 
     if (this._tooltipManager) this._tooltipManager.onMouseDown(x, y);
 
@@ -1643,6 +1673,7 @@ export default class CharacterSelectScene extends UIPanel {
     this._choosingActive = true;
     this._chosenDef = def;
     this._chooseHandoff = !!overrideSrc;
+    this._chooseSkipReveal = false;
     this._chooseElapsed = 0;
     this._chooseTransitionStarted = false;
     this._videoFadeMs = 0;
@@ -1674,7 +1705,7 @@ export default class CharacterSelectScene extends UIPanel {
     // the whole cutscene — onExit's stopMusic only fires at the handoff).
     if (this._chooseHandoff) {
       AudioManager.stopMusic(MAP_TRANSITION_MUSIC_FADE_MS);
-      AudioManager.playSfx(MAP_TRANSITION_SFX_KEY);
+      this._mapTransitionSfxId = AudioManager.playSfx(MAP_TRANSITION_SFX_KEY);
     }
 
     // The pooled video may still be mid-prime (playing muted) — make sure it
@@ -1788,6 +1819,12 @@ export default class CharacterSelectScene extends UIPanel {
     mapScene.setSeed('run_' + Date.now());
     mapScene.setRunState(runState, def.characterData);
 
+    // Click-to-skip: the movie's CURRENT frame dissolves over the SETTLED map
+    // (no fullscreen-splash reveal), with a slightly longer fade since an
+    // arbitrary mid-movie frame won't match the splash art.
+    const skip = this._chooseSkipReveal;
+    const overlayFadeMs = skip ? MAP_TRANSITION_SKIP_CROSSFADE_MS : MAP_TRANSITION_CROSSFADE_MS;
+
     const video = this._video;
     const paintable = video && !video._csFailed && !video.error && video.readyState >= 2;
     if (paintable && typeof mapScene.setEntryVideoOverlay === 'function') {
@@ -1803,7 +1840,11 @@ export default class CharacterSelectScene extends UIPanel {
       this._videoPool.delete(this._videoSrc);
       this._video = null;
       this._videoSrc = null;
-      mapScene.setEntryVideoOverlay(video, MAP_TRANSITION_CROSSFADE_MS);
+      // The reveal-skip in MapScene also needs to fade the stinger out — pass
+      // its handle along (null after a movie-skip, which already stopped it).
+      mapScene.setEntryVideoOverlay(video, overlayFadeMs, !skip,
+        skip ? null : { key: MAP_TRANSITION_SFX_KEY, id: this._mapTransitionSfxId });
+      this._mapTransitionSfxId = null;
       sm.switchTo('MapScene');
     } else {
       // Movie never played — classic fade into the normal (un-revealed) map.

@@ -49,6 +49,9 @@ const ENTRY_CONTENT_FADE_MS = 300;
 /** The reveal stinger fires this long BEFORE the shrink begins, so the sound
  *  anticipates the movement instead of landing with it (clamped to the hold). */
 const ENTRY_SFX_LEAD_MS = 200;
+/** Click-to-skip: the reveal's frozen frame cross-fades out over the settled
+ *  map screen this fast (ms). */
+const ENTRY_SKIP_FADE_MS = 250;
 
 /**
  * Overlay animation state enum.
@@ -99,6 +102,16 @@ export default class MapView {
     this._entryContentAlpha = 0;
     /** @type {Function|null} one-shot callback fired when the shrink phase begins */
     this._entryOnShrinkStart = null;
+    /** @type {{x:number,y:number,w:number,h:number}|null} last drawn reveal rect (for skip) */
+    this._entryLastRect = null;
+    /** @type {number} last drawn reveal corner radius (for skip) */
+    this._entryLastRadius = 0;
+    /** @type {{x:number,y:number,w:number,h:number}|null} frozen reveal frame fading out after a skip */
+    this._entrySkipRect = null;
+    /** @type {number} corner radius of the frozen skip frame */
+    this._entrySkipRadius = 0;
+    /** @type {number} 1→0 alpha of the frozen skip frame */
+    this._entrySkipAlpha = 0;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -124,6 +137,51 @@ export default class MapView {
   /** @returns {boolean} true while the entry reveal is animating */
   isEntryRevealActive() {
     return this._entryActive;
+  }
+
+  /**
+   * Skip the rest of the entry reveal (click/tap): the map settles to its
+   * final state IMMEDIATELY, and the reveal's current frame is frozen and
+   * cross-faded out on top of it (renderEntrySkipForeground, over
+   * ENTRY_SKIP_FADE_MS). A still-pending shrink stinger fires now so the
+   * landing keeps its punctuation.
+   * @returns {boolean} true if a reveal was active and got skipped
+   */
+  skipEntryReveal() {
+    if (!this._entryActive) return false;
+    this._entryActive = false;
+    this._entryContentAlpha = 1;
+    if (this._entryOnShrinkStart) {
+      const cb = this._entryOnShrinkStart;
+      this._entryOnShrinkStart = null;
+      cb();
+    }
+    if (this._entryLastRect) {
+      this._entrySkipRect = this._entryLastRect;
+      this._entrySkipRadius = this._entryLastRadius;
+      this._entrySkipAlpha = 1;
+    }
+    return true;
+  }
+
+  /**
+   * Draw + advance the skip cross-fade: the frozen reveal frame fading out
+   * over the settled map. Call from the scene's `renderForeground` hook
+   * (post-clip — the frozen rect can extend into the bars).
+   * @param {CanvasRenderingContext2D} ctx — design-space ctx
+   * @param {number} dt
+   */
+  renderEntrySkipForeground(ctx, dt) {
+    if (!this._entrySkipRect || this._entrySkipAlpha <= 0) return;
+    this._entrySkipAlpha -= dt / ENTRY_SKIP_FADE_MS;
+    if (this._entrySkipAlpha <= 0) {
+      this._entrySkipRect = null;
+      return;
+    }
+    ctx.save();
+    ctx.globalAlpha = this._entrySkipAlpha;
+    this._drawSplashInsideContainer(ctx, this._entrySkipRect, this._entrySkipRadius);
+    ctx.restore();
   }
 
   /**
@@ -196,6 +254,9 @@ export default class MapView {
     }
 
     this._drawSplashInsideContainer(ctx, rect, radius);
+    // Remembered so a click-to-skip can freeze this exact frame.
+    this._entryLastRect = rect;
+    this._entryLastRadius = radius;
     return true;
   }
 

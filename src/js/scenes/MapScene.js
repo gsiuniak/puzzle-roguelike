@@ -76,6 +76,9 @@ function startingSkillColors(characterDef) {
   return out;
 }
 
+/** A reveal-skip fades the still-ringing transition stinger out this fast (ms). */
+const ENTRY_SKIP_SFX_FADE_MS = 150;
+
 export default class MapScene extends UIPanel {
   constructor() {
     super();
@@ -143,6 +146,9 @@ export default class MapScene extends UIPanel {
     this._entryOverlayElapsed = 0;
     /** @type {boolean} arm MapView.beginEntryReveal() on the next onEnter */
     this._pendingEntryReveal = false;
+    /** @type {{key:string, id:number|null}|null} transition-stinger handle,
+     *  faded out if the player skips the reveal */
+    this._entrySfx = null;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -156,13 +162,19 @@ export default class MapScene extends UIPanel {
    * onEnter must not (and does not) reset the overlay state.
    * @param {HTMLVideoElement} video — plays out and is released when the fade ends
    * @param {number} fadeMs — fade-out duration
+   * @param {boolean} [reveal=true] — false skips the fullscreen-splash reveal
+   *   (a mid-movie click-to-skip: the movie's current frame dissolves straight
+   *   over the SETTLED map instead)
+   * @param {{key:string, id:number|null}|null} [sfx=null] — handle of the
+   *   still-ringing transition stinger, so a reveal-skip can fade it out too
    */
-  setEntryVideoOverlay(video, fadeMs) {
+  setEntryVideoOverlay(video, fadeMs, reveal = true, sfx = null) {
     this._destroyEntryOverlay();
     this._entryOverlayVideo = video || null;
     this._entryOverlayFadeMs = Math.max(1, fadeMs || 250);
     this._entryOverlayElapsed = 0;
-    this._pendingEntryReveal = true;
+    this._pendingEntryReveal = !!reveal;
+    this._entrySfx = sfx || null;
   }
 
   _destroyEntryOverlay() {
@@ -180,13 +192,33 @@ export default class MapScene extends UIPanel {
    * the fullscreen map splash beneath it (the start of the entry reveal).
    */
   renderForeground(_ctx) {
-    const video = this._entryOverlayVideo;
-    if (!video || video.error || video.readyState < 2) return;
     const app = this._sceneManager && this._sceneManager._app;
     if (!app) return;
+
+    // Reveal-skip cross-fade: the frozen reveal frame fading out over the
+    // settled map (only ever active after _skipEntryReveal).
+    if (this._mapView) this._mapView.renderEntrySkipForeground(app.ctx, 16);
+
+    const video = this._entryOverlayVideo;
+    if (!video || video.error || video.readyState < 2) return;
     const alpha = Math.max(0, 1 - this._entryOverlayElapsed / this._entryOverlayFadeMs);
     if (alpha <= 0) return;
     app.drawFullCanvasImage(video, alpha);
+  }
+
+  /**
+   * Skip the entry reveal (click/tap): drop the movie overlay instantly and
+   * cross-fade the reveal's frozen frame out over the settled map.
+   */
+  _skipEntryReveal() {
+    this._destroyEntryOverlay();
+    // Cut the still-ringing transition stinger with the visuals it accompanied
+    // (the post-transition stinger fired by skipEntryReveal takes over).
+    if (this._entrySfx) {
+      AudioManager.stopSfx(this._entrySfx.key, this._entrySfx.id, ENTRY_SKIP_SFX_FADE_MS);
+      this._entrySfx = null;
+    }
+    if (this._mapView) this._mapView.skipEntryReveal();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -340,6 +372,7 @@ export default class MapScene extends UIPanel {
 
     // Safety: release an entry overlay that hasn't finished fading.
     this._destroyEntryOverlay();
+    this._entrySfx = null;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -414,8 +447,12 @@ export default class MapScene extends UIPanel {
    */
   _handleMouseDown(x, y) {
     if (this._transitioning) return;
-    // Nodes are hidden/fading during the entry reveal — ignore clicks on them.
-    if (this._mapView && this._mapView.isEntryRevealActive()) return;
+    // A click/tap during the entry reveal skips it — the map cross-fades
+    // straight to its settled state.
+    if (this._mapView && this._mapView.isEntryRevealActive()) {
+      this._skipEntryReveal();
+      return;
+    }
     if (!this._mapView || !this._traversal) return;
 
     // MapView.hitTest handles container-offset internally
