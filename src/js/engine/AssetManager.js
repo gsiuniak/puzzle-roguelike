@@ -120,9 +120,12 @@ export default class AssetManager {
   /** Resolve a key through the alias chain to the first real (or unaliased) key. */
   _resolveKey(key) {
     let k = key;
-    const seen = new Set();
-    while (!this._assets.has(k) && this._aliases.has(k) && !seen.has(k)) {
-      seen.add(k);
+    // Hop cap replaces the old per-call `seen` Set (this runs on EVERY get(),
+    // dozens of times per frame — the Set was a constant allocation). A cycle
+    // can't be longer than the alias table, so capping hops at its size
+    // terminates identically.
+    let hops = this._aliases.size;
+    while (hops-- > 0 && !this._assets.has(k) && this._aliases.has(k)) {
       k = this._aliases.get(k);
     }
     return k;
@@ -316,10 +319,12 @@ export default class AssetManager {
    * @param {string} key - asset key
    * @param {number} w   - target width (integer)
    * @param {number} h   - target height (integer)
+   * @param {boolean} [smooth=false] - resample with high-quality smoothing
+   *   (for detailed art) instead of nearest (crisp sprites/tiles)
    * @returns {HTMLCanvasElement|null}
    */
-  getScaled(key, w, h) {
-    const cacheKey = `${key}:${w}:${h}`;
+  getScaled(key, w, h, smooth = false) {
+    const cacheKey = smooth ? `${key}:${w}:${h}:s` : `${key}:${w}:${h}`;
     if (this._scaledCache.has(cacheKey)) {
       return this._scaledCache.get(cacheKey);
     }
@@ -331,7 +336,8 @@ export default class AssetManager {
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = smooth;
+    if (smooth) ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, w, h);
 
     this._scaledCache.set(cacheKey, canvas);

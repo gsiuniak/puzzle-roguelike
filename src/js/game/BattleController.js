@@ -748,6 +748,13 @@ export default class BattleController {
   _swapDuration()  { return SWAP_BASE_DURATION / this.speedMultiplier; }
 
   /**
+   * Effective FALL phase duration (ms) — public so the board view can sync its
+   * fall ANIMATION to the real phase length instead of guessing (a mismatch
+   * makes tiles snap the tail of their drop when the phase ends first).
+   */
+  getFallDurationMs() { return this._phaseMs('FALL'); }
+
+  /**
    * True while the match-4+ emphasis "hit-stop" freeze is active (decision #42):
    * the board is held in SHOW_MATCH on the flourish and the scene should PAUSE
    * ALL other animation (character/portrait animation, floating & animated text,

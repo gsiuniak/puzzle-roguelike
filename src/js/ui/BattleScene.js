@@ -508,6 +508,13 @@ export default class BattleScene extends UIPanel {
     this._battleController = controller;
     if (controller && this._board) {
       this._board.setBoardModel(controller.board);
+      // Sync the fall ANIMATION duration to the controller's real FALL phase
+      // (BASE_PHASE_MS.FALL / speedMultiplier). The board's default 350 ms vs
+      // the ~233 ms logic phase made every falling tile snap the last ~third
+      // of its drop when the phase ended first.
+      if (typeof controller.getFallDurationMs === 'function') {
+        this._board.setFallDurationMs(controller.getFallDurationMs());
+      }
     }
   }
 
@@ -1492,8 +1499,10 @@ export default class BattleScene extends UIPanel {
       this._enemySkillsPane.setOwnerStats({ attack: state.enemyState.attack, magic: state.enemyState.magic });
     }
 
-    // Update combat log
-    if (this._combatLogText && state.log) {
+    // Update combat log — only while the panel is actually in the tree (it is
+    // currently disabled in buildHierarchy; this string build ran every frame
+    // for a panel nothing rendered).
+    if (this._combatLogText && state.log && this._combatLogPanel && this._combatLogPanel.parent) {
       const recent = state.log.getRecent(3);
       this._combatLogText.text = recent.map(e => e.message).join(' | ');
     }
@@ -2253,27 +2262,44 @@ export default class BattleScene extends UIPanel {
     const rR = this._enemyRelicBar && this._enemyRelicBar.rect;
     if (!pL || !pR || !rL || !rR || pR.w <= 0 || rR.w <= 0) return;
 
-    const F = (x) => app.designXToCanvasFraction(x);
-    const dark = `rgba(${SCRIM_COLOR}, ${SCRIM_RELIC_ALPHA})`;
-    const play = `rgba(${SCRIM_COLOR}, ${SCRIM_PLAY_ALPHA})`;
-    const clear = `rgba(${SCRIM_COLOR}, 0)`;
+    // The stops array is rebuilt only when one of its nine determinants
+    // changes (layout rects + viewport mapping); otherwise the SAME array
+    // reference is passed each frame, which fillFullCanvasHGradient's
+    // referential fast path turns into a zero-allocation cached-gradient fill.
+    const d = this._scrimDet || (this._scrimDet = new Float64Array(9));
+    if (
+      !this._scrimStops ||
+      d[0] !== rL.x || d[1] !== rL.w || d[2] !== pL.x + pL.w ||
+      d[3] !== pR.x || d[4] !== rR.x || d[5] !== rR.w ||
+      d[6] !== app.offsetX || d[7] !== app.scale || d[8] !== app.cssWidth
+    ) {
+      d[0] = rL.x; d[1] = rL.w; d[2] = pL.x + pL.w;
+      d[3] = pR.x; d[4] = rR.x; d[5] = rR.w;
+      d[6] = app.offsetX; d[7] = app.scale; d[8] = app.cssWidth;
 
-    // Left→right, monotonically increasing fractions (fillFullCanvasHGradient
-    // clamps each `at` into 0..1). The dark relic plateaus ramp DOWN to the
-    // lighter play alpha across the panel width (hidden behind the panel art)
-    // and ramp UP hard from transparent at the relic bars' outer edges.
-    app.fillFullCanvasHGradient([
-      { at: 0,                          color: clear },  // left screen edge
-      { at: F(rL.x - SCRIM_EDGE_SHOULDER), color: clear },  // hold transparent
-      { at: F(rL.x),                    color: dark },   // hard rise: relic band
-      { at: F(rL.x + rL.w),             color: dark },   // relic plateau (left)
-      { at: F(pL.x + pL.w),             color: play },   // → play area (under panel)
-      { at: F(pR.x),                    color: play },   // flat over the board
-      { at: F(rR.x),                    color: dark },   // → relic band (under panel)
-      { at: F(rR.x + rR.w),             color: dark },   // relic plateau (right)
-      { at: F(rR.x + rR.w + SCRIM_EDGE_SHOULDER), color: clear }, // hard fall
-      { at: 1,                          color: clear },  // right screen edge
-    ]);
+      const F = (x) => app.designXToCanvasFraction(x);
+      const dark = `rgba(${SCRIM_COLOR}, ${SCRIM_RELIC_ALPHA})`;
+      const play = `rgba(${SCRIM_COLOR}, ${SCRIM_PLAY_ALPHA})`;
+      const clear = `rgba(${SCRIM_COLOR}, 0)`;
+
+      // Left→right, monotonically increasing fractions (fillFullCanvasHGradient
+      // clamps each `at` into 0..1). The dark relic plateaus ramp DOWN to the
+      // lighter play alpha across the panel width (hidden behind the panel art)
+      // and ramp UP hard from transparent at the relic bars' outer edges.
+      this._scrimStops = [
+        { at: 0,                          color: clear },  // left screen edge
+        { at: F(rL.x - SCRIM_EDGE_SHOULDER), color: clear },  // hold transparent
+        { at: F(rL.x),                    color: dark },   // hard rise: relic band
+        { at: F(rL.x + rL.w),             color: dark },   // relic plateau (left)
+        { at: F(pL.x + pL.w),             color: play },   // → play area (under panel)
+        { at: F(pR.x),                    color: play },   // flat over the board
+        { at: F(rR.x),                    color: dark },   // → relic band (under panel)
+        { at: F(rR.x + rR.w),             color: dark },   // relic plateau (right)
+        { at: F(rR.x + rR.w + SCRIM_EDGE_SHOULDER), color: clear }, // hard fall
+        { at: 1,                          color: clear },  // right screen edge
+      ];
+    }
+    app.fillFullCanvasHGradient(this._scrimStops);
   }
 
   /**

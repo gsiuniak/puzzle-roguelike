@@ -427,20 +427,25 @@ export default class SkillsPane extends UIPanel {
     // the word in). Drawn for both the player and enemy panes.
     ctx.save();
     ctx.font = `${TITLE_FONT_SIZE}px ${FONT_FAMILY}`;
-    ctx.fillStyle = TITLE_COLOR;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.letterSpacing = `${TITLE_LETTER_SPACING}px`;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-    ctx.shadowBlur = 4;
-    ctx.fillText(TITLE_TEXT,
-      this.rect.x + this.rect.w / 2,
-      this.rect.y + this.rect.h * TITLE_CENTER_Y_FRAC);
+    // Two-pass text instead of shadowBlur (blur forces the slow canvas path
+    // and this draws every frame on both panes).
+    const titleX = this.rect.x + this.rect.w / 2;
+    const titleY = this.rect.y + this.rect.h * TITLE_CENTER_Y_FRAC;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillText(TITLE_TEXT, titleX + 1, titleY + 1);
+    ctx.fillStyle = TITLE_COLOR;
+    ctx.fillText(TITLE_TEXT, titleX, titleY);
     ctx.restore();
 
     const inner = this._innerRect();
     const cardW = inner.w - SCROLLBAR_GUTTER;
-    const layout = [];
+    // Grow-only pools reused across frames (this ran at 60 Hz allocating
+    // fresh arrays + one object per row for both panes).
+    const layout = this._rowLayoutPool || (this._rowLayoutPool = []);
+    const measures = this._measuresPool || (this._measuresPool = []);
 
     // Hide all keyword spans up front; cards drawn below re-enable theirs.
     for (const r of this._rows) {
@@ -448,9 +453,9 @@ export default class SkillsPane extends UIPanel {
     }
 
     // Measure all cards (content height drives the scroll range).
-    const measures = [];
     let contentH = 0;
-    for (const row of this._rows) {
+    for (let i = 0; i < this._rows.length; i++) {
+      const row = this._rows[i];
       let m = null;
       let h = GHOST_CARD_H;
       if (row.passive) {
@@ -460,9 +465,12 @@ export default class SkillsPane extends UIPanel {
         m = measureCardModel(ctx, row.model, cardW, { caster: this._ownerStats });
         h = m.h;
       }
-      measures.push({ m, h });
+      const slot = measures[i] || (measures[i] = { m: null, h: 0 });
+      slot.m = m;
+      slot.h = h;
       contentH += h + CARD_GAP;
     }
+    measures.length = this._rows.length;
     if (this._rows.length) contentH -= CARD_GAP;
     this._contentH = contentH;
     this._setScroll(this._scrollY); // re-clamp (content may have shrunk)
@@ -497,25 +505,34 @@ export default class SkillsPane extends UIPanel {
           });
         }
       }
-      layout.push({ y, h });
+      const slot = layout[i] || (layout[i] = { y: 0, h: 0 });
+      slot.y = y;
+      slot.h = h;
       y += h + CARD_GAP;
     }
+    layout.length = this._rows.length;
 
     // Top/bottom fade shadows when there is more content in that direction.
     const maxScroll = this._maxScroll();
     if (maxScroll > 0) {
+      // Fade gradients depend only on the inner rect — cached, not per frame.
+      if (!this._fadeGrads || this._fadeGradY !== inner.y || this._fadeGradH !== inner.h) {
+        const top = ctx.createLinearGradient(0, inner.y, 0, inner.y + FADE_HEIGHT);
+        top.addColorStop(0, 'rgba(0, 0, 0, 0.65)');
+        top.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        const bottom = ctx.createLinearGradient(0, inner.y + inner.h - FADE_HEIGHT, 0, inner.y + inner.h);
+        bottom.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        bottom.addColorStop(1, 'rgba(0, 0, 0, 0.65)');
+        this._fadeGrads = { top, bottom };
+        this._fadeGradY = inner.y;
+        this._fadeGradH = inner.h;
+      }
       if (this._scrollY > 1) {
-        const g = ctx.createLinearGradient(0, inner.y, 0, inner.y + FADE_HEIGHT);
-        g.addColorStop(0, 'rgba(0, 0, 0, 0.65)');
-        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = g;
+        ctx.fillStyle = this._fadeGrads.top;
         ctx.fillRect(inner.x, inner.y, inner.w, FADE_HEIGHT);
       }
       if (this._scrollY < maxScroll - 1) {
-        const g = ctx.createLinearGradient(0, inner.y + inner.h - FADE_HEIGHT, 0, inner.y + inner.h);
-        g.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        g.addColorStop(1, 'rgba(0, 0, 0, 0.65)');
-        ctx.fillStyle = g;
+        ctx.fillStyle = this._fadeGrads.bottom;
         ctx.fillRect(inner.x, inner.y + inner.h - FADE_HEIGHT, inner.w, FADE_HEIGHT);
       }
     }

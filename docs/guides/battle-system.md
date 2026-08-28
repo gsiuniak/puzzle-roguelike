@@ -89,6 +89,11 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 
 **Cascade Sub-phases:** SHOW_MATCH → REMOVE → FALL → (re-analyze → SHOW_MATCH or finish)
 
+Phase lengths = `BASE_PHASE_MS[phase] / speedMultiplier` (`_phaseMs`). The controller
+exposes **`getFallDurationMs()`** so the board VIEW syncs its fall animation to the
+real FALL phase — view animations mirroring a controller phase must derive their
+duration from the controller, never carry a local copy (decision #57).
+
 ---
 
 ## Flows

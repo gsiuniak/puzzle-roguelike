@@ -221,7 +221,11 @@ export default class MatchResolver {
     const matches = board.findAllConnectedMatches();
     if (matches.length === 0) return null;
 
+    // Numeric position keys (col*16+row, boards ≤8×8) — the old string keys
+    // paid an encode→Set→split(',')→Number round trip per cascade step,
+    // amplified inside every AI board simulation.
     const allPositions = new Set();
+    const positions = [];
     const creditedPositions = new Set();
     const mergedMana = {};
     let cascadeSkullDamage = 0;
@@ -229,7 +233,11 @@ export default class MatchResolver {
 
     for (const match of matches) {
       for (const pos of match.positions) {
-        allPositions.add(`${pos.col},${pos.row}`);
+        const key = pos.col * 16 + pos.row;
+        if (!allPositions.has(key)) {
+          allPositions.add(key);
+          positions.push(pos);
+        }
       }
 
       const count = match.count;
@@ -253,7 +261,7 @@ export default class MatchResolver {
       // costs a legitimately-long run its extra turn.
       let creditCount = 0;
       for (const pos of match.positions) {
-        const key = `${pos.col},${pos.row}`;
+        const key = pos.col * 16 + pos.row;
         if (!creditedPositions.has(key)) {
           creditedPositions.add(key);
           creditCount++;
@@ -272,12 +280,6 @@ export default class MatchResolver {
       if (match.isShape && count >= 4) {
         cascadeExtraTurn = true;
       }
-    }
-
-    const positions = [];
-    for (const key of allPositions) {
-      const [col, row] = key.split(',').map(Number);
-      positions.push({ col, row });
     }
 
     return {

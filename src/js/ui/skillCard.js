@@ -160,6 +160,13 @@ export function createCardModel(skill) {
  * are dropped and the last kept line gets a trailing ellipsis.
  * ctx.font must already be set by the caller.
  */
+// Bumped once the display fonts finish loading — measurements cached before
+// that were taken with fallback-face metrics and must be redone.
+let _fontsGeneration = 0;
+if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { _fontsGeneration++; }).catch(() => {});
+}
+
 function wrapWords(ctx, text, maxW) {
   const words = String(text).split(/\s+/).filter(Boolean);
   const lines = [];
@@ -199,6 +206,15 @@ function wrapWords(ctx, text, maxW) {
 function resolveModelDynamics(model, opts) {
   if (!model.lineTemplates) return;
   const caster = opts.caster || null;
+  // Resolved text depends only on (templates, effect payloads, attack, magic) —
+  // templates/payloads are static for a model's lifetime, so skip the per-line
+  // string resolution entirely (it ran per card per frame) until a stat moves.
+  const atk = caster ? caster.attack : null;
+  const mag = caster ? caster.magic : null;
+  if (model._dynResolved && model._dynAtk === atk && model._dynMag === mag) return;
+  model._dynResolved = true;
+  model._dynAtk = atk;
+  model._dynMag = mag;
   const cursor = { i: 0 };
   const effects = (model.skill && model.skill.effects) || [];
   for (let k = 0; k < model.effectKTs.length; k++) {
@@ -213,12 +229,32 @@ function resolveModelDynamics(model, opts) {
 export function measureCardModel(ctx, model, cardW, opts = {}) {
   resolveModelDynamics(model, opts);
 
+  // Whole-measure memo: the result depends only on (cardW, resolved stats,
+  // font readiness) — all cheap to compare. Cards re-measured every frame for
+  // the scroll range now cost two field checks on the steady path.
+  const mc = model._measureCache;
+  if (mc && mc.cardW === cardW && mc.fontsGen === _fontsGeneration
+      && mc.atk === model._dynAtk && mc.mag === model._dynMag) {
+    return mc.m;
+  }
+
   const textX = CARD_PAD.left + ICON_SIZE + ICON_GAP; // relative to card x
   // The cost lives on the icon badge — text gets the whole right side.
   const textW = Math.max(20, cardW - CARD_PAD.right - textX);
 
-  ctx.font = `bold ${NAME_FONT_SIZE}px ${FONT_FAMILY}`;
-  const nameLines = wrapWords(ctx, model.skill.name || '', textW);
+  // Name wrapping is cached on the model — it re-ran measureText per word per
+  // card per frame for a name that never changes. Re-wrapped on width change
+  // and once the display fonts finish loading (fallback-face metrics differ).
+  let nameLines;
+  const name = model.skill.name || '';
+  const nw = model._nameWrap;
+  if (nw && nw.name === name && nw.textW === textW && nw.fontsGen === _fontsGeneration) {
+    nameLines = nw.lines;
+  } else {
+    ctx.font = `bold ${NAME_FONT_SIZE}px ${FONT_FAMILY}`;
+    nameLines = wrapWords(ctx, name, textW);
+    model._nameWrap = { name, textW, fontsGen: _fontsGeneration, lines: nameLines };
+  }
   const nameH = nameLines.length * NAME_LINE_HEIGHT;
 
   const effectHeights = [];
@@ -233,7 +269,11 @@ export function measureCardModel(ctx, model, cardW, opts = {}) {
 
   const contentH = nameH + (effectsH > 0 ? NAME_DESC_GAP + effectsH : 0);
   const h = Math.max(CARD_MIN_H, CARD_PAD.top + contentH + CARD_PAD.bottom);
-  return { h, textX, textW, nameLines, effectHeights, effectsH };
+  const m = { h, textX, textW, nameLines, effectHeights, effectsH };
+  model._measureCache = {
+    cardW, fontsGen: _fontsGeneration, atk: model._dynAtk, mag: model._dynMag, m,
+  };
+  return m;
 }
 
 /**
@@ -438,6 +478,13 @@ export function drawCardModel(ctx, model, rect, m, opts = {}) {
 export function measurePassiveCardModel(ctx, model, cardW, opts = {}) {
   resolveModelDynamics(model, opts);
 
+  // Same whole-measure memo as measureCardModel.
+  const mc = model._measureCache;
+  if (mc && mc.cardW === cardW && mc.fontsGen === _fontsGeneration
+      && mc.atk === model._dynAtk && mc.mag === model._dynMag) {
+    return mc.m;
+  }
+
   // The banner sits top-left; the name AND the description both start just past
   // it so the two text columns share a left edge (`textX`). Layout uses the
   // constant banner aspect (= the sliced sprite's true w/h) so measure and draw
@@ -462,7 +509,11 @@ export function measurePassiveCardModel(ctx, model, cardW, opts = {}) {
   const headerH = PASSIVE_BANNER_H;
   const bodyContentH = Math.max(PASSIVE_HEADER_GAP + descH, PASSIVE_ICON_GAP + PASSIVE_ICON_SIZE);
   const h = CARD_PAD.top + headerH + bodyContentH + CARD_PAD.bottom;
-  return { h, textX, textW, bannerW, effectHeights, descH, headerH };
+  const m = { h, textX, textW, bannerW, effectHeights, descH, headerH };
+  model._measureCache = {
+    cardW, fontsGen: _fontsGeneration, atk: model._dynAtk, mag: model._dynMag, m,
+  };
+  return m;
 }
 
 /**
@@ -520,11 +571,12 @@ export function drawPassiveCardModel(ctx, model, rect, m, opts = {}) {
   // "Passive" label written into the banner.
   ctx.save();
   ctx.font = `${PASSIVE_BANNER_FONT_SIZE}px ${FONT_FAMILY}`;
-  ctx.fillStyle = PASSIVE_BANNER_TEXT_COLOR;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.55)';
-  ctx.shadowBlur = 3;
+  // Two-pass offset fill instead of shadowBlur (slow path, drawn per frame)
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillText(PASSIVE_BANNER_TEXT, bannerX + bannerW / 2 + 1, headerY + bannerH / 2 + 2);
+  ctx.fillStyle = PASSIVE_BANNER_TEXT_COLOR;
   ctx.fillText(PASSIVE_BANNER_TEXT, bannerX + bannerW / 2, headerY + bannerH / 2 + 1);
   ctx.restore();
 

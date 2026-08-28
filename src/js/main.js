@@ -296,6 +296,17 @@ async function init() {
     maxDpr,
   });
 
+  // Evict the pre-scaled asset bakes shortly after the window stops resizing
+  // (or the DPR changes): bake sizes are derived from the live transform, so a
+  // size change strands the old entries — panel-art bakes are multi-MB each.
+  // Debounced so a drag-resize doesn't clear mid-gesture; entries for the new
+  // size rebuild lazily on the next frame that needs them.
+  let scaledCacheEvictTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(scaledCacheEvictTimer);
+    scaledCacheEvictTimer = setTimeout(() => assetManager.clearScaledCache(), 300);
+  });
+
   // 3. InputManager — receives `app` so pointer events convert to design space
   const input = new InputManager(app.canvas, app);
 

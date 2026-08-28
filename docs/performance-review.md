@@ -166,7 +166,13 @@ evicted, videos destroyed on scene exit, at most one stale BattleScene between b
 - **Validate:** frame time on a mid-range phone, native vs capped; inspect text/tile
   sharpness on a DPR-3 device.
 
-### F7. Synchronous hint/AI simulation hitch, once per turn
+### F7. Synchronous hint/AI simulation hitch, once per turn *(timing corrected: Phase 0.75)*
+
+> Phase 0.75 correction: the glint hitch does NOT land at the cascade tail —
+> `_updateIdleGlints` re-rolls its 2.2–4.8 s timer every frame while the board
+> animates, so the MoveAdvisor cost hits mid-idle. The `EnemyAI.findBestSwap`
+> enemy-turn spike (a related synchronous scan) WAS fixed in 0.75
+> (mutate-and-revert + cheaper `findAllConnectedMatches`).
 
 - **Behavior:** idle-glint hint = `MoveAdvisor.rankMoves` with Monte-Carlo refill
   sampling + opponent-reply lookahead ≈ ~1,500 board clones + cascade resolutions per
@@ -180,15 +186,17 @@ evicted, videos destroyed on scene exit, at most one stale BattleScene between b
   state sync. **Validate:** `performance.mark` around the hint now; assert identical
   move output worker vs inline on seeded boards.
 
-### F8. Per-frame full UI relayout with allocations
+### F8. Per-frame full UI relayout with allocations *(intermediate step done: Phase 0.75)*
 
 - **Behavior:** `SceneManager` calls `scene.layoutChildren()` **every frame**
   (`SceneManager.js:297-298`); `UIContainer.layoutChildren` allocates filter arrays,
   per-child measure objects, and reduce closures per container per frame
   (`UIContainer.js:32-222`) — producing identical rects almost always.
 - **Change (Phase 2):** layout on resize/scene-enter/dirty-flag only; intermediate
-  step: keep per-frame layout but allocation-free. **Highest regression surface of the
-  medium tier** — per-frame relayout currently doubles as change propagation.
+  step: keep per-frame layout but allocation-free — **DONE in Phase 0.75** (pooled
+  measure slots, no filter/reduce/margin objects, identical semantics). The dirty-flag
+  version remains the **highest regression surface of the medium tier** — per-frame
+  relayout currently doubles as change propagation.
 - **Validate:** allocation-sampling profile idle battle; watch for stale layout on
   equip/resize.
 
@@ -208,7 +216,7 @@ evicted, videos destroyed on scene exit, at most one stale BattleScene between b
 | `getBoundingClientRect()` + `{x,y}` alloc per unthrottled mousemove | `InputManager.js:113` | Cache rect; invalidate on resize/scroll | **Phase 0 ✓** |
 | No `visibilitychange` handling — audio plays / videos decode while hidden | grep-confirmed absence | Mute/pause on hide (partly a product choice) | Phase 1 |
 | `getState()` allocates ~40-field object + ~10 arrays per frame | `BattleController.js:963-1080` | Reuse snapshot / swap event buffers only | Phase 1 |
-| Board idle pass allocates ~130 string keys + Set/map per frame | `BoardPlaceholder.js:763-827` | Precompute keys / numeric indexing | Phase 2 (with board bake) |
+| Board idle pass allocates ~130 string keys + Set/map per frame | `BoardPlaceholder.js:763-827` | Precompute keys / numeric indexing | **Phase 0.75 ✓** (reused numeric masks) |
 | Dead weight in served tree: 379 MB `raw*/_old/_bak` art, obsolete mp4s (~54 MB), unregistered `character_pane2` (4.7 MB), dead font, 404-ing sound defs | du + config | Delete/move | Disk hygiene only — unreferenced files are never fetched, so zero runtime impact; left to the owner (art pipeline may reference raw dirs) |
 | `getAllPlayerSkills` deep-clones all woven skills twice per battle setup | `playerStats.js:49,63,193` | Clone once | Phase 1 (low) |
 
@@ -325,14 +333,100 @@ the established bake-and-blit idiom, verified pixel-equivalent or imperceptible)
       module-cached sprites (2 gradients per matched tile per frame → ≤1 per frame, the
       ring). Matters most on chained 4+ flourishes, whose freeze beats escalate.
 
+**Phase 0.75 — fill-rate + AI-loop pass — IMPLEMENTED 2026-08-27** (second response to
+mobile cascade jank; a three-way deep dive found the remaining cost split between
+full-canvas fill rate at 60 Hz, per-frame allocation churn, and synchronous spikes
+amplified inside AI board-simulation loops — per-cascade-step logic allocations were
+measured as noise at ~1.6 Hz and deliberately left alone):
+
+*Fill rate / render state (all zero-visual-change; decision #56):*
+- [x] `CanvasApp.clear()`: the battle background's full-physical-canvas smoothed
+      cover-fit resample (≈4M px at dpr 2, every frame) baked once at backing-store
+      resolution; per frame is a 1:1 unsmoothed blit. Invalidated on backing-store
+      size change + `setBackgroundImage` generation bump.
+- [x] Battle scrim: `BattleScene.renderBackground` caches its 10-stop array on 9
+      numeric determinants; `fillFullCanvasHGradient` gained a referential fast path
+      (no per-frame key-string build).
+- [x] `imageSmoothingQuality = 'high'` LEAK fixed in `CharacterInfoPane`
+      `_renderHealthOverlay` (set with no enclosing save; silently upgraded every later
+      smoothed blit in the frame). Rule recorded in decision #56.
+- [x] `AssetManager.getScaled` gained a `smooth` flag; `BattleBoardPanel` (two ~1178²
+      arts → ~1080px, smoothed, every frame) and `UIPanel` panel art now draw ~1:1
+      physical-resolution bakes, guarded so animated rects fall back to direct draws
+      (no cache thrash). `clearScaledCache()` is now wired: debounced on window resize.
+- [x] Tile cell borders: the 64 per-frame hairline `strokeRect`s pre-stroked into
+      per-type bordered tile bakes (`BoardPlaceholder._getBorderedTile`); live stroke
+      remains only for loading/shuffle fallbacks.
+- [x] shadowBlur eradication round 2 (two-pass offset fills): `SkillsPane` title,
+      `UIProgressBar` label (default `shadowBlur` 2 → 0, the F10 open item),
+      `CharacterInfoPane` shield badges, `RelicBar` pager arrows, passive-card banner.
+- [x] `AssetManager._resolveKey`: per-call `Set` replaced with a hop-capped loop
+      (dozens of `get()`s per frame allocated a Set each).
+- [x] `TileTypes` predicates (`isWild`/`isFungal`/…): lowercase-id lookup table — no
+      more `toUpperCase()` string per call (128+ calls/frame from the board loop).
+
+*Shared logic / AI-amplified (verified: 3000-board old-vs-new equivalence harness ran
+identical outputs; seeded-RNG draw sequences identical; drift-check + toolbench smoke
+green):*
+- [x] `BoardModel.findAllConnectedMatches`: per-run position Sets precomputed once
+      (the invariant `setA` was rebuilt inside the O(n²) inner merge loop) and keys
+      are numeric `col*16+row`. Runs per cascade step and ~112×/enemy-turn evaluation.
+- [x] `MatchResolver.analyzeMatches`: numeric position keys; the string
+      encode→Set→`split(',')` round trips removed. External analysis shape frozen.
+- [x] `BoardModel.refill`: `makeWeightedSampler` builds the weight table once per
+      refill (was ~14 throwaway arrays per spawned tile); exactly one `Math.random()`
+      per tile, so seeded sim batches stay comparable.
+- [x] `EnemyAI.findBestSwap`: mutate-and-revert instead of ~112 `board.clone()`s in
+      one frame at enemy-turn start (`_scoreBoard` is read-only; board verified
+      bit-identical; same pick as the clone reference on 400 seeded boards).
+
+*Per-frame UI churn:*
+- [x] Skill cards: whole-measure memo per model keyed on (cardW, attack, magic, font
+      readiness); name-wrap cached on the model; `<<n>>` re-resolution gated on stat
+      change; `KeywordText` layout validity is field-compared (no per-call key string),
+      measure results cached on the layout, per-font ascent cache; fallback-face
+      measurements rebuild once on `document.fonts.ready`.
+- [x] `RelicBar`: referential fast path in `setRelics`, numeric stat compare in
+      `setOwnerStats`, and a steady-state guard in `_relayoutPage` (was re-paginating
+      every frame from the layout pass).
+- [x] `CharacterInfoPane`: `document.fonts.check` latched; name/stat fit caches are
+      field-compared. Dead per-frame combat-log string build gated off (panel is not
+      in the tree).
+- [x] `BoardPlaceholder`: reused numeric-index lookup structures (`Uint8Array` empty
+      mask, fall-slot array, swap-skip ints) replace 128+ per-frame key strings;
+      `Date.now()`/pulse/styles hoisted out of the highlight + targeting loops; the
+      per-swap-frame `drawTile` closure is now a method; fallback color table is a
+      module constant.
+- [x] `UIContainer.layoutChildren`: allocation-free rewrite (F8's sanctioned
+      intermediate step — identical placement semantics, pooled measure slots, no
+      filter/reduce/margin-object allocations, NO dirty flags).
+- [x] Approved feel fix (decision #57): board fall animation now syncs to the
+      controller's real FALL phase via `getFallDurationMs()` — tiles no longer snap
+      the last ~⅓ of their drop (`_fallDuration` 350 vs the 233 ms phase).
+
+*Deliberately NOT done (evaluated and cut):* per-step-only logic allocations
+(`preGravityGrid` copy ~9 arrays/step; PassiveSystem ctx objects ~18/step at 1.6 Hz —
+still Phase 3) · `getState()` snapshot reuse (aliases the ~17 read-and-clear one-shot
+event fields; stays a Phase 1 open item with that caveat) · a live cascade depth cap
+(gameplay change; `maxCascades` stays dead) · full text-run sprite baking · dirty-flag
+layout (F8 proper) · effect-count caps (owner decision: never degrade visuals — the
+Phase 0.5 burst throttle stays as-is, no new caps).
+
+*Still open after 0.75:* the MoveAdvisor idle-glint hitch (F7) actually fires 2.2–4.8 s
+into an idle turn (the glint timer re-rolls while the board animates), not at the
+cascade tail — evidence-gated: time-slice or worker it only if device profiles show it.
+A combined bg+scrim single-pass bake is the escalation if frames are still fill-bound.
+
 **Phase 1 — medium structural:** asset groups + title gating + Vite deploys (F3) ·
 re-pack/downscale relics + portrait sheets (F3/F4) · map static-layer bake + cached
-layout (F5) · `visibilitychange` pause/mute · `getState()` snapshot reuse.
+layout (F5) · `visibilitychange` pause/mute · `getState()` snapshot reuse (caution:
+one-shot event fields — see Phase 0.75 cuts).
 
-**Phase 2 — requires profiling evidence:** hint/AI Web Worker (F7) · dirty-flag layout
-(F8 — highest regression surface; only with the HUD in place) · battle static-layer
-caching if idle frames still exceed budget on target phones · atlas-native sprite
-rendering if memory targets aren't met.
+**Phase 2 — requires profiling evidence:** hint/AI Web Worker (F7 — see the corrected
+timing note in Phase 0.75) · dirty-flag layout (F8 — highest regression surface; the
+allocation-free intermediate step landed in Phase 0.75; only with the HUD in place) ·
+battle static-layer caching if idle frames still exceed budget on target phones ·
+atlas-native sprite rendering if memory targets aren't met.
 
 **Phase 3 — as the game grows:** PassiveSystem per-trigger indexing (relic counts ~5×) ·
 particle pooling (only on measured GC spikes) · hybrid WebGL effects layer (only if

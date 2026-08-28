@@ -32,7 +32,7 @@ export default class UIPanel extends UIContainer {
           ctx.clip();
         }
         // Stretch: draw image to exactly fill the panel rect
-        ctx.drawImage(img, rx, ry, rw, rh);
+        this._drawArtScaled(ctx, this.backgroundAssetKey, img, rx, ry, rw, rh);
         ctx.restore();
         this._restoreSmoothing(ctx);
       }
@@ -53,5 +53,32 @@ export default class UIPanel extends UIContainer {
     super.setStyle(props);
     if (props.backgroundAssetKey !== undefined) this.backgroundAssetKey = props.backgroundAssetKey;
     if (props.assetManager !== undefined) this.assetManager = props.assetManager;
+  }
+
+  /**
+   * Draw panel art via a PHYSICAL-resolution pre-scaled bake
+   * (AssetManager.getScaled with high-quality smoothing) so the per-frame
+   * draw is a ~1:1 blit instead of a full-res smoothed resample of large
+   * source art (the character/skills/board panel arts are 850–1200px sources
+   * drawn every frame). The bake is only used once the target size has been
+   * stable for a frame — a panel whose rect animates falls back to the direct
+   * draw, so it can never thrash the scaled cache with per-frame bakes.
+   * Physical scale comes from the live ctx transform (decision #51 — never
+   * window.devicePixelRatio).
+   */
+  _drawArtScaled(ctx, key, img, x, y, w, h) {
+    let baked = null;
+    if (typeof ctx.getTransform === 'function') {
+      const m = ctx.getTransform();
+      const pxScale = Math.max(0.1, Math.hypot(m.a, m.b));
+      const bw = Math.max(1, Math.round(w * pxScale));
+      const bh = Math.max(1, Math.round(h * pxScale));
+      if (bw === this._artBakeW && bh === this._artBakeH) {
+        baked = this.assetManager.getScaled(key, bw, bh, true);
+      }
+      this._artBakeW = bw;
+      this._artBakeH = bh;
+    }
+    ctx.drawImage(baked || img, x, y, w, h);
   }
 }

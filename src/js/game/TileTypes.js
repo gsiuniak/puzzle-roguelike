@@ -85,12 +85,28 @@ export function getTileType(typeId) {
 }
 
 /**
+ * Lowercase-id lookup table for the hot predicates below. The predicates run
+ * inside the board render loop (128+ calls/frame) and the sim's match scans —
+ * the old `typeId?.toUpperCase()` allocated a string per call. Board type ids
+ * are always lowercase; the uppercase path remains as a fallback for any
+ * mixed-case caller.
+ */
+const TYPE_BY_ID = {};
+for (const t of Object.values(TILE_TYPES)) TYPE_BY_ID[t.id] = t;
+
+/** Resolve a type id to its definition without allocating on the hot path. */
+function defOf(typeId) {
+  if (typeId == null) return undefined;
+  return TYPE_BY_ID[typeId] || TILE_TYPES[String(typeId).toUpperCase()];
+}
+
+/**
  * Check if a tile type is a skull.
  * @param {string} typeId
  * @returns {boolean}
  */
 export function isSkull(typeId) {
-  return TILE_TYPES[typeId?.toUpperCase()]?.isSkull ?? false;
+  return defOf(typeId)?.isSkull ?? false;
 }
 
 /**
@@ -100,7 +116,7 @@ export function isSkull(typeId) {
  * @returns {boolean}
  */
 export function isInert(typeId) {
-  return TILE_TYPES[typeId?.toUpperCase()]?.isInert ?? false;
+  return defOf(typeId)?.isInert ?? false;
 }
 
 /**
@@ -109,7 +125,7 @@ export function isInert(typeId) {
  * @returns {boolean}
  */
 export function isWild(typeId) {
-  return TILE_TYPES[typeId?.toUpperCase()]?.isWild ?? false;
+  return defOf(typeId)?.isWild ?? false;
 }
 
 /**
@@ -119,7 +135,7 @@ export function isWild(typeId) {
  * @returns {boolean}
  */
 export function isFungal(typeId) {
-  return TILE_TYPES[typeId?.toUpperCase()]?.isFungal ?? false;
+  return defOf(typeId)?.isFungal ?? false;
 }
 
 /**
@@ -128,7 +144,7 @@ export function isFungal(typeId) {
  * @returns {number}
  */
 export function fungalTimer(typeId) {
-  return TILE_TYPES[typeId?.toUpperCase()]?.fungalTimer ?? 0;
+  return defOf(typeId)?.fungalTimer ?? 0;
 }
 
 /**
@@ -139,7 +155,9 @@ export function fungalTimer(typeId) {
  * @returns {boolean}
  */
 export function isMana(typeId) {
-  return !isSkull(typeId) && !isInert(typeId) && !isWild(typeId);
+  const d = defOf(typeId);
+  // Unknown ids historically read as mana (all three flags absent) — preserved.
+  return d ? !(d.isSkull || d.isInert || d.isWild) : true;
 }
 
 /**
@@ -158,6 +176,38 @@ export function getRandomTileType(weights) {
     if (roll <= 0) return id;
   }
   return entries[entries.length - 1][0];
+}
+
+/**
+ * Build a reusable weighted sampler over `weights`. Filters/sums ONCE; each
+ * call then makes exactly one Math.random() roll (the same roll-per-tile
+ * contract as getRandomTileType, so seeded sim batches stay comparable) and
+ * walks the precomputed entries. BoardModel.refill uses this so a 30-tile
+ * refill costs one table build instead of ~14 array allocations per tile.
+ * @param {Object<string, number>} weights - Effective weights per type ID
+ * @returns {() => string}
+ */
+export function makeWeightedSampler(weights) {
+  const ids = [];
+  const ws = [];
+  let total = 0;
+  for (const id in weights) {
+    const w = weights[id];
+    if (w > 0) {
+      ids.push(id);
+      ws.push(w);
+      total += w;
+    }
+  }
+  if (ids.length === 0) return () => 'red'; // same fallback as getRandomTileType
+  return () => {
+    let roll = Math.random() * total;
+    for (let i = 0; i < ids.length; i++) {
+      roll -= ws[i];
+      if (roll <= 0) return ids[i];
+    }
+    return ids[ids.length - 1];
+  };
 }
 
 /**

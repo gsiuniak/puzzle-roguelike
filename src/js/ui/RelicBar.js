@@ -126,7 +126,8 @@ export default class RelicBar extends UIContainer {
     /** Owner stats ({ attack, magic }) for live `<<n>>` tooltip damage values. */
     this._ownerStats = null;
     /** Signature of the owner stats last baked into tooltips (re-attach gate). */
-    this._ownerStatsSig = '';
+    this._ownerStatsAtk = -1;
+    this._ownerStatsMag = -1;
     /** Last set of relic ids — used to skip rebuilds when unchanged. */
     this._lastRelicSignature = '';
     /** Cached last relic list. */
@@ -161,6 +162,9 @@ export default class RelicBar extends UIContainer {
     /** Drawn arrow hit-rects (null when that arrow is hidden). */
     this._upArrowRect = null;
     this._downArrowRect = null;
+    /** Forces the next _relayoutPage to run its full body (see the guard
+     *  there) — set by every state change that must re-paginate/re-attach. */
+    this._layoutDirty = true;
   }
 
   setAssetManager(am) {
@@ -181,6 +185,7 @@ export default class RelicBar extends UIContainer {
     }
     this._tooltipManager = tm;
     this._builtSliceSig = null; // force re-attach of the current page
+    this._layoutDirty = true;
     this._relayoutPage();
   }
 
@@ -191,10 +196,17 @@ export default class RelicBar extends UIContainer {
    */
   setRelics(relics) {
     const list = Array.isArray(relics) ? relics : [];
+    // Referential fast path — BattleScene passes the live battle-state relic
+    // array every frame; same reference + same length ⇒ same ids, so skip the
+    // per-frame map/join. (Length guards in-place push/pop mutation.)
+    if (list === this._lastRelicsRef && list.length === this._lastRelicsLen) return;
+    this._lastRelicsRef = list;
+    this._lastRelicsLen = list.length;
     const signature = list.map(r => (r && r.id) || '').join('|');
     if (signature === this._lastRelicSignature) return;
     this._lastRelicSignature = signature;
     this._lastRelics = list;
+    this._layoutDirty = true;
     this._relayoutPage();
   }
 
@@ -208,11 +220,15 @@ export default class RelicBar extends UIContainer {
    */
   setOwnerStats(stats) {
     this._ownerStats = stats || null;
-    const sig = stats ? `${stats.attack || 0}|${stats.magic || 0}` : '';
-    if (sig === this._ownerStatsSig) return;
-    this._ownerStatsSig = sig;
+    // Numeric compare (was a template-string build per frame).
+    const atk = stats ? (stats.attack || 0) : -1;
+    const mag = stats ? (stats.magic || 0) : -1;
+    if (atk === this._ownerStatsAtk && mag === this._ownerStatsMag) return;
+    this._ownerStatsAtk = atk;
+    this._ownerStatsMag = mag;
     // Re-bake the current page's tooltip text with the new stats.
     this._builtSliceSig = null;
+    this._layoutDirty = true;
     this._relayoutPage();
   }
 
@@ -233,6 +249,18 @@ export default class RelicBar extends UIContainer {
    */
   _relayoutPage() {
     const content = this.getContentRect();
+    // Steady-state guard: layoutChildren calls this EVERY frame from the
+    // global layout pass — skip the full re-pagination/re-position unless the
+    // rect, page, or relic list actually changed (state changes that need a
+    // forced pass set _layoutDirty).
+    if (
+      !this._layoutDirty &&
+      this._lastLayoutX === content.x && this._lastLayoutY === content.y &&
+      this._lastLayoutW === content.w && this._lastLayoutH === content.h &&
+      this._lastLayoutPage === this._page
+    ) {
+      return;
+    }
     const contentH = Math.max(0, content.h);
     const total = this._lastRelics.length;
     const rowH = ICON_SIZE + ICON_GAP;
@@ -269,6 +297,13 @@ export default class RelicBar extends UIContainer {
     }
 
     this._positionPage(content);
+
+    this._layoutDirty = false;
+    this._lastLayoutX = content.x;
+    this._lastLayoutY = content.y;
+    this._lastLayoutW = content.w;
+    this._lastLayoutH = content.h;
+    this._lastLayoutPage = this._page; // post-clamp value
   }
 
   /**
@@ -520,14 +555,9 @@ export default class RelicBar extends UIContainer {
   //   ctx.restore();
   // }
 
-  /** Draw a single filled triangle arrow within `r`, pointing `dir`. */
-  _drawArrow(ctx, r, dir) {
+  /** Trace the triangle path for `_drawArrow` into the current path. */
+  _arrowPath(ctx, r, dir) {
     const cx = r.x + r.w / 2;
-    ctx.save();
-    ctx.fillStyle = ARROW_COLOR;
-    ctx.shadowColor = ARROW_SHADOW;
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetY = 1;
     ctx.beginPath();
     if (dir === 'up') {
       ctx.moveTo(cx, r.y);
@@ -539,6 +569,19 @@ export default class RelicBar extends UIContainer {
       ctx.lineTo(cx, r.y + r.h);
     }
     ctx.closePath();
+  }
+
+  /** Draw a single filled triangle arrow within `r`, pointing `dir`.
+   *  Shadow = a second offset fill of the same path (no shadowBlur). */
+  _drawArrow(ctx, r, dir) {
+    ctx.save();
+    ctx.translate(0, 1); // the old shadowOffsetY
+    ctx.fillStyle = ARROW_SHADOW;
+    this._arrowPath(ctx, r, dir);
+    ctx.fill();
+    ctx.translate(0, -1);
+    ctx.fillStyle = ARROW_COLOR;
+    this._arrowPath(ctx, r, dir);
     ctx.fill();
     ctx.restore();
   }

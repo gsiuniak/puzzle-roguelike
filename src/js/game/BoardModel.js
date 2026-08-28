@@ -13,7 +13,7 @@
  *   - fall animation data generation
  */
 
-import { getRandomTileType, getDefaultSpawnWeights, isSkull, isInert, isWild, isFungal, BOARD_COLS, BOARD_ROWS } from './TileTypes.js';
+import { getRandomTileType, makeWeightedSampler, getDefaultSpawnWeights, isSkull, isInert, isWild, isFungal, BOARD_COLS, BOARD_ROWS } from './TileTypes.js';
 
 export default class BoardModel {
   /**
@@ -500,10 +500,22 @@ export default class BoardModel {
         if (ra !== rb) parent[ra] = rb;
       }
 
+      // Precompute each run's position-key Set ONCE (numeric col*16+row —
+      // boards are ≤8×8 so 16 is collision-free). The old code rebuilt BOTH
+      // Sets (array.map + template strings) inside the inner j-loop — O(n²)
+      // allocation churn that runs once per cascade step and ~112× per
+      // enemy-turn AI evaluation.
+      const keySets = new Array(n);
       for (let i = 0; i < n; i++) {
+        const s = new Set();
+        for (const p of runs[i].positions) s.add(p.col * 16 + p.row);
+        keySets[i] = s;
+      }
+
+      for (let i = 0; i < n; i++) {
+        const setA = keySets[i];
         for (let j = i + 1; j < n; j++) {
-          const setA = new Set(runs[i].positions.map(p => `${p.col},${p.row}`));
-          const setB = new Set(runs[j].positions.map(p => `${p.col},${p.row}`));
+          const setB = keySets[j];
           let sharedCount = 0;
           for (const key of setA) {
             if (setB.has(key)) sharedCount++;
@@ -520,21 +532,23 @@ export default class BoardModel {
         groups.get(root).push(runs[i]);
       }
 
-      // Build merged matches
+      // Build merged matches — dedupe on numeric keys and keep the first
+      // occurrence's {col,row} object directly (same first-seen ordering as
+      // the old string-Set → split(',') round trip, without the churn).
       for (const [, groupRuns] of groups.entries()) {
         const uniquePositions = new Set();
+        const positions = [];
         for (const run of groupRuns) {
           for (const pos of run.positions) {
-            uniquePositions.add(`${pos.col},${pos.row}`);
+            const key = pos.col * 16 + pos.row;
+            if (!uniquePositions.has(key)) {
+              uniquePositions.add(key);
+              positions.push(pos);
+            }
           }
         }
 
-        const positions = Array.from(uniquePositions).map(key => {
-          const [col, row] = key.split(',').map(Number);
-          return { col, row };
-        });
-
-        const count = uniquePositions.size;
+        const count = positions.length;
         const isShape = groupRuns.length > 1;
 
         allConnectedMatches.push({ typeId, positions, count, isShape });
@@ -587,10 +601,15 @@ export default class BoardModel {
   /** Fill all empty cells with random tiles using current spawn weights. */
   refill() {
     const weights = this.getEffectiveWeights();
+    // One precomputed sampler for the whole refill — getRandomTileType
+    // re-filtered/re-summed the weight table per spawned tile (~400 throwaway
+    // arrays per cascade FALL step, amplified inside every AI board sim).
+    // Roll count is unchanged: exactly one Math.random() per tile.
+    const sample = makeWeightedSampler(weights);
     for (let x = 0; x < this.cols; x++) {
       for (let y = 0; y < this.rows; y++) {
         if (this.grid[x][y] === null) {
-          this.grid[x][y] = getRandomTileType(weights);
+          this.grid[x][y] = sample();
         }
       }
     }

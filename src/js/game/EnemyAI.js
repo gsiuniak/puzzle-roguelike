@@ -83,11 +83,15 @@ export default class EnemyAI {
     let bestSwap = null;
     let bestScore = -Infinity;
 
+    // Mutate-and-revert instead of cloning: _scoreBoard is read-only (a match
+    // scan), and this loop runs for EVERY valid swap (~112 on a full board)
+    // synchronously at enemy-turn start — ~112 full board clones in one frame
+    // was a visible mobile hitch. Same evaluation order → same chosen swap.
+    // (BoardModel.getValidSwaps uses the identical swap/revert idiom.)
     for (const sw of swaps) {
-      const clone = board.clone();
-      clone.swap(sw.col1, sw.row1, sw.col2, sw.row2);
-
-      const score = this._scoreBoard(clone);
+      board.swap(sw.col1, sw.row1, sw.col2, sw.row2);
+      const score = this._scoreBoard(board);
+      board.swap(sw.col1, sw.row1, sw.col2, sw.row2);
 
       if (score > bestScore) {
         bestScore = score;

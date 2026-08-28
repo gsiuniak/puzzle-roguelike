@@ -1,5 +1,4 @@
 import UIElement from './UIElement.js';
-import Rect from './Rect.js';
 
 /**
  * UIContainer — flexbox-inspired layout container.
@@ -30,39 +29,58 @@ export default class UIContainer extends UIElement {
   // ── layout algorithm ────────────────────────────────
 
   layoutChildren() {
-    const content = this.getContentRect();
+    // Allocation-free per-frame layout (perf review F8's sanctioned
+    // intermediate step): placement semantics are IDENTICAL to the old code,
+    // but there is no children.filter array, no getContentRect Rect, no
+    // per-child measure/margin objects, and no reduce closures — this method
+    // runs for every container every frame from SceneManager's layout pass.
+    // Measure slots are pooled per instance (grow-only).
+    const rect = this.rect;
+    let pt, pr, pb, pl;
+    const pad = this.padding;
+    if (typeof pad === 'number') { pt = pr = pb = pl = pad; }
+    else if (pad) { pt = pad.top || 0; pr = pad.right || 0; pb = pad.bottom || 0; pl = pad.left || 0; }
+    else { pt = pr = pb = pl = 0; }
+    const contentX = rect.x + pl;
+    const contentY = rect.y + pt;
+    const contentW = rect.w - pl - pr;
+    const contentH = rect.h - pt - pb;
+
     const isRow = this.direction === 'row';
-    const visibleChildren = this.children.filter(c => c.visible);
+    const children = this.children;
+    const measures = this._layoutMeasures || (this._layoutMeasures = []);
 
-    if (visibleChildren.length === 0) return;
+    const axisSize = isRow ? contentW : contentH;    // main axis
+    const crossSize = isRow ? contentH : contentW;    // cross axis
 
-    const gap = this.gap;
-    const totalGap = gap * (visibleChildren.length - 1);
-
-    const axisSize = isRow ? content.w : content.h;    // main axis
-    const crossSize = isRow ? content.h : content.w;    // cross axis
-
-    // --- First pass: measure each child ---
+    // --- First pass: measure each visible child ---
+    let count = 0;
     let totalFixedAxis = 0;
     let totalFlexGrow = 0;
-    const childMeasures = [];
 
-    for (const child of visibleChildren) {
+    for (let ci = 0; ci < children.length; ci++) {
+      const child = children[ci];
+      if (!child.visible) continue;
+
       let axis = 0;
       let cross = crossSize; // default to full cross size
       let flexGrow = child.flexGrow || 0;
 
-      // Resolve child margin
-      const margin = child._resolveMargin();
-      const mgnMainStart = isRow ? margin.left : margin.top;
-      const mgnMainEnd   = isRow ? margin.right : margin.bottom;
-      const mgnCrossStart = isRow ? margin.top : margin.left;
-      const mgnCrossEnd   = isRow ? margin.bottom : margin.right;
+      // Resolve child margin into locals (no object)
+      let mt, mr, mb, ml;
+      const mg = child.margin;
+      if (typeof mg === 'number') { mt = mr = mb = ml = mg; }
+      else if (mg) { mt = mg.top || 0; mr = mg.right || 0; mb = mg.bottom || 0; ml = mg.left || 0; }
+      else { mt = mr = mb = ml = 0; }
+      const mgnMainStart = isRow ? ml : mt;
+      const mgnMainEnd   = isRow ? mr : mb;
+      const mgnCrossStart = isRow ? mt : ml;
+      const mgnCrossEnd   = isRow ? mb : mr;
 
       // --- Axis sizing (main direction) ---
       if (isRow) {
         if (child.widthPercent !== null && child.widthPercent !== undefined) {
-          axis = content.w * child.widthPercent;
+          axis = contentW * child.widthPercent;
         } else if (child.width !== null && child.width !== undefined) {
           axis = child.width;
         } else {
@@ -70,7 +88,7 @@ export default class UIContainer extends UIElement {
         }
       } else {
         if (child.heightPercent !== null && child.heightPercent !== undefined) {
-          axis = content.h * child.heightPercent;
+          axis = contentH * child.heightPercent;
         } else if (child.height !== null && child.height !== undefined) {
           axis = child.height;
         } else {
@@ -81,7 +99,7 @@ export default class UIContainer extends UIElement {
       // --- Cross sizing (perpendicular direction) ---
       if (isRow) {
         if (child.heightPercent !== null && child.heightPercent !== undefined) {
-          cross = content.h * child.heightPercent;
+          cross = contentH * child.heightPercent;
         } else if (child.height !== null && child.height !== undefined) {
           cross = child.height;
         } else {
@@ -90,7 +108,7 @@ export default class UIContainer extends UIElement {
         }
       } else {
         if (child.widthPercent !== null && child.widthPercent !== undefined) {
-          cross = content.w * child.widthPercent;
+          cross = contentW * child.widthPercent;
         } else if (child.width !== null && child.width !== undefined) {
           cross = child.width;
         } else {
@@ -111,16 +129,32 @@ export default class UIContainer extends UIElement {
       // Total main-axis space including margins
       const axisWithMargin = axis + mgnMainStart + mgnMainEnd;
 
-      childMeasures.push({
-        child, axis, cross, flexGrow,
-        mgnMainStart, mgnMainEnd, mgnCrossStart, mgnCrossEnd,
-        axisWithMargin,
+      const m = measures[count] || (measures[count] = {
+        child: null, axis: 0, cross: 0, flexGrow: 0,
+        mgnMainStart: 0, mgnMainEnd: 0, mgnCrossStart: 0, mgnCrossEnd: 0,
+        axisWithMargin: 0,
       });
+      m.child = child;
+      m.axis = axis;
+      m.cross = cross;
+      m.flexGrow = flexGrow;
+      m.mgnMainStart = mgnMainStart;
+      m.mgnMainEnd = mgnMainEnd;
+      m.mgnCrossStart = mgnCrossStart;
+      m.mgnCrossEnd = mgnCrossEnd;
+      m.axisWithMargin = axisWithMargin;
+      count++;
+
       totalFlexGrow += flexGrow;
       if (flexGrow === 0) {
         totalFixedAxis += axisWithMargin;
       }
     }
+
+    if (count === 0) return;
+
+    const gap = this.gap;
+    const totalGap = gap * (count - 1);
 
     // --- Distribute remaining space to flex children ---
     let remaining = axisSize - totalGap - totalFixedAxis;
@@ -128,15 +162,18 @@ export default class UIContainer extends UIElement {
 
     const flexUnit = totalFlexGrow > 0 ? remaining / totalFlexGrow : 0;
 
-    for (const m of childMeasures) {
+    let sumAxisWithMargin = 0;
+    for (let i = 0; i < count; i++) {
+      const m = measures[i];
       if (m.flexGrow > 0) {
         m.axis = Math.max(0, flexUnit * m.flexGrow);
         m.axisWithMargin = m.axis + m.mgnMainStart + m.mgnMainEnd;
       }
+      sumAxisWithMargin += m.axisWithMargin;
     }
 
     // --- Compute total axis used (margin-boxes) ---
-    const totalAxisUsed = childMeasures.reduce((s, m) => s + m.axisWithMargin, 0) + totalGap;
+    const totalAxisUsed = sumAxisWithMargin + totalGap;
 
     // --- Justify-content: compute per-gap distribution for space-* modes ---
     let effectiveGap = gap;
@@ -150,40 +187,33 @@ export default class UIContainer extends UIElement {
         startOffset = axisSize - totalAxisUsed;
         break;
       case 'space-between':
-        if (visibleChildren.length > 1) {
-          effectiveGap = (axisSize - childMeasures.reduce((s, m) => s + m.axisWithMargin, 0))
-            / (visibleChildren.length - 1);
+        if (count > 1) {
+          effectiveGap = (axisSize - sumAxisWithMargin) / (count - 1);
         }
         break;
-      case 'space-around':
-        if (visibleChildren.length > 0) {
-          const extra = (axisSize - childMeasures.reduce((s, m) => s + m.axisWithMargin, 0))
-            / visibleChildren.length;
-          effectiveGap = extra;       // gap between items
-          startOffset = extra / 2;   // half-gap before first item
-        }
+      case 'space-around': {
+        const extra = (axisSize - sumAxisWithMargin) / count;
+        effectiveGap = extra;       // gap between items
+        startOffset = extra / 2;   // half-gap before first item
         break;
-      case 'space-evenly':
-        if (visibleChildren.length > 0) {
-          const extra = (axisSize - childMeasures.reduce((s, m) => s + m.axisWithMargin, 0))
-            / (visibleChildren.length + 1);
-          effectiveGap = extra;
-          startOffset = extra;
-        }
+      }
+      case 'space-evenly': {
+        const extra = (axisSize - sumAxisWithMargin) / (count + 1);
+        effectiveGap = extra;
+        startOffset = extra;
         break;
+      }
       case 'start':
       default:
         break;
     }
 
     // --- Place children ---
-    let axisPos = isRow
-      ? (content.x + startOffset)
-      : (content.y + startOffset);
+    let axisPos = (isRow ? contentX : contentY) + startOffset;
+    const crossPosStart = isRow ? contentY : contentX;
 
-    const crossPosStart = isRow ? content.y : content.x;
-
-    for (const m of childMeasures) {
+    for (let i = 0; i < count; i++) {
+      const m = measures[i];
       // Compute cross-axis position from alignItems / alignSelf
       let crossPos;
       const childAlign = this._childAlign(m.child);
@@ -219,6 +249,9 @@ export default class UIContainer extends UIElement {
 
       axisPos += m.axisWithMargin + effectiveGap;
     }
+
+    // Drop child references in unused pool slots so removed subtrees can GC.
+    for (let i = count; i < measures.length; i++) measures[i].child = null;
   }
 
   _childAlign(child) {

@@ -7,6 +7,20 @@ import UIProgressBar from './UIProgressBar.js';
 import UIOrb from './UIOrb.js';
 import { getStatusDef, STATUS_KIND } from '../data/statusEffects.js';
 
+// Latched "is the display font usable yet" check. document.fonts.check() was
+// being called every frame per pane; once it reports true it can never go
+// false again, so remember the answer.
+let _displayFontLatch = false;
+function _displayFontReady() {
+  if (_displayFontLatch) return 1;
+  if (typeof document === 'undefined' || !document.fonts) return 1;
+  if (document.fonts.check('bold 12px "Marcellus SC"')) {
+    _displayFontLatch = true;
+    return 1;
+  }
+  return 0;
+}
+
 // ── Tunable layout constants ─────────────────────────────
 // Tuned for the wide-viewport battle side column (~465px pane width) and the
 // 2026-07 `character_pane_panel` art (852×623, aspect ≈1.37 — taller than the
@@ -278,17 +292,19 @@ export default class CharacterInfoPane extends UIPanel {
     this._infoCol = null;
     this._nameText = null;
     this._tagText = null;
-    // Cache key for the one-line name font fit (see _fitNameFont).
-    this._nameFitFor = null;
+    // Cache fields for the one-line name font fit (see _fitNameFont).
+    this._nameFitText = null;
+    this._nameFitFonts = -1;
     this._healthBar = null;
     this._attackValue = null;
     this._magicValue = null;
     this._armorValue = null;
     // Stats row + its groups, re-fit to the live text widths each render
-    // (see _fitStatsRow; cache key mirrors _nameFitFor).
+    // (see _fitStatsRow; cache fields mirror _fitNameFont's).
     this._statsRow = null;
     this._statGroups = [];
-    this._statsFitFor = null;
+    this._statsFitVals = null;
+    this._statsFitFonts = -1;
     this._manaOrbs = { red: null, blue: null, green: null, yellow: null, purple: null };
     // Active status effects (buffs/debuffs), refreshed from updateFromState().
     // Each entry is the live status object { id, kind, turns, ... }.
@@ -394,7 +410,7 @@ export default class CharacterInfoPane extends UIPanel {
 
     // Name — CENTERED in the info column on both panes; a long name shrinks
     // its font to stay on one line (_fitNameFont, run at render time).
-    this._nameFitFor = null; // fresh element starts at base size → refit
+    this._nameFitText = null; // fresh element starts at base size → refit
     this._nameText = new UIText(cd.name || '');
     this._nameText.setStyle({
       fontSize: NAME_FONT_SIZE,
@@ -448,7 +464,7 @@ export default class CharacterInfoPane extends UIPanel {
     statsRow.height = STATS_HEIGHT;
     this._statsRow = statsRow;
     this._statGroups = [];
-    this._statsFitFor = null;
+    this._statsFitVals = null;
 
     statsRow.addChild(this._buildStatGroup('icon_attack', () => this._attackValue, (el) => { this._attackValue = el; }, cd.attack ?? 0));
     statsRow.addChild(this._buildStatGroup('icon_magic',  () => this._magicValue,  (el) => { this._magicValue = el;  }, cd.magic  ?? 0));
@@ -585,11 +601,9 @@ export default class CharacterInfoPane extends UIPanel {
     const el = this._nameText;
     if (!el || !el.text) return;
 
-    const fontsReady = (typeof document !== 'undefined' && document.fonts)
-      ? (document.fonts.check('bold 12px "Marcellus SC"') ? 1 : 0)
-      : 1;
-    const key = `${el.text}|${fontsReady}`;
-    if (this._nameFitFor === key) return;
+    const fontsReady = _displayFontReady();
+    // Field compare (was a per-frame key-string build + fonts.check call).
+    if (this._nameFitText === el.text && this._nameFitFonts === fontsReady) return;
 
     const prevSize = el.fontSize;
     el.fontSize = NAME_FONT_SIZE;
@@ -604,7 +618,8 @@ export default class CharacterInfoPane extends UIPanel {
     }
     if (size !== prevSize) el.setStyle({ fontSize: size });
     else el.fontSize = prevSize;
-    this._nameFitFor = key;
+    this._nameFitText = el.text;
+    this._nameFitFonts = fontsReady;
   }
 
   /**
@@ -748,10 +763,14 @@ export default class CharacterInfoPane extends UIPanel {
     const y = bar.y + bar.h / 2 - h / 2;
 
     const prev = ctx.imageSmoothingEnabled;
+    const prevQ = ctx.imageSmoothingQuality;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, x, y, w, h);
     ctx.imageSmoothingEnabled = prev;
+    // Restore quality too — leaving 'high' set silently upgrades every later
+    // smoothed draw in the frame (no enclosing save/restore here).
+    ctx.imageSmoothingQuality = prevQ;
   }
 
   /**
@@ -828,11 +847,21 @@ export default class CharacterInfoPane extends UIPanel {
     const row = this._statsRow;
     if (!row || !this._statGroups.length || !row.rect || row.rect.w <= 0) return;
 
-    const fontsReady = (typeof document !== 'undefined' && document.fonts)
-      ? (document.fonts.check('bold 12px "Marcellus SC"') ? 1 : 0)
-      : 1;
-    const key = this._statGroups.map(g => g.valueText.text).join('|') + `|${fontsReady}`;
-    if (this._statsFitFor === key) return;
+    const fontsReady = _displayFontReady();
+    // Field compare per stat group (was a per-frame map/join key build +
+    // fonts.check call).
+    const vals = this._statsFitVals || (this._statsFitVals = []);
+    let changed = this._statsFitFonts !== fontsReady
+      || vals.length !== this._statGroups.length;
+    if (!changed) {
+      for (let i = 0; i < this._statGroups.length; i++) {
+        if (vals[i] !== this._statGroups[i].valueText.text) { changed = true; break; }
+      }
+    }
+    if (!changed) return;
+    this._statsFitFonts = fontsReady;
+    vals.length = this._statGroups.length;
+    for (let i = 0; i < this._statGroups.length; i++) vals[i] = this._statGroups[i].valueText.text;
 
     ctx.save();
     for (const g of this._statGroups) {
@@ -848,7 +877,6 @@ export default class CharacterInfoPane extends UIPanel {
     // Re-center the row with the fitted widths (its own rect is already laid
     // out by the normal pass, so a local re-layout is enough).
     row.layoutChildren();
-    this._statsFitFor = key;
   }
 
   /**
@@ -1027,11 +1055,11 @@ export default class CharacterInfoPane extends UIPanel {
         ctx.drawImage(b.icon, x, cy - b.iconH / 2, b.iconW, b.iconH);
         x += b.iconW + ARMOR_BADGE_ICON_GAP;
       }
+      // Two-pass offset fill instead of shadowBlur (slow path, per frame)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillText(b.text, x + 1, cy + 2);
       ctx.fillStyle = b.color;
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-      ctx.shadowBlur = 3;
       ctx.fillText(b.text, x, cy + 1);
-      ctx.shadowColor = 'transparent';
       x += b.textW;
     }
     ctx.restore();

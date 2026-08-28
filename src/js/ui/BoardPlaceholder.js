@@ -43,6 +43,14 @@ const WILD_BORDER_CONFIG = {
  * its cell. Distances/scales are in CELL-SIZE units so they're resolution
  * independent; per-tile start delays are staggered for a cascading reveal.
  */
+// Fallback tile fills while the sprite sheet streams in (module constant —
+// this literal used to be rebuilt every renderSelf call).
+const FALLBACK_TILE_COLORS = {
+  red: '#cc3333', blue: '#3366cc', green: '#33aa33',
+  yellow: '#cccc33', purple: '#9933cc', skull: '#555555',
+  disease: '#7d8a3a', thrall: '#b0392f',
+};
+
 const SHUFFLE_ANIM_DUR = 440;        // ms for a single tile to settle
 const SHUFFLE_STAGGER = 180;         // ms spread of per-tile start delays
 const SHUFFLE_MIN_DIST = 1.2;        // start offset (cell-size units)
@@ -271,6 +279,9 @@ export default class BoardPlaceholder extends UIElement {
     /** @type {Array<{col:number, row:number}>} */
     this.targetingOverlayCells = [];
     this._fallProgress = 0;
+    // Fall ANIMATION duration. BattleScene syncs this to the controller's
+    // real FALL phase via setFallDurationMs() — the raw 350 default only
+    // applies when no controller is wired (placeholder boards).
     this._fallDuration = 350;
 
     // Swap animation state
@@ -315,6 +326,11 @@ export default class BoardPlaceholder extends UIElement {
   setBoardModel(model) {
     this._boardModel = model;
     this._placeholderGrid = null;
+  }
+
+  /** Sync the fall animation to the controller's actual FALL phase length. */
+  setFallDurationMs(ms) {
+    if (ms > 0) this._fallDuration = ms;
   }
 
   get cols() { return this._boardModel ? this._boardModel.cols : 8; }
@@ -788,6 +804,13 @@ export default class BoardPlaceholder extends UIElement {
     }
     const bakeCs = Math.max(1, Math.round(cs * pxScale));
     this._bakeCs = bakeCs; // shared with the swap-anim tile draw below
+    this._cs = cs;         // design cell size — border bake needs the px ratio
+    // Bordered-tile bakes are keyed per tile type at ONE bakeCs — drop them
+    // all when the physical cell size changes (resize / DPR change).
+    if (this._borderBakeCs !== bakeCs) {
+      this._borderBakeCs = bakeCs;
+      if (this._borderedTileCache) this._borderedTileCache.clear();
+    }
 
     // Pre-scaled physical-resolution copies (nearest, matching the old live
     // downscale) — 1:1 blits instead of 64 full-res downscales per frame.
@@ -799,29 +822,26 @@ export default class BoardPlaceholder extends UIElement {
       ? (this._assetManager.getScaled('grid_light', bakeCs, bakeCs) || this._assetManager.get('grid_light'))
       : null;
 
-    const fallbackColors = {
-      red: '#cc3333', blue: '#3366cc', green: '#33aa33',
-      yellow: '#cccc33', purple: '#9933cc', skull: '#555555',
-      disease: '#7d8a3a', thrall: '#b0392f',
-    };
+    const fallbackColors = FALLBACK_TILE_COLORS;
 
     const bgDark = '#2a2a1a';
     const bgLight = '#3a3a2a';
 
-    // Build set of empty positions for quick lookup
-    const emptySet = new Set(this.emptyCells.map(p => `${p.col},${p.row}`));
+    // Reused per-frame lookup structures on numeric cell indices (col*16+row)
+    // — the old string-keyed Set/object built 128+ template strings per frame.
+    const emptyMask = this._emptyMask || (this._emptyMask = new Uint8Array(256));
+    emptyMask.fill(0);
+    for (const p of this.emptyCells) emptyMask[p.col * 16 + p.row] = 1;
 
-    // Build map of fall data: "col,row" → { startRow, startCol }
-    const fallMap = {};
-    for (const f of this.fallCells) {
-      fallMap[`${f.col},${f.row}`] = f;
-    }
+    const fallSlots = this._fallSlots || (this._fallSlots = new Array(256).fill(null));
+    fallSlots.fill(null);
+    for (const f of this.fallCells) fallSlots[f.col * 16 + f.row] = f;
 
     // Swap animation: skip rendering swapped tiles in their original positions
-    const swapSkip = new Set();
+    let swapSkipA = -1, swapSkipB = -1;
     if (this.swapAnim) {
-      swapSkip.add(`${this.swapAnim.from.col},${this.swapAnim.from.row}`);
-      swapSkip.add(`${this.swapAnim.to.col},${this.swapAnim.to.row}`);
+      swapSkipA = this.swapAnim.from.col * 16 + this.swapAnim.from.row;
+      swapSkipB = this.swapAnim.to.col * 16 + this.swapAnim.to.row;
     }
 
     // ═══════════════════════════════════════════════════════
@@ -829,12 +849,11 @@ export default class BoardPlaceholder extends UIElement {
     // ═══════════════════════════════════════════════════════
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
-        const key = `${col},${row}`;
         const x = ox + col * cs;
         const y = oy + row * cs;
         const isDark = (row + col) % 2 === 0;
 
-        if (emptySet.has(key)) {
+        if (emptyMask[col * 16 + row]) {
           // Dark overlay for removed tiles
           ctx.fillStyle = 'rgba(0,0,0,0.5)';
           ctx.fillRect(x, y, cs, cs);
@@ -873,13 +892,13 @@ export default class BoardPlaceholder extends UIElement {
     const wildBorders = [];
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
-        const key = `${col},${row}`;
+        const cellIdx = col * 16 + row;
 
         // Skip tiles being swap-animated (rendered separately at end)
-        if (swapSkip.has(key)) continue;
+        if (cellIdx === swapSkipA || cellIdx === swapSkipB) continue;
 
         // Skip empty cells
-        if (emptySet.has(key)) continue;
+        if (emptyMask[cellIdx]) continue;
 
         const colorKey = this.getTileAt(row, col);
         if (!colorKey) continue;
@@ -888,7 +907,7 @@ export default class BoardPlaceholder extends UIElement {
         let displayX = ox + col * cs;
         let displayY = oy + row * cs;
 
-        const fallData = fallMap[key];
+        const fallData = fallSlots[cellIdx];
         if (fallData && this._fallProgress < 1) {
           const startY = fallData.startRow >= 0
             ? oy + fallData.startRow * cs
@@ -904,7 +923,9 @@ export default class BoardPlaceholder extends UIElement {
         let drawX = displayX, drawY = displayY, drawCs = cs, tileAlpha = 1;
         const sa = this._shuffleAnim;
         if (sa) {
-          const o = sa.offsets.get(key);
+          // Shuffle offsets stay string-keyed (built once per shuffle); the
+          // key is only built while the fly-in is actually running.
+          const o = sa.offsets.get(`${col},${row}`);
           if (o) {
             const local = Math.max(0, Math.min(1, (sa.time - o.delay) / SHUFFLE_ANIM_DUR));
             const e = 1 - Math.pow(1 - local, 3); // easeOutCubic
@@ -929,10 +950,23 @@ export default class BoardPlaceholder extends UIElement {
         // thrashes with per-frame sizes.
         const assetKey = `tile_${colorKey}`;
         let tileImg = null;
+        let borderBaked = false;
         if (this._assetManager) {
-          tileImg = drawCs === cs
-            ? (this._assetManager.getScaled(assetKey, bakeCs, bakeCs) || this._assetManager.get(assetKey))
-            : this._assetManager.get(assetKey);
+          if (drawCs === cs) {
+            // Bordered bake first: tile art + cell border pre-stroked into one
+            // canvas, so the per-tile cost is a single 1:1 blit (the 64
+            // per-frame hairline strokeRects were a measurable path-stroke
+            // cost on mobile GPUs).
+            const bordered = this._getBorderedTile(assetKey, bakeCs, cs);
+            if (bordered) {
+              tileImg = bordered;
+              borderBaked = true;
+            } else {
+              tileImg = this._assetManager.getScaled(assetKey, bakeCs, bakeCs) || this._assetManager.get(assetKey);
+            }
+          } else {
+            tileImg = this._assetManager.get(assetKey);
+          }
         }
         if (tileImg) {
           ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, drawX, drawY, drawCs, drawCs);
@@ -943,10 +977,13 @@ export default class BoardPlaceholder extends UIElement {
           ctx.fillRect(drawX + 1, drawY + 1, drawCs - 2, (drawCs - 2) * 0.3);
         }
 
-        // Cell border
-        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(drawX, drawY, drawCs, drawCs);
+        // Cell border (live stroke only where the bake couldn't provide it:
+        // sheet still loading, fallback fill, or the shuffle fly-in's odd sizes)
+        if (!borderBaked) {
+          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(drawX, drawY, drawCs, drawCs);
+        }
 
         if (tileAlpha < 1) ctx.globalAlpha = prevAlpha;
 
@@ -992,16 +1029,22 @@ export default class BoardPlaceholder extends UIElement {
     // ═══════════════════════════════════════════════════════
 
     // ── Highlight overlay (SHOW_MATCH phase) ──
-    for (const pos of this.highlightCells) {
-      const hx = ox + pos.col * cs;
-      const hy = oy + pos.row * cs;
-      ctx.save();
+    if (this.highlightCells.length > 0) {
+      // Pulse + styles are identical for every cell — computed once per frame
+      // (was Date.now() + 2 rgba template strings + save/restore per cell).
       const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 150);
-      ctx.fillStyle = `rgba(255,255,100,${0.15 + pulse * 0.2})`;
-      ctx.fillRect(hx, hy, cs, cs);
-      ctx.strokeStyle = `rgba(255,255,50,${0.5 + pulse * 0.3})`;
+      ctx.save();
       ctx.lineWidth = 2.5;
-      ctx.strokeRect(hx + 1, hy + 1, cs - 2, cs - 2);
+      const hlFill = `rgba(255,255,100,${0.15 + pulse * 0.2})`;
+      const hlStroke = `rgba(255,255,50,${0.5 + pulse * 0.3})`;
+      for (const pos of this.highlightCells) {
+        const hx = ox + pos.col * cs;
+        const hy = oy + pos.row * cs;
+        ctx.fillStyle = hlFill;
+        ctx.fillRect(hx, hy, cs, cs);
+        ctx.strokeStyle = hlStroke;
+        ctx.strokeRect(hx + 1, hy + 1, cs - 2, cs - 2);
+      }
       ctx.restore();
     }
 
@@ -1013,23 +1056,26 @@ export default class BoardPlaceholder extends UIElement {
 
     // ── Targeting overlay (skill targeting like Explode! 3x3) ──
     if (this.targetingOverlayCells && this.targetingOverlayCells.length > 0) {
+      // Pulse + styles hoisted out of the loop (identical per cell).
+      const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 120);
+      // Pulsing glow via a wide faint outer stroke — no shadowBlur (the
+      // expensive canvas op; this runs per cell per frame while targeting).
+      const tgFill = `rgba(255, 255, 255, ${0.05 + pulse * 0.15})`;
+      const tgGlow = `rgba(255, 255, 255, ${0.10 + pulse * 0.14})`;
+      ctx.save();
       for (const pos of this.targetingOverlayCells) {
         const hx = ox + pos.col * cs;
         const hy = oy + pos.row * cs;
-        ctx.save();
-        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 120);
-        // Pulsing glow via a wide faint outer stroke — no shadowBlur (the
-        // expensive canvas op; this runs per cell per frame while targeting).
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.05 + pulse * 0.15})`;
+        ctx.fillStyle = tgFill;
         ctx.fillRect(hx, hy, cs, cs);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.10 + pulse * 0.14})`;
+        ctx.strokeStyle = tgGlow;
         ctx.lineWidth = 9;
         ctx.strokeRect(hx, hy, cs, cs);
         ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
         ctx.lineWidth = 3;
         ctx.strokeRect(hx, hy, cs, cs);
-        ctx.restore();
       }
+      ctx.restore();
     }
 
     // ── Hover ── (hidden during cascade animations)
@@ -1079,38 +1125,74 @@ export default class BoardPlaceholder extends UIElement {
       const bx = Math.floor(toStartX + (fromStartX - toStartX) * ease);
       const by = Math.floor(toStartY + (fromStartY - toStartY) * ease);
 
-      const drawTile = (x, y, typeKey) => {
-        if (!typeKey) return;
-        const assetKey = `tile_${typeKey}`;
-        const tileImg = this._assetManager
-          ? (this._assetManager.getScaled(assetKey, this._bakeCs || cs, this._bakeCs || cs) || this._assetManager.get(assetKey))
-          : null;
-        if (tileImg) {
-          ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, x, y, cs, cs);
-        } else {
-          ctx.fillStyle = fallbackColors[typeKey] || '#444';
-          ctx.fillRect(x + 1, y + 1, cs - 2, cs - 2);
-          ctx.fillStyle = 'rgba(255,255,255,0.08)';
-          ctx.fillRect(x + 1, y + 1, cs - 2, (cs - 2) * 0.3);
-        }
-        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(x, y, cs, cs);
-        // Keep the wild tile border on Thrall tiles while they swap.
-        if (isWild(typeKey)) this._drawWildTileBorder(ctx, x, y, cs);
-        // Keep the fungal timer badge on blight tiles while they swap.
-        if (isFungal(typeKey)) this._drawFungalTimerBadge(ctx, x, y, cs, fungalTimer(typeKey));
-      };
-
       // No drop shadow on the moving tiles — shadowBlur on drawImage forces
       // the slow canvas path every swap frame (mobile), and the motion itself
       // already separates the pair from the grid.
-      drawTile(ax, ay, fromType);
-      drawTile(bx, by, toType);
+      this._drawSwapTile(ctx, ax, ay, fromType, cs);
+      this._drawSwapTile(ctx, bx, by, toType, cs);
     }
 
     // Restore smoothing to previous state
     ctx.imageSmoothingEnabled = prevSmoothing;
+  }
+
+  /**
+   * Draw one swap-animated tile (was a per-frame closure allocated inside
+   * renderSelf for every swap frame). Same bordered bake as the grid pass.
+   */
+  _drawSwapTile(ctx, x, y, typeKey, cs) {
+    if (!typeKey) return;
+    const assetKey = `tile_${typeKey}`;
+    const bakeSize = this._bakeCs || cs;
+    const bordered = this._assetManager ? this._getBorderedTile(assetKey, bakeSize, cs) : null;
+    const tileImg = bordered || (this._assetManager
+      ? (this._assetManager.getScaled(assetKey, bakeSize, bakeSize) || this._assetManager.get(assetKey))
+      : null);
+    if (tileImg) {
+      ctx.drawImage(tileImg, 0, 0, tileImg.width, tileImg.height, x, y, cs, cs);
+    } else {
+      ctx.fillStyle = FALLBACK_TILE_COLORS[typeKey] || '#444';
+      ctx.fillRect(x + 1, y + 1, cs - 2, cs - 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(x + 1, y + 1, cs - 2, (cs - 2) * 0.3);
+    }
+    if (!bordered) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, y, cs, cs);
+    }
+    // Keep the wild tile border on Thrall tiles while they swap.
+    if (isWild(typeKey)) this._drawWildTileBorder(ctx, x, y, cs);
+    // Keep the fungal timer badge on blight tiles while they swap.
+    if (isFungal(typeKey)) this._drawFungalTimerBadge(ctx, x, y, cs, fungalTimer(typeKey));
+  }
+
+  /**
+   * Return a physical-resolution tile bake WITH the 0.5-design-px cell border
+   * pre-stroked into it (fully inside the cell — the old live strokeRect
+   * straddled the cell edge, its outer half overdrawn by neighbors), or null
+   * while the underlying sprite hasn't loaded (caller falls back to the live
+   * draw + strokeRect). One entry per tile type at the current bakeCs;
+   * invalidated in renderSelf when bakeCs changes.
+   */
+  _getBorderedTile(assetKey, bakeCs, cs) {
+    const cache = this._borderedTileCache || (this._borderedTileCache = new Map());
+    const hit = cache.get(assetKey);
+    if (hit !== undefined) return hit;
+    const base = this._assetManager.getScaled(assetKey, bakeCs, bakeCs);
+    if (!base) return null; // not cached — retried next frame once the sheet loads
+    const canvas = document.createElement('canvas');
+    canvas.width = bakeCs;
+    canvas.height = bakeCs;
+    const bctx = canvas.getContext('2d');
+    bctx.imageSmoothingEnabled = false;
+    bctx.drawImage(base, 0, 0);
+    const lw = 0.5 * (bakeCs / Math.max(1, cs)); // 0.5 design px in physical px
+    bctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    bctx.lineWidth = lw;
+    bctx.strokeRect(lw / 2, lw / 2, bakeCs - lw, bakeCs - lw);
+    cache.set(assetKey, canvas);
+    return canvas;
   }
 
   // ── Locked tile overlay (woven `lock`) ────────────────

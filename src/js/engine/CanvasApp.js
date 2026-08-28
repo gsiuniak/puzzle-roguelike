@@ -211,14 +211,67 @@ export default class CanvasApp {
   clear(fillColor = '#000000') {
     const ctx = this.ctx;
     ctx.save();
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    if (this._barFillImage) {
+    const baked = this._barFillImage ? this._getBakedBarFill() : null;
+    if (baked) {
+      // 1:1 physical-pixel blit of the pre-resampled bake — the per-frame
+      // cover-fit smoothed resample of the full source image was the single
+      // most expensive draw in the frame on hiDPI mobile.
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(baked, 0, 0);
+    } else if (this._barFillImage) {
+      // Source image not decodable yet (width 0) — same no-op draw as before;
+      // the bake path re-checks every frame until pixels appear.
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this._drawCoverImage(ctx, this._barFillImage, 0, 0, this._cssWidth, this._cssHeight);
     } else {
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       ctx.fillStyle = fillColor;
       ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);
     }
     ctx.restore();
+  }
+
+  /**
+   * Return the bar-fill image baked (cover-fit, high-quality, one time) at the
+   * current backing-store resolution, or null while the source has no decoded
+   * pixels yet. Rebaked when the backing store resizes (window resize / DPR
+   * change), when a different image is registered (generation counter — see
+   * `setBackgroundImage`), or when the same element's decoded size appears.
+   */
+  _getBakedBarFill() {
+    const img = this._barFillImage;
+    if (!img || !img.width || !img.height) return null;
+    const cw = this.canvas.width;
+    const ch = this.canvas.height;
+    if (
+      this._bakedBarFill &&
+      this._bakedBarFillGen === this._barFillGen &&
+      this._bakedBarFillW === cw &&
+      this._bakedBarFillH === ch &&
+      this._bakedBarFillSrcW === img.width &&
+      this._bakedBarFillSrcH === img.height
+    ) {
+      return this._bakedBarFill;
+    }
+    let bake = this._bakedBarFill;
+    if (!bake) bake = this._bakedBarFill = document.createElement('canvas');
+    bake.width = cw;
+    bake.height = ch;
+    const bctx = bake.getContext('2d', { alpha: false });
+    bctx.imageSmoothingEnabled = true;
+    bctx.imageSmoothingQuality = 'high';
+    // Cover-fit math in PHYSICAL pixels (this is a one-time resample).
+    const scale = Math.max(cw / img.width, ch / img.height);
+    const sw = img.width * scale;
+    const sh = img.height * scale;
+    bctx.drawImage(img, (cw - sw) / 2, (ch - sh) / 2, sw, sh);
+    this._bakedBarFillGen = this._barFillGen;
+    this._bakedBarFillW = cw;
+    this._bakedBarFillH = ch;
+    this._bakedBarFillSrcW = img.width;
+    this._bakedBarFillSrcH = img.height;
+    return bake;
   }
 
   /**
@@ -228,7 +281,11 @@ export default class CanvasApp {
    * @param {HTMLImageElement|HTMLCanvasElement|null} img
    */
   setBackgroundImage(img) {
+    if ((img || null) === this._barFillImage) return;
     this._barFillImage = img || null;
+    // Generation counter keys the bar-fill bake — bumping it on every image
+    // change is how the bake knows to rebuild without fingerprinting pixels.
+    this._barFillGen = (this._barFillGen || 0) + 1;
   }
 
   /**
@@ -301,15 +358,21 @@ export default class CanvasApp {
     // Gradient creation is allocation + GPU-resource churn, and callers (the
     // battle scrim) pass IDENTICAL stops every frame — cache the last gradient
     // and rebuild only when the stops or canvas width actually change.
-    let key = this._cssWidth + '|';
-    for (const s of stops) key += s.at + ':' + s.color + ';';
-    if (key !== this._hGradKey) {
-      const grad = ctx.createLinearGradient(0, 0, this._cssWidth, 0);
-      for (const s of stops) {
-        grad.addColorStop(Math.max(0, Math.min(1, s.at)), s.color);
+    // Referential fast path first: a caller that reuses the SAME stops array
+    // (the battle scrim after its own caching) skips even the key-string build.
+    if (!(stops === this._hGradStopsRef && this._cssWidth === this._hGradCssW && this._hGrad)) {
+      let key = this._cssWidth + '|';
+      for (const s of stops) key += s.at + ':' + s.color + ';';
+      if (key !== this._hGradKey) {
+        const grad = ctx.createLinearGradient(0, 0, this._cssWidth, 0);
+        for (const s of stops) {
+          grad.addColorStop(Math.max(0, Math.min(1, s.at)), s.color);
+        }
+        this._hGradKey = key;
+        this._hGrad = grad;
       }
-      this._hGradKey = key;
-      this._hGrad = grad;
+      this._hGradStopsRef = stops;
+      this._hGradCssW = this._cssWidth;
     }
     ctx.fillStyle = this._hGrad;
     ctx.fillRect(0, 0, this._cssWidth, this._cssHeight);

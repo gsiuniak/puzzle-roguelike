@@ -24,6 +24,12 @@ import { KEYWORD_MISSING_COLOR } from '../data/keywordDefinitions.js';
  *   shadowColor / shadowBlur / shadowOffsetX / shadowOffsetY.
  */
 export default class KeywordText extends UIElement {
+  /** Module-wide ascent-per-font cache (ctx.measureText('M') per font string). */
+  static _ascentCache = new Map();
+  /** Bumped when the display fonts finish loading — layouts measured with
+   *  fallback-face metrics rebuild once with the real faces. */
+  static _fontsGen = 0;
+
   constructor(text = '') {
     super();
     this.text = text;
@@ -219,30 +225,65 @@ export default class KeywordText extends UIElement {
   }
 
   _getLayout(ctx) {
-    const key = `${this.text}|${this.getFontString()}|${this.maxWidth}|${this.maxLines}`;
-    if (this._layout && this._layoutKey === key) return this._layout;
+    // Field-by-field validity check — the old joined key string was rebuilt
+    // (allocated) on every call, per span per card per frame.
+    if (
+      this._layout &&
+      this._layoutText === this.text &&
+      this._layoutFontSize === this.fontSize &&
+      this._layoutFontFamily === this.fontFamily &&
+      this._layoutBold === this.bold &&
+      this._layoutItalic === this.italic &&
+      this._layoutMaxWidth === this.maxWidth &&
+      this._layoutMaxLines === this.maxLines &&
+      this._layoutLineHeight === this.lineHeight &&
+      this._layoutFontsGen === KeywordText._fontsGen
+    ) {
+      return this._layout;
+    }
     this._layout = this._buildLayout(ctx);
-    this._layoutKey = key;
+    this._layoutText = this.text;
+    this._layoutFontSize = this.fontSize;
+    this._layoutFontFamily = this.fontFamily;
+    this._layoutBold = this.bold;
+    this._layoutItalic = this.italic;
+    this._layoutMaxWidth = this.maxWidth;
+    this._layoutMaxLines = this.maxLines;
+    this._layoutLineHeight = this.lineHeight;
+    this._layoutFontsGen = KeywordText._fontsGen;
     return this._layout;
   }
 
   /**
    * Measure wrapped dimensions. Mirrors UIText.measureText's return shape.
+   * Cached on the layout — the old path re-measured (incl. an uncached
+   * ctx.measureText('M')) per span per frame.
    * @returns {{width:number, height:number, ascent:number, lineCount:number}}
    */
   measureText(ctx) {
-    const { lines } = this._getLayout(ctx);
+    const layout = this._getLayout(ctx);
+    if (layout.measure) return layout.measure;
+    const { lines } = layout;
     const lineH = this._getLineHeight();
     let maxWidth = 0;
     for (const l of lines) if (l.width > maxWidth) maxWidth = l.width;
-    const m = ctx.measureText('M');
-    const ascent = m.actualBoundingBoxAscent || this.fontSize * 0.8;
-    return {
+    const fontStr = this.getFontString();
+    let ascent = KeywordText._ascentCache.get(fontStr);
+    if (ascent === undefined) {
+      const prevFont = ctx.font;
+      ctx.font = fontStr;
+      const m = ctx.measureText('M');
+      ascent = m.actualBoundingBoxAscent || this.fontSize * 0.8;
+      ctx.font = prevFont;
+      KeywordText._ascentCache.set(fontStr, ascent);
+    }
+    layout.measure = {
       width: maxWidth,
       height: lines.length > 0 ? (lines.length - 1) * lineH + this.fontSize : 0,
       ascent,
       lineCount: lines.length,
     };
+    return layout.measure;
   }
 
   // ── Render ────────────────────────────────────────────
@@ -346,4 +387,14 @@ export default class KeywordText extends UIElement {
     if (needsClip) ctx.restore();
     ctx.restore();
   }
+}
+
+// Once the display fonts land, drop fallback-face measurements: bump the
+// layout generation and clear the cached ascents so everything re-measures
+// once with the real faces.
+if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    KeywordText._fontsGen++;
+    KeywordText._ascentCache.clear();
+  }).catch(() => {});
 }

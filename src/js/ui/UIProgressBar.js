@@ -91,9 +91,12 @@ export default class UIProgressBar extends UIElement {
     this.borderColor = '#555555';
     this.borderWidth = 1;
     this.cornerRadius = 4;
-    /** Subtle dark shadow on label text by default */
+    /** Subtle dark shadow on label text by default — rendered as a two-pass
+     *  offset fill, NOT canvas shadowBlur (blur forces the slow path and the
+     *  label draws every frame on every bar). shadowBlur kept for API compat
+     *  but no longer honored. */
     this.shadowColor = 'rgba(0,0,0,0.65)';
-    this.shadowBlur = 2;
+    this.shadowBlur = 0;
     this.shadowOffsetX = 1;
     this.shadowOffsetY = 1;
   }
@@ -337,20 +340,19 @@ export default class UIProgressBar extends UIElement {
       ctx.stroke();
     }
 
-    // Label centered
+    // Label centered — shadow is a two-pass offset fill (no shadowBlur)
     if (this.label) {
-      // Apply text shadow
-      if (this.shadowColor) {
-        ctx.shadowColor = this.shadowColor;
-        ctx.shadowBlur = this.shadowBlur;
-        ctx.shadowOffsetX = this.shadowOffsetX;
-        ctx.shadowOffsetY = this.shadowOffsetY;
-      }
-      ctx.fillStyle = this.labelColor;
       ctx.font = `${this.labelFontSize}px "Marcellus SC", Georgia, "Times New Roman", serif`;
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'center';
-      ctx.fillText(this.label, r.x + r.w / 2, r.y + r.h / 2);
+      const lx = r.x + r.w / 2;
+      const ly = r.y + r.h / 2;
+      if (this.shadowColor) {
+        ctx.fillStyle = this.shadowColor;
+        ctx.fillText(this.label, lx + this.shadowOffsetX, ly + this.shadowOffsetY);
+      }
+      ctx.fillStyle = this.labelColor;
+      ctx.fillText(this.label, lx, ly);
     }
 
     ctx.restore();

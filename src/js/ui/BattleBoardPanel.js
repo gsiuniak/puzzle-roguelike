@@ -100,11 +100,7 @@ export default class BattleBoardPanel extends UIPanel {
     if (!img || img.complete === false || !img.width) return;
     const f = this._getFrameRect();
     this._applySmoothing(ctx);
-    ctx.drawImage(
-      img,
-      Math.floor(f.x), Math.floor(f.y),
-      Math.ceil(f.w), Math.ceil(f.h)
-    );
+    this._drawSquareArtScaled(ctx, FRAME_OVERLAY_KEY, img, f);
     this._restoreSmoothing(ctx);
   }
 
@@ -114,17 +110,39 @@ export default class BattleBoardPanel extends UIPanel {
       const img = this.assetManager.get(this.backgroundAssetKey);
       if (img) {
         this._applySmoothing(ctx);
-        const f = this._getFrameRect();
-        ctx.drawImage(
-          img,
-          Math.floor(f.x), Math.floor(f.y),
-          Math.ceil(f.w), Math.ceil(f.h)
-        );
+        this._drawSquareArtScaled(ctx, this.backgroundAssetKey, img, this._getFrameRect());
         this._restoreSmoothing(ctx);
       }
     }
     if (this.background) this._drawBackground(ctx);
     if (this.borderColor && this.borderWidth > 0) this._drawBorder(ctx);
+  }
+
+  /** Both frame arts (~1178×1181 sources) were smoothly resampled to the
+   *  ~1080px square EVERY frame — route them through UIPanel's physical-
+   *  resolution pre-scaled bake so the per-frame cost is a ~1:1 blit. Uses a
+   *  per-key size memo (base + overlay share this panel instance, so the
+   *  inherited single `_artBakeW/H` memo would ping-pong between them). */
+  _drawSquareArtScaled(ctx, key, img, f) {
+    const x = Math.floor(f.x);
+    const y = Math.floor(f.y);
+    const w = Math.ceil(f.w);
+    const h = Math.ceil(f.h);
+    let baked = null;
+    if (typeof ctx.getTransform === 'function') {
+      const m = ctx.getTransform();
+      const pxScale = Math.max(0.1, Math.hypot(m.a, m.b));
+      const bw = Math.max(1, Math.round(w * pxScale));
+      const bh = Math.max(1, Math.round(h * pxScale));
+      const memo = this._squareArtMemo || (this._squareArtMemo = {});
+      const prev = memo[key];
+      if (prev && prev.w === bw && prev.h === bh) {
+        baked = this.assetManager.getScaled(key, bw, bh, true);
+      } else {
+        memo[key] = { w: bw, h: bh };
+      }
+    }
+    ctx.drawImage(baked || img, x, y, w, h);
   }
 
   /**
