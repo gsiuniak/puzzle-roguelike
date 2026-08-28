@@ -46,6 +46,9 @@ const ENTRY_HOLD_MS = 200;
 const ENTRY_SHRINK_MS = 700;
 /** Nodes/paths/labels fade-in after the splash lands in the container (ms) */
 const ENTRY_CONTENT_FADE_MS = 300;
+/** The reveal stinger fires this long BEFORE the shrink begins, so the sound
+ *  anticipates the movement instead of landing with it (clamped to the hold). */
+const ENTRY_SFX_LEAD_MS = 200;
 
 /**
  * Overlay animation state enum.
@@ -94,6 +97,8 @@ export default class MapView {
     /** @type {number} contents fade-in alpha for the current frame (set by
      *  renderEntryRevealBackground, consumed by renderFullscreen) */
     this._entryContentAlpha = 0;
+    /** @type {Function|null} one-shot callback fired when the shrink phase begins */
+    this._entryOnShrinkStart = null;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -106,10 +111,14 @@ export default class MapView {
    * over it — decision #58 handoff), holds briefly, shrinks into the map
    * container, then the map contents fade in. Armed by MapScene when the
    * character-confirm cutscene hands off.
+   * @param {Function|null} [onShrinkStart] — fired ONCE, `ENTRY_SFX_LEAD_MS`
+   *   BEFORE the shrink phase begins so the sound anticipates the movement
+   *   (MapScene plays the reveal stinger off it).
    */
-  beginEntryReveal() {
+  beginEntryReveal(onShrinkStart = null) {
     this._entryActive = true;
     this._entryTimer = 0;
+    this._entryOnShrinkStart = onShrinkStart;
   }
 
   /** @returns {boolean} true while the entry reveal is animating */
@@ -156,6 +165,14 @@ export default class MapView {
       const tl = app.cssToDesign(0, 0);
       const br = app.cssToDesign(app.cssWidth, app.cssHeight);
       full = { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+    }
+
+    // The reveal stinger ANTICIPATES the movement — it fires ENTRY_SFX_LEAD_MS
+    // before the shrink begins, so the sound reads as causing the motion.
+    if (this._entryOnShrinkStart && t >= Math.max(0, ENTRY_HOLD_MS - ENTRY_SFX_LEAD_MS)) {
+      const cb = this._entryOnShrinkStart;
+      this._entryOnShrinkStart = null; // one-shot
+      cb();
     }
 
     let rect = full;

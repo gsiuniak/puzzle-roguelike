@@ -190,6 +190,20 @@ const SOUNDS = {
     src: ['assets/sprites/title/title_screen_movie_transition_sfx.webm'],
     category: AudioCategory.SFX,
   },
+  // Character-confirm → map transition stinger — played by CharacterSelectScene
+  // simultaneously with the title_map_transition video (the select-screen music
+  // fades out as it starts). Standalone file (lives beside its video).
+  sfx_map_transition: {
+    src: ['assets/sprites/map/title_map_transition_sfx.webm'],
+    category: AudioCategory.SFX,
+  },
+  // Map entry-reveal stinger — played by MapScene the moment the fullscreen
+  // splash starts SHRINKING into the map container (see MapView's entry
+  // reveal). Standalone file (lives beside the transition video).
+  sfx_map_post_transition: {
+    src: ['assets/sprites/map/title_map_post_transition_sfx.mp3'],
+    category: AudioCategory.SFX,
+  },
 
   // ── Skill resolve sounds (played when skill effect resolves, NOT on button click) ──
   // All sprite-backed — clip names match the SFX_SPRITE_SHEET entries.

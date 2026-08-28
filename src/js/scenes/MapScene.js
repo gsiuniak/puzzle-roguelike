@@ -255,7 +255,11 @@ export default class MapScene extends UIPanel {
     // dissolves into the fullscreen splash, which then shrinks into place.
     if (this._pendingEntryReveal) {
       this._pendingEntryReveal = false;
-      if (this._mapView) this._mapView.beginEntryReveal();
+      if (this._mapView) {
+        // The reveal stinger fires the frame the fullscreen splash starts
+        // shrinking into the container.
+        this._mapView.beginEntryReveal(() => AudioManager.playSfx('sfx_map_post_transition'));
+      }
     }
 
     // ── Music ────────────────────────────────────────

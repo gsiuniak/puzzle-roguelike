@@ -57,6 +57,10 @@ const MAP_TRANSITION_HANDOFF_LEAD_MS = 90;
  *  Tiny by design — the splash IS the movie's final frame at identical framing,
  *  so the dissolve only needs to mask compression-level differences. */
 const MAP_TRANSITION_CROSSFADE_MS = 150;
+/** SoundConfig stinger played simultaneously with the map-transition movie. */
+const MAP_TRANSITION_SFX_KEY = 'sfx_map_transition';
+/** How fast the select-screen music fades out as the movie + stinger start (ms). */
+const MAP_TRANSITION_MUSIC_FADE_MS = 300;
 
 /**
  * Brief fade-in of the splash background video (per-def `splashBackgroundVideo`,
@@ -1663,6 +1667,14 @@ export default class CharacterSelectScene extends UIPanel {
       this._video = null;
       this._startChooseTransition();
       return;
+    }
+
+    // Map-transition mode: the stinger replaces the select-screen music the
+    // moment the movie starts (without this, main_theme keeps playing under
+    // the whole cutscene — onExit's stopMusic only fires at the handoff).
+    if (this._chooseHandoff) {
+      AudioManager.stopMusic(MAP_TRANSITION_MUSIC_FADE_MS);
+      AudioManager.playSfx(MAP_TRANSITION_SFX_KEY);
     }
 
     // The pooled video may still be mid-prime (playing muted) — make sure it
