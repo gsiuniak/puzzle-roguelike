@@ -36,7 +36,7 @@ import { resolveEnemyRelicIds } from '../data/relics/enemyRelicCatalog.js';
 import { MAP_TRANSITION_VIDEO } from '../data/videoManifest.js';
 
 /** Duration of the cross-fade transition between splash backgrounds (ms) */
-const CROSS_FADE_DURATION = 400;
+const CROSS_FADE_DURATION = 200;
 
 /**
  * What plays after "Choose Hero" is confirmed:
