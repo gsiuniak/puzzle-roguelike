@@ -101,12 +101,19 @@ const CHOOSE_VIDEO_MAX_DURATION = 30000;
  * inconsistencies between the splash and the video's first frames.
  * 0 = instant swap (old behavior).
  *
- * The video is held PAUSED on its first frame for the whole fade (a static
- * splash blended with a static frame) and playback only starts once the fade
- * completes — blending the splash with already-moving video reads as
- * ghosting/smearing instead of a dissolve.
+ * Also the confirm → map-transition movie's entrance (it rides this same
+ * pipeline): the movie eases in over the frozen splash instead of snapping
+ * to it.
  */
-const CHOOSE_VIDEO_FADE_IN_MS = 0;
+const CHOOSE_VIDEO_FADE_IN_MS = 700;
+
+/**
+ * How far INTO the fade-in playback starts (ms). 0 = the movie is already in
+ * motion from the first faded frame, so it has visibly been playing by the
+ * time the dissolve lands; ≥ CHOOSE_VIDEO_FADE_IN_MS = the old behavior (held
+ * PAUSED on frame 0 for the whole fade, motion only once fully opaque).
+ */
+const CHOOSE_VIDEO_PLAY_AT_FADE_MS = 0;
 
 /**
  * Safety: if the intro video never becomes paintable (readyState < 2) within
@@ -2210,7 +2217,9 @@ export default class CharacterSelectScene extends UIPanel {
     // stays paused on that first frame until the fade completes, then plays.
     if (this._video && this._video.readyState >= 2) {
       this._videoFadeMs += dt;
-      if (this._videoFadeMs >= CHOOSE_VIDEO_FADE_IN_MS) this._startVideoPlayback();
+      // Playback starts partway into the fade (CHOOSE_VIDEO_PLAY_AT_FADE_MS)
+      // so the movie is already moving as the dissolve completes.
+      if (this._videoFadeMs >= CHOOSE_VIDEO_PLAY_AT_FADE_MS) this._startVideoPlayback();
     } else if (this._chooseElapsed >= CHOOSE_VIDEO_PLAY_FALLBACK_MS) {
       // Never became paintable — play anyway so the ended/error fallbacks
       // (and the duration-based near-end check below) still drive the exit.
