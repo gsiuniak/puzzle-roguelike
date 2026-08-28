@@ -1853,6 +1853,36 @@ export default class CharacterSelectScene extends UIPanel {
   }
 
   // ═══════════════════════════════════════════════════════
+  // Boot-time video preload + loading gate
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Buffer every video this scene will need — the confirm → map transition
+   * movie (pooled + primed) and the splash background loops. Called from
+   * main.js at BOOT (alongside TitleScreen.preloadVideos) so the LoadingScene
+   * can gate on them; onEnter re-runs the same ensures as no-ops.
+   */
+  preloadVideos() {
+    this._preloadAllVideos();
+    this._preloadAllSplashBgVideos();
+  }
+
+  /**
+   * Loading-gate readiness of the boot-preloaded videos. Failed or errored
+   * elements count as READY — the gate must never wait on a video that will
+   * never arrive (every consumer has a static fallback, decision #53).
+   * @returns {{ready:number, total:number}}
+   */
+  getPreloadVideoStatus() {
+    const vids = [...this._videoPool.values(), ...this._splashBgPool.values()];
+    let ready = 0;
+    for (const v of vids) {
+      if (v._csFailed || v._bgFailed || v.error || v.readyState >= 3) ready++;
+    }
+    return { ready, total: vids.length };
+  }
+
+  // ═══════════════════════════════════════════════════════
   // Choose-hero intro video
   // ═══════════════════════════════════════════════════════
 

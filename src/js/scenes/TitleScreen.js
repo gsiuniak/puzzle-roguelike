@@ -110,6 +110,21 @@ export default class TitleScreen extends UIPanel {
     }
   }
 
+  /**
+   * Loading-gate readiness of the boot-preloaded title movies. A failed or
+   * errored element counts as READY — the gate must never wait on a video
+   * that will never arrive (this scene falls back to the static title).
+   * @returns {{ready:number, total:number}}
+   */
+  getPreloadVideoStatus() {
+    const vids = [this._introVideo, this._transitionVideo].filter(Boolean);
+    let ready = 0;
+    for (const v of vids) {
+      if (v._tsFailed || v.error || v.readyState >= 3) ready++;
+    }
+    return { ready, total: vids.length };
+  }
+
   // ── Video setup / teardown ────────────────────────────
 
   /**

@@ -42,6 +42,14 @@ const FADE_DURATION    = 600;   // ms fade into TitleScreen
 const FADE_IN_DURATION = 350;   // ms this scene fades up on first appearance
 const MIN_DISPLAY_MS   = 350;   // floor so the screen doesn't just flash (loading runs in parallel, so this doesn't delay loading itself)
 const PROGRESS_LERP    = 0.12;  // how fast the displayed bar eases toward real progress
+// ── Video gate ──────────────────────────────────────────────
+// The scene also waits for the boot-preloaded movies (title intro/transition,
+// character-select splash loops, confirm → map transition) so first play never
+// opens on a black/stalled video. The extra wait is CAPPED — its clock starts
+// only once assets are done, and on timeout the scene proceeds (every video
+// consumer has a static fallback, decision #53).
+const VIDEO_WAIT_CAP_MS = 6000; // max extra wait for gated videos after assets finish
+const ASSET_PROGRESS_WEIGHT = 0.8; // bar blend: assets 80%, gated videos 20%
 const SHIMMER_SPEED     = 0.0012; // shimmer sweep cycles per ms
 const INDETERMINATE_SPEED = 0.0009; // looping sweep speed when no real progress is known
 
@@ -63,6 +71,11 @@ export default class LoadingScene extends UIPanel {
     this._shimmerPhase = 0;     // animation phase for shimmer / indeterminate sweep
     this._transitioning = false;
 
+    /** @type {(() => {ready:number, total:number})|null} gated-video readiness poll */
+    this._videoGate = null;
+    /** @type {number} _elapsed when assets finished (starts the capped video wait); -1 = not yet */
+    this._videoWaitStart = -1;
+
     /** @type {import('./SceneManager.js').default|null} */
     this._sceneManager = null;
   }
@@ -70,12 +83,21 @@ export default class LoadingScene extends UIPanel {
   /** AssetManager whose `progress` this scene polls. Set by main.js. */
   setAssetManager(am) { this._assetManager = am; }
 
+  /**
+   * Poll function reporting the boot-preloaded videos' readiness
+   * ({ready, total}). Set by main.js; the scene then waits (capped) for
+   * ready === total before fading to the title.
+   * @param {() => {ready:number, total:number}} fn
+   */
+  setVideoGate(fn) { this._videoGate = fn; }
+
   // ── Lifecycle ─────────────────────────────────────────
   onEnter() {
     this._elapsed = 0;
     this._displayProgress = 0;
     this._shimmerPhase = 0;
     this._transitioning = false;
+    this._videoWaitStart = -1;
     if (this._sceneManager && this._assetManager == null) {
       this._assetManager = this._sceneManager.assetManager;
     }
@@ -88,13 +110,30 @@ export default class LoadingScene extends UIPanel {
     this._elapsed += dt;
     this._shimmerPhase += dt;
 
-    // Ease the displayed bar toward the real load progress so it animates
+    const assetProgress = this._assetManager ? this._assetManager.progress : 1;
+
+    // Gated-video readiness (title/select/map movies). The capped extra wait
+    // starts counting only once assets are done — the movies download in
+    // parallel from boot, so the cap rarely engages.
+    let videoProgress = 1;
+    if (this._videoGate) {
+      const s = this._videoGate();
+      videoProgress = s && s.total > 0 ? s.ready / s.total : 1;
+    }
+    const assetsDone = assetProgress >= 1;
+    if (assetsDone && this._videoWaitStart < 0) this._videoWaitStart = this._elapsed;
+    const videosDone = videoProgress >= 1
+      || (this._videoWaitStart >= 0 && this._elapsed - this._videoWaitStart >= VIDEO_WAIT_CAP_MS);
+    const loaded = assetsDone && videosDone;
+
+    // Ease the displayed bar toward the blended load progress so it animates
     // smoothly instead of snapping between discrete asset-load steps.
-    const target = this._assetManager ? this._assetManager.progress : 1;
+    const target = loaded
+      ? 1
+      : assetProgress * ASSET_PROGRESS_WEIGHT + videoProgress * (1 - ASSET_PROGRESS_WEIGHT);
     this._displayProgress += (target - this._displayProgress) * PROGRESS_LERP;
 
-    // Transition once assets are loaded AND the minimum display time elapsed.
-    const loaded = !this._assetManager || this._assetManager.progress >= 1;
+    // Transition once everything is loaded AND the minimum display time elapsed.
     if (loaded && this._elapsed >= MIN_DISPLAY_MS && !this._transitioning) {
       if (this._sceneManager && !this._sceneManager.isTransitioning()) {
         this._transitioning = true;

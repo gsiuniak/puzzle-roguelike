@@ -358,10 +358,20 @@ async function init() {
   sceneManager.registerScene('SkillWeaveScene', skillWeaveScene);
   // BattleScene is registered lazily by MapScene._transitionToBattle()
 
-  // Buffer both title movies NOW, in parallel with asset loading, so the intro
-  // starts frame-perfect the moment the LoadingScene fades to the title and a
-  // title click plays the transition with no stall (idempotent).
+  // Buffer the flow-critical movies NOW, in parallel with asset loading:
+  // the title intro/transition, the character-select splash loops, and the
+  // confirm → map transition (all idempotent — the scenes re-ensure on enter).
   titleScreen.preloadVideos();
+  characterSelectScene.preloadVideos();
+
+  // The LoadingScene gates on those movies too (a CAPPED extra wait after
+  // assets finish — see VIDEO_WAIT_CAP_MS), so a fresh deploy never fades to
+  // the title before its movie can actually play.
+  loadingScene.setVideoGate(() => {
+    const t = titleScreen.getPreloadVideoStatus();
+    const c = characterSelectScene.getPreloadVideoStatus();
+    return { ready: t.ready + c.ready, total: t.total + c.total };
+  });
 
   // 11. Wire the fullscreen toggle button.
   // The Fullscreen API requires a user gesture, so we attach a tap/click
