@@ -116,6 +116,11 @@ Per-frame: BattleScene.update(dt)
      → updates CharacterPane via updateFromState()
      → updates turn label, combat log
      → spawns visual effects (floating images, particles, screen shake)
+     → handles skillCastEvents (mana-drain wisps, spent-card ghost, enemy cast
+       showcase, spell-projectile damage carrier) BEFORE floatingStatEvents —
+       'skull'/'skill'-sourced damage defers into its carrier and is delivered
+       (counter tick, recoil, flash, directional shake, vignette) at arrival
+       (decision #59); sourceless damage counts immediately
      → plays SFX (turn announcement, extra turn, skull damage, skill sound, tile destroy)
      → manages music transitions on state change
   → on GAME_OVER (victory): delay → LevelUpOverlay.show()  (mandatory attribute pick)
@@ -192,6 +197,7 @@ RED, BLUE, GREEN, YELLOW, PURPLE, SKULL, DISEASE, WILD, THRALL, SANGUINE_EGG, FU
 | [#3](../decisions/03-tile-destruction-rewards-use-centralized-resolvedestroyedtilerewards.md) | Tile destruction rewards centralized | `resolveDestroyedTileRewards()` in MatchResolver, shared by cascades + skill destruction. |
 | [#4](../decisions/04-extra-turns-are-non-cumulative-retain-turn.md) | Extra turns are non-cumulative, ACTION-scoped flags | `_extraTurnEarned` consumed once at the action epilogue; enemy extra turns must re-arm the fire gate. |
 | [#13](../decisions/13-all-one-shot-visual-sfx-flags.md) | One-shot visual/SFX flags | Read-and-cleared in `getState()` to prevent double-firing. |
+| [#59](../decisions/59-direct-damage-is-delivered-by-visual-carriers.md) | Direct damage is delivered by visual carriers | `_applyDamage` tags damage floatingStatEvents with `source` ('skull' from `opts.isSkull`; 'skill' passed by the DAMAGE/CONSUME handlers; null = incidental). `_castSkill` pushes a one-shot `skillCastEvents` entry (side, skill ref, cost copy, target cell) BEFORE effects resolve. BattleScene syncs the damage counter + impact feedback to the carrier effect's arrival. |
 | [#17](../decisions/17-hp-resets-to-full-each-battle.md) | HP resets to full each battle | Battle mana/armor/attack also reset; `currentHp` is bookkeeping only. |
 | [#18](../decisions/18-canvas-uses-dpr-aware-rendering.md) | Canvas uses DPR-aware rendering | Layout in CSS pixels; context pre-scaled. |
 | [#19](../decisions/19-post-battle-flow-level-up-reward-map.md) | Post-battle flow: Level Up → Reward → map | GAME_OVER does not return to MapScene directly; defeat routes to GameOverScene. |

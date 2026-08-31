@@ -71,6 +71,8 @@ export default class ManaStreamEffect {
    * @param {number} [config.curve=55]            - perpendicular bow magnitude (px)
    * @param {number} [config.trail=6]             - trail sample count (path resolution)
    * @param {number} [config.fadeTail=140]        - ms a wisp fades after arriving
+   * @param {number} [config.delayMs=0]           - initial hold before any wisp launches
+   *   (used by the skill-projectile reuse to wait out the enemy cast showcase)
    * @param {function} [config.onArrive]          - called once as wisps land
    */
   constructor(sources, target, config = {}) {
@@ -85,9 +87,10 @@ export default class ManaStreamEffect {
     this.curve = config.curve != null ? config.curve : 55;
     this.trail = config.trail != null ? config.trail : 6;
     this.fadeTail = config.fadeTail != null ? config.fadeTail : 140;
+    this.delayMs = config.delayMs != null ? config.delayMs : 0;
 
     this._onArrive = typeof config.onArrive === 'function' ? config.onArrive : null;
-    this._arriveAt = this.travelMs * 0.78;
+    this._arriveAt = this.delayMs + this.travelMs * 0.78;
     this._arrived = false;
 
     this.elapsed = 0;
@@ -103,7 +106,7 @@ export default class ManaStreamEffect {
     this._wisps = [];
     for (let i = 0; i < srcs.length; i++) {
       for (let k = 0; k < this.wispsPerSource; k++) {
-        const delay = Math.random() * this.staggerMs;
+        const delay = this.delayMs + Math.random() * this.staggerMs;
         const sx = srcs[i].x + (Math.random() * 2 - 1) * this.spawnJitter;
         const sy = srcs[i].y + (Math.random() * 2 - 1) * this.spawnJitter;
         const dx = target.x - sx;
@@ -121,7 +124,7 @@ export default class ManaStreamEffect {
       }
     }
 
-    this._total = this.travelMs + this.staggerMs + this.fadeTail + 60;
+    this._total = this.delayMs + this.travelMs + this.staggerMs + this.fadeTail + 60;
     // No wisps (no valid sources) → nothing to do.
     if (this._wisps.length === 0) this.done = true;
   }

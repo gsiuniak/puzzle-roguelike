@@ -51,12 +51,38 @@ export default class UIOrb extends UIElement {
     // intensifying flourish (unlike the damage counter).
     this._pulseElapsed = UIOrb.PULSE_MS; // start settled
     this._pulsing = false;
+    /** +1 = outward bobble (mana gained), −1 = inward dip (mana spent). */
+    this._pulseSign = 1;
+
+    // ── Deny flash (clicked a skill this orb can't pay for) ──
+    // A short red ring + tint over the orb, decaying out. Driven by
+    // update(dt); triggered via flashDeny().
+    this._denyElapsed = UIOrb.DENY_MS; // start settled
+    this._denying = false;
   }
 
   /** Trigger (or restart) the slight scale bobble. */
   pulse() {
     this._pulseElapsed = 0;
     this._pulsing = true;
+    this._pulseSign = 1;
+  }
+
+  /**
+   * Trigger the INVERSE bobble — a quick inward dip, the "mana spent"
+   * counterpart to pulse()'s "mana gained" pop (fired as a cast's drain
+   * wisps leave the orb).
+   */
+  deflate() {
+    this._pulseElapsed = 0;
+    this._pulsing = true;
+    this._pulseSign = -1;
+  }
+
+  /** Flash the orb red — "this cost is missing" denial feedback. */
+  flashDeny() {
+    this._denyElapsed = 0;
+    this._denying = true;
   }
 
   update(dt) {
@@ -65,13 +91,17 @@ export default class UIOrb extends UIElement {
       this._pulseElapsed += dt;
       if (this._pulseElapsed >= UIOrb.PULSE_MS) this._pulsing = false;
     }
+    if (this._denying) {
+      this._denyElapsed += dt;
+      if (this._denyElapsed >= UIOrb.DENY_MS) this._denying = false;
+    }
   }
 
   /** Current pulse scale factor (1 when settled). */
   _pulseScale() {
     if (!this._pulsing) return 1;
     const p = this._pulseElapsed / UIOrb.PULSE_MS;
-    return 1 + UIOrb.PULSE_AMP * (1 - p) * Math.cos(p * Math.PI * 1.5);
+    return 1 + this._pulseSign * UIOrb.PULSE_AMP * (1 - p) * Math.cos(p * Math.PI * 1.5);
   }
 
   renderSelf(ctx) {
@@ -93,6 +123,26 @@ export default class UIOrb extends UIElement {
       this._renderWithPlate(ctx, r);
     } else {
       this._renderSimple(ctx, r);
+    }
+
+    // Deny flash — red ring + soft tint over the orb circle, fading out.
+    // Drawn inside the pulse transform so a concurrent bobble carries it.
+    if (this._denying) {
+      const p = this._denyElapsed / UIOrb.DENY_MS;
+      const a = (1 - p) * (1 - p); // fast falloff
+      const size = Math.min(r.w, r.h);
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      const radius = size / 2 - this.borderWidth;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(220, 40, 30, ${0.30 * a})`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255, 70, 50, ${0.9 * a})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
     }
 
     if (scaled) ctx.restore();
@@ -266,3 +316,4 @@ export default class UIOrb extends UIElement {
 // Pulse "bobble" tunables (slight, non-intensifying flourish).
 UIOrb.PULSE_MS = 280;
 UIOrb.PULSE_AMP = 0.22;
+UIOrb.DENY_MS = 380;

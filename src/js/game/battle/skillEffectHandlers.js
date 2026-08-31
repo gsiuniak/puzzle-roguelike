@@ -76,7 +76,7 @@ export const SKILL_EFFECT_HANDLERS = {
     // character AND enemy skills carry it (bonus uses the caster's stats).
     const scaleBonus = scaledBonus(effect.damage && effect.damage.scaling, src);
     const amount = base + perSkull * skullCount + perArmor * (src.armor || 0) + scaleBonus;
-    const r = c._applyDamage(tgt, amount);
+    const r = c._applyDamage(tgt, amount, { source: 'skill' });
     c.log.add(`${src.name} deals ${r.actualDamage} damage to ${tgt.name}.`);
     c._setShakeFromDamage(r.actualDamage, tgt.maxHp);
     c._markDirectDamage(side, r.actualDamage);
@@ -315,7 +315,7 @@ export const SKILL_EFFECT_HANDLERS = {
     }
     const amount = Math.floor(units / divisor);
     if (amount > 0) {
-      const r = c._applyDamage(tgt, amount);
+      const r = c._applyDamage(tgt, amount, { source: 'skill' });
       c.log.add(`${src.name} consumes ${units} ${cfg.resource || 'mana'}, dealing ${r.actualDamage} damage.`);
       c._setShakeFromDamage(r.actualDamage, tgt.maxHp);
       c._markDirectDamage(side, r.actualDamage);

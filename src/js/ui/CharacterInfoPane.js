@@ -660,7 +660,10 @@ export default class CharacterInfoPane extends UIPanel {
     // grows/lunges in place; orthogonal to alpha (they can run together).
     const t = this._portraitTransform;
     const hasTransform = t && (t.scale !== 1 || t.dx || t.dy || t.rot);
-    if (alpha >= 1 && !hasTransform) {
+    // Hit flash (flashPortrait): an additive second self-draw brightens the
+    // portrait's own pixels white-hot — no bake, exact fit, video-safe.
+    const flashA = this._flashAlpha();
+    if (alpha >= 1 && !hasTransform && flashA <= 0) {
       this._portrait.renderSelf(ctx);
       return;
     }
@@ -677,6 +680,18 @@ export default class CharacterInfoPane extends UIPanel {
       ctx.translate(-cx, -cy);
     }
     this._portrait.renderSelf(ctx);
+    if (flashA > 0) {
+      // Additive re-draw of the same art at the same rect: only the
+      // portrait's own pixels brighten (the transparent surround stays
+      // untouched), following whatever transform is active above.
+      const prevOp = ctx.globalCompositeOperation;
+      const prevAlpha = ctx.globalAlpha;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = prevAlpha * flashA;
+      this._portrait.renderSelf(ctx);
+      ctx.globalCompositeOperation = prevOp;
+      ctx.globalAlpha = prevAlpha;
+    }
     ctx.restore();
   }
 
@@ -989,6 +1004,44 @@ export default class CharacterInfoPane extends UIPanel {
   pulseManaOrb(color) {
     const orb = this._manaOrbs[color];
     if (orb && typeof orb.pulse === 'function') orb.pulse();
+  }
+
+  /** Inward dip on a mana orb — "mana spent" (a cast's drain wisps leaving). */
+  deflateManaOrb(color) {
+    const orb = this._manaOrbs[color];
+    if (orb && typeof orb.deflate === 'function') orb.deflate();
+  }
+
+  /** Red deny flash on a mana orb — "this cost is missing" feedback. */
+  denyManaOrb(color) {
+    const orb = this._manaOrbs[color];
+    if (orb && typeof orb.flashDeny === 'function') orb.flashDeny();
+  }
+
+  /**
+   * Flash the portrait white-hot for an instant — the "took a hit" cue,
+   * fired by BattleScene when a damage carrier (skull stream / spell
+   * projectile) lands. Implemented as an ADDITIVE second draw of the
+   * portrait art over itself (see _renderPortrait), so it needs no baked
+   * tint, follows the smack/recoil transform, and works for video portraits.
+   * Time-based (Date.now) so it needs no update() wiring; it deliberately
+   * keeps decaying through a hit-stop freeze (an impact flash + freeze read
+   * as one beat).
+   * @param {number} [strength=1] 0..1 peak additive alpha multiplier
+   * @param {number} [durationMs=170]
+   */
+  flashPortrait(strength = 1, durationMs = 170) {
+    this._flashStart = Date.now();
+    this._flashDur = Math.max(1, durationMs);
+    this._flashStrength = Math.max(0, Math.min(1, strength));
+  }
+
+  /** Current flash alpha (0 when settled). @private */
+  _flashAlpha() {
+    if (!this._flashStart) return 0;
+    const p = (Date.now() - this._flashStart) / this._flashDur;
+    if (p >= 1) { this._flashStart = 0; return 0; }
+    return this._flashStrength * (1 - p) * (1 - p);
   }
 
   /**

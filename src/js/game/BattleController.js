@@ -239,6 +239,20 @@ export default class BattleController {
     this._relicTriggerEvents = [];
 
     /**
+     * Skill-cast events for the current frame. One entry per _castSkill
+     * (every cast funnels through it — invariant #1), pushed BEFORE the
+     * skill's effects resolve so the scene can process the cast (mana-drain
+     * wisps, enemy cast showcase, spell projectile) before routing the same
+     * frame's damage events into the projectile. Read & cleared via
+     * getState(). `skill` is a live reference (read-only for the scene);
+     * `cost` is a defensive copy; targetCol/Row are the clicked cell for
+     * targeted casts (null otherwise).
+     * @type {Array<{side:string, skillId:string, skill:object,
+     *   cost:Object<string,number>, targetCol:number|null, targetRow:number|null}>}
+     */
+    this._skillCastEvents = [];
+
+    /**
      * Speed multiplier for all animation timing.
      * 1.0 = normal, 2.0 = fast, 0.5 = slow.
      * Scales phase durations, enemy delay, and swap duration.
@@ -1029,6 +1043,11 @@ export default class BattleController {
     const relicTriggers = this._relicTriggerEvents;
     this._relicTriggerEvents = [];
 
+    // Capture skill-cast events and clear so the scene handles each cast's
+    // feedback (mana drain, showcase, projectile) exactly once.
+    const skillCastEvents = this._skillCastEvents;
+    this._skillCastEvents = [];
+
     // Capture Thrall-harvest animation events and clear so the scene spawns
     // each tendril effect exactly once per harvest.
     const harvestEvents = this._harvestEvents;
@@ -1075,6 +1094,7 @@ export default class BattleController {
       pendingSkillSound,
       floatingStatEvents,
       relicTriggers,
+      skillCastEvents,
       harvestEvents,
       thrallSummoned,
       fungalExploded,
@@ -1219,6 +1239,18 @@ export default class BattleController {
     const caster = this._getStateBySide(side);
     this._spendCost(caster, skill);
     this._setSkillSound(skill);
+    // One-shot cast event for the scene (mana-drain wisps, enemy cast
+    // showcase, spell projectile). Pushed before effects resolve so the
+    // scene sees the cast in the same snapshot as (and ahead of) the damage
+    // events the effects emit.
+    this._skillCastEvents.push({
+      side,
+      skillId: skill.id,
+      skill,
+      cost: { ...(skill.cost || {}) },
+      targetCol: opts.targetCol != null ? opts.targetCol : null,
+      targetRow: opts.targetRow != null ? opts.targetRow : null,
+    });
     this.log.add(`${caster.name} uses ${skill.name}.`);
 
     const targeted = Array.isArray(opts.targetArea);
@@ -2964,10 +2996,16 @@ export default class BattleController {
    * @param {'player'|'enemy'} side — the affected combatant
    * @param {'damage'|'heal'|'armor'|'barrier'} kind — drives color & sign in BattleScene
    * @param {number} amount — magnitude shown (always positive)
+   * @param {'skull'|'skill'|null} [source] — for kind 'damage' only: what dealt
+   *   it. 'skull' = skull tiles (match or destroy), 'skill' = a direct skill
+   *   hit (DAMAGE/CONSUME), null = incidental (poison, reflect, relic echo, …).
+   *   BattleScene routes 'skull'/'skill' damage through a visual carrier
+   *   (skull stream / spell projectile) and ticks the damage counter on
+   *   arrival; sourceless damage counts up immediately.
    */
-  _emitFloatingStat(side, kind, amount) {
+  _emitFloatingStat(side, kind, amount, source = null) {
     if (!amount || amount <= 0) return;
-    this._floatingStatEvents.push({ side, kind, amount: amount | 0 });
+    this._floatingStatEvents.push({ side, kind, amount: amount | 0, source });
   }
 
   /**
@@ -3058,7 +3096,10 @@ export default class BattleController {
     // Floating "-x" damage text over the damaged side's portrait. This is the
     // single chokepoint for ALL damage (skill, skull, passive), so every hit
     // animates here. Uses actualDamage to match the combat-log number.
-    this._emitFloatingStat(side, 'damage', result.actualDamage);
+    // The source tag ('skull' / 'skill' / null) lets BattleScene sync the
+    // damage counter to the matching carrier effect's arrival.
+    this._emitFloatingStat(side, 'damage', result.actualDamage,
+      opts.isSkull ? 'skull' : (opts.source || null));
     // Death is STICKY: once a side's HP is reduced to 0 it has lost, even if a
     // later heal in the same resolution window (Soul Eater, Alabaster Flask,
     // Oungan, …) brings HP back above 0. Without this, lethal-damage-then-heal

@@ -34,13 +34,23 @@ export default class ScreenShake {
 
     /** Whether the shake is currently active */
     this.active = false;
+
+    /**
+     * Directional bias (−1 | 0 | +1): the attack axis. A hit traveling
+     * left→right (player attacking) shoves the screen RIGHT (+1) on its
+     * leading edge before the normal oscillation takes over, so the shake
+     * reads as "hit from the left" rather than a generic rumble.
+     */
+    this.dirX = 0;
   }
 
   /**
    * Trigger a screen shake. If already shaking, the higher intensity wins.
    * @param {number} intensity - 0.0 to 1.0 (clamped internally)
+   * @param {number} [dirX=0] - optional attack-axis bias: +1 shoves right,
+   *   −1 shoves left, 0 keeps the classic non-directional shake.
    */
-  trigger(intensity) {
+  trigger(intensity, dirX = 0) {
     const clamped = Math.max(0, Math.min(1, intensity));
     if (clamped <= 0) return;
 
@@ -48,6 +58,7 @@ export default class ScreenShake {
     // or we'd get a jarring restart). Only start fresh if idle.
     if (!this.active || clamped > this.intensity) {
       this.intensity = clamped;
+      this.dirX = dirX > 0 ? 1 : (dirX < 0 ? -1 : 0);
     }
     if (!this.active) {
       this.elapsed = 0;
@@ -94,10 +105,18 @@ export default class ScreenShake {
     // Two overlapping sine waves at different frequencies and phases
     // to produce a natural, non-metronomic shake.
     const t = this.elapsed;
-    const x = Math.sin(t * 0.062 + 1.7) * amplitude
-            + Math.sin(t * 0.113 + 0.4) * amplitude * 0.45;
+    let x = Math.sin(t * 0.062 + 1.7) * amplitude
+          + Math.sin(t * 0.113 + 0.4) * amplitude * 0.45;
     const y = Math.cos(t * 0.073 + 0.3) * amplitude
             + Math.cos(t * 0.097 + 2.1) * amplitude * 0.45;
+
+    // Directional shove: a strong initial kick along the attack axis that
+    // dies off faster than the oscillation (front-loaded via decay²), so the
+    // first visible frames carry the hit's direction and the tail is the
+    // familiar rumble.
+    if (this.dirX !== 0) {
+      x += this.dirX * maxOffset * decay * decay * 1.1;
+    }
 
     return {
       x: Math.round(x),

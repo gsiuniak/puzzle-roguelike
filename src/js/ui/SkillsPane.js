@@ -2,6 +2,7 @@ import UIPanel from './UIPanel.js';
 import {
   createCardModel, measureCardModel, drawCardModel,
   measurePassiveCardModel, drawPassiveCardModel,
+  roundRectPath,
   CARD_BG_KEY, CARD_PAD, ICON_SIZE,
 } from './skillCard.js';
 
@@ -100,8 +101,23 @@ const TITLE_COLOR = '#e8d8a8';
 const TITLE_CENTER_Y_FRAC = 0.055;
 const TITLE_LETTER_SPACING = 1.5;
 
-// ── Whether to show Equipped Info 
+// ── Whether to show Equipped Info
 const EQUIPPED_INFO_IS_ENABLED = false
+
+// ── Deny wiggle (clicked a card you can't afford) ──
+// The card shakes its head "no": a horizontal sine wiggle decaying to rest.
+// Fired from handleMouseUp alongside the onSkillDenied callback (BattleScene
+// flashes the missing mana orbs red in sync).
+const DENY_WIGGLE_MS = 340;
+const DENY_WIGGLE_AMP = 7;      // px at the first swing
+const DENY_WIGGLE_CYCLES = 2.5; // full left-right swings over the duration
+
+// ── Spent-card ghost (a skill was just cast) ──
+// The cast card dims to a dark ghost for a beat then eases back — "that
+// action happened / is spent" even when eyes were on the board. Triggered
+// via markCast() from BattleScene's skillCastEvents handling.
+const CAST_GHOST_MS = 650;
+const CAST_GHOST_MAX_ALPHA = 0.55;
 
 const FONT_FAMILY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
@@ -122,6 +138,18 @@ export default class SkillsPane extends UIPanel {
     this.onSkillClick = null;
     /** @type {Function|null} () => void — opens the Manage Skills modal */
     this.onManageClick = null;
+    /**
+     * @type {Function|null} (skillData, missingColors:string[]) => void —
+     * fired when a click lands on a card the player CAN'T afford (the card
+     * wiggles "no"; BattleScene flashes the missing mana orbs red).
+     */
+    this.onSkillDenied = null;
+
+    /** Deny-wiggle state: which row + when it started (Date.now, 0 = idle). */
+    this._denyRow = -1;
+    this._denyStart = 0;
+    /** skillId → Date.now() of its cast (spent-card ghost overlay). */
+    this._castGhosts = new Map();
 
     /**
      * Combined display rows (passives first, then skills, then ghost fillers).
@@ -334,10 +362,41 @@ export default class SkillsPane extends UIPanel {
     const i = this._rowAt(y);
     if (i === -1 || i !== this._pressRow || !this._insideInner(x, y)) return true;
     const row = this._rows[i];
-    if (row && !row.locked && !row.passive && this.onSkillClick && this._affordable(row.skill)) {
-      this.onSkillClick(row.skill);
+    if (row && !row.locked && !row.passive && this.onSkillClick) {
+      if (this._affordable(row.skill)) {
+        this.onSkillClick(row.skill);
+      } else {
+        // Denial feedback: the card wiggles "no" and the caller gets told
+        // which cost colors are short (to flash those orbs red). Silent
+        // rejection is the worst-feeling outcome, so this always reacts.
+        this._denyRow = i;
+        this._denyStart = Date.now();
+        if (this.onSkillDenied) {
+          this.onSkillDenied(row.skill, this._missingColors(row.skill));
+        }
+      }
     }
     return true;
+  }
+
+  /** Cost colors the current mana can't cover (drives the orb deny flash). */
+  _missingColors(skill) {
+    const missing = [];
+    if (!skill || !skill.cost) return missing;
+    for (const [color, amount] of Object.entries(skill.cost)) {
+      if ((this._mana && this._mana[color] || 0) < amount) missing.push(color);
+    }
+    return missing;
+  }
+
+  /**
+   * Mark a skill as just-cast: its card dims to a dark ghost for a beat then
+   * eases back (the "spent" read). Called by BattleScene from the
+   * controller's skillCastEvents.
+   */
+  markCast(skillId) {
+    if (!skillId) return;
+    this._castGhosts.set(skillId, Date.now());
   }
 
   /** Index of the card at absolute y (uses the last-rendered layout). */
@@ -495,6 +554,19 @@ export default class SkillsPane extends UIPanel {
           this._renderGhostCard(ctx, inner.x, y, cardW, h);
         } else {
           if (row.model) for (const kt of row.model.effectKTs) kt.visible = true;
+          // Deny wiggle — a decaying horizontal "no" shake on the refused card.
+          let wiggleX = 0;
+          if (i === this._denyRow && this._denyStart) {
+            const p = (Date.now() - this._denyStart) / DENY_WIGGLE_MS;
+            if (p >= 1) {
+              this._denyRow = -1;
+              this._denyStart = 0;
+            } else {
+              wiggleX = Math.sin(p * Math.PI * 2 * DENY_WIGGLE_CYCLES)
+                * DENY_WIGGLE_AMP * (1 - p);
+            }
+          }
+          if (wiggleX) { ctx.save(); ctx.translate(wiggleX, 0); }
           drawCardModel(ctx, row.model, { x: inner.x, y, w: cardW, h }, m, {
             assetManager: this._assetManager,
             hovered: i === this._hoverRow,
@@ -503,6 +575,23 @@ export default class SkillsPane extends UIPanel {
             // separately gated by onSkillClick in handleMouseUp.
             castable: !row.locked && this._affordable(row.skill),
           });
+          // Spent-card ghost — a dark veil that snaps on at cast and eases
+          // off, reading as "that skill just fired".
+          const castAt = row.skill && this._castGhosts.get(row.skill.id);
+          if (castAt) {
+            const p = (Date.now() - castAt) / CAST_GHOST_MS;
+            if (p >= 1) {
+              this._castGhosts.delete(row.skill.id);
+            } else {
+              const a = CAST_GHOST_MAX_ALPHA * (1 - p * p);
+              ctx.save();
+              roundRectPath(ctx, inner.x + 2, y + 2, cardW - 4, h - 4, 8);
+              ctx.fillStyle = `rgba(8, 6, 10, ${a})`;
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+          if (wiggleX) ctx.restore();
         }
       }
       const slot = layout[i] || (layout[i] = { y: 0, h: 0 });

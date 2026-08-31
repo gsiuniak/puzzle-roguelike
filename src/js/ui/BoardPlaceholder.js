@@ -1056,6 +1056,24 @@ export default class BoardPlaceholder extends UIElement {
 
     // ── Targeting overlay (skill targeting like Explode! 3x3) ──
     if (this.targetingOverlayCells && this.targetingOverlayCells.length > 0) {
+      // Dim every cell OUTSIDE the previewed area so the target zone pops
+      // (same read as the match-4 flourish darken). Cheap flat fills, and
+      // only while targeting — a transient state.
+      const inArea = this._targetDimSet || (this._targetDimSet = new Set());
+      inArea.clear();
+      for (const pos of this.targetingOverlayCells) {
+        inArea.add(pos.col * 16 + pos.row);
+      }
+      ctx.save();
+      ctx.fillStyle = 'rgba(6, 4, 12, 0.42)';
+      for (let col = 0; col < this.cols; col++) {
+        for (let row = 0; row < this.rows; row++) {
+          if (inArea.has(col * 16 + row)) continue;
+          ctx.fillRect(ox + col * cs, oy + row * cs, cs, cs);
+        }
+      }
+      ctx.restore();
+
       // Pulse + styles hoisted out of the loop (identical per cell).
       const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 120);
       // Pulsing glow via a wide faint outer stroke — no shadowBlur (the

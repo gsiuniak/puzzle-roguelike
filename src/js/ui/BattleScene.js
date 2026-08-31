@@ -11,11 +11,14 @@ import FloatingImageEffect from './FloatingImageEffect.js';
 import FloatingTextEffect from './FloatingTextEffect.js';
 import DamageCounterEffect from './DamageCounterEffect.js';
 import ManaStreamEffect from './ManaStreamEffect.js';
+import SkullStreamEffect from './SkullStreamEffect.js';
+import SkillCastShowcaseEffect from './SkillCastShowcaseEffect.js';
 import TileParticleEffect from './TileParticleEffect.js';
 import HarvestTendrilEffect from './HarvestTendrilEffect.js';
 import BloodSplashEffect from './BloodSplashEffect.js';
 import SpriteSheetAnimation from './SpriteSheetAnimation.js';
 import { PortraitSmackEffect } from './PortraitSmackEffect.js';
+import { PortraitRecoilEffect } from './PortraitRecoilEffect.js';
 import HintCursorEffect from './HintCursorEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
@@ -124,6 +127,27 @@ const ONLY_SHOW_ACTIVE_TURN_DAMAGE = true;
 /** Flourish SFX pitch-up per additional 4+ match in one cascade (+8% playback rate
  *  each; the chain depth is capped controller-side, see MATCH4_CHAIN_DEPTH_MAX). */
 const MATCH4_CHAIN_PITCH_STEP = 0.08;
+
+// ── Damage delivery (carrier-synced impact feedback) ─────
+// Direct damage (source 'skull'/'skill' on the controller's damage events) is
+// held back and DELIVERED by a visual carrier — the skull stream flying from
+// the destroyed cells, or the spell projectile from the caster — so the
+// damage counter, portrait recoil/flash, directional shake, and (player-side)
+// red vignette all fire at the moment of visual impact. Incidental damage
+// (poison/reflect/echo, source null) counts up immediately, as before.
+/** Mirrors the controller's SHAKE_FULL_AT_HP_FRACTION — damage at this
+ *  fraction of the receiver's max HP is a full-intensity impact. */
+const IMPACT_FULL_AT_HP_FRACTION = 0.2;
+/** Peak alpha + fade time of the player-side red damage vignette. */
+const VIGNETTE_MAX_ALPHA = 0.4;
+const VIGNETTE_FADE_MS = 620;
+/** Spell projectile timing: launch beat after the cast (player), and how far
+ *  into the enemy's cast showcase (fly-in + hold) the projectile launches. */
+const PROJECTILE_DELAY_PLAYER_MS = 120;
+const PROJECTILE_DELAY_ENEMY_MS = 700;
+/** Radial stagger of destroy-burst spawns from a targeted cast's epicenter
+ *  (ms per cell of distance) — the "shockwave from the impact point" read. */
+const DESTROY_STAGGER_MS_PER_CELL = 40;
 
 // ── Tunable layout constants ─────────────────────────────
 // FALLBACK anchor lift for the accumulating damage counter (px above the health
@@ -383,6 +407,35 @@ export default class BattleScene extends UIPanel {
     // PortraitSmackEffect). Driven in update(); feeds pane.setPortraitTransform.
     /** @type {{player:PortraitSmackEffect|null, enemy:PortraitSmackEffect|null}} */
     this._smackAnims = { player: null, enemy: null };
+
+    // Receiver-side portrait recoil (the flinch when a damage carrier lands).
+    // Composed WITH the smack transform in update() — a side can lunge and
+    // flinch in the same window (reflect) and both should read.
+    /** @type {{player:PortraitRecoilEffect|null, enemy:PortraitRecoilEffect|null}} */
+    this._recoilAnims = { player: null, enemy: null };
+
+    /**
+     * Live damage carriers per RECEIVING side — the in-flight skull streams /
+     * spell projectiles that damage events (source 'skull'/'skill') defer
+     * into. Each entry: { kind, effect, addDamage(amount), isOpen() }.
+     * Janitored in update() (a finished carrier flushes any stranded payload
+     * so damage feedback can never be lost). Also part of the controller's
+     * turn gate (_hasPendingDamageDelivery).
+     */
+    this._carriers = { player: [], enemy: [] };
+
+    /** Delayed effect spawns: [{t: msLeft, fn}] — advanced in update(), so
+     *  they freeze with the hit-stop like every other scene animation. */
+    this._delayedSpawns = [];
+
+    /** Player-hit red edge vignette: current alpha 0..1 (decays in update,
+     *  drawn in renderForeground over the full canvas). */
+    this._damageVignetteAlpha = 0;
+    this._vignetteSprite = null;
+
+    /** Epicenter of THIS FRAME's targeted cast (radial destroy-burst stagger);
+     *  set while processing skillCastEvents, cleared after destroyedTiles. */
+    this._destroyEpicenter = null;
 
     // ── Accumulating damage counters (one per side, over the portrait) ──
     // Each is a DamageCounterEffect that accumulates all damage to that side
@@ -802,6 +855,10 @@ export default class BattleScene extends UIPanel {
         this._invalidateSuggestedMove();
         this._battleController.tryPlayerSkill(skill);
       };
+      // Unaffordable click → the pane wiggles the card; we flash the missing
+      // mana orbs red in sync.
+      this._playerSkillsPane.onSkillDenied = (skill, missingColors) =>
+        this._onSkillDenied(skill, missingColors);
     }
 
     // ── Manage Skills / Loadout modal (player pane only) ──
@@ -906,6 +963,13 @@ export default class BattleScene extends UIPanel {
 
     // Drop the attack animation POC so it doesn't carry over.
     this._attackAnim = null;
+
+    // Drop the damage-delivery state (in-flight carriers, queued spawns,
+    // vignette, recoils) so nothing carries into the next battle.
+    this._carriers = { player: [], enemy: [] };
+    this._delayedSpawns = [];
+    this._damageVignetteAlpha = 0;
+    this._recoilAnims = { player: null, enemy: null };
 
     const input = this._sceneManager._input;
     if (!input) return;
@@ -1288,6 +1352,18 @@ export default class BattleScene extends UIPanel {
       }
     }
 
+    // ── Skill cast feedback ──
+    // Mana-drain wisps out of the paying orbs (+ orb deflate), the spent-card
+    // ghost, the enemy cast showcase, and — for direct-damage skills — the
+    // spell projectile that CARRIES this cast's damage to the receiver.
+    // Processed BEFORE floatingStatEvents below so the same snapshot's
+    // 'skill'-sourced damage finds its carrier.
+    if (state.skillCastEvents && state.skillCastEvents.length > 0) {
+      for (const ev of state.skillCastEvents) {
+        this._onSkillCastEvent(ev, state);
+      }
+    }
+
     // ── Character attack animation (POC) ──
     // Play the player character's attack flash whenever the player deals DIRECT
     // damage — a damaging spell or skull damage (NOT incidental damage like
@@ -1318,10 +1394,13 @@ export default class BattleScene extends UIPanel {
       this._audioManager.playSfx(state.pendingSkillSound);
     }
 
-    // ── Trigger screen shake for damage ──
-    if (state.shakeIntensity && state.shakeIntensity > 0) {
-      this._screenShake.trigger(state.shakeIntensity);
-    }
+    // ── Screen shake for damage — held until after the damage events below.
+    // When this frame's direct damage was deferred into a carrier (skull
+    // stream / spell projectile), the shake belongs to the carrier's ARRIVAL
+    // (triggered in _deliverDamage), not to the model update — so the
+    // controller's shake is suppressed for those frames.
+    this._pendingShake = state.shakeIntensity || 0;
+    this._shakeDeferredThisFrame = false;
 
     // ── Spawn tile destruction particle bursts ──
     if (state.destroyedTiles && state.destroyedTiles.length > 0 && this._board) {
@@ -1329,10 +1408,31 @@ export default class BattleScene extends UIPanel {
       if (this._audioManager) {
         this._audioManager.playSfx('sfx_tile_destroy');
       }
+      // Destroyed SKULLS launch the skull stream at the receiver — the
+      // cause→effect carrier this snapshot's 'skull' damage defers into.
+      if (state.activeSide) {
+        let skullCells = null;
+        for (const dt of state.destroyedTiles) {
+          const tt = getTileType(dt.typeId);
+          if (tt && tt.isSkull) (skullCells || (skullCells = [])).push(dt);
+        }
+        if (skullCells) this._spawnSkullStream(skullCells, state.activeSide);
+      }
+      // A targeted cast ripples the bursts outward from the clicked cell
+      // (the epicenter was stashed while processing skillCastEvents above).
+      const epi = this._destroyEpicenter;
       for (const dt of state.destroyedTiles) {
-        this._spawnTileDestroyParticles(dt);
+        const delay = epi
+          ? Math.hypot(dt.col - epi.col, dt.row - epi.row) * DESTROY_STAGGER_MS_PER_CELL
+          : 0;
+        if (delay > 1) {
+          this._queueDelayedSpawn(delay, () => this._spawnTileDestroyParticles(dt));
+        } else {
+          this._spawnTileDestroyParticles(dt);
+        }
       }
     }
+    this._destroyEpicenter = null;
 
     // ── Spawn tile conversion shimmer effects ──
     if (state.convertedTiles && state.convertedTiles.length > 0 && this._board) {
@@ -1426,6 +1526,22 @@ export default class BattleScene extends UIPanel {
       for (const ev of state.floatingStatEvents) {
         if (ev.kind === 'damage') {
           if (restrictToActiveTurn && ev.side === state.activeSide) continue;
+          // DIRECT damage (skull tiles / a skill hit) rides its visual
+          // carrier and is delivered — counter tick, recoil, flash, shake,
+          // vignette — when the carrier lands. No open carrier (spawn
+          // failed, effect already landed) → deliver immediately so the
+          // feedback can never be lost. Incidental damage (source null:
+          // poison, reflect, relic echo) counts up immediately, as before.
+          if (ev.source === 'skull' || ev.source === 'skill') {
+            const carrier = this._openCarrier(ev.side);
+            if (carrier) {
+              carrier.addDamage(ev.amount);
+              this._shakeDeferredThisFrame = true;
+            } else {
+              this._deliverDamage(ev.side, ev.amount, true, null);
+            }
+            continue;
+          }
           const receiver = ev.side === 'player' ? state.playerState : state.enemyState;
           this._addDamageToCounter(ev.side, ev.amount, receiver ? receiver.maxHp : 0);
         } else {
@@ -1434,6 +1550,15 @@ export default class BattleScene extends UIPanel {
         }
       }
     }
+
+    // Release the controller's shake unless this frame's direct damage was
+    // deferred into a carrier (its shake fires at delivery instead). The
+    // attack-axis bias follows the resolving side's push direction.
+    if (this._pendingShake > 0 && !this._shakeDeferredThisFrame) {
+      const dir = state.activeSide === 'player' ? 1 : (state.activeSide === 'enemy' ? -1 : 0);
+      this._screenShake.trigger(this._pendingShake, dir);
+    }
+    this._pendingShake = 0;
 
     // Keep live damage counters anchored: the accumulation hovers over the
     // RECEIVER's health bar, and the number flies to that side's portrait on
@@ -1729,6 +1854,12 @@ export default class BattleScene extends UIPanel {
     for (const side of ['player', 'enemy']) {
       const c = this._damageCounters[side];
       if (c && !c.done && !c.delivered) return true;
+      // An in-flight damage carrier (skull stream / spell projectile) also
+      // holds the turn: its arrival is what CREATES/feeds the counter, so
+      // the gate must cover the flight too.
+      for (const carrier of this._carriers[side]) {
+        if (!carrier.effect.done) return true;
+      }
     }
     return false;
   }
@@ -1749,6 +1880,350 @@ export default class BattleScene extends UIPanel {
       this._floatingEffects.push(counter);
     }
     counter.add(amount, maxHp);
+  }
+
+  // ── Carrier-delivered damage (skull streams / spell projectiles) ──────
+
+  /** The most recent still-open carrier for `side`, or null. @private */
+  _openCarrier(side) {
+    const list = this._carriers[side];
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].isOpen()) return list[i];
+    }
+    return null;
+  }
+
+  /**
+   * A damage carrier landed (or direct damage had no carrier): tick the
+   * receiver's counter and fire the impact suite — portrait recoil + hit
+   * flash, directional screen shake, the player-side red vignette, and (on
+   * the last chunk) an impact burst at the portrait.
+   * @param {'player'|'enemy'} side - the RECEIVER
+   * @param {number} amount - damage chunk (0 = a fizzle: burst only)
+   * @param {boolean} isLast - final chunk of this carrier's sequence
+   * @param {{x:number,y:number}|null} impactPoint - burst anchor
+   * @param {string} [impactColor] - burst tint (skill element); crimson default
+   * @private
+   */
+  _deliverDamage(side, amount, isLast, impactPoint, impactColor) {
+    const c = this._battleController;
+    const receiver = c ? (side === 'player' ? c.playerState : c.enemyState) : null;
+    const maxHp = receiver ? receiver.maxHp : 0;
+    if (amount > 0) {
+      this._addDamageToCounter(side, amount, maxHp);
+      const intensity = maxHp > 0
+        ? Math.min(1, (amount / maxHp) / IMPACT_FULL_AT_HP_FRACTION)
+        : 0.3;
+      this._maybePlayRecoil(side, Math.max(intensity, isLast ? 0.35 : 0.2));
+      const pane = side === 'player' ? this._playerPane : this._enemyPane;
+      if (pane && typeof pane.flashPortrait === 'function') {
+        pane.flashPortrait(Math.min(1, 0.4 + intensity * 0.6));
+      }
+      // Directional: the shove travels WITH the attack, toward the receiver.
+      this._screenShake.trigger(intensity, side === 'player' ? -1 : 1);
+      if (side === 'player') {
+        this._damageVignetteAlpha = Math.min(1, this._damageVignetteAlpha + 0.45 + intensity * 0.55);
+      }
+    }
+    if (isLast && impactPoint) {
+      this._spawnImpactBurst(impactPoint, impactColor);
+    }
+  }
+
+  /**
+   * Start (or re-jolt) the receiver-side portrait flinch. Knockback points
+   * AWAY from the attack: the player pane is hit from the right (dir −1),
+   * the enemy pane from the left (dir +1). @private
+   */
+  _maybePlayRecoil(side, intensity) {
+    const pane = side === 'player' ? this._playerPane : this._enemyPane;
+    if (!pane || typeof pane.getPortraitRect !== 'function') return;
+    const existing = this._recoilAnims[side];
+    if (existing && !existing.done) {
+      existing.hit(intensity);
+      return;
+    }
+    const rect = pane.getPortraitRect();
+    const reach = rect ? Math.max(0.7, Math.min(1.4, rect.w / 300)) : 1;
+    this._recoilAnims[side] = new PortraitRecoilEffect({
+      dir: side === 'player' ? -1 : 1,
+      intensity,
+      reach,
+    });
+  }
+
+  /** Small radial burst where a carrier lands (screen coords). @private */
+  _spawnImpactBurst(point, color) {
+    const effect = new TileParticleEffect(point.x, point.y, color || '#e2452f', 4, {
+      particleCount: 10,
+      sparkCount: 6,
+      minLife: 200,
+      maxLife: 420,
+      minSpeed: 20,
+      maxSpeed: 90,
+      gravity: 5,
+    });
+    // Floating list (NOT _particleEffects — those render inside the board):
+    // the burst anchors to a portrait, above the panes.
+    this._floatingEffects.push(effect);
+  }
+
+  /**
+   * Launch the skull stream: crimson wisps + tumbling ghost-skull heads from
+   * each destroyed skull cell to the RECEIVER's portrait. Registers a damage
+   * carrier so this snapshot's 'skull' damage is delivered chunk-by-chunk as
+   * the wisps land (each arrival ticks the counter). @private
+   */
+  _spawnSkullStream(cells, attackerSide) {
+    const receiverSide = attackerSide === 'player' ? 'enemy' : 'player';
+    const pane = receiverSide === 'player' ? this._playerPane : this._enemyPane;
+    const target = pane && typeof pane.getPortraitCenter === 'function'
+      ? pane.getPortraitCenter() : null;
+    if (!target || !this._board) return;
+
+    const sources = [];
+    for (const cell of cells) {
+      const p = this._cellToScreen(cell);
+      if (p) sources.push(p);
+    }
+    if (sources.length === 0) return;
+
+    const metrics = this._board.getCellMetrics();
+    const head = this._assetManager ? this._assetManager.get('tile_skull') : null;
+    const effect = new SkullStreamEffect(sources, target, {
+      headImage: head && head.complete !== false ? head : null,
+      headSize: Math.max(24, metrics.cellSize * 0.5),
+      onDeliver: (chunk, isLast) => this._deliverDamage(receiverSide, chunk, isLast, target),
+    });
+    this._floatingEffects.push(effect);
+    this._carriers[receiverSide].push({
+      kind: 'skull',
+      effect,
+      addDamage: (amount) => effect.addPayload(amount),
+      isOpen: () => effect.delivering,
+    });
+  }
+
+  /**
+   * Handle one skill-cast event: mana-drain wisps out of the paying orbs
+   * (+ orb deflate), the spent-card ghost, the ENEMY cast showcase (a copy
+   * of the played card flying out to center stage), and — for skills with a
+   * direct opponent-damage effect — the element-tinted spell projectile that
+   * carries the cast's damage to the receiver. @private
+   */
+  _onSkillCastEvent(ev, state) {
+    const side = ev.side === 'enemy' ? 'enemy' : 'player';
+    const oppSide = side === 'player' ? 'enemy' : 'player';
+    const pane = side === 'player' ? this._playerPane : this._enemyPane;
+    const oppPane = side === 'player' ? this._enemyPane : this._playerPane;
+    const skillsPane = side === 'player' ? this._playerSkillsPane : this._enemySkillsPane;
+    const casterState = side === 'player' ? state.playerState : state.enemyState;
+
+    // Targeted cast → stash the epicenter for this frame's destroy ripple.
+    if (ev.targetCol != null && ev.targetRow != null) {
+      this._destroyEpicenter = { col: ev.targetCol, row: ev.targetRow };
+    }
+
+    // Card anchor (the card may be scrolled partly out of the list — clamp).
+    let cardRect = null;
+    let cardCenter = null;
+    if (skillsPane && typeof skillsPane.getCardRect === 'function') {
+      const r = skillsPane.getCardRect(ev.skillId);
+      if (r) {
+        const top = Math.max(r.y, r.clipTop);
+        const bottom = Math.min(r.y + r.h, r.clipBottom);
+        cardRect = { x: r.x, y: top, w: r.w, h: Math.max(20, bottom - top) };
+        cardCenter = { x: r.x + r.w / 2, y: top + Math.max(10, (bottom - top) / 2) };
+      }
+    }
+
+    // Spent-card ghost — "that action just fired".
+    if (skillsPane && typeof skillsPane.markCast === 'function') {
+      skillsPane.markCast(ev.skillId);
+    }
+
+    // Enemy cast showcase: the played card flies out and holds a beat so the
+    // player can read what was cast. The mana drain then feeds the showcase
+    // spot (the card visibly absorbs the payment).
+    let drainTarget = cardCenter;
+    if (side === 'enemy' && this._assetManager) {
+      const center = this._showcaseCenter();
+      this._floatingEffects.push(new SkillCastShowcaseEffect(ev.skill, {
+        assetManager: this._assetManager,
+        center,
+        startRect: cardRect,
+        outTarget: (pane && pane.getPortraitCenter && pane.getPortraitCenter()) || undefined,
+        caster: casterState,
+        cardW: cardRect ? cardRect.w : 320,
+      }));
+      drainTarget = center;
+    }
+
+    // Mana drain: wisps out of each paying orb + an inward orb deflate — the
+    // reverse of the match→orb streams, closing the resource loop visually.
+    if (pane && typeof pane.getManaOrbCenter === 'function' && ev.cost) {
+      for (const [color, amount] of Object.entries(ev.cost)) {
+        if (!amount || amount <= 0) continue;
+        const orbCenter = pane.getManaOrbCenter(color);
+        if (!orbCenter) continue;
+        const target = drainTarget
+          || (pane.getPortraitCenter && pane.getPortraitCenter())
+          || orbCenter;
+        let tileColor = '#ffffff';
+        try { tileColor = getTileType(color).particleColor; } catch (e) { /* non-tile color */ }
+        this._floatingEffects.push(new ManaStreamEffect([orbCenter], target, {
+          color: tileColor,
+          coreColor: '#ffffff',
+          thickness: 2.5,
+          wispsPerSource: Math.min(3, 1 + amount),
+          travelMs: 340,
+          staggerMs: 110,
+          spawnJitter: 8,
+          curve: 40,
+          fadeTail: 120,
+        }));
+        if (typeof pane.deflateManaOrb === 'function') pane.deflateManaOrb(color);
+      }
+    }
+
+    // Spell projectile — the damage carrier for direct-damage skills. The
+    // enemy's launches late enough to ride out of its showcase beat.
+    if (this._skillDealsOpponentDamage(ev.skill)) {
+      const from = pane && pane.getPortraitCenter && pane.getPortraitCenter();
+      const to = oppPane && oppPane.getPortraitCenter && oppPane.getPortraitCenter();
+      if (from && to) {
+        const colors = this._skillVfxColors(ev.skill);
+        const carrier = {
+          kind: 'skill',
+          effect: null,
+          pending: 0,
+          arrived: false,
+          impactPoint: to,
+          impactColor: colors.color,
+        };
+        const effect = new ManaStreamEffect([from], to, {
+          color: colors.color,
+          coreColor: colors.coreColor,
+          thickness: 7,
+          wispsPerSource: 3,
+          travelMs: 430,
+          staggerMs: 60,
+          spawnJitter: 12,
+          curve: 95,
+          trail: 7,
+          fadeTail: 170,
+          delayMs: side === 'enemy' ? PROJECTILE_DELAY_ENEMY_MS : PROJECTILE_DELAY_PLAYER_MS,
+          onArrive: () => {
+            carrier.arrived = true;
+            const amt = carrier.pending;
+            carrier.pending = 0;
+            this._deliverDamage(oppSide, amt, true, carrier.impactPoint, carrier.impactColor);
+          },
+        });
+        carrier.effect = effect;
+        carrier.addDamage = (amount) => {
+          carrier.pending += amount;
+          if (carrier.arrived) {
+            const amt = carrier.pending;
+            carrier.pending = 0;
+            this._deliverDamage(oppSide, amt, true, null);
+          }
+        };
+        carrier.isOpen = () => !effect.done && !carrier.arrived;
+        this._floatingEffects.push(effect);
+        this._carriers[oppSide].push(carrier);
+      }
+    }
+  }
+
+  /** True when the skill has a direct opponent-damage effect (the projectile
+   *  gate) — SKILL_EFFECT_TYPES.DAMAGE ('damage') / CONSUME ('consume'). */
+  _skillDealsOpponentDamage(skill) {
+    if (!skill || !Array.isArray(skill.effects)) return false;
+    for (const e of skill.effects) {
+      if (e && (e.effectType === 'damage' || e.effectType === 'consume')) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The projectile/impact color language for a skill. An authored
+   * `skill.vfx: { color, coreColor }` wins; otherwise the DOMINANT mana cost
+   * color's tile palette (so every skill — woven ones included — gets an
+   * element read with zero authoring); free skills fall back to arcane gold.
+   */
+  _skillVfxColors(skill) {
+    if (skill && skill.vfx && skill.vfx.color) {
+      return { color: skill.vfx.color, coreColor: skill.vfx.coreColor || '#ffffff' };
+    }
+    const cost = (skill && skill.cost) || {};
+    let best = null;
+    let bestAmount = 0;
+    for (const [color, amount] of Object.entries(cost)) {
+      if (amount > bestAmount) { best = color; bestAmount = amount; }
+    }
+    if (best) {
+      try {
+        return { color: getTileType(best).particleColor, coreColor: '#ffffff' };
+      } catch (e) { /* not a tile color */ }
+    }
+    return { color: '#e8c86a', coreColor: '#fff6d8' };
+  }
+
+  /** Center-stage anchor for the enemy cast showcase (upper board area). */
+  _showcaseCenter() {
+    if (this._board) {
+      const m = this._board.getCellMetrics();
+      if (m && m.cellSize) {
+        return {
+          x: m.offsetX + (this._board.cols * m.cellSize) / 2,
+          y: m.offsetY + this._board.rows * m.cellSize * 0.4,
+        };
+      }
+    }
+    return { x: BASE_DESIGN_WIDTH / 2, y: 430 };
+  }
+
+  /** Queue fn() to run in `ms` — advanced in update(), so it freezes with
+   *  the hit-stop like every other scene animation. @private */
+  _queueDelayedSpawn(ms, fn) {
+    this._delayedSpawns.push({ t: ms, fn });
+  }
+
+  /** Clicked an unaffordable card: flash the MISSING cost colors' orbs red
+   *  (the pane wiggles the card itself). @private */
+  _onSkillDenied(_skill, missingColors) {
+    const pane = this._playerPane;
+    if (!pane || typeof pane.denyManaOrb !== 'function') return;
+    for (const color of (missingColors || [])) {
+      pane.denyManaOrb(color);
+    }
+  }
+
+  /**
+   * Lazily bake the red edge-vignette sprite: a SQUARE radial gradient
+   * (transparent center → deep crimson edge) that the full-canvas draw
+   * stretches into an ellipse touching all four edges. Baked once; every
+   * frame while visible is a single alpha-scaled drawImage. @private
+   */
+  _getVignetteSprite() {
+    if (this._vignetteSprite || typeof document === 'undefined') {
+      return this._vignetteSprite;
+    }
+    const S = 512;
+    const c = document.createElement('canvas');
+    c.width = S;
+    c.height = S;
+    const g = c.getContext('2d');
+    const half = S / 2;
+    const grad = g.createRadialGradient(half, half, half * 0.58, half, half, half * 1.04);
+    grad.addColorStop(0, 'rgba(150, 8, 8, 0)');
+    grad.addColorStop(0.55, 'rgba(150, 8, 8, 0.5)');
+    grad.addColorStop(1, 'rgba(110, 0, 0, 1)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, S, S);
+    this._vignetteSprite = c;
+    return c;
   }
 
   /**
@@ -2199,11 +2674,44 @@ export default class BattleScene extends UIPanel {
     // Update screen shake
     this._screenShake.update(dt);
 
+    // Delayed effect spawns (destroy-burst ripple, …).
+    for (let i = this._delayedSpawns.length - 1; i >= 0; i--) {
+      const d = this._delayedSpawns[i];
+      d.t -= dt;
+      if (d.t <= 0) {
+        this._delayedSpawns.splice(i, 1);
+        d.fn();
+      }
+    }
+
+    // Player-hit red vignette decay.
+    if (this._damageVignetteAlpha > 0) {
+      this._damageVignetteAlpha = Math.max(0, this._damageVignetteAlpha - dt / VIGNETTE_FADE_MS);
+    }
+
     // Update floating effects, remove completed ones
     for (let i = this._floatingEffects.length - 1; i >= 0; i--) {
       this._floatingEffects[i].update(dt);
       if (this._floatingEffects[i].done) {
         this._floatingEffects.splice(i, 1);
+      }
+    }
+
+    // Damage-carrier janitor: a finished carrier leaves the list; a skill
+    // carrier that somehow finished with payload still on board flushes it
+    // (damage feedback must never be lost). SkullStreamEffect self-flushes.
+    for (const side of ['player', 'enemy']) {
+      const list = this._carriers[side];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const carrier = list[i];
+        if (carrier.effect && carrier.effect.done) {
+          if (carrier.kind === 'skill' && carrier.pending > 0) {
+            const rest = carrier.pending;
+            carrier.pending = 0;
+            this._deliverDamage(side, rest, true, null);
+          }
+          list.splice(i, 1);
+        }
       }
     }
 
@@ -2219,17 +2727,42 @@ export default class BattleScene extends UIPanel {
       this._playerPane.setPortraitAlpha(this._attackAnim ? 1 - this._attackAnim.fadeAlpha : 1);
     }
 
-    // Portrait "smack" lunge (both sides): advance each active effect and push
-    // its transform onto the pane; clear the transform when it finishes.
+    // Portrait "smack" lunge + hit recoil (both sides): advance each active
+    // effect and push the COMPOSED transform onto the pane (a side can lunge
+    // and flinch in the same window — e.g. reflect — and both should read).
     for (const side of ['player', 'enemy']) {
       const smack = this._smackAnims[side];
-      if (!smack) continue;
+      const recoil = this._recoilAnims[side];
+      if (!smack && !recoil) continue;
       const pane = side === 'player' ? this._playerPane : this._enemyPane;
-      smack.update(dt);
-      if (pane && pane.setPortraitTransform) {
-        pane.setPortraitTransform(smack.done ? null : smack.getTransform());
+      if (smack) {
+        smack.update(dt);
+        if (smack.done) this._smackAnims[side] = null;
       }
-      if (smack.done) this._smackAnims[side] = null;
+      if (recoil) {
+        recoil.update(dt);
+        if (recoil.done) this._recoilAnims[side] = null;
+      }
+      if (pane && pane.setPortraitTransform) {
+        const s = this._smackAnims[side];
+        const r = this._recoilAnims[side];
+        let t = null;
+        if (s && r) {
+          const st = s.getTransform();
+          const rt = r.getTransform();
+          t = {
+            scale: st.scale * rt.scale,
+            dx: st.dx + rt.dx,
+            dy: st.dy + rt.dy,
+            rot: st.rot + rt.rot,
+          };
+        } else if (s) {
+          t = s.getTransform();
+        } else if (r) {
+          t = r.getTransform();
+        }
+        pane.setPortraitTransform(t);
+      }
     }
 
     // Update particle effects, remove completed ones
@@ -2317,6 +2850,21 @@ export default class BattleScene extends UIPanel {
     if (!sm) return;
     const w = sm._app.width;
     const h = sm._app.height;
+
+    // Player-hit red edge vignette — full-canvas (covers the bars), beneath
+    // the buttons/overlays. Alpha bumped by _deliverDamage, decays in update.
+    if (this._damageVignetteAlpha > 0.01) {
+      const app = sm._app;
+      const sprite = this._getVignetteSprite();
+      if (sprite && typeof app.cssToDesign === 'function') {
+        const tl = app.cssToDesign(0, 0);
+        const br = app.cssToDesign(app.cssWidth, app.cssHeight);
+        ctx.save();
+        ctx.globalAlpha = VIGNETTE_MAX_ALPHA * Math.min(1, this._damageVignetteAlpha);
+        ctx.drawImage(sprite, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+        ctx.restore();
+      }
+    }
 
     // Corner action buttons (skip / map) — drawn before the overlays so a
     // map/reward overlay backdrop sits on top of them. Self-gated when an
@@ -2958,6 +3506,8 @@ export default class BattleScene extends UIPanel {
         this._invalidateSuggestedMove();
         this._battleController.tryPlayerSkill(skill);
       };
+      this._playerSkillsPane.onSkillDenied = (skill, missingColors) =>
+        this._onSkillDenied(skill, missingColors);
     }
     this._registerSkillTooltips();
   }
