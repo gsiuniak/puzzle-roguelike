@@ -1,5 +1,9 @@
 import UIElement from './UIElement.js';
 import { isWild, isMana, isFungal, fungalTimer } from '../game/TileTypes.js';
+// Shared fall kinematics (rigid shared gravity + landing bounce). The law
+// lives in BattleController so the FALL phase length and this view's
+// animation can never disagree; FALL_TUNING is live-tunable via ?falltune.
+import { fallTimeToLandMs, fallRowsFallen, FALL_TUNING } from '../game/BattleController.js';
 
 /**
  * Wild-tile (Thrall) animated rainbow border.
@@ -280,9 +284,14 @@ export default class BoardPlaceholder extends UIElement {
     this.targetingOverlayCells = [];
     this._fallProgress = 0;
     // Fall ANIMATION duration. BattleScene syncs this to the controller's
-    // real FALL phase via setFallDurationMs() — the raw 350 default only
-    // applies when no controller is wired (placeholder boards).
+    // real FALL phase via setFallDurationMs() — now PER FRAME (the phase is
+    // sized per step to its longest fall); the raw 350 default only applies
+    // when no controller is wired (placeholder boards).
     this._fallDuration = 350;
+    // Fall-kinematics inputs: the current step's animation array (a
+    // reference-change detector) + its longest fall distance in rows.
+    this._fallCellsRef = null;
+    this._fallMaxDist = 1;
 
     // Swap animation state
     /** @type {{from:{col:number,row:number},to:{col:number,row:number},progress:number}|null} */
@@ -390,9 +399,21 @@ export default class BoardPlaceholder extends UIElement {
 
   update(dt) {
     if (this.fallCells.length > 0) {
+      // Cache the step's longest fall distance (the kinematics anchor) —
+      // recomputed only when the controller hands over a NEW step's array.
+      if (this.fallCells !== this._fallCellsRef) {
+        this._fallCellsRef = this.fallCells;
+        let m = 1;
+        for (const f of this.fallCells) {
+          const d = f.row - f.startRow;
+          if (d > m) m = d;
+        }
+        this._fallMaxDist = m;
+      }
       this._fallProgress = Math.min(1, this._fallProgress + dt / this._fallDuration);
     } else {
       this._fallProgress = 0;
+      this._fallCellsRef = null;
     }
     if (this._shuffleAnim) {
       this._shuffleAnim.time += dt;
@@ -886,6 +907,28 @@ export default class BoardPlaceholder extends UIElement {
     // ═══════════════════════════════════════════════════════
     // PASS 3: TILES + BORDERS + OVERLAYS
     // ═══════════════════════════════════════════════════════
+    // While tiles are FALLING, clip the tile passes to the grid band plus a
+    // small peek above the top row: stacked refill tiles start several rows
+    // ABOVE the board (negative startRow) and must enter from under the
+    // frame's top rail — not hover over the crest art. The peek band sits
+    // within the rail zone the frame overlay repaints on top.
+    const fallClip = this.fallCells.length > 0 && this._fallProgress < 1;
+    if (fallClip) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ox - 2, oy - cs * 0.35, this.cols * cs + 4, this.rows * cs + cs * 0.35 + 2);
+      ctx.clip();
+    }
+    // Shared-gravity fall state for THIS frame: elapsed BASE ms into the
+    // step (progress × the phase's base length = deepest land time + bounce)
+    // → rows EVERY falling tile has covered. Computed once; each tile just
+    // subtracts what it has left, so all falling tiles move at identical
+    // instantaneous speeds (rigid columns — gaps never change mid-flight).
+    const fallElapsed = fallClip
+      ? this._fallProgress
+        * (fallTimeToLandMs(this._fallMaxDist || 1) + FALL_TUNING.bounceMs)
+      : 0;
+    const fallRows = fallClip ? fallRowsFallen(fallElapsed) : 0;
     // Wild (Thrall) borders are deferred to a pass AFTER all tiles are drawn —
     // the frame overhangs the cell, so drawing it inline would let later-drawn
     // neighbor tiles clip its right/bottom edge.
@@ -909,14 +952,24 @@ export default class BoardPlaceholder extends UIElement {
 
         const fallData = fallSlots[cellIdx];
         if (fallData && this._fallProgress < 1) {
-          const startY = fallData.startRow >= 0
-            ? oy + fallData.startRow * cs
-            : oy - cs;
-          const startX = ox + fallData.startCol * cs;
-          const t = this._fallProgress;
-          const ease = 1 - (1 - t) * (1 - t);
-          displayX = Math.floor(startX + (displayX - startX) * ease);
-          displayY = Math.floor(startY + (displayY - startY) * ease);
+          // Rigid shared gravity: every falling tile has covered `fallRows`
+          // rows this frame; this tile sits at its landing cell minus what
+          // it has left (startRow may be NEGATIVE — refills stack above the
+          // board and drop in under the rail). Once landed, a brief BOUNCE
+          // hop (sin envelope, decaying) sells the stop as a thunk instead
+          // of a slam — tiles that landed together bounce together.
+          const dist = fallData.row - fallData.startRow;
+          const remaining = dist - fallRows;
+          if (remaining > 0) {
+            displayY = Math.floor(displayY - remaining * cs);
+          } else if (FALL_TUNING.bounceAmp > 0 && FALL_TUNING.bounceMs > 0) {
+            const sinceLand = fallElapsed - fallTimeToLandMs(dist);
+            const q = sinceLand / FALL_TUNING.bounceMs;
+            if (q >= 0 && q < 1) {
+              const hop = FALL_TUNING.bounceAmp * cs * Math.sin(Math.PI * q) * (1 - q);
+              displayY = Math.floor(displayY - hop);
+            }
+          }
         }
 
         // Board-shuffle fly-in: offset/scale/fade each tile toward its cell.
@@ -1019,6 +1072,7 @@ export default class BoardPlaceholder extends UIElement {
     for (const b of wildBorders) {
       this._drawWildTileBorder(ctx, b.x, b.y, b.cs != null ? b.cs : cs);
     }
+    if (fallClip) ctx.restore();
 
     // Idle "sleeping" glints — sheen sweep on resting mana tiles (only spawns
     // while the board is idle; see _updateIdleGlints).

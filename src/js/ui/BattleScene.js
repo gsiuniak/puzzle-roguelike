@@ -27,7 +27,7 @@ import RewardOverlay from './RewardOverlay.js';
 import LevelUpOverlay from './LevelUpOverlay.js';
 import SkillLoadoutOverlay from './SkillLoadoutOverlay.js';
 import TooltipManager from '../systems/TooltipManager.js';
-import { BattleState } from '../game/BattleController.js';
+import { BattleState, FALL_TUNING } from '../game/BattleController.js';
 import { loadHintWeights } from '../game/ai/hintWeights.js';
 import { getTileType, isMana } from '../game/TileTypes.js';
 import { syncBattleResultsToRunState, applyRunModifier, getEffectivePlayerStats, MAX_EQUIPPED_SKILLS } from '../data/playerStats.js';
@@ -1360,6 +1360,9 @@ export default class BattleScene extends UIPanel {
     // ── Attack animation live tuner (POC; no-op unless ATTACK_ANIM_DEBUG on) ──
     if (this._handleAttackAnimDebugKey(e)) return;
 
+    // ── Fall-feel live tuner (?falltune URL flag) ──
+    if (this._handleFallTuneKey(e)) return;
+
     // ── Battle log overlay toggle ('l') — the last 20 actions ──
     if (ACTION_TICKER_ENABLED && (e.key === 'l' || e.key === 'L')) {
       if (!this._mapView || !this._mapView.isOverlayActive()) {
@@ -1824,6 +1827,12 @@ export default class BattleScene extends UIPanel {
       this._board.highlightCells = state.highlightCells || [];
       this._board.emptyCells = state.emptyCells || [];
       this._board.fallCells = state.fallCells || [];
+      // Re-sync the fall duration EVERY frame (decision #57): the FALL phase
+      // is now sized per step to its longest fall, so the one-time sync in
+      // setBattleController is no longer enough.
+      if (this._battleController && typeof this._battleController.getFallDurationMs === 'function') {
+        this._board.setFallDurationMs(this._battleController.getFallDurationMs());
+      }
       this._board.match4Flourish = state.match4Flourish || null;
       this._board.swapAnim = state.swapAnim || null;
       this._board.targetingOverlayCells = state.targetingOverlayCells || [];
@@ -2581,6 +2590,40 @@ export default class BattleScene extends UIPanel {
         fps: cfg.fps, alpha: cfg.alpha, fadeOutFrames: tune.fadeOutFrames,
         loop: debug, hold: debug }
     );
+  }
+
+  /**
+   * Fall-feel live tuner (enabled by the `?falltune` URL flag): digit-pair
+   * keys mutate the exported FALL_TUNING object (BattleController) in play —
+   * the next falls use the new physics immediately — and log the values to
+   * bake back into the constants. Returns true if it consumed the key.
+   *   1 / 2 — oneRowMs −25 / +25   (the 1-cell fall time, base ms)
+   *   3 / 4 — vmaxAtRows −0.25 / +0.25 (freefall cells before cruise)
+   *   5 / 6 — bounceMs −20 / +20
+   *   7 / 8 — bounceAmp −0.02 / +0.02  (0 = no landing hop)
+   * @private
+   */
+  _handleFallTuneKey(e) {
+    if (this._fallTuneEnabled === undefined) {
+      this._fallTuneEnabled = typeof window !== 'undefined' && window.location
+        && String(window.location.search).includes('falltune');
+    }
+    if (!this._fallTuneEnabled) return false;
+    const T = FALL_TUNING;
+    switch (e.key) {
+      case '1': T.oneRowMs = Math.max(100, T.oneRowMs - 25); break;
+      case '2': T.oneRowMs += 25; break;
+      case '3': T.vmaxAtRows = Math.max(0.5, T.vmaxAtRows - 0.25); break;
+      case '4': T.vmaxAtRows = Math.min(9, T.vmaxAtRows + 0.25); break;
+      case '5': T.bounceMs = Math.max(0, T.bounceMs - 20); break;
+      case '6': T.bounceMs += 20; break;
+      case '7': T.bounceAmp = Math.max(0, +(T.bounceAmp - 0.02).toFixed(2)); break;
+      case '8': T.bounceAmp = +(T.bounceAmp + 0.02).toFixed(2); break;
+      default: return false;
+    }
+    // eslint-disable-next-line no-console
+    console.log('[falltune] FALL_TUNING =', JSON.stringify(T));
+    return true;
   }
 
   /**

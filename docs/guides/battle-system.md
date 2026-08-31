@@ -89,10 +89,26 @@ TURN_INTRO → PLAYER_TURN → TARGETING → RESOLVING → ...               GAM
 
 **Cascade Sub-phases:** SHOW_MATCH → REMOVE → FALL → (re-analyze → SHOW_MATCH or finish)
 
-Phase lengths = `BASE_PHASE_MS[phase] / speedMultiplier` (`_phaseMs`). The controller
-exposes **`getFallDurationMs()`** so the board VIEW syncs its fall animation to the
-real FALL phase — view animations mirroring a controller phase must derive their
-duration from the controller, never carry a local copy (decision #57).
+Phase lengths = `BASE_PHASE_MS[phase] / speedMultiplier` (`_phaseMs`). **FALL is
+DYNAMIC per step, driven by RIGID shared-gravity fall kinematics + a landing
+bounce** (the block atop BattleController, exported as
+**`fallTimeToLandMs(d)`** / **`fallRowsFallen(t)`** + the MUTABLE
+**`FALL_TUNING`** object): every falling tile follows ONE velocity profile
+(accelerate, cruise at terminal velocity) and stops with a small view-side
+bounce when it lands — rows-covered is identical for every tile at every
+instant, so inter-tile gaps NEVER change mid-flight (columns fall as rigid
+blocks; per-distance easing phases make gaps breathe, which reads as the
+column "stretching"). The bounce is what keeps the hard gravity stop from
+reading as a slam. `_doFall` sizes the phase to
+`fallTimeToLandMs(maxFallRows) + bounceMs` (refills count their stacked
+negative `startRow`s). Effective land times at defaults: 1 cell = 233ms (the
+row anchor), 2 = 330, 4 = 495, 8 = 825. **`FALL_TUNING` is LIVE-tunable via
+the `?falltune` URL flag** (BattleScene binds digit-pair keys 1-8 and logs
+values — dial in play, bake back): `oneRowMs`, `vmaxAtRows`, `bounceMs`,
+`bounceAmp`. The controller exposes **`getFallDurationMs()`** so the board
+VIEW syncs its fall animation per frame — view animations mirroring a
+controller phase must derive their duration from the controller, never carry
+a local copy (decision #57).
 
 ---
 

@@ -654,11 +654,17 @@ export default class BoardModel {
         }
       }
 
-      // New tiles from above
+      // New tiles from above — stacked in landing order ABOVE the board
+      // (startRow goes -1, -2, … upward), so a refill column enters as a
+      // coherent spaced stack instead of every new tile spawning from the
+      // SAME cell one row up and overlapping in flight. The view clips
+      // falling tiles to the grid band, so the stack stays hidden until it
+      // drops in under the frame's top rail. A row match still yields the
+      // classic single 1-cell entry (one refill per column, startRow -1).
       for (let y = 0; y < oldStartRow; y++) {
         animations.push({
           col: x, row: y,
-          startRow: -1, startCol: x,
+          startRow: y - oldStartRow, startCol: x,
         });
       }
     }

@@ -41,6 +41,54 @@ const CascadePhase = {
 
 /** Base durations in ms (scaled by speedMultiplier) */
 const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
+// ── Fall kinematics — RIGID shared gravity + landing bounce ──────────────
+// Every falling tile follows ONE velocity profile — accelerate under a
+// shared gravity, cruise at terminal velocity — and simply stops (with a
+// small cosmetic bounce) when it lands. Because rows-covered-so-far is the
+// SAME for every tile at every instant, the gaps between falling tiles
+// NEVER change mid-flight: a column falls as a rigid block. (This is the
+// anti-"stretching" property — any scheme that gives tiles per-distance
+// easing phases makes inter-tile gaps breathe, which reads as the column
+// elongating like taffy.) The landing BOUNCE (view-side, see
+// BoardPlaceholder) is what keeps the hard gravity stop from reading as a
+// slam — the classic match-3 thunk.
+//
+// fallTimeToLandMs(d) sizes the FALL phase per step (its longest fall,
+// + bounceMs so the hop finishes inside the phase); fallRowsFallen(t) is the
+// inverse, driving every tile per frame. Times are BASE ms
+// (pre-speedMultiplier, ÷1.5 in play).
+//
+// FALL_TUNING is deliberately a MUTABLE exported object: with the ?falltune
+// URL flag, BattleScene binds live-tuner keys that adjust it in play and log
+// the values — dial the feel in-game, then bake the numbers here.
+//   oneRowMs   — BASE ms for a 1-cell fall (the row-match anchor; ≈233 eff)
+//   vmaxAtRows — cells of freefall before terminal velocity (higher = faster
+//                cruise → deep falls quicker + harder)
+//   bounceMs   — landing-hop duration (BASE ms; part of the phase length)
+//   bounceAmp  — hop height as a fraction of a cell (0 = no bounce)
+export const FALL_TUNING = {
+  oneRowMs: 350,
+  vmaxAtRows: 2,
+  bounceMs: 130,
+  bounceAmp: 0.12,
+};
+/** Base ms for a tile to fall `d` rows under the shared gravity. */
+export function fallTimeToLandMs(d) {
+  const g = 2 / (FALL_TUNING.oneRowMs * FALL_TUNING.oneRowMs); // rows/ms²
+  const dv = FALL_TUNING.vmaxAtRows;
+  if (d <= dv) return Math.sqrt((2 * d) / g);
+  const vmax = Math.sqrt(2 * dv * g);
+  return vmax / g + (d - dv) / vmax;
+}
+/** Rows fallen after `tMs` base ms under the shared gravity (inverse). */
+export function fallRowsFallen(tMs) {
+  const g = 2 / (FALL_TUNING.oneRowMs * FALL_TUNING.oneRowMs);
+  const dv = FALL_TUNING.vmaxAtRows;
+  const vmax = Math.sqrt(2 * dv * g);
+  const tv = vmax / g;
+  if (tMs <= tv) return (g * tMs * tMs) / 2;
+  return dv + (tMs - tv) * vmax;
+}
 /**
  * Match-4+ emphasis "freeze" (see decision #42). When a 4+ match grants an extra
  * turn, the board holds on the matched tiles for a brief configurable beat — the
@@ -262,6 +310,10 @@ export default class BattleController {
     // ── Cascade step-by-step ──
     this._cascadePhase = null;
     this._phaseTimer = 0;
+    /** Per-step FALL duration (pre-speed-scale, ms) from the step's longest
+     *  fall — set in _doFall via fallTimeToLandMs, read by _phaseMs('FALL').
+     *  0 = none yet (fallback BASE_PHASE_MS.FALL). */
+    this._fallStepBaseMs = 0;
     /** @type {import('./MatchResolver.js').MatchAnalysis|null} */
     this._analysis = null;
     this._allSteps = [];
@@ -757,7 +809,14 @@ export default class BattleController {
 
   // ── Timing Helpers ────────────────────────────────────
 
-  _phaseMs(phase) { return BASE_PHASE_MS[phase] / this.speedMultiplier; }
+  _phaseMs(phase) {
+    // FALL is per-step dynamic — sized in _doFall to the step's longest fall
+    // via the shared fall kinematics (see fallTimeToLandMs above).
+    if (phase === CascadePhase.FALL && this._fallStepBaseMs > 0) {
+      return this._fallStepBaseMs / this.speedMultiplier;
+    }
+    return BASE_PHASE_MS[phase] / this.speedMultiplier;
+  }
   _enemyDelay()    { return ENEMY_BASE_DELAY / this.speedMultiplier; }
   _swapDuration()  { return SWAP_BASE_DURATION / this.speedMultiplier; }
 
@@ -2119,6 +2178,17 @@ export default class BattleController {
     this.board.applyGravity();
     this.board.refill();
     const animations = this.board.generateFallAnimations(preGravityGrid);
+
+    // Size this step's FALL phase to its LONGEST fall under the shared
+    // gravity, plus the landing bounce so the hop finishes inside the phase.
+    // Refill tiles carry negative startRows (stacked above the board), so
+    // row − startRow is the true travel distance for them too.
+    let maxDist = 1;
+    for (const a of animations) {
+      const d = a.row - a.startRow;
+      if (d > maxDist) maxDist = d;
+    }
+    this._fallStepBaseMs = fallTimeToLandMs(maxDist) + FALL_TUNING.bounceMs;
 
     this.emptyCells = [];
     this.fallCells = animations;
