@@ -67,8 +67,8 @@ const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
 //   bounceMs   — landing-hop duration (BASE ms; part of the phase length)
 //   bounceAmp  — hop height as a fraction of a cell (0 = no bounce)
 export const FALL_TUNING = {
-  oneRowMs: 325,
-  vmaxAtRows: 4,
+  oneRowMs: 280, // 325,
+  vmaxAtRows: 8,
   bounceMs: 130,
   bounceAmp: 0.12,
 };
