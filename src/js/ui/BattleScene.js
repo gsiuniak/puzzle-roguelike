@@ -19,6 +19,8 @@ import BloodSplashEffect from './BloodSplashEffect.js';
 import SpriteSheetAnimation from './SpriteSheetAnimation.js';
 import { PortraitSmackEffect } from './PortraitSmackEffect.js';
 import { PortraitRecoilEffect } from './PortraitRecoilEffect.js';
+import BattleActionTicker, { TICKER_BAKE_SCALE } from './BattleActionTicker.js';
+import { roundRectPath } from './skillCard.js';
 import HintCursorEffect from './HintCursorEffect.js';
 import ScreenShake from './ScreenShake.js';
 import RewardOverlay from './RewardOverlay.js';
@@ -141,6 +143,12 @@ const IMPACT_FULL_AT_HP_FRACTION = 0.2;
 /** Peak alpha + fade time of the player-side red damage vignette. */
 const VIGNETTE_MAX_ALPHA = 0.4;
 const VIGNETTE_FADE_MS = 620;
+/** The vignette is reserved for hits that MATTER (on every enemy hit it
+ *  dulled itself): it fires only when the player is left LOW (post-hit HP
+ *  below this fraction of max) or the hit was BIG (the delivery sequence's
+ *  total ≥ this fraction of max HP). */
+const VIGNETTE_LOW_HP_FRAC = 0.25;
+const VIGNETTE_BIG_HIT_FRAC = 0.25;
 /** Spell projectile timing: launch beat after the cast (player), and how far
  *  into the enemy's cast showcase (fly-in + hold) the projectile launches. */
 const PROJECTILE_DELAY_PLAYER_MS = 120;
@@ -148,6 +156,44 @@ const PROJECTILE_DELAY_ENEMY_MS = 700;
 /** Radial stagger of destroy-burst spawns from a targeted cast's epicenter
  *  (ms per cell of distance) — the "shockwave from the impact point" read. */
 const DESTROY_STAGGER_MS_PER_CELL = 40;
+
+// ── Action ticker + battle log overlay ───────────────────
+// Every meaningful action pushes one line to the BattleActionTicker (pops in
+// top-center, then falls + fades — see the class). The ticker's history feeds
+// the battle-log overlay: 'l' key or the corner log button, showing the last
+// BattleActionTicker HISTORY_MAX (20) actions; click / ESC / 'l' closes.
+/** THE kill switch for the whole feature: false = no ticker rows are
+ *  collected or drawn, no corner log button, 'l' does nothing. */
+const ACTION_TICKER_ENABLED = true;
+/** Resting Y of the newest ticker line (design px from the viewport top). */
+const TICKER_TOP_Y = 14;
+/** Ticker row colors by event kind (cast/extra-turn gold, stat kinds match
+ *  the floating-text palette in _spawnStatTextEffect). */
+const TICKER_COLORS = Object.freeze({
+  cast: '#e8c86a',
+  damage: '#e23b3b',
+  heal: '#3fbf3f',
+  armor: '#4aa3ff',
+  barrier: '#a24dff',
+  poison: '#7cc63f',
+  extraTurn: '#ffd75e',
+  transform: '#c77dff',
+});
+/** Ticker action-icon asset keys per stat kind (poison has no sprite yet —
+ *  its row keeps a text label instead). */
+const TICKER_KIND_ICONS = Object.freeze({
+  heal: 'character_select_heart',
+  armor: 'icon_block',
+  barrier: 'icon_barrier',
+});
+/** Battle-log overlay layout: a fixed 10-row viewport over the (≤20-entry)
+ *  history — wheel or drag inside the panel scrolls, tap closes. */
+const LOG_PANEL_W = 680;
+const LOG_LINE_H = 48;
+const LOG_VISIBLE_ROWS = 10;
+const LOG_TITLE_H = 58;
+const LOG_PAD = 22;
+const LOG_SCROLLBAR_W = 5;
 
 // ── Tunable layout constants ─────────────────────────────
 // FALLBACK anchor lift for the accumulating damage counter (px above the health
@@ -436,6 +482,18 @@ export default class BattleScene extends UIPanel {
     /** Epicenter of THIS FRAME's targeted cast (radial destroy-burst stagger);
      *  set while processing skillCastEvents, cleared after destroyedTiles. */
     this._destroyEpicenter = null;
+
+    /** Top-center action waterfall + the last-20-actions history that feeds
+     *  the battle-log overlay. */
+    this._actionTicker = new BattleActionTicker();
+    /** Battle-log overlay ('l' / corner button) visibility + scroll state. */
+    this._logOverlayOpen = false;
+    this._logScroll = 0;
+    /** Active drag-scroll on the log panel: {startY, startScroll, moved}. */
+    this._logDrag = null;
+    /** Per-side damage accumulated across a carrier's chunk deliveries —
+     *  emitted as ONE ticker line when the sequence's isLast chunk lands. */
+    this._deliveryAccum = { player: 0, enemy: 0 };
 
     // ── Accumulating damage counters (one per side, over the portrait) ──
     // Each is a DamageCounterEffect that accumulates all damage to that side
@@ -971,6 +1029,13 @@ export default class BattleScene extends UIPanel {
     this._damageVignetteAlpha = 0;
     this._recoilAnims = { player: null, enemy: null };
 
+    // Action ticker + battle log: fresh per battle.
+    this._actionTicker.clear();
+    this._logOverlayOpen = false;
+    this._logScroll = 0;
+    this._logDrag = null;
+    this._deliveryAccum = { player: 0, enemy: 0 };
+
     const input = this._sceneManager._input;
     if (!input) return;
 
@@ -1045,6 +1110,20 @@ export default class BattleScene extends UIPanel {
       return;
     }
 
+    // Battle log overlay open: a press INSIDE the panel starts a potential
+    // drag-scroll (a release without movement still closes — tap = close,
+    // drag = scroll); a press outside closes immediately.
+    if (this._logOverlayOpen) {
+      const r = this._getLogPanelRect();
+      if (r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+        this._logDrag = { startY: y, startScroll: this._logScroll, moved: false };
+      } else {
+        this._logOverlayOpen = false;
+        this._logDrag = null;
+      }
+      return;
+    }
+
     // Corner action buttons (skip / map) — clickable regardless of turn state.
     if (this._handleCornerButtonClick(x, y)) return;
 
@@ -1105,6 +1184,15 @@ export default class BattleScene extends UIPanel {
     // show a hover state.
     this._lastPointerX = x;
     this._lastPointerY = y;
+    // Battle log overlay: dragging inside the panel scrolls it.
+    if (this._logOverlayOpen) {
+      if (this._logDrag) {
+        const dy = y - this._logDrag.startY;
+        if (Math.abs(dy) > 8) this._logDrag.moved = true;
+        this._setLogScroll(this._logDrag.startScroll - dy);
+      }
+      return;
+    }
     if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
       this._loadoutOverlay.handleMouseMove(x, y);
       return;
@@ -1151,6 +1239,20 @@ export default class BattleScene extends UIPanel {
   }
 
   _handleMouseUp(x, y) {
+    // Battle log overlay: releasing a non-drag press closes it (tap = close,
+    // drag = scroll and stays open). The release of the corner-button click
+    // that OPENED it is ignored (_logJustOpened).
+    if (this._logOverlayOpen) {
+      if (this._logJustOpened) {
+        this._logJustOpened = false;
+        this._logDrag = null;
+        return;
+      }
+      const drag = this._logDrag;
+      this._logDrag = null;
+      if (!drag || !drag.moved) this._logOverlayOpen = false;
+      return;
+    }
     if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
       this._loadoutOverlay.handleMouseUp(x, y);
       return;
@@ -1220,8 +1322,12 @@ export default class BattleScene extends UIPanel {
     }
   }
 
-  /** Wheel routing: loadout modal first, then the two skills panels. */
+  /** Wheel routing: log overlay / loadout modal first, then the skills panels. */
   _handleWheel(x, y, deltaY) {
+    if (this._logOverlayOpen) {
+      this._setLogScroll(this._logScroll + deltaY * 0.6);
+      return;
+    }
     if (this._loadoutOverlay && this._loadoutOverlay.isActive()) {
       this._loadoutOverlay.handleWheel(x, y, deltaY);
       return;
@@ -1253,6 +1359,22 @@ export default class BattleScene extends UIPanel {
 
     // ── Attack animation live tuner (POC; no-op unless ATTACK_ANIM_DEBUG on) ──
     if (this._handleAttackAnimDebugKey(e)) return;
+
+    // ── Battle log overlay toggle ('l') — the last 20 actions ──
+    if (ACTION_TICKER_ENABLED && (e.key === 'l' || e.key === 'L')) {
+      if (!this._mapView || !this._mapView.isOverlayActive()) {
+        this._logOverlayOpen = !this._logOverlayOpen;
+        this._logScroll = 0; // open (and reopen) at the newest rows
+        this._logDrag = null;
+      }
+      return;
+    }
+    // While the log overlay is up, ESC closes it and everything else is inert
+    // (any click also closes — see _handleMouseDown).
+    if (this._logOverlayOpen) {
+      if (e.key === 'Escape') this._logOverlayOpen = false;
+      return;
+    }
 
     // ── Debug: instant win with 'K' key ──
     if ((e.key === 'k' || e.key === 'K') && window.__DEBUG_MODE) {
@@ -1338,18 +1460,54 @@ export default class BattleScene extends UIPanel {
       if (this._audioManager) {
         this._audioManager.playSfx('sfx_extra_turn');
       }
+      // (The ticker's extra-turn row is pushed after the mana-match rows
+      // below, so it lands on top with the triggering tile as its icon.)
     }
 
     // ── Spawn match text effects + mana streams for every 3+ match ──
     // Mana from matches is credited to the ACTIVE side, so the wisps fly to
     // that side's mana orbs. Skull/inert matches grant no mana → no stream.
     if (state.matchTextTriggers && state.matchTextTriggers.length > 0 && this._board) {
+      const manaByType = new Map();
       for (const trigger of state.matchTextTriggers) {
         this._spawnMatchTextEffect(trigger);
         if (isMana(trigger.typeId)) {
           this._spawnManaStream(trigger, state.activeSide);
+          manaByType.set(trigger.typeId, (manaByType.get(trigger.typeId) || 0) + trigger.count);
         }
       }
+      // Ticker rows — [matcher portrait] › [matched tile art] › +N, one row
+      // per color this step (same-color matches in one step merge).
+      if (state.activeSide) {
+        for (const [typeId, count] of manaByType) {
+          this._pushAction({
+            portrait: this._sidePortraitImage(state.activeSide),
+            icon: this._tickerImage(`tile_${typeId}`),
+            value: `+${count}`,
+            color: getTileType(typeId).particleColor,
+          });
+        }
+      }
+    }
+
+    // Extra-turn ticker row — pushed AFTER the mana rows from the same step
+    // so it owns the crisp slot, with the TRIGGERING matched tile as its icon
+    // ([portrait] › [the 4+ match's tile art] › "Extra turn"). Skill-granted
+    // extra turns set no trigger pos (the cast row covers those).
+    if (state.extraTurnTriggerPos && state.activeSide) {
+      let tileId = null;
+      if (state.matchTextTriggers) {
+        for (const t of state.matchTextTriggers) {
+          if (t.count >= 4) { tileId = t.typeId; break; }
+        }
+      }
+      if (!tileId && state.match4Flourish) tileId = state.match4Flourish.color;
+      this._pushAction({
+        portrait: this._sidePortraitImage(state.activeSide),
+        icon: tileId ? this._tickerImage(`tile_${tileId}`) : null,
+        text: 'Extra turn',
+        color: TICKER_COLORS.extraTurn,
+      });
     }
 
     // ── Skill cast feedback ──
@@ -1499,6 +1657,14 @@ export default class BattleScene extends UIPanel {
     // the portrait/name + skills need an explicit rebuild here.
     if (state.enemyTransformed) {
       this.setEnemyData(state.enemyTransformed);
+      if (state.enemyTransformed.name) {
+        // setEnemyData just swapped _enemyData → the chip shows the NEW form.
+        this._pushAction({
+          portrait: this._sidePortraitImage('enemy'),
+          text: `${state.enemyTransformed.name} emerges`,
+          color: TICKER_COLORS.transform,
+        });
+      }
     }
     // Transform SFX (egg spawn / hatch), set from the relic's `sound` payload.
     if (state.transformSfx && this._audioManager) {
@@ -1538,15 +1704,36 @@ export default class BattleScene extends UIPanel {
               carrier.addDamage(ev.amount);
               this._shakeDeferredThisFrame = true;
             } else {
-              this._deliverDamage(ev.side, ev.amount, true, null);
+              this._deliverDamage(ev.side, ev.amount, true, null, null,
+                this._tickerImage(ev.source === 'skull' ? 'tile_skull' : 'icon_attack'));
             }
             continue;
           }
           const receiver = ev.side === 'player' ? state.playerState : state.enemyState;
           this._addDamageToCounter(ev.side, ev.amount, receiver ? receiver.maxHp : 0);
+          // Incidental damage (reflect/echo) — a generic attack-icon row.
+          const hitPortrait = this._sidePortraitImage(ev.side);
+          this._pushAction({
+            portrait: hitPortrait,
+            icon: this._tickerImage('icon_attack'),
+            text: hitPortrait ? null : this._sideName(state, ev.side),
+            value: `-${ev.amount}`,
+            color: TICKER_COLORS.damage,
+          });
         } else {
           this._spawnStatTextEffect(ev, stackBySide[ev.side] || 0);
           stackBySide[ev.side] = (stackBySide[ev.side] || 0) + 1;
+          // Ticker row — [portrait] › [heart/shield/barrier icon] › +N
+          // (poison has no icon sprite → a "poison" label, and reads as -N).
+          const portrait = this._sidePortraitImage(ev.side);
+          const label = ev.kind === 'poison' ? 'poison' : null;
+          this._pushAction({
+            portrait,
+            icon: this._tickerImage(TICKER_KIND_ICONS[ev.kind]),
+            text: portrait ? label : `${this._sideName(state, ev.side)}${label ? ` ${label}` : ''}`,
+            value: `${ev.kind === 'poison' ? '-' : '+'}${ev.amount}`,
+            color: TICKER_COLORS[ev.kind] || '#e8d8a8',
+          });
         }
       }
     }
@@ -1905,10 +2092,27 @@ export default class BattleScene extends UIPanel {
    * @param {string} [impactColor] - burst tint (skill element); crimson default
    * @private
    */
-  _deliverDamage(side, amount, isLast, impactPoint, impactColor) {
+  _deliverDamage(side, amount, isLast, impactPoint, impactColor, tickerIcon) {
     const c = this._battleController;
     const receiver = c ? (side === 'player' ? c.playerState : c.enemyState) : null;
     const maxHp = receiver ? receiver.maxHp : 0;
+    // Ticker: chunked arrivals pool into ONE row, emitted on the last chunk —
+    // [receiver portrait] › [what hit them: skull art / the skill's icon] › -N.
+    this._deliveryAccum[side] += Math.max(0, amount || 0);
+    const seqTotal = this._deliveryAccum[side];
+    if (isLast && seqTotal > 0) {
+      const portrait = this._sidePortraitImage(side);
+      this._pushAction({
+        portrait,
+        icon: tickerIcon || null,
+        text: portrait
+          ? null
+          : ((receiver && receiver.name) || (side === 'player' ? 'Player' : 'Enemy')),
+        value: `-${seqTotal}`,
+        color: TICKER_COLORS.damage,
+      });
+      this._deliveryAccum[side] = 0;
+    }
     if (amount > 0) {
       this._addDamageToCounter(side, amount, maxHp);
       const intensity = maxHp > 0
@@ -1921,8 +2125,20 @@ export default class BattleScene extends UIPanel {
       }
       // Directional: the shove travels WITH the attack, toward the receiver.
       this._screenShake.trigger(intensity, side === 'player' ? -1 : 1);
-      if (side === 'player') {
-        this._damageVignetteAlpha = Math.min(1, this._damageVignetteAlpha + 0.45 + intensity * 0.55);
+    }
+    // Red vignette — only for hits that MATTER: the player is left LOW, or
+    // the hit was BIG. Judged on the sequence's LAST chunk against its
+    // pooled total (a chip hit that leaves you healthy flashes nothing).
+    // Outside the amount>0 block: a skull sequence's last chunk can round
+    // to 0 while earlier chunks carried the damage. receiver.hp is already
+    // post-hit at delivery time (model applies damage at cast/match time),
+    // so a killing blow always qualifies via the low-HP arm.
+    if (side === 'player' && isLast && seqTotal > 0 && maxHp > 0) {
+      const lowHp = receiver && receiver.hp / maxHp < VIGNETTE_LOW_HP_FRAC;
+      const bigHit = seqTotal / maxHp >= VIGNETTE_BIG_HIT_FRAC;
+      if (lowHp || bigHit) {
+        const seqIntensity = Math.min(1, (seqTotal / maxHp) / IMPACT_FULL_AT_HP_FRACTION);
+        this._damageVignetteAlpha = Math.min(1, this._damageVignetteAlpha + 0.45 + seqIntensity * 0.55);
       }
     }
     if (isLast && impactPoint) {
@@ -1989,11 +2205,13 @@ export default class BattleScene extends UIPanel {
     if (sources.length === 0) return;
 
     const metrics = this._board.getCellMetrics();
-    const head = this._assetManager ? this._assetManager.get('tile_skull') : null;
+    const head = this._tickerImage('tile_skull');
     const effect = new SkullStreamEffect(sources, target, {
-      headImage: head && head.complete !== false ? head : null,
+      headImage: head,
       headSize: Math.max(24, metrics.cellSize * 0.5),
-      onDeliver: (chunk, isLast) => this._deliverDamage(receiverSide, chunk, isLast, target),
+      // The skull art doubles as the ticker damage row's icon.
+      onDeliver: (chunk, isLast) =>
+        this._deliverDamage(receiverSide, chunk, isLast, target, null, head),
     });
     this._floatingEffects.push(effect);
     this._carriers[receiverSide].push({
@@ -2023,6 +2241,20 @@ export default class BattleScene extends UIPanel {
     if (ev.targetCol != null && ev.targetRow != null) {
       this._destroyEpicenter = { col: ev.targetCol, row: ev.targetRow };
     }
+
+    // Action ticker row — [caster portrait] › [skill icon] › "Fracture".
+    // The icon image doubles as the damage row's icon (stashed on the
+    // projectile carrier below), tying the hit back to the cast.
+    const castIcon = this._tickerImage(ev.skill.icon);
+    const casterPortrait = this._sidePortraitImage(side);
+    this._pushAction({
+      portrait: casterPortrait,
+      icon: castIcon,
+      text: casterPortrait
+        ? ev.skill.name
+        : `${(casterState && casterState.name) || side} casts ${ev.skill.name}`,
+      color: TICKER_COLORS.cast,
+    });
 
     // Card anchor (the card may be scrolled partly out of the list — clamp).
     let cardRect = null;
@@ -2100,6 +2332,9 @@ export default class BattleScene extends UIPanel {
           arrived: false,
           impactPoint: to,
           impactColor: colors.color,
+          // The cast's icon rides along so the delivered-damage ticker row
+          // shows WHAT hit ([receiver] › [skill icon] › -N).
+          tickerIcon: castIcon,
         };
         const effect = new ManaStreamEffect([from], to, {
           color: colors.color,
@@ -2117,7 +2352,7 @@ export default class BattleScene extends UIPanel {
             carrier.arrived = true;
             const amt = carrier.pending;
             carrier.pending = 0;
-            this._deliverDamage(oppSide, amt, true, carrier.impactPoint, carrier.impactColor);
+            this._deliverDamage(oppSide, amt, true, carrier.impactPoint, carrier.impactColor, carrier.tickerIcon);
           },
         });
         carrier.effect = effect;
@@ -2126,7 +2361,7 @@ export default class BattleScene extends UIPanel {
           if (carrier.arrived) {
             const amt = carrier.pending;
             carrier.pending = 0;
-            this._deliverDamage(oppSide, amt, true, null);
+            this._deliverDamage(oppSide, amt, true, null, null, carrier.tickerIcon);
           }
         };
         carrier.isOpen = () => !effect.done && !carrier.arrived;
@@ -2188,6 +2423,35 @@ export default class BattleScene extends UIPanel {
    *  the hit-stop like every other scene animation. @private */
   _queueDelayedSpawn(ms, fn) {
     this._delayedSpawns.push({ t: ms, fn });
+  }
+
+  /**
+   * Push one visual row onto the action ticker (and its battle-log history).
+   * @param {{portrait?:object, icon?:object, text?:string, value?:string, color?:string}} spec
+   */
+  _pushAction(spec) {
+    if (ACTION_TICKER_ENABLED && this._actionTicker) this._actionTicker.push(spec);
+  }
+
+  /** A READY image for an asset key, or null (the ticker bakes are one-shot
+   *  — never hand them a still-loading Image). @private */
+  _tickerImage(key) {
+    if (!key || !this._assetManager) return null;
+    const img = this._assetManager.get(key);
+    return img && img.complete !== false && img.width ? img : null;
+  }
+
+  /** A side's ready portrait art for the ticker chip, or null. @private */
+  _sidePortraitImage(side) {
+    const data = side === 'player' ? this._playerData : this._enemyData;
+    if (!data || !data.portrait) return null;
+    return this._tickerImage(`portrait_${data.portrait}`);
+  }
+
+  /** Display name for a side, from the live state snapshot. @private */
+  _sideName(state, side) {
+    const s = side === 'player' ? state.playerState : state.enemyState;
+    return (s && s.name) || (side === 'player' ? 'Player' : 'Enemy');
   }
 
   /** Clicked an unaffordable card: flash the MISSING cost colors' orbs red
@@ -2572,7 +2836,8 @@ export default class BattleScene extends UIPanel {
         (this._levelUpOverlay && this._levelUpOverlay.isActive()) ||
         (this._rewardOverlay && this._rewardOverlay.isActive()) ||
         (this._loadoutOverlay && this._loadoutOverlay.isActive()) ||
-        (this._mapView && this._mapView.isOverlayActive());
+        (this._mapView && this._mapView.isOverlayActive()) ||
+        this._logOverlayOpen;
       this._tooltipManager.setEnabled(!overlayActive);
       this._tooltipManager.update(dt);
     }
@@ -2689,6 +2954,9 @@ export default class BattleScene extends UIPanel {
       this._damageVignetteAlpha = Math.max(0, this._damageVignetteAlpha - dt / VIGNETTE_FADE_MS);
     }
 
+    // Action ticker (top-center waterfall).
+    this._actionTicker.update(dt);
+
     // Update floating effects, remove completed ones
     for (let i = this._floatingEffects.length - 1; i >= 0; i--) {
       this._floatingEffects[i].update(dt);
@@ -2708,7 +2976,7 @@ export default class BattleScene extends UIPanel {
           if (carrier.kind === 'skill' && carrier.pending > 0) {
             const rest = carrier.pending;
             carrier.pending = 0;
-            this._deliverDamage(side, rest, true, null);
+            this._deliverDamage(side, rest, true, null, null, carrier.tickerIcon || null);
           }
           list.splice(i, 1);
         }
@@ -2896,6 +3164,134 @@ export default class BattleScene extends UIPanel {
       sm._app.fillFullCanvas(`rgba(0, 0, 0, ${this._loadoutOverlay.getBackdropAlpha()})`);
       this._loadoutOverlay.render(ctx, w, h);
     }
+
+    // Battle log overlay ('l' / corner log button) — dimmed backdrop + the
+    // last-20-actions panel; any click / ESC / 'l' closes.
+    if (this._logOverlayOpen) {
+      sm._app.fillFullCanvas('rgba(0, 0, 0, 0.62)');
+      this._renderLogOverlay(ctx);
+    }
+  }
+
+  /** The battle-log panel's design-space rect (fixed size: a 10-row viewport
+   *  — also the mousedown hit-test for drag-scroll vs tap-close). @private */
+  _getLogPanelRect() {
+    const app = this._sceneManager && this._sceneManager._app;
+    const cx = app ? app.designWidth / 2 : 960;
+    const h = LOG_TITLE_H + LOG_VISIBLE_ROWS * LOG_LINE_H + LOG_PAD * 2;
+    return {
+      x: cx - LOG_PANEL_W / 2,
+      y: Math.max(40, 540 - h / 2),
+      w: LOG_PANEL_W,
+      h,
+      cx,
+    };
+  }
+
+  _logMaxScroll() {
+    const n = this._actionTicker ? this._actionTicker.getHistory().length : 0;
+    return Math.max(0, (n - LOG_VISIBLE_ROWS) * LOG_LINE_H);
+  }
+
+  _setLogScroll(v) {
+    this._logScroll = Math.max(0, Math.min(this._logMaxScroll(), v));
+  }
+
+  /**
+   * The battle-log panel: a dark rounded panel with a FIXED 10-row viewport
+   * over the history — the SAME baked visual row sprites the ticker shows
+   * (portrait › icon › amount), left-aligned, newest first. Wheel / drag
+   * inside the panel scrolls (`_logScroll`, px); a thin gold scrollbar shows
+   * when more rows exist. Drawn in design space from renderForeground.
+   * @param {CanvasRenderingContext2D} ctx
+   */
+  _renderLogOverlay(ctx) {
+    const r = this._getLogPanelRect();
+    const history = this._actionTicker ? this._actionTicker.getHistory() : [];
+    const n = history.length;
+    const { x, y, cx } = r;
+
+    ctx.save();
+    // Panel
+    roundRectPath(ctx, x, y, r.w, r.h, 14);
+    ctx.fillStyle = 'rgba(16, 12, 9, 0.94)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(214, 188, 120, 0.75)';
+    ctx.stroke();
+
+    // Title + close hint
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '28px "Marcellus SC", Georgia, serif';
+    ctx.fillStyle = '#e8d8a8';
+    ctx.fillText('Battle Log', cx, y + LOG_TITLE_H / 2 + 4);
+    ctx.font = '13px "Marcellus SC", Georgia, serif';
+    ctx.fillStyle = 'rgba(157, 146, 124, 0.9)';
+    ctx.fillText(
+      n > LOG_VISIBLE_ROWS ? 'scroll for older · L / tap to close' : 'L / tap to close',
+      cx, y + r.h - 12,
+    );
+
+    // Divider under the title
+    ctx.strokeStyle = 'rgba(214, 188, 120, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + LOG_PAD, y + LOG_TITLE_H);
+    ctx.lineTo(x + r.w - LOG_PAD, y + LOG_TITLE_H);
+    ctx.stroke();
+
+    // Rows viewport — clipped; scrolled by _logScroll (0 = newest at top).
+    const bodyY = y + LOG_TITLE_H + LOG_PAD / 2;
+    const bodyH = LOG_VISIBLE_ROWS * LOG_LINE_H;
+    if (n === 0) {
+      ctx.font = '20px "Marcellus SC", Georgia, serif';
+      ctx.fillStyle = 'rgba(157, 146, 124, 0.9)';
+      ctx.fillText('No actions yet', cx, bodyY + LOG_LINE_H / 2);
+      ctx.restore();
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.rect(x + 4, bodyY, r.w - 8, bodyH);
+    ctx.clip();
+    const rowX = x + LOG_PAD + 6;
+    const maxW = r.w - (LOG_PAD + 6) * 2 - LOG_SCROLLBAR_W;
+    ctx.imageSmoothingEnabled = true;
+    for (let i = 0; i < n; i++) {
+      const rowTop = bodyY + i * LOG_LINE_H - this._logScroll;
+      if (rowTop + LOG_LINE_H < bodyY || rowTop > bodyY + bodyH) continue;
+      const spec = history[n - 1 - i]; // newest at the top
+      const lineY = rowTop + LOG_LINE_H / 2;
+      ctx.globalAlpha = Math.max(0.5, 1 - i * 0.025);
+      this._actionTicker.ensureSprite(spec);
+      if (spec.sprite) {
+        const w0 = spec.spriteW / TICKER_BAKE_SCALE;
+        const h0 = spec.spriteH / TICKER_BAKE_SCALE;
+        const scale = Math.min((LOG_LINE_H - 4) / h0, maxW / w0, 1);
+        ctx.drawImage(spec.sprite, rowX, lineY - (h0 * scale) / 2, w0 * scale, h0 * scale);
+      } else {
+        ctx.font = '20px "Marcellus SC", Georgia, serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = spec.color || '#e8d8a8';
+        ctx.fillText([spec.text, spec.value].filter(Boolean).join(' '), rowX, lineY);
+        ctx.textAlign = 'center';
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Scrollbar (only when there's more than one viewport of rows).
+    const maxScroll = this._logMaxScroll();
+    if (maxScroll > 0) {
+      const trackX = x + r.w - LOG_PAD + 6;
+      const thumbH = Math.max(24, bodyH * (LOG_VISIBLE_ROWS / n));
+      const thumbY = bodyY + (bodyH - thumbH) * (this._logScroll / maxScroll);
+      ctx.fillStyle = 'rgba(60, 50, 32, 0.55)';
+      ctx.fillRect(trackX, bodyY, LOG_SCROLLBAR_W, bodyH);
+      ctx.fillStyle = 'rgba(214, 188, 120, 0.75)';
+      ctx.fillRect(trackX, thumbY, LOG_SCROLLBAR_W, thumbH);
+    }
+    ctx.restore();
   }
 
   // ── Corner action buttons (skip / map) ──────────────
@@ -2922,6 +3318,12 @@ export default class BattleScene extends UIPanel {
       hint: {
         x: x + (s - hs) / 2,
         y: yTop + (s + CORNER_BUTTON_GAP) * 2,
+        w: hs, h: hs,
+      },
+      // Battle log — same small disc treatment as the hint button, below it.
+      log: {
+        x: x + (s - hs) / 2,
+        y: yTop + (s + CORNER_BUTTON_GAP) * 2 + hs + CORNER_BUTTON_GAP,
         w: hs, h: hs,
       },
     };
@@ -2952,6 +3354,17 @@ export default class BattleScene extends UIPanel {
     }
     if (BattleScene._pointInRect(x, y, rects.hint)) {
       this._requestHint();
+      return true;
+    }
+    if (ACTION_TICKER_ENABLED && BattleScene._pointInRect(x, y, rects.log)) {
+      // Only ever OPENS here: when the overlay is up, the close/drag handling
+      // at the top of _handleMouseDown consumes the click first. The flag
+      // makes the SAME click's mouseup a no-op (it would otherwise read as a
+      // tap-close and shut the overlay the instant it opened).
+      this._logOverlayOpen = true;
+      this._logScroll = 0;
+      this._logDrag = null;
+      this._logJustOpened = true;
       return true;
     }
     return false;
@@ -3159,7 +3572,44 @@ export default class BattleScene extends UIPanel {
     if (skipImg) ctx.drawImage(skipImg, rects.skip.x, rects.skip.y, rects.skip.w, rects.skip.h);
     if (mapImg)  ctx.drawImage(mapImg, rects.map.x, rects.map.y, rects.map.w, rects.map.h);
     this._renderHintButton(ctx, rects.hint);
+    if (ACTION_TICKER_ENABLED) this._renderLogButton(ctx, rects.log);
     ctx.imageSmoothingEnabled = prevSmoothing;
+  }
+
+  /**
+   * Draw the small battle-log button (canvas primitives, matching the "?"
+   * hint disc): a dark disc with a gold ring and three list lines. Always
+   * enabled — the log is readable in any battle state.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {{x:number,y:number,w:number,h:number}} r
+   */
+  _renderLogButton(ctx, r) {
+    if (!r) return;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r.w / 2 - 1, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(18, 14, 10, 0.85)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = `rgba(${HINT_COLOR}, 0.9)`;
+    ctx.stroke();
+    // Three list lines (top one shorter — reads as "log/list").
+    const lineW = r.w * 0.42;
+    const gap = r.h * 0.16;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = `rgba(${HINT_COLOR}, 0.95)`;
+    for (let i = -1; i <= 1; i++) {
+      const w = i === -1 ? lineW * 0.7 : lineW;
+      ctx.beginPath();
+      ctx.moveTo(cx - w / 2, cy + i * gap);
+      ctx.lineTo(cx + w / 2, cy + i * gap);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /**
@@ -3472,6 +3922,14 @@ export default class BattleScene extends UIPanel {
     // Restore context after shake offset
     if (shake.x !== 0 || shake.y !== 0) {
       ctx.restore();
+    }
+
+    // Action ticker (design space, top-center, outside the shake — a combat
+    // log shouldn't rattle). Skipped while the battle-log overlay is up (the
+    // overlay supersedes it).
+    if (ACTION_TICKER_ENABLED && !this._logOverlayOpen) {
+      const app = this._sceneManager && this._sceneManager._app;
+      this._actionTicker.render(ctx, app ? app.designWidth / 2 : 960, TICKER_TOP_Y);
     }
 
     // Hint banner + gauntlet cursor (design space, above the panes — the
