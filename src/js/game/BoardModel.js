@@ -620,7 +620,7 @@ export default class BoardModel {
   /**
    * Generate animation data for gravity fall by comparing before/after grid.
    * @param {Array<Array<string|null>>} beforeGrid - grid state before gravity
-   * @returns {Array<{col: number, row: number, startRow: number, startCol: number}>}
+   * @returns {Array<{col: number, row: number, startRow: number, startCol: number, delayIdx: number}>}
    */
   generateFallAnimations(beforeGrid) {
     const animations = [];
@@ -642,12 +642,14 @@ export default class BoardModel {
         }
       }
 
+      const colAnims = [];
+
       // Old tiles falling
       for (let i = 0; i < beforeOldTiles.length; i++) {
         const beforeTile = beforeOldTiles[i];
         const afterTile = afterOldTiles[i];
         if (afterTile && beforeTile.row !== afterTile.row) {
-          animations.push({
+          colAnims.push({
             col: x, row: afterTile.row,
             startRow: beforeTile.row, startCol: x,
           });
@@ -662,11 +664,22 @@ export default class BoardModel {
       // drops in under the frame's top rail. A row match still yields the
       // classic single 1-cell entry (one refill per column, startRow -1).
       for (let y = 0; y < oldStartRow; y++) {
-        animations.push({
+        colAnims.push({
           col: x, row: y,
           startRow: y - oldStartRow, startCol: x,
         });
       }
+
+      // COLLAPSE PROPAGATION ORDER: `delayIdx` = how many movers sit BELOW
+      // this tile in its column (by final row). The fall animation staggers
+      // each tile's start by delayIdx × FALL_TUNING.propagationMs, so
+      // knocking out a BOTTOM row ripples the pile downward tile by tile
+      // (the mover just above the gap leads; refills enter last), while a
+      // TOP-row match — one refill per column, nothing below it — stays
+      // instant. Lower tiles always start first, so tiles can never cross.
+      colAnims.sort((a, b) => b.row - a.row);
+      for (let i = 0; i < colAnims.length; i++) colAnims[i].delayIdx = i;
+      for (const a of colAnims) animations.push(a);
     }
 
     return animations;

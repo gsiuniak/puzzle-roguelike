@@ -2601,6 +2601,7 @@ export default class BattleScene extends UIPanel {
    *   3 / 4 — vmaxAtRows −0.25 / +0.25 (freefall cells before cruise)
    *   5 / 6 — bounceMs −20 / +20
    *   7 / 8 — bounceAmp −0.02 / +0.02  (0 = no landing hop)
+   *   9 / 0 — propagationMs −10 / +10  (collapse ripple; 0 = rigid block)
    * @private
    */
   _handleFallTuneKey(e) {
@@ -2619,6 +2620,8 @@ export default class BattleScene extends UIPanel {
       case '6': T.bounceMs += 20; break;
       case '7': T.bounceAmp = Math.max(0, +(T.bounceAmp - 0.02).toFixed(2)); break;
       case '8': T.bounceAmp = +(T.bounceAmp + 0.02).toFixed(2); break;
+      case '9': T.propagationMs = Math.max(0, T.propagationMs - 10); break;
+      case '0': T.propagationMs += 10; break;
       default: return false;
     }
     // eslint-disable-next-line no-console

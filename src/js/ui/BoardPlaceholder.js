@@ -289,9 +289,10 @@ export default class BoardPlaceholder extends UIElement {
     // when no controller is wired (placeholder boards).
     this._fallDuration = 350;
     // Fall-kinematics inputs: the current step's animation array (a
-    // reference-change detector) + its longest fall distance in rows.
+    // reference-change detector) + the step's total base-ms length (last
+    // tile's propagation delay + travel + bounce — mirrors _doFall's math).
     this._fallCellsRef = null;
-    this._fallMaxDist = 1;
+    this._fallTotalBaseMs = 0;
 
     // Swap animation state
     /** @type {{from:{col:number,row:number},to:{col:number,row:number},progress:number}|null} */
@@ -403,12 +404,16 @@ export default class BoardPlaceholder extends UIElement {
       // recomputed only when the controller hands over a NEW step's array.
       if (this.fallCells !== this._fallCellsRef) {
         this._fallCellsRef = this.fallCells;
-        let m = 1;
+        // The step's total base length = its last-finishing tile (delay +
+        // travel) + bounce — the SAME math as BattleController._doFall, so
+        // progress × this is exact base-time elapsed.
+        let m = fallTimeToLandMs(1);
         for (const f of this.fallCells) {
-          const d = f.row - f.startRow;
-          if (d > m) m = d;
+          const t = (f.delayIdx || 0) * FALL_TUNING.propagationMs
+            + fallTimeToLandMs(f.row - f.startRow);
+          if (t > m) m = t;
         }
-        this._fallMaxDist = m;
+        this._fallTotalBaseMs = m + FALL_TUNING.bounceMs;
       }
       this._fallProgress = Math.min(1, this._fallProgress + dt / this._fallDuration);
     } else {
@@ -925,10 +930,8 @@ export default class BoardPlaceholder extends UIElement {
     // subtracts what it has left, so all falling tiles move at identical
     // instantaneous speeds (rigid columns — gaps never change mid-flight).
     const fallElapsed = fallClip
-      ? this._fallProgress
-        * (fallTimeToLandMs(this._fallMaxDist || 1) + FALL_TUNING.bounceMs)
+      ? this._fallProgress * (this._fallTotalBaseMs || 1)
       : 0;
-    const fallRows = fallClip ? fallRowsFallen(fallElapsed) : 0;
     // Wild (Thrall) borders are deferred to a pass AFTER all tiles are drawn —
     // the frame overhangs the cell, so drawing it inline would let later-drawn
     // neighbor tiles clip its right/bottom edge.
@@ -952,18 +955,22 @@ export default class BoardPlaceholder extends UIElement {
 
         const fallData = fallSlots[cellIdx];
         if (fallData && this._fallProgress < 1) {
-          // Rigid shared gravity: every falling tile has covered `fallRows`
-          // rows this frame; this tile sits at its landing cell minus what
-          // it has left (startRow may be NEGATIVE — refills stack above the
-          // board and drop in under the rail). Once landed, a brief BOUNCE
-          // hop (sin envelope, decaying) sells the stop as a thunk instead
-          // of a slam — tiles that landed together bounce together.
+          // Shared gravity + COLLAPSE PROPAGATION: this tile starts falling
+          // delayIdx × propagationMs after the step began (the mover just
+          // above the gap leads, the pile ripples downward tile by tile),
+          // then follows the one shared gravity law — lower tiles always
+          // lead, so tiles can never cross. startRow may be NEGATIVE
+          // (refills stack above the board and drop in under the rail).
+          // Once landed, a brief BOUNCE hop (sin envelope, decaying) sells
+          // the stop as a thunk instead of a slam.
           const dist = fallData.row - fallData.startRow;
-          const remaining = dist - fallRows;
+          const local = fallElapsed
+            - (fallData.delayIdx || 0) * FALL_TUNING.propagationMs;
+          const remaining = dist - (local > 0 ? fallRowsFallen(local) : 0);
           if (remaining > 0) {
             displayY = Math.floor(displayY - remaining * cs);
           } else if (FALL_TUNING.bounceAmp > 0 && FALL_TUNING.bounceMs > 0) {
-            const sinceLand = fallElapsed - fallTimeToLandMs(dist);
+            const sinceLand = local - fallTimeToLandMs(dist);
             const q = sinceLand / FALL_TUNING.bounceMs;
             if (q >= 0 && q < 1) {
               const hop = FALL_TUNING.bounceAmp * cs * Math.sin(Math.PI * q) * (1 - q);

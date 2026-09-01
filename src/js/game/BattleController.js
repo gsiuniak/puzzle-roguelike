@@ -61,16 +61,23 @@ const BASE_PHASE_MS = { SHOW_MATCH: 400, REMOVE: 200, FALL: 350 };
 // FALL_TUNING is deliberately a MUTABLE exported object: with the ?falltune
 // URL flag, BattleScene binds live-tuner keys that adjust it in play and log
 // the values — dial the feel in-game, then bake the numbers here.
-//   oneRowMs   — BASE ms for a 1-cell fall (the row-match anchor; ≈233 eff)
-//   vmaxAtRows — cells of freefall before terminal velocity (higher = faster
-//                cruise → deep falls quicker + harder)
-//   bounceMs   — landing-hop duration (BASE ms; part of the phase length)
-//   bounceAmp  — hop height as a fraction of a cell (0 = no bounce)
+//   oneRowMs      — BASE ms for a 1-cell fall (the row-match anchor)
+//   vmaxAtRows    — cells of freefall before terminal velocity (higher =
+//                   faster cruise → deep falls quicker + harder)
+//   bounceMs      — landing-hop duration (BASE ms; part of the phase length)
+//   bounceAmp     — hop height as a fraction of a cell (0 = no bounce)
+//   propagationMs — COLLAPSE RIPPLE: each mover starts falling this many BASE
+//                   ms after the mover below it in its column (delayIdx from
+//                   BoardModel.generateFallAnimations). A bottom-row match
+//                   ripples the whole pile downward tile by tile instead of
+//                   dropping it as one instant block; a top-row match (nothing
+//                   below the refill) stays instant. 0 = rigid block.
 export const FALL_TUNING = {
   oneRowMs: 220, // 325,
   vmaxAtRows: 2,
   bounceMs: 130,
   bounceAmp: 0.12,
+  propagationMs: 35,
 };
 /** Base ms for a tile to fall `d` rows under the shared gravity. */
 export function fallTimeToLandMs(d) {
@@ -2179,16 +2186,18 @@ export default class BattleController {
     this.board.refill();
     const animations = this.board.generateFallAnimations(preGravityGrid);
 
-    // Size this step's FALL phase to its LONGEST fall under the shared
-    // gravity, plus the landing bounce so the hop finishes inside the phase.
-    // Refill tiles carry negative startRows (stacked above the board), so
-    // row − startRow is the true travel distance for them too.
-    let maxDist = 1;
+    // Size this step's FALL phase to its LAST-FINISHING tile — propagation
+    // delay + travel time under the shared gravity — plus the landing bounce
+    // so the hop finishes inside the phase. Refill tiles carry negative
+    // startRows (stacked above the board), so row − startRow is the true
+    // travel distance for them too.
+    let maxTotal = fallTimeToLandMs(1);
     for (const a of animations) {
-      const d = a.row - a.startRow;
-      if (d > maxDist) maxDist = d;
+      const t = (a.delayIdx || 0) * FALL_TUNING.propagationMs
+        + fallTimeToLandMs(a.row - a.startRow);
+      if (t > maxTotal) maxTotal = t;
     }
-    this._fallStepBaseMs = fallTimeToLandMs(maxDist) + FALL_TUNING.bounceMs;
+    this._fallStepBaseMs = maxTotal + FALL_TUNING.bounceMs;
 
     this.emptyCells = [];
     this.fallCells = animations;

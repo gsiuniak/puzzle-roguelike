@@ -99,13 +99,17 @@ bounce when it lands — rows-covered is identical for every tile at every
 instant, so inter-tile gaps NEVER change mid-flight (columns fall as rigid
 blocks; per-distance easing phases make gaps breathe, which reads as the
 column "stretching"). The bounce is what keeps the hard gravity stop from
-reading as a slam. `_doFall` sizes the phase to
-`fallTimeToLandMs(maxFallRows) + bounceMs` (refills count their stacked
-negative `startRow`s). Effective land times at defaults: 1 cell = 233ms (the
-row anchor), 2 = 330, 4 = 495, 8 = 825. **`FALL_TUNING` is LIVE-tunable via
-the `?falltune` URL flag** (BattleScene binds digit-pair keys 1-8 and logs
-values — dial in play, bake back): `oneRowMs`, `vmaxAtRows`, `bounceMs`,
-`bounceAmp`. The controller exposes **`getFallDurationMs()`** so the board
+reading as a slam. **Collapse PROPAGATION:** each mover starts `delayIdx × propagationMs` after
+the step begins, where `delayIdx` = movers below it in its column
+(`BoardModel.generateFallAnimations` sorts each column bottom-up) — knocking
+out a BOTTOM row ripples the pile downward tile by tile (gap-adjacent tile
+leads, refills enter last), a top-row match stays instant, and lower tiles
+always lead so crossing is impossible. `_doFall` sizes the phase to the
+LAST-finishing tile (`max(delayIdx·propagationMs + fallTimeToLandMs(d)) +
+bounceMs`; refills count their stacked negative `startRow`s).
+**`FALL_TUNING` is LIVE-tunable via the `?falltune` URL flag** (BattleScene
+binds digit-pair keys 1-9/0 and logs values — dial in play, bake back):
+`oneRowMs`, `vmaxAtRows`, `bounceMs`, `bounceAmp`, `propagationMs`. The controller exposes **`getFallDurationMs()`** so the board
 VIEW syncs its fall animation per frame — view animations mirroring a
 controller phase must derive their duration from the controller, never carry
 a local copy (decision #57).
