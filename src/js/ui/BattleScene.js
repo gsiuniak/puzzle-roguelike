@@ -164,7 +164,7 @@ const DESTROY_STAGGER_MS_PER_CELL = 40;
 // BattleActionTicker HISTORY_MAX (20) actions; click / ESC / 'l' closes.
 /** THE kill switch for the whole feature: false = no ticker rows are
  *  collected or drawn, no corner log button, 'l' does nothing. */
-const ACTION_TICKER_ENABLED = true;
+const ACTION_TICKER_ENABLED = false; // true;
 /** Resting Y of the newest ticker line (design px from the viewport top). */
 const TICKER_TOP_Y = 14;
 /** Ticker row colors by event kind (cast/extra-turn gold, stat kinds match
